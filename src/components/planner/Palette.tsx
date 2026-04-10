@@ -2,14 +2,19 @@
 
 import { GROUP_META, GROUP_ORDER } from "@/lib/group-meta";
 import { legacyDestinationFromRegionId } from "@/lib/legacy-destination";
-import type { Destination, Park } from "@/lib/types";
+import type { CustomTile, Destination, Park } from "@/lib/types";
+import { useMemo, useState } from "react";
 
 type Props = {
   parks: Park[];
+  customTiles: CustomTile[];
   /** `regions.id` for the active trip; filters via `park.region_ids`. */
   regionId: string | null;
   selectedParkId: string | null;
   onSelectPark: (id: string | null) => void;
+  onAddCustom: (group: string) => void;
+  onEditCustom: (tile: CustomTile) => void;
+  onDeleteCustom: (tileId: string) => void;
 };
 
 function matchesDestination(park: Park, dest: Destination): boolean {
@@ -28,12 +33,25 @@ function matchesRegion(park: Park, regionId: string | null): boolean {
 
 export function Palette({
   parks,
+  customTiles,
   regionId,
   selectedParkId,
   onSelectPark,
+  onAddCustom,
+  onEditCustom,
+  onDeleteCustom,
 }: Props) {
-  const inRegion = parks.filter((p) => matchesRegion(p, regionId));
-  if (inRegion.length === 0) {
+  const [menuTileId, setMenuTileId] = useState<string | null>(null);
+
+  const builtInForRegion = useMemo(
+    () => parks.filter((p) => matchesRegion(p, regionId)),
+    [parks, regionId],
+  );
+
+  const hasCatalog = builtInForRegion.length > 0;
+  const hasCustom = customTiles.length > 0;
+
+  if (!hasCatalog && !hasCustom) {
     return (
       <aside className="rounded-2xl border border-royal/12 bg-cream p-4 text-royal shadow-sm">
         <h2 className="mb-2 font-serif text-base font-semibold text-royal">
@@ -41,8 +59,8 @@ export function Palette({
         </h2>
         <p className="font-sans text-sm leading-relaxed text-royal/75">
           No park tiles are available for this destination in the catalog yet.
-          Try editing the trip region, or place dining and resort tiles from the
-          calendar.
+          Add your own with &quot;Add custom&quot; inside a category below, or
+          try editing the trip region.
         </p>
       </aside>
     );
@@ -61,7 +79,10 @@ export function Palette({
             (p) =>
               p.park_group === groupKey && matchesRegion(p, regionId),
           );
-          if (groupParks.length === 0) return null;
+          const groupCustom = customTiles.filter(
+            (t) => t.park_group === groupKey,
+          );
+          if (groupParks.length === 0 && groupCustom.length === 0) return null;
 
           return (
             <details
@@ -101,6 +122,99 @@ export function Palette({
                     </button>
                   );
                 })}
+
+                {groupCustom.map((tile) => {
+                  const selected = selectedParkId === tile.id;
+                  const menuOpen = menuTileId === tile.id;
+                  return (
+                    <div
+                      key={tile.id}
+                      className="relative inline-flex max-w-full items-stretch gap-0.5"
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onSelectPark(selected ? null : tile.id)
+                        }
+                        className={`relative inline-flex max-w-[calc(100%-1.75rem)] items-center gap-1 rounded-full pl-3 pr-2 py-2 text-left font-sans text-xs font-medium transition ${
+                          selected
+                            ? "scale-105 ring-2 ring-royal ring-offset-1"
+                            : "hover:opacity-95"
+                        }`}
+                        style={{
+                          backgroundColor: tile.bg_colour,
+                          color: tile.fg_colour,
+                        }}
+                        title="Your custom tile"
+                      >
+                        <span
+                          className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-gold text-[0.55rem] font-bold leading-none text-royal shadow-sm"
+                          aria-hidden
+                        >
+                          ★
+                        </span>
+                        {tile.icon ? (
+                          <span className="shrink-0" aria-hidden>
+                            {tile.icon}
+                          </span>
+                        ) : null}
+                        <span className="truncate">{tile.name}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-lg border border-royal/25 bg-white px-1.5 font-sans text-xs font-bold text-royal hover:bg-cream"
+                        aria-label="Tile menu"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMenuTileId(menuOpen ? null : tile.id);
+                        }}
+                      >
+                        ···
+                      </button>
+                      {menuOpen ? (
+                        <div className="absolute right-0 top-full z-20 mt-1 min-w-[7.5rem] rounded-lg border border-royal/20 bg-white py-1 shadow-lg">
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-1.5 text-left font-sans text-xs text-royal hover:bg-cream"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuTileId(null);
+                              onEditCustom(tile);
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-1.5 text-left font-sans text-xs text-red-700 hover:bg-red-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMenuTileId(null);
+                              if (
+                                confirm(
+                                  `Delete “${tile.name}”? It will be removed from your calendar too.`,
+                                )
+                              ) {
+                                onDeleteCustom(tile.id);
+                              }
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  onClick={() => onAddCustom(groupKey)}
+                  className="flex min-h-[2.5rem] min-w-[6.5rem] flex-col items-center justify-center gap-0.5 rounded-full border-2 border-dashed border-royal/40 bg-transparent px-2 py-2 font-sans text-[0.65rem] font-semibold text-royal transition hover:border-royal hover:bg-royal/5"
+                >
+                  <span className="text-lg leading-none">+</span>
+                  <span>Add custom</span>
+                </button>
               </div>
             </details>
           );

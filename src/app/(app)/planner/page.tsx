@@ -1,6 +1,10 @@
 import { PlannerClient } from "@/app/(app)/planner/PlannerClient";
 import { getAchievementDefinitions } from "@/lib/db/achievements";
 import { getSuccessfulAiGenerationCountsForTrips } from "@/lib/db/ai-generations";
+import {
+  getCustomTileLimit,
+  getUserCustomTiles,
+} from "@/lib/db/custom-tiles";
 import { getAllParks } from "@/lib/db/parks";
 import { getAllRegions } from "@/lib/db/regions";
 import { getActiveTripForUser, getUserTrips } from "@/lib/db/trips";
@@ -59,8 +63,16 @@ export default async function PlannerPage({
     firstParam(sp.checkout) === "success" ||
     firstParam(sp.upgraded) === "pending";
 
-  const [trips, parks, regions, activeTrip, profileTier, achievementDefs] =
-    await Promise.all([
+  const [
+    trips,
+    parks,
+    regions,
+    activeTrip,
+    profileTier,
+    achievementDefs,
+    customTiles,
+    customTileLimit,
+  ] = await Promise.all([
       getUserTrips(user.id),
       getAllParks(),
       getAllRegions(),
@@ -76,6 +88,8 @@ export default async function PlannerPage({
         return data.tier as UserTier;
       })(),
       getAchievementDefinitions(),
+      getUserCustomTiles(user.id),
+      getCustomTileLimit(user.id),
     ]);
 
   const tripIds = trips.map((t) => t.id);
@@ -96,6 +110,8 @@ export default async function PlannerPage({
       aiGenerationCountsByTrip={aiGenerationCountsByTrip}
       siteUrl={siteUrl}
       purchaseHighlight={purchaseHighlight}
+      initialCustomTiles={customTiles}
+      customTileLimit={customTileLimit}
     />
   );
 }

@@ -1,8 +1,10 @@
 import { Calendar } from "@/components/planner/Calendar";
+import { getUserCustomTiles } from "@/lib/db/custom-tiles";
 import { getAllParks } from "@/lib/db/parks";
 import { getTripByPublicSlug } from "@/lib/db/trips";
 import { legacyDestinationFromRegionId } from "@/lib/legacy-destination";
 import type { Destination, Park } from "@/lib/types";
+import { customTileToPark } from "@/lib/types";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -36,7 +38,14 @@ export default async function PublicTripPage({ params }: Props) {
   const trip = await getTripByPublicSlug(slug);
   if (!trip) notFound();
 
-  const parks = filterParksForTrip(await getAllParks(), trip.region_id);
+  const [allParks, ownerCustomTiles] = await Promise.all([
+    getAllParks(),
+    getUserCustomTiles(trip.owner_id),
+  ]);
+  const parks: Park[] = [
+    ...filterParksForTrip(allParks, trip.region_id),
+    ...ownerCustomTiles.map(customTileToPark),
+  ];
 
   return (
     <div className="min-h-screen bg-cream">

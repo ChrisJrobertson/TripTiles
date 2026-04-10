@@ -107,6 +107,79 @@ export interface Park {
   sort_order: number;
 }
 
+/** User-created palette tile (`custom_tiles` table). */
+export interface CustomTile {
+  id: string;
+  user_id: string;
+  name: string;
+  park_group: string;
+  bg_colour: string;
+  fg_colour: string;
+  region_ids: string[];
+  save_to_library: boolean;
+  icon: string | null;
+  notes: string | null;
+  address: string | null;
+  url: string | null;
+  trips_used_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Unified shape for palette rendering (built-in park or custom tile). */
+export interface PaletteItem {
+  id: string;
+  name: string;
+  icon: string | null;
+  bg_colour: string;
+  fg_colour: string;
+  park_group: string;
+  is_custom: boolean;
+  notes?: string | null;
+}
+
+export function parkToPaletteItem(park: Park): PaletteItem {
+  return {
+    id: park.id,
+    name: park.name,
+    icon: park.icon,
+    bg_colour: park.bg_colour,
+    fg_colour: park.fg_colour,
+    park_group: park.park_group,
+    is_custom: park.is_custom,
+    notes: null,
+  };
+}
+
+export function customTileToPaletteItem(tile: CustomTile): PaletteItem {
+  return {
+    id: tile.id,
+    name: tile.name,
+    icon: tile.icon,
+    bg_colour: tile.bg_colour,
+    fg_colour: tile.fg_colour,
+    park_group: tile.park_group,
+    is_custom: true,
+    notes: tile.notes,
+  };
+}
+
+/** Map a custom DB row to a `Park` for calendar / AI guardrails. */
+export function customTileToPark(tile: CustomTile): Park {
+  return {
+    id: tile.id,
+    name: tile.name,
+    icon: tile.icon,
+    bg_colour: tile.bg_colour,
+    fg_colour: tile.fg_colour,
+    park_group: tile.park_group,
+    destinations: [],
+    region_ids: tile.region_ids ?? [],
+    is_custom: true,
+    sort_order: 10000,
+  };
+}
+
 export interface Trip {
   id: string;
   owner_id: string;

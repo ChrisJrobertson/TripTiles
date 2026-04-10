@@ -11,8 +11,10 @@ import {
 } from "@/actions/trips";
 import { AppNavHeader } from "@/components/app/AppNavHeader";
 import { AchievementToast } from "@/components/gamification/AchievementToast";
+import { deleteCustomTileAction } from "@/actions/custom-tiles";
 import { Calendar } from "@/components/planner/Calendar";
 import { Countdown } from "@/components/planner/Countdown";
+import { CustomTileModal } from "@/components/planner/CustomTileModal";
 import { DayNotesPanel } from "@/components/planner/DayNotesPanel";
 import { EditableTitle } from "@/components/planner/EditableTitle";
 import { MobilePlannerDock } from "@/components/planner/MobilePlannerDock";
@@ -34,12 +36,14 @@ import { useToast } from "@/lib/toast";
 import type {
   AchievementDefinition,
   Assignments,
+  CustomTile,
   Park,
   Region,
   SlotType,
   Trip,
   UserTier,
 } from "@/lib/types";
+import { customTileToPark } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
@@ -66,6 +70,9 @@ type Props = {
   siteUrl: string;
   /** Show post-checkout help (URL param from marketing). */
   purchaseHighlight: boolean;
+  initialCustomTiles: CustomTile[];
+  /** From `user_custom_tile_limit` RPC. */
+  customTileLimit: number;
 };
 
 const ASSIGN_DEBOUNCE_MS = 450;
@@ -106,6 +113,8 @@ export function PlannerClient({
   aiGenerationCountsByTrip: initialAiCounts,
   siteUrl,
   purchaseHighlight,
+  initialCustomTiles,
+  customTileLimit,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -152,6 +161,15 @@ export function PlannerClient({
   );
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
+  const [customTiles, setCustomTiles] = useState<CustomTile[]>(
+    initialCustomTiles,
+  );
+  const [customTileModalOpen, setCustomTileModalOpen] = useState(false);
+  const [customTileModalGroup, setCustomTileModalGroup] =
+    useState<string>("dining");
+  const [editingCustomTile, setEditingCustomTile] =
+    useState<CustomTile | null>(null);
+
   const hintRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const assignTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -170,6 +188,25 @@ export function PlannerClient({
     const r = regions.find((x) => x.id === activeTrip.region_id);
     return r?.short_name ?? r?.name ?? "your destination";
   }, [activeTrip?.region_id, regions]);
+
+  const calendarParks = useMemo(
+    () => [...parks, ...customTiles.map(customTileToPark)],
+    [parks, customTiles],
+  );
+
+  const customTilesForPalette = useMemo(() => {
+    const rid = resolvePaletteRegionId(activeTrip);
+    if (!rid) return [];
+    return customTiles.filter(
+      (t) =>
+        t.save_to_library || (t.region_ids?.includes(rid) ?? false),
+    );
+  }, [customTiles, activeTrip]);
+
+  const remainingCustomCreates = useMemo(() => {
+    if (customTileLimit >= 1000) return 999999;
+    return Math.max(0, customTileLimit - customTiles.length);
+  }, [customTileLimit, customTiles.length]);
 
   const enqueueAchievementKeys = useCallback(
     (keys: string[]) => {
@@ -238,6 +275,10 @@ export function PlannerClient({
   );
 
   useEffect(() => {
+    setCustomTiles(initialCustomTiles);
+  }, [initialCustomTiles]);
+
+  useEffect(() => {
     setTrips(initialTrips);
     const valid =
       initialActiveTripId &&
@@ -259,6 +300,56 @@ export function PlannerClient({
     if (hintRef.current) clearTimeout(hintRef.current);
     hintRef.current = setTimeout(() => setHint(null), 2200);
   }, []);
+
+  const handleAddCustom = useCallback(
+    (group: string) => {
+      const rid = resolvePaletteRegionId(activeTrip);
+      if (!rid) {
+        showHint("Set a destination region on this trip first.");
+        return;
+      }
+      setEditingCustomTile(null);
+      setCustomTileModalGroup(group);
+      setCustomTileModalOpen(true);
+    },
+    [activeTrip, showHint],
+  );
+
+  const handleEditCustom = useCallback((tile: CustomTile) => {
+    setEditingCustomTile(tile);
+    setCustomTileModalGroup(tile.park_group);
+    setCustomTileModalOpen(true);
+  }, []);
+
+  const handleDeleteCustom = useCallback(
+    async (tileId: string) => {
+      const res = await deleteCustomTileAction(tileId);
+      if (!res.ok) {
+        showToast("Couldn't delete tile — try again");
+        return;
+      }
+      setCustomTiles((prev) => prev.filter((t) => t.id !== tileId));
+      startTransition(() => router.refresh());
+    },
+    [router, showToast],
+  );
+
+  const handleCustomTileSuccess = useCallback(
+    (tile: CustomTile, newAchievements: string[]) => {
+      setCustomTiles((prev) => {
+        const i = prev.findIndex((t) => t.id === tile.id);
+        if (i >= 0) {
+          const next = [...prev];
+          next[i] = tile;
+          return next;
+        }
+        return [tile, ...prev];
+      });
+      enqueueAchievementKeys(newAchievements);
+      startTransition(() => router.refresh());
+    },
+    [enqueueAchievementKeys, router],
+  );
 
   const clearAssignTimer = useCallback(() => {
     if (assignTimerRef.current) {
@@ -654,15 +745,19 @@ export function PlannerClient({
             <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:pr-1">
               <Palette
                 parks={parks}
+                customTiles={customTilesForPalette}
                 regionId={resolvePaletteRegionId(activeTrip)}
                 selectedParkId={selectedParkId}
                 onSelectPark={setSelectedParkId}
+                onAddCustom={handleAddCustom}
+                onEditCustom={handleEditCustom}
+                onDeleteCustom={handleDeleteCustom}
               />
             </div>
             <div className="min-w-0 w-full">
               <Calendar
                 trip={activeTrip}
-                parks={parks}
+                parks={calendarParks}
                 selectedParkId={selectedParkId}
                 onAssign={onAssign}
                 onClear={onClear}
@@ -800,6 +895,23 @@ export function PlannerClient({
         submitError={smartError}
         onGenerate={handleSmartPlanGenerate}
       />
+
+      {activeTrip ? (
+        <CustomTileModal
+          isOpen={customTileModalOpen}
+          onClose={() => {
+            setCustomTileModalOpen(false);
+            setEditingCustomTile(null);
+          }}
+          regionId={resolvePaletteRegionId(activeTrip) ?? ""}
+          initialCategory={customTileModalGroup}
+          editingTile={editingCustomTile}
+          remainingCreates={remainingCustomCreates}
+          showFreeTierTileCounter={isFreeTierForTripLimit(userTier)}
+          tilesUsedCount={customTiles.length}
+          onSuccess={handleCustomTileSuccess}
+        />
+      ) : null}
 
       <TierLimitModal
         isOpen={tierLimitOpen}

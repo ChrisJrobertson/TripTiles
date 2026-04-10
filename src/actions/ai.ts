@@ -1,8 +1,9 @@
 "use server";
 
 import Anthropic from "@anthropic-ai/sdk";
-import { getRegionById } from "@/lib/db/regions";
+import { getCustomTilesForRegion } from "@/lib/db/custom-tiles";
 import { getParksForRegion } from "@/lib/db/parks";
+import { getRegionById } from "@/lib/db/regions";
 import { getTripById } from "@/lib/db/trips";
 import {
   applyArrivalDayNoThemeParks,
@@ -12,7 +13,8 @@ import {
 } from "@/lib/ai-plan-guardrails";
 import { addDays, formatDateKey, parseDate } from "@/lib/date-helpers";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
-import type { Assignments, SlotType, Trip } from "@/lib/types";
+import type { Assignments, CustomTile, SlotType, Trip } from "@/lib/types";
+import { customTileToPark } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 import { awardAchievementAction } from "@/actions/achievements";
 import { getSuccessfulAiGenerationCountForTrip } from "@/lib/db/ai-generations";
@@ -246,6 +248,8 @@ function buildPlannerUserMessage(params: {
   regionName: string;
   trip: Trip;
   parksForPrompt: { id: string; name: string }[];
+  /** User-defined tiles (optional extra lines for Claude). */
+  customTiles: CustomTile[];
   cruiseInstruction: string;
   childAges: string;
   crowdJson: string;
@@ -256,12 +260,22 @@ function buildPlannerUserMessage(params: {
     regionName,
     trip,
     parksForPrompt,
+    customTiles,
     cruiseInstruction,
     childAges,
     crowdJson,
   } = params;
 
   const parkLines = parksForPrompt.map((p) => `${p.id}: ${p.name}`).join("\n");
+  const customLines =
+    customTiles.length > 0
+      ? `\n\nThe user has also added these custom tiles you can use:\n${customTiles
+          .map(
+            (t) =>
+              `${t.id}: ${t.name}${t.notes ? ` (${t.notes})` : ""}`,
+          )
+          .join("\n")}`
+      : "";
 
   const crowdSection =
     crowdJson === "{}"
@@ -276,7 +290,7 @@ function buildPlannerUserMessage(params: {
 - ${cruiseInstruction}
 
 Available park IDs and names:
-${parkLines}`;
+${parkLines}${customLines}`;
 
   if (mode === "smart") {
     const extra = userPrompt.trim();
@@ -394,23 +408,32 @@ export async function generateAIPlanAction(input: {
     }
   }
 
-  const parks = await getParksForRegion(rid);
-  if (parks.length === 0) {
+  const builtInParks = await getParksForRegion(rid);
+  const customTileRows = await getCustomTilesForRegion(user.id, rid);
+  const customAsParks = customTileRows.map(customTileToPark);
+
+  const builtFiltered = trip.has_cruise
+    ? builtInParks
+    : builtInParks.filter((p) => !requiresCruiseSegment(p));
+  const customFiltered = trip.has_cruise
+    ? customAsParks
+    : customAsParks.filter((p) => !requiresCruiseSegment(p));
+
+  const parksForPrompt = [...builtFiltered, ...customFiltered];
+
+  if (parksForPrompt.length === 0) {
     return {
       ok: false,
       error: "AI_ERROR",
-      message: "No parks configured for this region.",
+      message:
+        "No parks or custom tiles available for this region. Add built-in parks in the catalog or create custom tiles.",
     };
   }
-
-  const parksForPrompt = trip.has_cruise
-    ? parks
-    : parks.filter((p) => !requiresCruiseSegment(p));
 
   const allowedParkIds = new Set(parksForPrompt.map((p) => p.id));
   const dateAllow = allowedDateKeys(trip.start_date, trip.end_date);
   const sortedDateKeys = sortDateKeysFromSet(dateAllow);
-  const parksById = new Map(parks.map((p) => [p.id, p]));
+  const parksById = new Map(parksForPrompt.map((p) => [p.id, p]));
 
   const childAges = trip.child_ages?.length
     ? ` (ages ${trip.child_ages.join(", ")})`
@@ -421,7 +444,7 @@ export async function generateAIPlanAction(input: {
     : `Cruise segment: NO — do not use any cruise ship, at-sea, port-day, or cruise-excursion tiles.`;
 
   const crowdPatterns = getCrowdPatternsForParkIds(
-    parksForPrompt.map((p) => p.id),
+    builtFiltered.map((p) => p.id),
   );
   const crowdJson = JSON.stringify(crowdPatterns, null, 2);
 
@@ -432,6 +455,7 @@ export async function generateAIPlanAction(input: {
     regionName: `${region.name} (${region.country})`,
     trip,
     parksForPrompt,
+    customTiles: customTileRows,
     cruiseInstruction,
     childAges,
     crowdJson,
