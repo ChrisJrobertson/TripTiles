@@ -28,6 +28,7 @@ const MODEL_BY_TIER: Record<string, string> = {
   free: "claude-haiku-4-5",
   pro: "claude-haiku-4-5",
   family: "claude-haiku-4-5",
+  premium: "claude-sonnet-4-6",
   concierge: "claude-sonnet-4-6",
   agent_staff: "claude-haiku-4-5",
   agent_admin: "claude-haiku-4-5",

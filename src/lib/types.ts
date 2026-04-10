@@ -16,6 +16,7 @@ export type UserTier =
   | "free"
   | "pro"
   | "family"
+  | "premium"
   | "concierge"
   | "agent_admin"
   | "agent_staff";

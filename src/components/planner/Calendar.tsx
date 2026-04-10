@@ -18,6 +18,8 @@ type Props = {
   onAssign: (dateKey: string, slot: SlotType, parkId: string) => void;
   onClear: (dateKey: string, slot: SlotType) => void;
   onNeedParkFirst: () => void;
+  /** Read-only grid (e.g. public share page). */
+  readOnly?: boolean;
 };
 
 const SLOTS: { key: SlotType; label: string; area: string }[] = [
@@ -71,13 +73,14 @@ export function Calendar({
   onAssign,
   onClear,
   onNeedParkFirst,
+  readOnly = false,
 }: Props) {
   const parkById = new Map(parks.map((p) => [p.id, p]));
   const weeks = buildWeeks(trip);
 
   return (
-    <div className="w-full overflow-x-auto">
-      <div className="inline-block min-w-full">
+    <div className="w-full min-w-0 overflow-x-auto">
+      <div className="w-full min-w-[min(100%,64rem)]">
         <div
           className="grid gap-1"
           style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}
@@ -115,6 +118,16 @@ export function Calendar({
               const dayNum = day.getDate();
               const mon = MONTHS_SHORT[day.getMonth()];
               const crowdLine = dayCrowdNote(trip, key);
+              const dnRaw = trip.preferences?.day_notes;
+              let dayNote = "";
+              if (
+                dnRaw &&
+                typeof dnRaw === "object" &&
+                !Array.isArray(dnRaw)
+              ) {
+                const v = (dnRaw as Record<string, unknown>)[key];
+                dayNote = typeof v === "string" ? v.trim() : "";
+              }
 
               return (
                 <div
@@ -137,6 +150,11 @@ export function Calendar({
                       Why this day: {crowdLine}
                     </p>
                   ) : null}
+                  {dayNote ? (
+                    <p className="border-b border-royal/10 bg-amber-50/90 px-1 py-0.5 font-sans text-[0.55rem] leading-tight text-royal/85 sm:text-[0.58rem]">
+                      Note: {dayNote}
+                    </p>
+                  ) : null}
                   <div className="planner-slot-grid flex-1 p-0.5">
                     {SLOTS.map(({ key: slot, label, area }) => {
                       const pid = ass[slot];
@@ -145,7 +163,9 @@ export function Calendar({
                         <div
                           key={slot}
                           className={`planner-slot ${area} ${
-                            park ? "" : "cursor-pointer bg-cream/50 hover:bg-cream"
+                            readOnly || park
+                              ? ""
+                              : "cursor-pointer bg-cream/50 hover:bg-cream"
                           }`}
                           style={
                             park
@@ -156,6 +176,7 @@ export function Calendar({
                               : undefined
                           }
                           onClick={() => {
+                            if (readOnly) return;
                             if (park) return;
                             if (selectedParkId) {
                               onAssign(key, slot, selectedParkId);
@@ -164,6 +185,7 @@ export function Calendar({
                             }
                           }}
                           onKeyDown={(e) => {
+                            if (readOnly) return;
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
                               if (!park) {
@@ -175,23 +197,25 @@ export function Calendar({
                               }
                             }
                           }}
-                          role={park ? undefined : "button"}
-                          tabIndex={park ? undefined : 0}
+                          role={readOnly || park ? undefined : "button"}
+                          tabIndex={readOnly || park ? undefined : 0}
                         >
                           <span className="planner-slot-label">{label}</span>
                           {park ? (
                             <>
-                              <button
-                                type="button"
-                                className="planner-slot-clear"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onClear(key, slot);
-                                }}
-                                aria-label="Clear slot"
-                              >
-                                ×
-                              </button>
+                              {!readOnly ? (
+                                <button
+                                  type="button"
+                                  className="planner-slot-clear"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onClear(key, slot);
+                                  }}
+                                  aria-label="Clear slot"
+                                >
+                                  ×
+                                </button>
+                              ) : null}
                               <span className="mt-3 line-clamp-3 pl-0.5 pr-3 font-sans text-[0.6rem] font-medium leading-tight sm:text-[0.65rem]">
                                 {park.icon ? `${park.icon} ` : ""}
                                 {park.name}

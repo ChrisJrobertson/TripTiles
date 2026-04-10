@@ -1,6 +1,7 @@
 "use client";
 
 import type { AchievementDefinition } from "@/lib/types";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type Props = {
@@ -15,7 +16,7 @@ export function AchievementToast({ achievement, onDismiss }: Props) {
     const t = setTimeout(() => {
       setExiting(true);
       setTimeout(onDismiss, 320);
-    }, 5000);
+    }, 6000);
     return () => clearTimeout(t);
   }, [onDismiss]);
 
@@ -25,24 +26,41 @@ export function AchievementToast({ achievement, onDismiss }: Props) {
   }
 
   return (
-    <button
-      type="button"
-      onClick={dismissNow}
-      className={`pointer-events-auto flex w-full max-w-[min(22rem,calc(100vw-2rem))] items-start gap-3 rounded-xl border-2 border-gold bg-cream px-4 py-3 text-left shadow-xl transition duration-300 ease-out ${
+    <div
+      className={`pointer-events-auto w-full max-w-[min(22rem,calc(100vw-2rem))] rounded-xl border-2 border-gold bg-cream px-4 py-3 text-left shadow-xl transition duration-300 ease-out ${
         exiting ? "translate-x-3 opacity-0" : "translate-x-0 opacity-100"
       } `}
+      role="status"
     >
-      <span className="text-3xl leading-none" aria-hidden>
-        {achievement.icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block font-serif text-base font-semibold text-royal">
-          {achievement.title}
+      <div className="flex items-start gap-3">
+        <span className="text-3xl leading-none" aria-hidden>
+          {achievement.icon}
         </span>
-        <span className="mt-1 block font-sans text-sm leading-snug text-royal/80">
-          {achievement.description}
-        </span>
-      </span>
-    </button>
+        <div className="min-w-0 flex-1">
+          <span className="block font-serif text-base font-semibold text-royal">
+            {achievement.title}
+          </span>
+          <span className="mt-1 block font-sans text-sm leading-snug text-royal/80">
+            {achievement.description}
+          </span>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Link
+              href="/achievements"
+              className="font-sans text-sm font-semibold text-gold underline decoration-gold/40 underline-offset-4 transition hover:text-royal"
+              onClick={(e) => e.stopPropagation()}
+            >
+              View in Passport
+            </Link>
+            <button
+              type="button"
+              onClick={dismissNow}
+              className="font-sans text-xs font-medium text-royal/50 hover:text-royal"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

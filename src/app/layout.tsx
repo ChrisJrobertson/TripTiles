@@ -13,8 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TripTiles",
-  description: "Visual theme park trip planner — coming soon.",
+  title: {
+    default: "TripTiles",
+    template: "%s · TripTiles",
+  },
+  description:
+    "Plan theme park trips on a visual calendar — Smart Plan AI, Trip Passport stamps, and print-friendly itineraries.",
 };
 
 export default function RootLayout({

@@ -32,9 +32,25 @@ export function Palette({
   selectedParkId,
   onSelectPark,
 }: Props) {
+  const inRegion = parks.filter((p) => matchesRegion(p, regionId));
+  if (inRegion.length === 0) {
+    return (
+      <aside className="rounded-2xl border border-royal/12 bg-cream p-4 text-royal shadow-sm">
+        <h2 className="mb-2 font-serif text-base font-semibold text-royal">
+          Parks
+        </h2>
+        <p className="font-sans text-sm leading-relaxed text-royal/75">
+          No park tiles are available for this destination in the catalog yet.
+          Try editing the trip region, or place dining and resort tiles from the
+          calendar.
+        </p>
+      </aside>
+    );
+  }
+
   return (
-    <aside className="rounded-2xl border-2 border-gold/70 bg-cream p-4 text-royal shadow-sm">
-      <h2 className="mb-4 font-serif text-lg font-semibold text-royal">
+    <aside className="rounded-2xl border border-royal/12 bg-cream p-4 text-royal shadow-sm">
+      <h2 className="mb-3 font-serif text-base font-semibold text-royal">
         Parks
       </h2>
       <div className="flex flex-col gap-2">

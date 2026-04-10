@@ -1,42 +1,151 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "TripTiles — Visual theme park trip planner",
+  description:
+    "Plan your theme park holiday on one calendar — parks, dining, Smart Plan AI, and Trip Passport stamps.",
+};
 
 export default function MarketingHomePage() {
   return (
     <div className="flex min-h-screen flex-col bg-cream">
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-royal/10 bg-cream/95 px-6 py-4 backdrop-blur-sm">
-        <Link
-          href="/"
-          className="font-serif text-xl font-semibold tracking-tight text-gold md:text-2xl"
-        >
-          TripTiles
-        </Link>
-        <nav>
-          <Link
-            href="/login"
-            className="font-serif text-sm font-medium text-royal transition hover:text-gold"
-          >
-            Sign in
-          </Link>
-        </nav>
+      <header className="sticky top-0 z-20 border-b border-royal/10 bg-cream/95 px-6 py-4 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
+          <span className="font-serif text-xl font-semibold tracking-tight text-gold md:text-2xl">
+            TripTiles
+          </span>
+          <nav className="flex flex-wrap items-center justify-end gap-x-5 gap-y-2 font-sans text-sm">
+            <Link href="/pricing" className="text-royal/80 hover:text-royal">
+              Pricing
+            </Link>
+            <Link href="/feedback" className="text-royal/80 hover:text-royal">
+              Feedback
+            </Link>
+            <Link
+              href="/login?next=/planner"
+              className="font-medium text-royal hover:text-gold"
+            >
+              Sign in
+            </Link>
+          </nav>
+        </div>
       </header>
 
-      <main className="flex flex-1 flex-col items-center justify-center px-6 py-16">
-        <div className="max-w-xl text-center">
-          <p className="font-serif text-4xl font-semibold tracking-tight text-royal md:text-5xl">
-            TripTiles
-          </p>
-          <p className="mt-4 font-serif text-lg text-royal/80">coming soon</p>
+      <main className="flex flex-1 flex-col">
+        <section className="relative overflow-hidden px-6 pb-20 pt-16 md:pb-28 md:pt-24">
           <div
-            className="mx-auto mt-10 h-1 w-24 rounded-full bg-gold"
+            className="pointer-events-none absolute inset-0 -z-10 opacity-40"
+            style={{
+              backgroundImage: `radial-gradient(ellipse 80% 60% at 50% -20%, rgba(201, 169, 97, 0.25), transparent),
+                radial-gradient(ellipse 60% 40% at 100% 50%, rgba(11, 30, 92, 0.06), transparent)`,
+            }}
             aria-hidden
           />
-          <Link
-            href="/login"
-            className="mt-12 inline-flex min-h-12 items-center justify-center rounded-lg bg-royal px-8 py-3 font-serif text-base font-semibold text-cream shadow-md transition hover:bg-royal/90"
-          >
-            Start planning - it&apos;s free →
-          </Link>
-        </div>
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="font-sans text-xs font-semibold uppercase tracking-[0.2em] text-gold">
+              Theme park trips, visually planned
+            </p>
+            <h1 className="mt-4 font-serif text-4xl font-semibold leading-tight tracking-tight text-royal md:text-5xl md:leading-tight">
+              See your whole holiday on one calendar
+            </h1>
+            <p className="mx-auto mt-6 max-w-xl font-sans text-lg leading-relaxed text-royal/80">
+              Drag parks, meals, and rest days onto your stay — then let Smart
+              Plan suggest a crowd-aware itinerary. Collect stamps in your Trip
+              Passport as you plan.
+            </p>
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+              <Link
+                href="/login?next=/planner"
+                className="inline-flex min-h-12 items-center justify-center rounded-lg bg-royal px-8 py-3 font-serif text-base font-semibold text-cream shadow-lg shadow-royal/20 transition hover:bg-royal/90"
+              >
+                Start planning — free
+              </Link>
+              <Link
+                href="/pricing"
+                className="inline-flex min-h-12 items-center justify-center rounded-lg border border-royal/25 bg-white px-6 py-3 font-sans text-sm font-semibold text-royal transition hover:bg-cream"
+              >
+                View pricing
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        <section className="border-t border-royal/10 bg-white/60 px-6 py-16">
+          <div className="mx-auto grid max-w-5xl gap-10 md:grid-cols-3 md:gap-8">
+            {[
+              {
+                step: "1",
+                title: "Create your trip",
+                body: "Dates, destination, and who’s travelling — set it up in the wizard in a minute.",
+              },
+              {
+                step: "2",
+                title: "Fill your calendar",
+                body: "Pick parks and dining from your palette. Your plan saves as you go.",
+              },
+              {
+                step: "3",
+                title: "Smart Plan (optional)",
+                body: "Generate an AI draft that respects arrival day, cruise nights, and crowd hints.",
+              },
+            ].map((item) => (
+              <div key={item.step} className="text-left">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gold/20 font-sans text-sm font-bold text-royal">
+                  {item.step}
+                </span>
+                <h2 className="mt-4 font-serif text-xl font-semibold text-royal">
+                  {item.title}
+                </h2>
+                <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
+                  {item.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="px-6 py-16">
+          <div className="mx-auto max-w-2xl rounded-2xl border border-gold/35 bg-white px-8 py-10 text-center shadow-sm">
+            <h2 className="font-serif text-2xl font-semibold text-royal">
+              Built for friends &amp; family first
+            </h2>
+            <p className="mt-3 font-sans text-sm leading-relaxed text-royal/75">
+              We&apos;re polishing the experience before a wider launch. If
+              something breaks or feels unclear, we want to know — it helps
+              everyone.
+            </p>
+            <Link
+              href="/feedback"
+              className="mt-6 inline-flex min-h-11 items-center justify-center rounded-lg border border-royal/20 bg-cream px-6 py-2.5 font-sans text-sm font-semibold text-royal transition hover:border-gold/50"
+            >
+              Send feedback
+            </Link>
+          </div>
+        </section>
+
+        <footer className="mt-auto border-t border-royal/10 bg-cream px-6 py-10">
+          <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-6 sm:flex-row">
+            <span className="font-serif text-lg font-semibold text-gold">
+              TripTiles
+            </span>
+            <div className="flex flex-wrap justify-center gap-6 font-sans text-sm text-royal/70">
+              <Link href="/pricing" className="hover:text-royal">
+                Pricing
+              </Link>
+              <Link href="/feedback" className="hover:text-royal">
+                Feedback
+              </Link>
+              <Link href="/login?next=/planner" className="hover:text-royal">
+                Sign in
+              </Link>
+            </div>
+          </div>
+          <p className="mx-auto mt-6 max-w-5xl text-center font-sans text-xs text-royal/45">
+            Smart Plan uses AI; always double-check times and park hours before
+            you travel.
+          </p>
+        </footer>
       </main>
     </div>
   );

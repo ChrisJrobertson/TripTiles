@@ -108,3 +108,21 @@ export async function getUserTripCount(userId: string): Promise<number> {
   if (error) throw error;
   return count ?? 0;
 }
+
+/** Public share page — `trips` RLS allows `is_public = true` for anon. */
+export async function getTripByPublicSlug(
+  slug: string,
+): Promise<Trip | null> {
+  const trimmed = slug.trim();
+  if (!trimmed) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("trips")
+    .select("*")
+    .eq("is_public", true)
+    .eq("public_slug", trimmed)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return mapTripRow(data as Record<string, unknown>);
+}

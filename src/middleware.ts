@@ -3,7 +3,12 @@ import { safeNextPath } from "@/lib/auth/safe-next-path";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { updateSession } from "@/lib/supabase/update-session";
 
-const PROTECTED_PREFIXES = ["/planner", "/admin", "/agency"] as const;
+const PROTECTED_PREFIXES = [
+  "/planner",
+  "/admin",
+  "/agency",
+  "/achievements",
+] as const;
 
 let loggedMissingSupabaseEnv = false;
 
@@ -60,6 +65,15 @@ export const config = {
     "/login/:path*",
     "/planner",
     "/planner/:path*",
+    "/achievements",
+    "/achievements/:path*",
+    "/pricing",
+    "/pricing/:path*",
+    "/feedback",
+    "/feedback/:path*",
+    "/p",
+    "/p/:path*",
+    "/api/analytics/:path*",
     "/admin",
     "/admin/:path*",
     "/agency",

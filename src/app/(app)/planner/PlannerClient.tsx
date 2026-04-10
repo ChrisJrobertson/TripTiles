@@ -9,20 +9,27 @@ import {
   updateTripFromWizardAction,
   updateTripMetadataAction,
 } from "@/actions/trips";
-import { SignOutButton } from "@/components/auth/SignOutButton";
+import { AppNavHeader } from "@/components/app/AppNavHeader";
 import { AchievementToast } from "@/components/gamification/AchievementToast";
 import { Calendar } from "@/components/planner/Calendar";
 import { Countdown } from "@/components/planner/Countdown";
+import { DayNotesPanel } from "@/components/planner/DayNotesPanel";
 import { EditableTitle } from "@/components/planner/EditableTitle";
+import { MobilePlannerDock } from "@/components/planner/MobilePlannerDock";
 import { Palette } from "@/components/planner/Palette";
+import { PlannerActionsMenu } from "@/components/planner/PlannerActionsMenu";
+import { PlannerTopNotices } from "@/components/planner/PlannerTopNotices";
 import { SavingIndicator } from "@/components/planner/SavingIndicator";
+import { ShareTripPanel } from "@/components/planner/ShareTripPanel";
 import {
   SmartPlanModal,
   type SmartPlanGeneratePayload,
 } from "@/components/planner/SmartPlanModal";
 import { TripSelector } from "@/components/planner/TripSelector";
+import { TripTimeline } from "@/components/planner/TripTimeline";
 import { Wizard } from "@/components/planner/Wizard";
 import { TierLimitModal } from "@/components/paywall/TierLimitModal";
+import { trackEvent } from "@/lib/analytics/client";
 import { useToast } from "@/lib/toast";
 import type {
   AchievementDefinition,
@@ -55,6 +62,10 @@ type Props = {
   achievementDefs: AchievementDefinition[];
   /** Successful AI generations per trip id (for free-tier UX). */
   aiGenerationCountsByTrip: Record<string, number>;
+  /** Absolute site URL for share links (no trailing slash). */
+  siteUrl: string;
+  /** Show post-checkout help (URL param from marketing). */
+  purchaseHighlight: boolean;
 };
 
 const ASSIGN_DEBOUNCE_MS = 450;
@@ -93,6 +104,8 @@ export function PlannerClient({
   userTier,
   achievementDefs,
   aiGenerationCountsByTrip: initialAiCounts,
+  siteUrl,
+  purchaseHighlight,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -137,12 +150,20 @@ export function PlannerClient({
   const [tierLimitReason, setTierLimitReason] = useState(
     "You already have a trip on the free plan.",
   );
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
   const hintRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const assignTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
+
+  const hasAnyAssignment = useMemo(() => {
+    if (!activeTrip) return false;
+    return Object.values(activeTrip.assignments).some(
+      (a) => a && Object.keys(a).length > 0,
+    );
+  }, [activeTrip]);
 
   const regionLabel = useMemo(() => {
     if (!activeTrip?.region_id) return "your destination";
@@ -206,7 +227,9 @@ export function PlannerClient({
     async <T,>(fn: () => Promise<T>): Promise<T> => {
       beginSaving();
       try {
-        return await fn();
+        const r = await fn();
+        setLastSavedAt(new Date());
+        return r;
       } finally {
         endSaving();
       }
@@ -327,6 +350,7 @@ export function PlannerClient({
           ),
         }));
         showToast("✨ Plan generated!");
+        trackEvent("smart_plan_success", { mode: payload.mode });
         enqueueAchievementKeys(res.newAchievements);
         setSmartOpen(false);
         startTransition(() => router.refresh());
@@ -402,72 +426,84 @@ export function PlannerClient({
   const savingVisible = isSaving || isPending;
 
   return (
-    <div className="min-h-screen bg-cream pb-16 pt-4">
-      <header className="sticky top-0 z-30 border-b border-royal/10 bg-cream/95 px-4 py-3 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="font-serif text-lg font-semibold text-gold">
-              TripTiles
-            </span>
-            <span className="font-sans text-sm text-royal/70">{userEmail}</span>
-          </div>
-          <SignOutButton />
-        </div>
-      </header>
+    <div className="min-h-screen bg-cream pb-28 pt-2 lg:pb-16">
+      <AppNavHeader
+        userEmail={userEmail}
+        userTier={userTier}
+        tripCount={trips.length}
+        freeTripLimit={FREE_TIER_TRIP_LIMIT}
+      />
+
+      <div className="mx-auto max-w-7xl px-4 pt-2">
+        <PlannerTopNotices
+          purchaseHighlight={purchaseHighlight}
+          hasTrip={trips.length > 0}
+          hasAnyAssignment={hasAnyAssignment}
+        />
+      </div>
 
       {activeTrip ? (
-        <main className="mx-auto max-w-6xl px-4 py-6">
-          <div className="text-center">
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <h1 className="font-serif text-2xl font-semibold text-royal sm:text-3xl">
-                <EditableTitle
-                  key={`${activeTrip.id}-fam`}
-                  value={activeTrip.family_name}
-                  onSave={(v) => {
-                    const trimmed = v.trim();
-                    applyLocalPatch(activeTrip.id, { family_name: trimmed });
-                    void withSaving(async () => {
-                      setSaveError(null);
-                      const res = await updateTripMetadataAction({
-                        tripId: activeTrip.id,
-                        familyName: trimmed,
+        <main className="mx-auto max-w-7xl px-4 py-4 sm:py-6">
+          <header className="border-b border-royal/10 pb-5">
+            <div className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h1 className="text-balance font-serif text-2xl font-semibold tracking-tight text-royal sm:text-3xl">
+                  <EditableTitle
+                    key={`${activeTrip.id}-fam`}
+                    value={activeTrip.family_name}
+                    onSave={(v) => {
+                      const trimmed = v.trim();
+                      applyLocalPatch(activeTrip.id, { family_name: trimmed });
+                      void withSaving(async () => {
+                        setSaveError(null);
+                        const res = await updateTripMetadataAction({
+                          tripId: activeTrip.id,
+                          familyName: trimmed,
+                        });
+                        if (!res.ok) setSaveError(res.error);
                       });
-                      if (!res.ok) setSaveError(res.error);
-                    });
-                  }}
-                  className="inline-block min-w-[4ch]"
-                />
-                <span className="text-royal/50"> — </span>
-                <EditableTitle
-                  key={`${activeTrip.id}-adv`}
-                  value={activeTrip.adventure_name}
-                  onSave={(v) => {
-                    const trimmed = v.trim();
-                    applyLocalPatch(activeTrip.id, { adventure_name: trimmed });
-                    void withSaving(async () => {
-                      setSaveError(null);
-                      const res = await updateTripMetadataAction({
-                        tripId: activeTrip.id,
-                        adventureName: trimmed,
+                    }}
+                    className="inline-block min-w-[4ch]"
+                  />
+                  <span className="text-royal/40"> — </span>
+                  <EditableTitle
+                    key={`${activeTrip.id}-adv`}
+                    value={activeTrip.adventure_name}
+                    onSave={(v) => {
+                      const trimmed = v.trim();
+                      applyLocalPatch(activeTrip.id, {
+                        adventure_name: trimmed,
                       });
-                      if (!res.ok) setSaveError(res.error);
-                    });
-                  }}
-                  className="inline-block min-w-[6ch]"
+                      void withSaving(async () => {
+                        setSaveError(null);
+                        const res = await updateTripMetadataAction({
+                          tripId: activeTrip.id,
+                          adventureName: trimmed,
+                        });
+                        if (!res.ok) setSaveError(res.error);
+                      });
+                    }}
+                    className="inline-block min-w-[6ch]"
+                  />
+                </h1>
+                <SavingIndicator
+                  isSaving={savingVisible}
+                  lastSavedAt={lastSavedAt}
                 />
-              </h1>
-              <SavingIndicator isSaving={savingVisible} />
+              </div>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+                <Countdown
+                  startDate={activeTrip.start_date}
+                  endDate={activeTrip.end_date}
+                />
+                <TripTimeline trip={activeTrip} variant="inline" />
+              </div>
             </div>
-            <div className="mt-3">
-              <Countdown
-                startDate={activeTrip.start_date}
-                endDate={activeTrip.end_date}
-              />
-            </div>
-          </div>
+          </header>
 
-          <div className="mt-8">
+          <div className="mt-5">
             <TripSelector
+              className="w-full"
               trips={trips}
               activeTripId={activeTripId}
               onSwitch={(id) => {
@@ -523,12 +559,15 @@ export function PlannerClient({
           ) : null}
 
           {hint ? (
-            <p className="mt-2 text-center font-sans text-sm font-medium text-royal">
+            <p className="mt-2 text-center font-sans text-sm font-medium text-royal sm:text-left">
               {hint}
             </p>
           ) : null}
 
-          <div className="mt-6 flex flex-wrap gap-2">
+          <section
+            className="mt-5 flex flex-wrap items-center gap-2"
+            aria-label="Trip actions"
+          >
             <button
               type="button"
               onClick={() => {
@@ -536,9 +575,9 @@ export function PlannerClient({
                 setWizardFirstRun(false);
                 setWizardOpen(true);
               }}
-              className="rounded-lg bg-royal px-4 py-2 font-sans text-sm font-medium text-cream"
+              className="rounded-lg bg-royal px-4 py-2.5 font-sans text-sm font-semibold text-cream shadow-sm transition hover:bg-royal/90"
             >
-              Edit Trip
+              Edit trip
             </button>
             <button
               type="button"
@@ -546,13 +585,12 @@ export function PlannerClient({
                 setSmartError(null);
                 setSmartOpen(true);
               }}
-              className="rounded-lg border border-gold bg-white px-4 py-2 font-sans text-sm font-medium text-royal"
+              className="rounded-lg border-2 border-gold bg-white px-4 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition hover:bg-gold/10"
             >
               Smart Plan ✨
             </button>
-            <button
-              type="button"
-              onClick={() => {
+            <PlannerActionsMenu
+              onResetCruise={() => {
                 if (!activeTripId) return;
                 applyLocalPatch(activeTripId, {
                   has_cruise: false,
@@ -571,13 +609,7 @@ export function PlannerClient({
                   else startTransition(() => router.refresh());
                 });
               }}
-              className="rounded-lg border border-royal/20 bg-white px-4 py-2 font-sans text-sm text-royal"
-            >
-              Reset Cruise
-            </button>
-            <button
-              type="button"
-              onClick={() => {
+              onClearAll={() => {
                 if (!activeTripId) return;
                 applyLocalPatch(activeTripId, { assignments: {} });
                 void withSaving(async () => {
@@ -593,23 +625,14 @@ export function PlannerClient({
                   } else startTransition(() => router.refresh());
                 });
               }}
-              className="rounded-lg border border-royal/20 bg-white px-4 py-2 font-sans text-sm text-royal"
-            >
-              Clear All
-            </button>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="rounded-lg border border-royal/20 bg-white px-4 py-2 font-sans text-sm text-royal print:hidden"
-            >
-              Print Calendar
-            </button>
-          </div>
+              onPrint={() => window.print()}
+            />
+          </section>
 
           {typeof activeTrip.preferences?.ai_crowd_summary === "string" &&
           (activeTrip.preferences.ai_crowd_summary as string).trim() ? (
             <div
-              className="mt-6 rounded-xl border border-gold/50 bg-white/90 px-4 py-3 font-sans text-sm leading-relaxed text-royal/90 shadow-sm"
+              className="mt-5 rounded-xl border border-gold/40 bg-white px-4 py-3 font-sans text-sm leading-relaxed text-royal/90 shadow-sm"
               role="status"
             >
               <span className="font-semibold text-royal">Crowd strategy — </span>
@@ -617,28 +640,67 @@ export function PlannerClient({
             </div>
           ) : null}
 
-          <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,17rem)_1fr]">
-            <Palette
-              parks={parks}
-              regionId={resolvePaletteRegionId(activeTrip)}
-              selectedParkId={selectedParkId}
-              onSelectPark={setSelectedParkId}
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <ShareTripPanel
+              tripId={activeTrip.id}
+              isPublic={activeTrip.is_public}
+              publicSlug={activeTrip.public_slug}
+              siteUrl={siteUrl}
             />
-            <Calendar
-              trip={activeTrip}
-              parks={parks}
-              selectedParkId={selectedParkId}
-              onAssign={onAssign}
-              onClear={onClear}
-              onNeedParkFirst={() => showHint("Pick a park first")}
-            />
+            <DayNotesPanel trip={activeTrip} tripId={activeTrip.id} />
+          </div>
+
+          <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] lg:gap-8">
+            <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:pr-1">
+              <Palette
+                parks={parks}
+                regionId={resolvePaletteRegionId(activeTrip)}
+                selectedParkId={selectedParkId}
+                onSelectPark={setSelectedParkId}
+              />
+            </div>
+            <div className="min-w-0 w-full">
+              <Calendar
+                trip={activeTrip}
+                parks={parks}
+                selectedParkId={selectedParkId}
+                onAssign={onAssign}
+                onClear={onClear}
+                onNeedParkFirst={() => showHint("Pick a park first")}
+              />
+            </div>
           </div>
         </main>
       ) : (
-        <div className="px-4 py-16 text-center">
-          <p className="font-sans text-royal">
-            Create your first trip to see your calendar.
+        <main className="mx-auto max-w-lg px-4 py-16 text-center">
+          <p className="font-serif text-2xl font-semibold text-royal">
+            Let&apos;s plan your adventure
           </p>
+          <p className="mt-3 font-sans text-sm leading-relaxed text-royal/75">
+            Add dates and destination in the wizard, then drag parks onto your
+            calendar. Your plan saves automatically — open Trip Passport anytime
+            to see stamps you&apos;ve earned.
+          </p>
+          <ul className="mx-auto mt-6 max-w-sm space-y-2 text-left font-sans text-sm text-royal/80">
+            <li className="flex gap-2">
+              <span className="text-gold" aria-hidden>
+                ✓
+              </span>
+              <span>One free trip to try everything</span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-gold" aria-hidden>
+                ✓
+              </span>
+              <span>Smart Plan suggests a draft itinerary (optional)</span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-gold" aria-hidden>
+                ✓
+              </span>
+              <span>Print or tweak days whenever you like</span>
+            </li>
+          </ul>
           {!wizardOpen ? (
             <button
               type="button"
@@ -646,12 +708,12 @@ export function PlannerClient({
                 setWizardFirstRun(true);
                 setWizardOpen(true);
               }}
-              className="mt-6 rounded-lg bg-royal px-6 py-3 font-serif text-sm font-semibold text-cream"
+              className="mt-8 rounded-lg bg-royal px-8 py-3 font-serif text-base font-semibold text-cream shadow-md transition hover:bg-royal/90"
             >
               Open trip wizard
             </button>
           ) : null}
-        </div>
+        </main>
       )}
 
       <Wizard
@@ -708,11 +770,21 @@ export function PlannerClient({
               throw new Error(res.error);
             }
             enqueueAchievementKeys(res.newAchievements);
+            trackEvent("trip_created");
             startTransition(() => router.refresh());
             return undefined;
           });
         }}
       />
+
+      {activeTrip ? (
+        <MobilePlannerDock
+          trip={activeTrip}
+          selectedParkId={selectedParkId}
+          onAssign={onAssign}
+          onNeedParkFirst={() => showHint("Pick a park first")}
+        />
+      ) : null}
 
       <SmartPlanModal
         isOpen={smartOpen}

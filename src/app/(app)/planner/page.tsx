@@ -4,6 +4,7 @@ import { getSuccessfulAiGenerationCountsForTrips } from "@/lib/db/ai-generations
 import { getAllParks } from "@/lib/db/parks";
 import { getAllRegions } from "@/lib/db/regions";
 import { getActiveTripForUser, getUserTrips } from "@/lib/db/trips";
+import { getPublicSiteUrl } from "@/lib/site";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type { UserTier } from "@/lib/types";
@@ -11,7 +12,18 @@ import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default async function PlannerPage() {
+function firstParam(
+  v: string | string[] | undefined,
+): string | undefined {
+  if (Array.isArray(v)) return v[0];
+  return v;
+}
+
+export default async function PlannerPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   if (!getSupabaseUrl() || !getSupabaseAnonKey()) {
     return (
       <main className="min-h-screen bg-cream px-6 py-12">
@@ -41,6 +53,12 @@ export default async function PlannerPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/planner");
 
+  const sp = await searchParams;
+  const purchaseHighlight =
+    firstParam(sp.purchase) === "pending" ||
+    firstParam(sp.checkout) === "success" ||
+    firstParam(sp.upgraded) === "pending";
+
   const [trips, parks, regions, activeTrip, profileTier, achievementDefs] =
     await Promise.all([
       getUserTrips(user.id),
@@ -64,6 +82,8 @@ export default async function PlannerPage() {
   const aiGenerationCountsByTrip =
     await getSuccessfulAiGenerationCountsForTrips(tripIds, user.id);
 
+  const siteUrl = getPublicSiteUrl() || "http://localhost:3001";
+
   return (
     <PlannerClient
       initialTrips={trips}
@@ -74,6 +94,8 @@ export default async function PlannerPage() {
       userTier={profileTier}
       achievementDefs={achievementDefs}
       aiGenerationCountsByTrip={aiGenerationCountsByTrip}
+      siteUrl={siteUrl}
+      purchaseHighlight={purchaseHighlight}
     />
   );
 }

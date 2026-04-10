@@ -16,6 +16,16 @@ function revalidatePlanner() {
   revalidatePath("/planner");
 }
 
+function randomPublicSlug(): string {
+  const c = globalThis.crypto;
+  if (c?.getRandomValues) {
+    const b = new Uint8Array(9);
+    c.getRandomValues(b);
+    return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  }
+  return `t${Date.now().toString(36)}`;
+}
+
 type ProfileTierRow = { tier: string };
 
 async function getProfileTier(userId: string): Promise<string | null> {
@@ -295,4 +305,148 @@ export async function updateTripFromWizardAction(input: {
     cruiseEmbark: hasCruise ? input.cruiseEmbark : null,
     cruiseDisembark: hasCruise ? input.cruiseDisembark : null,
   });
+}
+
+/** Enable/disable read-only public link (`/p/[slug]`). */
+export async function updateTripSharingAction(input: {
+  tripId: string;
+  enabled: boolean;
+}): Promise<
+  | { ok: true; publicSlug: string | null; isPublic: boolean }
+  | { ok: false; error: string }
+> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { ok: false, error: "Not signed in." };
+
+    const supabase = await createClient();
+
+    if (!input.enabled) {
+      const { error } = await supabase
+        .from("trips")
+        .update({
+          is_public: false,
+          public_slug: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", input.tripId)
+        .eq("owner_id", user.id);
+
+      if (error) return { ok: false, error: error.message };
+      revalidatePlanner();
+      revalidatePath("/p", "layout");
+      return { ok: true, publicSlug: null, isPublic: false };
+    }
+
+    const { data: existing, error: loadErr } = await supabase
+      .from("trips")
+      .select("public_slug")
+      .eq("id", input.tripId)
+      .eq("owner_id", user.id)
+      .maybeSingle();
+
+    if (loadErr) return { ok: false, error: loadErr.message };
+
+    const existingSlug =
+      existing &&
+      typeof existing === "object" &&
+      "public_slug" in existing &&
+      existing.public_slug
+        ? String(existing.public_slug)
+        : null;
+
+    if (existingSlug) {
+      const { error } = await supabase
+        .from("trips")
+        .update({
+          is_public: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", input.tripId)
+        .eq("owner_id", user.id);
+
+      if (error) return { ok: false, error: error.message };
+      revalidatePlanner();
+      revalidatePath(`/p/${existingSlug}`);
+      return { ok: true, publicSlug: existingSlug, isPublic: true };
+    }
+
+    for (let i = 0; i < 10; i++) {
+      const slug = randomPublicSlug();
+      const { error } = await supabase
+        .from("trips")
+        .update({
+          is_public: true,
+          public_slug: slug,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", input.tripId)
+        .eq("owner_id", user.id);
+
+      if (!error) {
+        revalidatePlanner();
+        revalidatePath(`/p/${slug}`);
+        return { ok: true, publicSlug: slug, isPublic: true };
+      }
+      const code = (error as { code?: string }).code;
+      if (code !== "23505") {
+        return { ok: false, error: error.message };
+      }
+    }
+    return { ok: false, error: "Could not allocate a unique share link." };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
+  }
+}
+
+/** Shallow-merge keys into `trips.preferences` (e.g. day_notes). */
+export async function updateTripPreferencesPatchAction(input: {
+  tripId: string;
+  patch: Record<string, unknown>;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { ok: false, error: "Not signed in." };
+
+    const supabase = await createClient();
+    const { data: row, error: fetchErr } = await supabase
+      .from("trips")
+      .select("preferences")
+      .eq("id", input.tripId)
+      .eq("owner_id", user.id)
+      .maybeSingle();
+
+    if (fetchErr) return { ok: false, error: fetchErr.message };
+    if (!row) return { ok: false, error: "Trip not found." };
+
+    const prev =
+      row.preferences &&
+      typeof row.preferences === "object" &&
+      !Array.isArray(row.preferences)
+        ? (row.preferences as Record<string, unknown>)
+        : {};
+    const next = { ...prev, ...input.patch };
+
+    const { error } = await supabase
+      .from("trips")
+      .update({
+        preferences: next,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.tripId)
+      .eq("owner_id", user.id);
+
+    if (error) return { ok: false, error: error.message };
+    revalidatePlanner();
+    revalidatePath("/p", "layout");
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
+  }
 }

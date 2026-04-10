@@ -44,6 +44,7 @@ export async function awardAchievementAction(
     }
 
     revalidatePath("/planner");
+    revalidatePath("/achievements");
     return { ok: true, justEarned: true };
   } catch (e) {
     return {

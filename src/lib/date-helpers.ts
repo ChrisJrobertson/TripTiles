@@ -71,3 +71,14 @@ export function addDays(d: Date, n: number): Date {
   x.setDate(x.getDate() + n);
   return x;
 }
+
+/** Inclusive list of planner date keys between trip dates. */
+export function eachDateKeyInRange(startIso: string, endIso: string): string[] {
+  const a = parseDate(startIso);
+  const b = parseDate(endIso);
+  const out: string[] = [];
+  for (let d = new Date(a); d <= b; d = addDays(d, 1)) {
+    out.push(formatDateKey(d));
+  }
+  return out;
+}

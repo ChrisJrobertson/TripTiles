@@ -9,6 +9,7 @@ type Props = {
   onNew: () => void;
   onRename: () => void;
   onDelete: () => void;
+  className?: string;
 };
 
 export function TripSelector({
@@ -18,11 +19,14 @@ export function TripSelector({
   onNew,
   onRename,
   onDelete,
+  className = "",
 }: Props) {
   const onlyOne = trips.length <= 1;
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-gold/50 bg-cream/80 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+    <div
+      className={`flex flex-col gap-3 rounded-xl border border-royal/10 bg-white px-4 py-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${className}`}
+    >
       <label className="flex flex-wrap items-center gap-2 font-sans text-sm text-royal">
         <span className="font-medium">Current trip:</span>
         <select

@@ -104,6 +104,22 @@ export function SmartPlanModal({
         </p>
 
         <div
+          className="mt-4 rounded-xl border border-amber-200/90 bg-amber-50/95 px-3 py-2.5 font-sans text-xs leading-relaxed text-royal/90"
+          role="note"
+        >
+          <strong className="font-semibold text-royal">AI disclaimer:</strong>{" "}
+          Smart Plan is a draft. It can make mistakes — always verify park
+          hours, refurbishments, and reservations with official sources before
+          you travel.
+        </div>
+        <p className="mt-2 font-sans text-[0.7rem] leading-snug text-royal/55">
+          <strong className="text-royal/70">Undo:</strong> leave &quot;Overwrite
+          existing tiles&quot; off and run again, use{" "}
+          <strong>Clear All</strong> for this trip, or refresh the page to sync
+          from the server.
+        </p>
+
+        <div
           className="mt-4 flex rounded-lg border border-royal/20 bg-white p-1"
           role="radiogroup"
           aria-label="Plan mode"
