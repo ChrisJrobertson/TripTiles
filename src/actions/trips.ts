@@ -1,6 +1,11 @@
 "use server";
 
+import {
+  awardAchievementAction,
+  checkAndAwardMilestonesAction,
+} from "@/actions/achievements";
 import { getUserTripCount } from "@/lib/db/trips";
+import { legacyDestinationFromRegionId } from "@/lib/legacy-destination";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type { Assignments, Destination } from "@/lib/types";
 import { revalidatePath } from "next/cache";
@@ -29,13 +34,16 @@ async function getProfileTier(userId: string): Promise<string | null> {
 export async function createTripAction(input: {
   familyName: string;
   adventureName: string;
-  destination: Destination;
+  regionId: string;
   startDate: string;
   endDate: string;
   hasCruise: boolean;
   cruiseEmbark?: string | null;
   cruiseDisembark?: string | null;
-}): Promise<{ ok: true; tripId: string } | { ok: false; error: string }> {
+}): Promise<
+  | { ok: true; tripId: string; newAchievements: string[] }
+  | { ok: false; error: string }
+> {
   try {
     const user = await getCurrentUser();
     if (!user) return { ok: false, error: "Not signed in." };
@@ -48,13 +56,16 @@ export async function createTripAction(input: {
       }
     }
 
+    const legacyDestination = legacyDestinationFromRegionId(input.regionId);
+
     const supabase = await createClient();
     const hasCruise = input.hasCruise;
     const row = {
       owner_id: user.id,
+      region_id: input.regionId,
       family_name: input.familyName.trim(),
       adventure_name: input.adventureName.trim(),
-      destination: input.destination,
+      destination: legacyDestination,
       start_date: input.startDate,
       end_date: input.endDate,
       has_cruise: hasCruise,
@@ -66,6 +77,8 @@ export async function createTripAction(input: {
       public_slug: null as string | null,
       adults: 2,
       children: 0,
+      child_ages: [] as number[],
+      notes: null as string | null,
     };
 
     const { data: inserted, error } = await supabase
@@ -76,8 +89,29 @@ export async function createTripAction(input: {
 
     if (error) return { ok: false, error: error.message };
     if (!inserted?.id) return { ok: false, error: "Insert failed." };
+
+    const newAchievements: string[] = [];
+
+    const first = await awardAchievementAction("first_trip");
+    if (first.ok && first.justEarned) newAchievements.push("first_trip");
+
+    const destKey = `dest_${input.regionId}`;
+    const { data: destDef } = await supabase
+      .from("achievement_definitions")
+      .select("key")
+      .eq("key", destKey)
+      .maybeSingle();
+
+    if (destDef) {
+      const destAward = await awardAchievementAction(destKey);
+      if (destAward.ok && destAward.justEarned) newAchievements.push(destKey);
+    }
+
+    const milestoneKeys = await checkAndAwardMilestonesAction();
+    newAchievements.push(...milestoneKeys);
+
     revalidatePlanner();
-    return { ok: true, tripId: String(inserted.id) };
+    return { ok: true, tripId: String(inserted.id), newAchievements };
   } catch (e) {
     return {
       ok: false,
@@ -92,6 +126,7 @@ export async function updateTripMetadataAction(input: {
   familyName?: string;
   adventureName?: string;
   destination?: Destination;
+  regionId?: string;
   startDate?: string;
   endDate?: string;
   hasCruise?: boolean;
@@ -113,6 +148,12 @@ export async function updateTripMetadataAction(input: {
       body.adventure_name = input.adventureName.trim();
     }
     if (input.destination !== undefined) body.destination = input.destination;
+    if (input.regionId !== undefined) {
+      body.region_id = input.regionId;
+      if (input.destination === undefined) {
+        body.destination = legacyDestinationFromRegionId(input.regionId);
+      }
+    }
     if (input.startDate !== undefined) body.start_date = input.startDate;
     if (input.endDate !== undefined) body.end_date = input.endDate;
     if (input.hasCruise === true) {
@@ -233,6 +274,7 @@ export async function updateTripFromWizardAction(input: {
   tripId: string;
   familyName: string;
   adventureName: string;
+  regionId: string;
   destination: Destination;
   startDate: string;
   endDate: string;
@@ -245,6 +287,7 @@ export async function updateTripFromWizardAction(input: {
     tripId: input.tripId,
     familyName: input.familyName.trim(),
     adventureName: input.adventureName.trim(),
+    regionId: input.regionId,
     destination: input.destination,
     startDate: input.startDate,
     endDate: input.endDate,

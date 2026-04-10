@@ -24,6 +24,11 @@ export function mapTripRow(row: Record<string, unknown>): Trip {
       ? String(row.last_opened_at)
       : updated || created;
 
+  const childAges = row.child_ages;
+  const child_ages: number[] = Array.isArray(childAges)
+    ? childAges.map((n) => Number(n))
+    : [];
+
   return {
     id: String(row.id),
     owner_id: owner,
@@ -31,6 +36,7 @@ export function mapTripRow(row: Record<string, unknown>): Trip {
     family_name: String(row.family_name ?? ""),
     adventure_name: String(row.adventure_name ?? ""),
     destination: (row.destination as Destination) ?? "custom",
+    region_id: row.region_id != null ? String(row.region_id) : null,
     start_date: String(row.start_date ?? ""),
     end_date: String(row.end_date ?? ""),
     has_cruise: Boolean(row.has_cruise),
@@ -39,10 +45,12 @@ export function mapTripRow(row: Record<string, unknown>): Trip {
       row.cruise_disembark != null ? String(row.cruise_disembark) : null,
     assignments,
     preferences,
+    notes: row.notes != null ? String(row.notes) : null,
     is_public: Boolean(row.is_public),
     public_slug: row.public_slug != null ? String(row.public_slug) : null,
     adults: Number(row.adults ?? 2),
     children: Number(row.children ?? 0),
+    child_ages,
     created_at: created,
     updated_at: updated,
     last_opened_at: lastOpened,

@@ -4,10 +4,25 @@ type Props = {
   isOpen: boolean;
   onClose: () => void;
   reason: string;
+  /** Defaults to trip-limit copy; use `ai` for Smart Plan generation limits. */
+  variant?: "trips" | "ai";
 };
 
-export function TierLimitModal({ isOpen, onClose, reason }: Props) {
+export function TierLimitModal({
+  isOpen,
+  onClose,
+  reason,
+  variant = "trips",
+}: Props) {
   if (!isOpen) return null;
+  const heading =
+    variant === "ai"
+      ? "Unlock more Smart Plan generations"
+      : "Upgrade to plan more trips";
+  const sub =
+    variant === "ai"
+      ? "Upgrade your plan for higher limits and premium AI models."
+      : "The free plan includes 1 trip. Unlock unlimited trips with TripTiles Pro.";
   return (
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(11,30,92,0.85)] p-4"
@@ -20,13 +35,10 @@ export function TierLimitModal({ isOpen, onClose, reason }: Props) {
           id="tier-limit-title"
           className="font-serif text-xl font-semibold text-royal"
         >
-          Upgrade to plan more trips
+          {heading}
         </h2>
         <p className="mt-3 font-sans text-sm text-royal/80">{reason}</p>
-        <p className="mt-2 font-sans text-sm text-royal/70">
-          The free plan includes 1 trip. Unlock unlimited trips with TripTiles
-          Pro.
-        </p>
+        <p className="mt-2 font-sans text-sm text-royal/70">{sub}</p>
         <div className="mt-6 flex flex-wrap gap-3">
           <a
             href="/pricing"

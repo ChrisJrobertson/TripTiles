@@ -79,6 +79,20 @@ export type Assignment = Partial<Record<SlotType, string>>;
 /** Date keys: `${year}-${month}-${day}` without zero-padding (e.g. "2026-8-17"). */
 export type Assignments = Record<string, Assignment>;
 
+export interface Region {
+  id: string;
+  name: string;
+  short_name: string;
+  country: string;
+  country_code: string;
+  continent: string;
+  flag_emoji: string | null;
+  description: string | null;
+  is_active: boolean;
+  is_featured: boolean;
+  sort_order: number;
+}
+
 export interface Park {
   id: string;
   name: string;
@@ -87,6 +101,7 @@ export interface Park {
   fg_colour: string;
   park_group: string;
   destinations: Destination[];
+  region_ids: string[];
   is_custom: boolean;
   sort_order: number;
 }
@@ -98,21 +113,60 @@ export interface Trip {
   family_name: string;
   adventure_name: string;
   destination: Destination;
+  /** Source of truth for palette & AI; `regions.id`. */
+  region_id: string | null;
   start_date: string;
   end_date: string;
   has_cruise: boolean;
   cruise_embark: string | null;
   cruise_disembark: string | null;
-  assignments: Assignments;
-  preferences: Record<string, unknown>;
-  is_public: boolean;
-  public_slug: string | null;
   adults: number;
   children: number;
-  /** ISO timestamps from DB */
+  child_ages: number[];
+  assignments: Assignments;
+  preferences: Record<string, unknown>;
+  notes: string | null;
+  is_public: boolean;
+  public_slug: string | null;
+  last_opened_at: string;
   created_at: string;
   updated_at: string;
-  last_opened_at: string;
+}
+
+export type AchievementCategory =
+  | "milestone"
+  | "trips"
+  | "parks"
+  | "destinations"
+  | "days"
+  | "social"
+  | "loyalty";
+
+export interface Achievement {
+  id: string;
+  user_id: string;
+  achievement_key: string;
+  earned_at: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface AchievementDefinition {
+  key: string;
+  title: string;
+  description: string;
+  icon: string;
+  category: AchievementCategory;
+  threshold: number | null;
+  sort_order: number;
+}
+
+export interface ProfileStats {
+  trips_planned_count: number;
+  days_planned_count: number;
+  parks_visited_count: number;
+  ai_generations_lifetime: number;
+  templates_cloned_count: number;
+  tier: UserTier;
 }
 
 /** Data collected by the trip wizard (steps 1–4). */
@@ -121,6 +175,8 @@ export type WizardData = {
   adventure_name: string;
   start_date: string;
   end_date: string;
+  region_id: string;
+  /** Legacy enum, derived from `region_id` for DB compatibility. */
   destination: Destination;
   has_cruise: boolean;
   cruise_embark: string | null;

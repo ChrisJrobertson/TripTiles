@@ -1,11 +1,13 @@
 "use client";
 
 import { GROUP_META, GROUP_ORDER } from "@/lib/group-meta";
+import { legacyDestinationFromRegionId } from "@/lib/legacy-destination";
 import type { Destination, Park } from "@/lib/types";
 
 type Props = {
   parks: Park[];
-  destination: Destination;
+  /** `regions.id` for the active trip; filters via `park.region_ids`. */
+  regionId: string | null;
   selectedParkId: string | null;
   onSelectPark: (id: string | null) => void;
 };
@@ -15,9 +17,18 @@ function matchesDestination(park: Park, dest: Destination): boolean {
   return park.destinations.includes(dest);
 }
 
+function matchesRegion(park: Park, regionId: string | null): boolean {
+  if (!regionId) return true;
+  if (park.region_ids?.length) {
+    return park.region_ids.includes(regionId);
+  }
+  const legacy = legacyDestinationFromRegionId(regionId);
+  return matchesDestination(park, legacy);
+}
+
 export function Palette({
   parks,
-  destination,
+  regionId,
   selectedParkId,
   onSelectPark,
 }: Props) {
@@ -32,7 +43,7 @@ export function Palette({
           if (!meta) return null;
           const groupParks = parks.filter(
             (p) =>
-              p.park_group === groupKey && matchesDestination(p, destination),
+              p.park_group === groupKey && matchesRegion(p, regionId),
           );
           if (groupParks.length === 0) return null;
 

@@ -1,29 +1,19 @@
 "use client";
 
 import { daysBetween, formatDateISO, parseDate } from "@/lib/date-helpers";
-import type { Destination, Trip, WizardData } from "@/lib/types";
+import { legacyDestinationFromRegionId } from "@/lib/legacy-destination";
+import type { Region, Trip, WizardData } from "@/lib/types";
 import { useEffect, useState } from "react";
+import { RegionPicker } from "./RegionPicker";
 
 type Props = {
   isOpen: boolean;
   isFirstRun: boolean;
   initialData: Partial<Trip>;
+  regions: Region[];
   onClose: () => void;
   onComplete: (data: WizardData) => Promise<boolean | void>;
 };
-
-const DEST_OPTIONS: {
-  value: Destination;
-  label: string;
-  emoji: string;
-}[] = [
-  { value: "orlando", label: "Orlando", emoji: "🏰" },
-  { value: "paris", label: "Paris", emoji: "🗼" },
-  { value: "tokyo", label: "Tokyo", emoji: "🗾" },
-  { value: "cali", label: "California", emoji: "🌴" },
-  { value: "cruise", label: "Cruise Only", emoji: "🚢" },
-  { value: "custom", label: "Other", emoji: "🌍" },
-];
 
 function defaultDates() {
   const today = new Date();
@@ -41,6 +31,7 @@ export function Wizard({
   isOpen,
   isFirstRun,
   initialData,
+  regions,
   onClose,
   onComplete,
 }: Props) {
@@ -49,7 +40,7 @@ export function Wizard({
   const [adventureName, setAdventureName] = useState("A Magical Adventure");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [destination, setDestination] = useState<Destination>("orlando");
+  const [regionId, setRegionId] = useState<string>("orlando");
   const [hasCruise, setHasCruise] = useState(false);
   const [cruiseEmbark, setCruiseEmbark] = useState("");
   const [cruiseDisembark, setCruiseDisembark] = useState("");
@@ -65,11 +56,18 @@ export function Wizard({
     setAdventureName(initialData.adventure_name ?? "A Magical Adventure");
     setStartDate(initialData.start_date ?? defs.start_date);
     setEndDate(initialData.end_date ?? defs.end_date);
-    setDestination((initialData.destination as Destination) ?? "orlando");
+    const rid =
+      initialData.region_id ??
+      (initialData.destination &&
+      initialData.destination !== "custom" &&
+      regions.some((r) => r.id === initialData.destination)
+        ? initialData.destination
+        : "orlando");
+    setRegionId(String(rid));
     setHasCruise(initialData.has_cruise ?? false);
     setCruiseEmbark(initialData.cruise_embark ?? "");
     setCruiseDisembark(initialData.cruise_disembark ?? "");
-  }, [isOpen, initialData]);
+  }, [isOpen, initialData, regions]);
 
   if (!isOpen) return null;
 
@@ -91,6 +89,15 @@ export function Wizard({
     }
     if (daysBetween(s, e) > 60) {
       setError("Trip cannot be longer than 60 days.");
+      return false;
+    }
+    setError(null);
+    return true;
+  }
+
+  function validateStep3(): boolean {
+    if (!regionId || !regions.some((r) => r.id === regionId)) {
+      setError("Please choose a destination region.");
       return false;
     }
     setError(null);
@@ -123,12 +130,14 @@ export function Wizard({
   }
 
   async function finish(skipCruiseDetails?: boolean) {
+    const legacy = legacyDestinationFromRegionId(regionId);
     const data: WizardData = {
       family_name: familyName.trim(),
       adventure_name: adventureName.trim(),
       start_date: startDate,
       end_date: endDate,
-      destination,
+      region_id: regionId,
+      destination: legacy,
       has_cruise: skipCruiseDetails ? false : hasCruise,
       cruise_embark:
         !skipCruiseDetails && hasCruise ? cruiseEmbark : null,
@@ -154,7 +163,7 @@ export function Wizard({
       role="dialog"
       aria-modal="true"
     >
-      <div className="my-auto w-full max-w-lg rounded-2xl border border-gold/40 bg-cream p-5 shadow-2xl sm:p-8 min-[0px]:min-h-[min(100%,36rem)] sm:min-h-0">
+      <div className="my-auto w-full max-w-2xl rounded-2xl border border-gold/40 bg-cream p-5 shadow-2xl sm:p-8 min-[0px]:min-h-[min(100%,36rem)] sm:min-h-0">
         <p className="font-sans text-sm font-medium text-royal/80">
           Step {step} of 4
         </p>
@@ -226,24 +235,12 @@ export function Wizard({
         ) : null}
 
         {step === 3 ? (
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {DEST_OPTIONS.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                onClick={() => setDestination(o.value)}
-                className={`rounded-xl border-2 px-3 py-4 text-center font-sans text-sm font-medium transition ${
-                  destination === o.value
-                    ? "border-royal bg-white shadow-md"
-                    : "border-royal/15 bg-white/70 hover:border-gold/50"
-                }`}
-              >
-                <span className="text-2xl" aria-hidden>
-                  {o.emoji}
-                </span>
-                <span className="mt-2 block text-royal">{o.label}</span>
-              </button>
-            ))}
+          <div className="mt-6 max-h-[min(70vh,32rem)] overflow-y-auto pr-1">
+            <RegionPicker
+              regions={regions}
+              selectedRegionId={regionId}
+              onChange={setRegionId}
+            />
           </div>
         ) : null}
 
@@ -313,6 +310,7 @@ export function Wizard({
               onClick={() => {
                 if (step === 1 && !validateStep1()) return;
                 if (step === 2 && !validateStep2()) return;
+                if (step === 3 && !validateStep3()) return;
                 setStep((s) => s + 1);
               }}
               className="rounded-lg bg-royal px-4 py-2 font-sans text-sm font-semibold text-cream"

@@ -1,8 +1,12 @@
 import { PlannerClient } from "@/app/(app)/planner/PlannerClient";
+import { getAchievementDefinitions } from "@/lib/db/achievements";
+import { getSuccessfulAiGenerationCountsForTrips } from "@/lib/db/ai-generations";
 import { getAllParks } from "@/lib/db/parks";
+import { getAllRegions } from "@/lib/db/regions";
 import { getActiveTripForUser, getUserTrips } from "@/lib/db/trips";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
-import { getCurrentUser } from "@/lib/supabase/server";
+import { createClient, getCurrentUser } from "@/lib/supabase/server";
+import type { UserTier } from "@/lib/types";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -37,18 +41,39 @@ export default async function PlannerPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/planner");
 
-  const [trips, parks, activeTrip] = await Promise.all([
-    getUserTrips(user.id),
-    getAllParks(),
-    getActiveTripForUser(user.id),
-  ]);
+  const [trips, parks, regions, activeTrip, profileTier, achievementDefs] =
+    await Promise.all([
+      getUserTrips(user.id),
+      getAllParks(),
+      getAllRegions(),
+      getActiveTripForUser(user.id),
+      (async (): Promise<UserTier | null> => {
+        const supabase = await createClient();
+        const { data } = await supabase
+          .from("profiles")
+          .select("tier")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (!data || typeof data !== "object" || !("tier" in data)) return null;
+        return data.tier as UserTier;
+      })(),
+      getAchievementDefinitions(),
+    ]);
+
+  const tripIds = trips.map((t) => t.id);
+  const aiGenerationCountsByTrip =
+    await getSuccessfulAiGenerationCountsForTrips(tripIds);
 
   return (
     <PlannerClient
       initialTrips={trips}
       parks={parks}
+      regions={regions}
       initialActiveTripId={activeTrip?.id ?? null}
       userEmail={user.email ?? ""}
+      userTier={profileTier}
+      achievementDefs={achievementDefs}
+      aiGenerationCountsByTrip={aiGenerationCountsByTrip}
     />
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { generateAIPlanAction } from "@/actions/ai";
 import {
   createTripAction,
   deleteTripAction,
@@ -9,6 +10,7 @@ import {
   updateTripMetadataAction,
 } from "@/actions/trips";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { AchievementToast } from "@/components/gamification/AchievementToast";
 import { Calendar } from "@/components/planner/Calendar";
 import { Countdown } from "@/components/planner/Countdown";
 import { EditableTitle } from "@/components/planner/EditableTitle";
@@ -19,30 +21,84 @@ import { TripSelector } from "@/components/planner/TripSelector";
 import { Wizard } from "@/components/planner/Wizard";
 import { TierLimitModal } from "@/components/paywall/TierLimitModal";
 import { useToast } from "@/lib/toast";
-import type { Assignments, Park, SlotType, Trip } from "@/lib/types";
+import type {
+  AchievementDefinition,
+  Assignments,
+  Park,
+  Region,
+  SlotType,
+  Trip,
+  UserTier,
+} from "@/lib/types";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import "./planner.css";
 
 type Props = {
   initialTrips: Trip[];
   parks: Park[];
+  regions: Region[];
   initialActiveTripId: string | null;
   userEmail: string;
+  /** From `profiles.tier`; null if missing (treated like free for trip limit UX). */
+  userTier: UserTier | null;
+  achievementDefs: AchievementDefinition[];
+  /** Successful AI generations per trip id (for free-tier UX). */
+  aiGenerationCountsByTrip: Record<string, number>;
 };
 
 const ASSIGN_DEBOUNCE_MS = 450;
 const SAVE_FLASH_MS = 500;
+/** Must match server-side enforcement in `createTripAction`. */
+const FREE_TIER_TRIP_LIMIT = 1;
+
+function isFreeTierForTripLimit(tier: UserTier | null): boolean {
+  return tier === null || tier === "free";
+}
+
+function shouldBlockNewTripWizard(
+  tripsLength: number,
+  tier: UserTier | null,
+): boolean {
+  return (
+    isFreeTierForTripLimit(tier) && tripsLength >= FREE_TIER_TRIP_LIMIT
+  );
+}
+
+function resolvePaletteRegionId(trip: Trip | null): string | null {
+  if (!trip) return null;
+  if (trip.region_id) return trip.region_id;
+  if (trip.destination !== "custom") return trip.destination;
+  return null;
+}
+
+type AchievementToastItem = { id: string; def: AchievementDefinition };
 
 export function PlannerClient({
   initialTrips,
   parks,
+  regions,
   initialActiveTripId,
   userEmail,
+  userTier,
+  achievementDefs,
+  aiGenerationCountsByTrip: initialAiCounts,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { message: toastMessage, show: showToast } = useToast();
+
+  const achievementDefByKey = useMemo(
+    () => new Map(achievementDefs.map((d) => [d.key, d])),
+    [achievementDefs],
+  );
 
   const [trips, setTrips] = useState<Trip[]>(initialTrips);
   const [activeTripId, setActiveTripId] = useState(() => {
@@ -66,12 +122,47 @@ export function PlannerClient({
   );
   const [wizardEditId, setWizardEditId] = useState<string | null>(null);
   const [smartOpen, setSmartOpen] = useState(false);
+  const [smartError, setSmartError] = useState<string | null>(null);
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
+  const [aiGenByTrip, setAiGenByTrip] = useState(initialAiCounts);
+  const [achievementToasts, setAchievementToasts] = useState<
+    AchievementToastItem[]
+  >([]);
+  const [tierLimitVariant, setTierLimitVariant] = useState<"trips" | "ai">(
+    "trips",
+  );
+  const [tierLimitReason, setTierLimitReason] = useState(
+    "You already have a trip on the free plan.",
+  );
 
   const hintRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const assignTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
+
+  const enqueueAchievementKeys = useCallback(
+    (keys: string[]) => {
+      const next: AchievementToastItem[] = [];
+      for (const key of keys) {
+        const def = achievementDefByKey.get(key);
+        if (def) {
+          next.push({ id: `${key}-${Date.now()}-${Math.random()}`, def });
+        }
+      }
+      if (next.length === 0) return;
+      setAchievementToasts((prev) => [...prev, ...next]);
+    },
+    [achievementDefByKey],
+  );
+
+  const dismissAchievementToast = useCallback((id: string) => {
+    setAchievementToasts((prev) => prev.filter((x) => x.id !== id));
+  }, []);
+
+  useEffect(() => {
+    setAiGenByTrip(initialAiCounts);
+  }, [initialAiCounts]);
 
   const beginSaving = useCallback(() => {
     if (saveHideTimerRef.current) {
@@ -166,6 +257,49 @@ export function PlannerClient({
       ),
     );
   }, []);
+
+  const handleSmartPlanGenerate = useCallback(
+    async (prompt: string) => {
+      if (!activeTripId) return;
+      setSmartError(null);
+      setIsAiGenerating(true);
+      try {
+        const res = await generateAIPlanAction({
+          tripId: activeTripId,
+          userPrompt: prompt,
+        });
+        if (!res.ok) {
+          if (res.error === "TIER_LIMIT") {
+            setTierLimitVariant("ai");
+            setTierLimitReason(res.message);
+            setTierLimitOpen(true);
+            return;
+          }
+          setSmartError(res.message);
+          showToast(res.message);
+          return;
+        }
+        applyLocalPatch(activeTripId, { assignments: res.assignments });
+        setAiGenByTrip((prev) => ({
+          ...prev,
+          [activeTripId]: (prev[activeTripId] ?? 0) + 1,
+        }));
+        showToast("✨ Plan generated!");
+        enqueueAchievementKeys(res.newAchievements);
+        setSmartOpen(false);
+        startTransition(() => router.refresh());
+      } finally {
+        setIsAiGenerating(false);
+      }
+    },
+    [
+      activeTripId,
+      applyLocalPatch,
+      enqueueAchievementKeys,
+      router,
+      showToast,
+    ],
+  );
 
   const onAssign = useCallback(
     (dateKey: string, slot: SlotType, parkId: string) => {
@@ -298,6 +432,14 @@ export function PlannerClient({
                 void touchTripAction(id);
               }}
               onNew={() => {
+                if (shouldBlockNewTripWizard(trips.length, userTier)) {
+                  setTierLimitVariant("trips");
+                  setTierLimitReason(
+                    "You already have a trip on the free plan.",
+                  );
+                  setTierLimitOpen(true);
+                  return;
+                }
                 setWizardEditId(null);
                 setWizardFirstRun(false);
                 setWizardOpen(true);
@@ -357,7 +499,10 @@ export function PlannerClient({
             </button>
             <button
               type="button"
-              onClick={() => setSmartOpen(true)}
+              onClick={() => {
+                setSmartError(null);
+                setSmartOpen(true);
+              }}
               className="rounded-lg border border-gold bg-white px-4 py-2 font-sans text-sm font-medium text-royal"
             >
               Smart Plan ✨
@@ -421,7 +566,7 @@ export function PlannerClient({
           <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,17rem)_1fr]">
             <Palette
               parks={parks}
-              destination={activeTrip.destination}
+              regionId={resolvePaletteRegionId(activeTrip)}
               selectedParkId={selectedParkId}
               onSelectPark={setSelectedParkId}
             />
@@ -458,6 +603,7 @@ export function PlannerClient({
       <Wizard
         isOpen={wizardOpen}
         isFirstRun={wizardFirstRun}
+        regions={regions}
         initialData={wizardInitial()}
         onClose={() => {
           setWizardOpen(false);
@@ -470,6 +616,7 @@ export function PlannerClient({
                 tripId: wizardEditId,
                 familyName: data.family_name,
                 adventureName: data.adventure_name,
+                regionId: data.region_id,
                 destination: data.destination,
                 startDate: data.start_date,
                 endDate: data.end_date,
@@ -487,7 +634,7 @@ export function PlannerClient({
             const res = await createTripAction({
               familyName: data.family_name,
               adventureName: data.adventure_name,
-              destination: data.destination,
+              regionId: data.region_id,
               startDate: data.start_date,
               endDate: data.end_date,
               hasCruise: data.has_cruise,
@@ -497,24 +644,54 @@ export function PlannerClient({
 
             if (!res.ok) {
               if (res.error === "TIER_LIMIT") {
+                setTierLimitVariant("trips");
+                setTierLimitReason(
+                  "You already have a trip on the free plan.",
+                );
                 setTierLimitOpen(true);
                 return false;
               }
               throw new Error(res.error);
             }
+            enqueueAchievementKeys(res.newAchievements);
             startTransition(() => router.refresh());
             return undefined;
           });
         }}
       />
 
-      <SmartPlanModal isOpen={smartOpen} onClose={() => setSmartOpen(false)} />
+      <SmartPlanModal
+        isOpen={smartOpen}
+        onClose={() => {
+          setSmartOpen(false);
+          setSmartError(null);
+        }}
+        generationsUsedThisTrip={aiGenByTrip[activeTripId] ?? 0}
+        showFreeTierNote={isFreeTierForTripLimit(userTier)}
+        isGenerating={isAiGenerating}
+        submitError={smartError}
+        onGenerate={handleSmartPlanGenerate}
+      />
 
       <TierLimitModal
         isOpen={tierLimitOpen}
         onClose={() => setTierLimitOpen(false)}
-        reason="You already have a trip on the free plan."
+        variant={tierLimitVariant}
+        reason={tierLimitReason}
       />
+
+      <div
+        className="pointer-events-none fixed right-4 top-20 z-[85] flex max-w-[min(22rem,calc(100vw-2rem))] flex-col gap-2"
+        aria-live="polite"
+      >
+        {achievementToasts.map((item) => (
+          <AchievementToast
+            key={item.id}
+            achievement={item.def}
+            onDismiss={() => dismissAchievementToast(item.id)}
+          />
+        ))}
+      </div>
 
       {toastMessage ? (
         <div className="fixed bottom-6 left-1/2 z-[80] max-w-[min(90vw,20rem)] -translate-x-1/2 rounded-full bg-royal px-4 py-2 text-center font-sans text-sm text-cream shadow-lg">
