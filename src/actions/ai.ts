@@ -4,6 +4,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getRegionById } from "@/lib/db/regions";
 import { getParksForRegion } from "@/lib/db/parks";
 import { getTripById } from "@/lib/db/trips";
+import {
+  enforceAiPlanGuardrails,
+  requiresCruiseSegment,
+  sortDateKeysFromSet,
+} from "@/lib/ai-plan-guardrails";
 import { addDays, formatDateKey, parseDate } from "@/lib/date-helpers";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type { Assignments, SlotType } from "@/lib/types";
@@ -52,7 +57,22 @@ Rules:
 - Each day can have any combination of am, pm, lunch, dinner slots, or
   none at all (rest day)
 - Schedule rest days every 3-4 park days, especially with young children
-- For arrival/departure days, use 'flyout' / 'flyhome' in the appropriate slot
+- Fly Out / Arrive (park id flyout) MUST only appear on day 1 (one slot only:
+  AM or PM, not both slots with flyout).
+- Fly Home / Depart (park id flyhome) MUST only appear on the final day (one
+  slot only: AM or PM, not both slots with flyhome).
+- Fly Out and Fly Home must NEVER appear on the same calendar day unless the
+  trip is exactly one day long.
+- Cruise tiles (e.g. Ship Pool/Bar, At Sea, Port Day, cruise excursions) may
+  ONLY be placed on days from Cruise Embark through Cruise Disembark when the
+  trip includes a cruise. If the trip has NO cruise segment, you MUST NOT place
+  any ship-only or cruise-line tiles.
+- Do not repeat the SAME main park on consecutive calendar days. A park may
+  appear multiple times across the trip but not on back-to-back days.
+- If a day is meant as downtime (rest / pool / light shopping), keep AM and PM
+  consistent: use restful tiles (pool, spa, resort, shopping, outlets) in both
+  AM and PM — do not pair a rest-style day with a full theme park in the other
+  half-day.
 - For dining, use 'owl' (Quick Service), 'tsr' (Table Service), 'char'
   (Character Dining), 'specd' (Specialty Dining), 'villa' (Home Cook)
 - Match park choices to the family's stated preferences
@@ -216,21 +236,32 @@ export async function generateAIPlanAction(input: {
     };
   }
 
-  const allowedParkIds = new Set(parks.map((p) => p.id));
+  const parksForPrompt = trip.has_cruise
+    ? parks
+    : parks.filter((p) => !requiresCruiseSegment(p));
+
+  const allowedParkIds = new Set(parksForPrompt.map((p) => p.id));
   const dateAllow = allowedDateKeys(trip.start_date, trip.end_date);
+  const sortedDateKeys = sortDateKeysFromSet(dateAllow);
+  const parksById = new Map(parks.map((p) => [p.id, p]));
 
   const childAges = trip.child_ages?.length
     ? ` (ages ${trip.child_ages.join(", ")})`
     : "";
+
+  const cruiseInstruction = trip.has_cruise
+    ? `Cruise segment: YES — only schedule ship/cruise-line tiles on days from embark (${trip.cruise_embark}) through disembark (${trip.cruise_disembark}), inclusive.`
+    : `Cruise segment: NO — do not use any cruise ship, at-sea, port-day, or cruise-excursion tiles.`;
 
   const userMessage = `Trip details:
 - Region: ${region.name} (${region.country})
 - Dates: ${trip.start_date} to ${trip.end_date}
 - Family: ${trip.adults} adults, ${trip.children} children${childAges}
 - Cruise: ${trip.has_cruise ? `yes, embark ${trip.cruise_embark} disembark ${trip.cruise_disembark}` : "no"}
+- ${cruiseInstruction}
 
 Available park IDs and names for ${region.name}:
-${parks.map((p) => `${p.id}: ${p.name}`).join("\n")}
+${parksForPrompt.map((p) => `${p.id}: ${p.name}`).join("\n")}
 
 Family preferences:
 ${input.userPrompt.trim()}
@@ -313,7 +344,33 @@ Generate the itinerary JSON now.`;
       };
     }
 
-    const merged = mergeAssignments(trip.assignments, sanitized);
+    const guarded = enforceAiPlanGuardrails(sanitized, {
+      trip,
+      parksById,
+      sortedDateKeys,
+    });
+    if (Object.keys(guarded).length === 0) {
+      await supabase.from("ai_generations").insert({
+        user_id: user.id,
+        trip_id: input.tripId,
+        prompt: input.userPrompt,
+        model,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_gbp_pence: null,
+        success: false,
+        error_message: "Plan failed guardrail validation (empty after cleanup)",
+      });
+
+      return {
+        ok: false,
+        error: "AI_ERROR",
+        message:
+          "The plan could not be applied after safety checks. Try generating again.",
+      };
+    }
+
+    const merged = mergeAssignments(trip.assignments, guarded);
     const now = new Date().toISOString();
 
     const { error: upErr } = await supabase
