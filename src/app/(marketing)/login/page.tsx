@@ -5,16 +5,19 @@ import Link from "next/link";
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_link:
     "That sign-in link is invalid or has expired. Request a new magic link below.",
+  auth_failed:
+    "We couldn’t complete sign-in from that link. Details below — try a new magic link if needed.",
 };
 
 type Props = {
-  searchParams: Promise<{ next?: string; error?: string }>;
+  searchParams: Promise<{ next?: string; error?: string; reason?: string }>;
 };
 
 export default async function LoginPage({ searchParams }: Props) {
   const params = await searchParams;
   const next = safeNextPath(params.next);
   const errorKey = params.error;
+  const reason = params.reason?.trim();
   const errorMessage =
     errorKey && ERROR_MESSAGES[errorKey] ? ERROR_MESSAGES[errorKey] : null;
 
@@ -40,7 +43,12 @@ export default async function LoginPage({ searchParams }: Props) {
             className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-800"
             role="alert"
           >
-            {errorMessage}
+            <p>{errorMessage}</p>
+            {errorKey === "auth_failed" && reason ? (
+              <p className="mt-2 break-words font-mono text-xs text-red-900/90">
+                {reason}
+              </p>
+            ) : null}
           </div>
         ) : null}
 
