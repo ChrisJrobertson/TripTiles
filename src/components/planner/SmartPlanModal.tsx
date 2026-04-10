@@ -1,26 +1,39 @@
 "use client";
 
+import { daysBetween, parseDate } from "@/lib/date-helpers";
+import type { Trip } from "@/lib/types";
 import { useEffect, useState, type FormEvent } from "react";
 
 const MAX_CHARS = 500;
 const DEFAULT_FREE_CAP = 5;
 
+export type SmartPlanGeneratePayload = {
+  mode: "smart" | "custom";
+  userPrompt: string;
+  /** When true, AI overwrites existing calendar tiles where it outputs a slot. */
+  replaceExistingTiles: boolean;
+};
+
 type Props = {
   isOpen: boolean;
   onClose: () => void;
-  /** Successful AI runs for this trip (free tier display). */
+  /** Trip used for Smart mode preview (dates, party size). */
+  trip: Trip | null;
+  /** Region label e.g. short_name for copy. */
+  regionLabel: string;
   generationsUsedThisTrip: number;
   freeTierCap?: number;
-  /** Hide the “Free plan: X of 5” line for paid tiers. */
   showFreeTierNote?: boolean;
   isGenerating: boolean;
   submitError: string | null;
-  onGenerate: (prompt: string) => Promise<void>;
+  onGenerate: (payload: SmartPlanGeneratePayload) => Promise<void>;
 };
 
 export function SmartPlanModal({
   isOpen,
   onClose,
+  trip,
+  regionLabel,
   generationsUsedThisTrip,
   freeTierCap = DEFAULT_FREE_CAP,
   showFreeTierNote = true,
@@ -28,24 +41,48 @@ export function SmartPlanModal({
   submitError,
   onGenerate,
 }: Props) {
-  const [text, setText] = useState("");
+  const [mode, setMode] = useState<"smart" | "custom">("smart");
+  const [smartNote, setSmartNote] = useState("");
+  const [customText, setCustomText] = useState("");
+  const [familyOpen, setFamilyOpen] = useState(false);
+  const [replaceExistingTiles, setReplaceExistingTiles] = useState(false);
 
   useEffect(() => {
-    if (isOpen) setText("");
+    if (isOpen) {
+      setSmartNote("");
+      setCustomText("");
+      setMode("smart");
+      setFamilyOpen(false);
+      setReplaceExistingTiles(false);
+    }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const remaining = MAX_CHARS - text.length;
-  const over = remaining < 0;
+  const tripDays =
+    trip?.start_date && trip?.end_date
+      ? daysBetween(parseDate(trip.start_date), parseDate(trip.end_date)) + 1
+      : 0;
+
+  const smartSummary =
+    trip && tripDays > 0
+      ? `I'll build a ${tripDays}-day plan for ${trip.adults} adult${trip.adults === 1 ? "" : "s"}${trip.children ? ` and ${trip.children} child${trip.children === 1 ? "" : "ren"}` : ""} in ${regionLabel}, optimising park days using historical crowd patterns for your dates.`
+      : `I'll build a plan for ${regionLabel} using historical crowd patterns for your trip dates.`;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (over || isGenerating) return;
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    await onGenerate(trimmed);
+    if (isGenerating) return;
+    if (mode === "custom" && !customText.trim()) return;
+    await onGenerate({
+      mode,
+      userPrompt: mode === "smart" ? smartNote.trim() : customText.trim(),
+      replaceExistingTiles,
+    });
   }
+
+  const customOver = customText.length > MAX_CHARS;
+  const canSubmit =
+    mode === "smart" ? true : Boolean(customText.trim()) && !customOver;
 
   return (
     <div
@@ -54,7 +91,7 @@ export function SmartPlanModal({
       aria-modal="true"
       aria-labelledby="smart-plan-title"
     >
-      <div className="w-full max-w-lg rounded-2xl border border-gold/40 bg-cream p-6 shadow-xl sm:p-8">
+      <div className="max-h-[min(90vh,44rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-gold/40 bg-cream p-6 shadow-xl sm:p-8">
         <h2
           id="smart-plan-title"
           className="font-serif text-xl font-semibold text-royal"
@@ -62,32 +99,103 @@ export function SmartPlanModal({
           Smart Plan ✨
         </h2>
         <p className="mt-2 font-sans text-sm text-royal/75">
-          Tell us about your family and how you like to travel — we&apos;ll draft
-          a day-by-day plan you can tweak.
+          Crowd-aware scheduling uses patterns we ship in-app — not live park
+          data.
         </p>
 
-        <form onSubmit={(e) => void handleSubmit(e)} className="mt-5 space-y-3">
-          <label className="block">
-            <span className="font-sans text-sm font-medium text-royal">
-              Your trip style &amp; priorities
-            </span>
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value.slice(0, MAX_CHARS))}
-              rows={6}
-              maxLength={MAX_CHARS}
-              placeholder={`We're a family of 4 with two kids aged 8 and 10. The kids love roller coasters and Star Wars. My wife hates queueing. We want one rest day in the middle. Budget is moderate.`}
-              className="mt-2 w-full resize-y rounded-lg border border-royal/25 px-3 py-3 font-sans text-sm text-royal placeholder:text-royal/35"
-              disabled={isGenerating}
-            />
-            <span
-              className={`mt-1 block text-right font-sans text-xs ${
-                over ? "text-red-600" : "text-royal/50"
-              }`}
-            >
-              {text.length} / {MAX_CHARS}
-            </span>
-          </label>
+        <div
+          className="mt-4 flex rounded-lg border border-royal/20 bg-white p-1"
+          role="radiogroup"
+          aria-label="Plan mode"
+        >
+          <button
+            type="button"
+            role="radio"
+            aria-checked={mode === "smart"}
+            onClick={() => setMode("smart")}
+            className={`flex-1 rounded-md px-3 py-2 text-center font-sans text-sm font-medium transition ${
+              mode === "smart"
+                ? "bg-royal text-cream"
+                : "text-royal/80 hover:bg-cream"
+            }`}
+          >
+            Smart Plan (recommended)
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={mode === "custom"}
+            onClick={() => setMode("custom")}
+            className={`flex-1 rounded-md px-3 py-2 text-center font-sans text-sm font-medium transition ${
+              mode === "custom"
+                ? "bg-royal text-cream"
+                : "text-royal/80 hover:bg-cream"
+            }`}
+          >
+            Custom prompt
+          </button>
+        </div>
+
+        <form onSubmit={(e) => void handleSubmit(e)} className="mt-5 space-y-4">
+          {mode === "smart" ? (
+            <>
+              <div className="rounded-lg border border-gold/40 bg-white/80 px-4 py-3 font-sans text-sm leading-relaxed text-royal">
+                {smartSummary}
+              </div>
+              <div className="rounded-lg border border-royal/15 bg-white">
+                <button
+                  type="button"
+                  onClick={() => setFamilyOpen((o) => !o)}
+                  className="flex w-full items-center justify-between px-3 py-2 text-left font-sans text-sm font-medium text-royal"
+                >
+                  Anything to know about your family?
+                  <span className="text-royal/50">{familyOpen ? "▾" : "▸"}</span>
+                </button>
+                {familyOpen ? (
+                  <div className="border-t border-royal/10 px-3 pb-3 pt-1">
+                    <textarea
+                      value={smartNote}
+                      onChange={(e) =>
+                        setSmartNote(e.target.value.slice(0, MAX_CHARS))
+                      }
+                      rows={4}
+                      maxLength={MAX_CHARS}
+                      placeholder="e.g. one child gets overwhelmed in crowds — prefer shorter park days."
+                      className="w-full resize-y rounded-lg border border-royal/25 px-3 py-2 font-sans text-sm text-royal placeholder:text-royal/35"
+                      disabled={isGenerating}
+                    />
+                    <span className="mt-1 block text-right font-sans text-xs text-royal/50">
+                      {smartNote.length} / {MAX_CHARS}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <label className="block">
+              <span className="font-sans text-sm font-medium text-royal">
+                Your trip style &amp; priorities
+              </span>
+              <textarea
+                value={customText}
+                onChange={(e) =>
+                  setCustomText(e.target.value.slice(0, MAX_CHARS))
+                }
+                rows={6}
+                maxLength={MAX_CHARS}
+                placeholder={`We're a family of 4 with two kids aged 8 and 10. The kids love roller coasters and Star Wars. My wife hates queueing. We want one rest day in the middle. Budget is moderate.`}
+                className="mt-2 w-full resize-y rounded-lg border border-royal/25 px-3 py-3 font-sans text-sm text-royal placeholder:text-royal/35"
+                disabled={isGenerating}
+              />
+              <span
+                className={`mt-1 block text-right font-sans text-xs ${
+                  customOver ? "text-red-600" : "text-royal/50"
+                }`}
+              >
+                {customText.length} / {MAX_CHARS}
+              </span>
+            </label>
+          )}
 
           {showFreeTierNote ? (
             <p className="font-sans text-xs text-royal/65">
@@ -103,6 +211,31 @@ export function SmartPlanModal({
               Your plan includes premium AI models and higher limits.
             </p>
           )}
+
+          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-royal/15 bg-white/90 px-3 py-2 font-sans text-sm text-royal">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={replaceExistingTiles}
+              onChange={(e) => setReplaceExistingTiles(e.target.checked)}
+              disabled={isGenerating}
+            />
+            <span>
+              <span className="font-medium">Replace tiles I already placed</span>
+              <span className="mt-0.5 block text-xs font-normal text-royal/70">
+                Off (default): AI only fills empty slots and keeps your manual
+                picks. On: AI can overwrite existing parks and dining for slots
+                it returns.
+              </span>
+            </span>
+          </label>
+
+          <p className="font-sans text-[0.7rem] leading-snug text-royal/55">
+            Crowd predictions are based on historical patterns and general
+            industry knowledge, not real-time data. Actual crowds vary with
+            weather, school holidays, and events. Always confirm official park
+            hours before you travel.
+          </p>
 
           {submitError ? (
             <p
@@ -124,7 +257,7 @@ export function SmartPlanModal({
             </button>
             <button
               type="submit"
-              disabled={isGenerating || over || !text.trim()}
+              disabled={isGenerating || !canSubmit}
               className="min-w-[12rem] flex-1 rounded-lg bg-gold px-4 py-3 font-serif text-sm font-semibold text-royal shadow-sm transition hover:brightness-105 disabled:opacity-60"
             >
               {isGenerating ? (

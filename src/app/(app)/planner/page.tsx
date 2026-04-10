@@ -62,7 +62,7 @@ export default async function PlannerPage() {
 
   const tripIds = trips.map((t) => t.id);
   const aiGenerationCountsByTrip =
-    await getSuccessfulAiGenerationCountsForTrips(tripIds);
+    await getSuccessfulAiGenerationCountsForTrips(tripIds, user.id);
 
   return (
     <PlannerClient

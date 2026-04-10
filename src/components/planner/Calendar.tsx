@@ -38,6 +38,16 @@ function inTripRange(day: Date, trip: Trip): boolean {
   return t >= s && t <= e;
 }
 
+function dayCrowdNote(
+  trip: Trip,
+  dateKey: string,
+): string | null {
+  const raw = trip.preferences?.ai_day_crowd_notes;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const v = (raw as Record<string, unknown>)[dateKey];
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
 function buildWeeks(trip: Trip): Date[][] {
   const start = parseDate(trip.start_date);
   const end = parseDate(trip.end_date);
@@ -104,6 +114,7 @@ export function Calendar({
 
               const dayNum = day.getDate();
               const mon = MONTHS_SHORT[day.getMonth()];
+              const crowdLine = dayCrowdNote(trip, key);
 
               return (
                 <div
@@ -118,6 +129,14 @@ export function Calendar({
                       {mon}
                     </span>
                   </div>
+                  {crowdLine ? (
+                    <p
+                      className="border-b border-gold/30 bg-cream/90 px-1 py-0.5 font-sans text-[0.55rem] leading-tight text-royal/80 sm:text-[0.58rem]"
+                      title={crowdLine}
+                    >
+                      Why this day: {crowdLine}
+                    </p>
+                  ) : null}
                   <div className="planner-slot-grid flex-1 p-0.5">
                     {SLOTS.map(({ key: slot, label, area }) => {
                       const pid = ass[slot];

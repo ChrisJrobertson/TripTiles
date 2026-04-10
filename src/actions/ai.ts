@@ -11,9 +11,11 @@ import {
 } from "@/lib/ai-plan-guardrails";
 import { addDays, formatDateKey, parseDate } from "@/lib/date-helpers";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
-import type { Assignments, SlotType } from "@/lib/types";
+import type { Assignments, SlotType, Trip } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 import { awardAchievementAction } from "@/actions/achievements";
+import { getSuccessfulAiGenerationCountForTrip } from "@/lib/db/ai-generations";
+import { getCrowdPatternsForParkIds } from "@/lib/data/crowd-patterns";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY ?? "",
@@ -40,15 +42,34 @@ You will receive:
 - A list of available park IDs and their names that the user can choose from
 - The user's family details and free-text preferences
 
-You must return ONLY valid JSON in this exact shape, with no preamble or
-explanation:
+You must return ONLY valid JSON in this shape, with no preamble or explanation.
+Include optional crowd fields whenever CROWD_PATTERNS are provided (see below).
 
 {
   "assignments": {
     "2026-7-9": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" },
     "2026-7-10": { "am": "ep", "pm": "ep", "dinner": "tsr" }
+  },
+  "crowd_reasoning": "One short paragraph on how you traded off busier vs quieter days (optional but recommended).",
+  "day_crowd_notes": {
+    "2026-7-14": "Why this park on this date vs alternatives — one line."
   }
 }
+
+## Crowd-awareness (when CROWD_PATTERNS appears in the user message)
+
+You receive a CROWD_PATTERNS object: per-park day-of-week scores (0–10, higher =
+busier), month scores (0–10), known_events with date ranges and impact flags.
+These are historical-style heuristics — not live data.
+
+When assigning parks to specific dates:
+1. For each candidate date and park, compute an effective score = (day_of_week_score + month_score) / 2 for that calendar month and weekday. If a known_event covers that date: add +2 if impact is very_busy_fri_sat and the date is Friday or Saturday; add +3 if impact is closes_early (note compressed hours — avoid that park that night for families needing a full day, or mention it in day_crowd_notes); +0 for extended_hours unless you explain.
+2. Place the busiest headline parks (often Magic Kingdom, Universal pair, new lands) on trip days with the LOWEST effective scores when you have a choice.
+3. Place naturally calmer parks (e.g. Animal Kingdom, some water parks) on higher-traffic calendar days when you cannot avoid them.
+4. NEVER claim exact wait times, live attendance, or precise percentages not implied by the scores. Use wording like "historically quieter", "typically busier", "usually better mid-week".
+5. Put brief trade-off explanations in crowd_reasoning and/or day_crowd_notes (one line per day you want to highlight, date keys YYYY-M-D unpadded).
+
+If CROWD_PATTERNS is empty or missing rows for some parks, still avoid obvious weekend peaks for major parks using general knowledge, and do not invent numeric wait times.
 
 Rules:
 - Date keys must be in the format YYYY-M-D with NO zero padding (e.g.
@@ -91,11 +112,46 @@ function modelForTier(tier: string | null): string {
   return MODEL_BY_TIER[t] ?? MODEL_BY_TIER.free;
 }
 
-function mergeAssignments(base: Assignments, incoming: Assignments): Assignments {
+/** Incoming overwrites the same day/slot keys (full overlay). */
+function mergeAssignmentsOverlay(
+  base: Assignments,
+  incoming: Assignments,
+): Assignments {
   const out: Assignments = { ...base };
   for (const [day, slots] of Object.entries(incoming)) {
     if (!slots || typeof slots !== "object") continue;
     out[day] = { ...(out[day] ?? {}), ...slots };
+  }
+  return out;
+}
+
+/**
+ * Merges AI output into the trip calendar.
+ * - `preserveExisting: true` (default): only fills slots that are still empty —
+ *   never overwrites a park/dining tile the user already placed.
+ * - `false`: same as overlay — AI rewrites any slot it outputs (full regenerate).
+ */
+function mergeAiIntoTrip(
+  base: Assignments,
+  incoming: Assignments,
+  preserveExisting: boolean,
+): Assignments {
+  if (!preserveExisting) {
+    return mergeAssignmentsOverlay(base, incoming);
+  }
+  const out: Assignments = { ...base };
+  for (const [day, slots] of Object.entries(incoming)) {
+    if (!slots || typeof slots !== "object") continue;
+    const dayOut: Partial<Record<SlotType, string>> = { ...(out[day] ?? {}) };
+    for (const [slot, pid] of Object.entries(slots)) {
+      if (!SLOT_SET.has(slot as SlotType)) continue;
+      if (typeof pid !== "string") continue;
+      const cur = dayOut[slot as SlotType];
+      if (cur !== undefined && cur !== "") continue;
+      dayOut[slot as SlotType] = pid;
+    }
+    if (Object.keys(dayOut).length > 0) out[day] = dayOut;
+    else delete out[day];
   }
   return out;
 }
@@ -145,9 +201,107 @@ function sanitizeAssignments(
   return out;
 }
 
+function parseCrowdMetadata(
+  raw: unknown,
+  allowedDates: Set<string>,
+): {
+  crowd_reasoning?: string;
+  day_crowd_notes?: Record<string, string>;
+} {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const obj = raw as Record<string, unknown>;
+  let crowd_reasoning: string | undefined;
+  if (typeof obj.crowd_reasoning === "string") {
+    const t = obj.crowd_reasoning.trim();
+    if (t) crowd_reasoning = t.slice(0, 1200);
+  }
+  const day_crowd_notes: Record<string, string> = {};
+  const notes = obj.day_crowd_notes;
+  if (notes && typeof notes === "object" && !Array.isArray(notes)) {
+    for (const [k, v] of Object.entries(notes as Record<string, unknown>)) {
+      if (!allowedDates.has(k)) continue;
+      if (typeof v !== "string") continue;
+      const s = v.trim();
+      if (s) day_crowd_notes[k] = s.slice(0, 400);
+    }
+  }
+  return {
+    crowd_reasoning,
+    day_crowd_notes:
+      Object.keys(day_crowd_notes).length > 0 ? day_crowd_notes : undefined,
+  };
+}
+
+function buildPlannerUserMessage(params: {
+  mode: "smart" | "custom";
+  userPrompt: string;
+  regionName: string;
+  trip: Trip;
+  parksForPrompt: { id: string; name: string }[];
+  cruiseInstruction: string;
+  childAges: string;
+  crowdJson: string;
+}): string {
+  const {
+    mode,
+    userPrompt,
+    regionName,
+    trip,
+    parksForPrompt,
+    cruiseInstruction,
+    childAges,
+    crowdJson,
+  } = params;
+
+  const parkLines = parksForPrompt.map((p) => `${p.id}: ${p.name}`).join("\n");
+
+  const crowdSection =
+    crowdJson === "{}"
+      ? "CROWD_PATTERNS: {} (no hand-tuned rows for these park IDs — still favour mid-week for headline parks when possible.)"
+      : `CROWD_PATTERNS (relative scores — not real-time crowds):\n${crowdJson}`;
+
+  const coreTrip = `Trip details:
+- Region: ${regionName}
+- Dates: ${trip.start_date} to ${trip.end_date}
+- Family: ${trip.adults} adults, ${trip.children} children${childAges}
+- Cruise: ${trip.has_cruise ? `yes, embark ${trip.cruise_embark} disembark ${trip.cruise_disembark}` : "no"}
+- ${cruiseInstruction}
+
+Available park IDs and names:
+${parkLines}`;
+
+  if (mode === "smart") {
+    const extra = userPrompt.trim();
+    return `${coreTrip}
+
+${crowdSection}
+
+SMART PLAN (recommended) MODE — build a full itinerary using crowd patterns to place busier parks on historically lighter days within this window. The user did not write a long custom brief.
+${extra ? `Optional family notes from the user:\n${extra}\n` : ""}
+Generate the itinerary JSON now (include crowd_reasoning and day_crowd_notes when possible).`;
+  }
+
+  return `${coreTrip}
+
+${crowdSection}
+
+CUSTOM PROMPT MODE — apply the traveller's preferences first, then use crowd patterns to improve date choices.
+
+Traveller's own words:
+${userPrompt.trim() || "(empty — rely on trip defaults only.)"}
+
+Generate the itinerary JSON now (include crowd_reasoning and day_crowd_notes when possible).`;
+}
+
 export async function generateAIPlanAction(input: {
   tripId: string;
+  mode: "smart" | "custom";
   userPrompt: string;
+  /**
+   * When false, AI output overwrites existing tiles where both specify a slot.
+   * Default true: only empty slots are filled (manual picks kept).
+   */
+  preserveExistingSlots?: boolean;
 }): Promise<
   | {
       ok: true;
@@ -155,6 +309,10 @@ export async function generateAIPlanAction(input: {
       tokensUsed: number;
       model: string;
       newAchievements: string[];
+      crowdSummary: string | null;
+      dayCrowdNotes: Record<string, string> | null;
+      /** Successful AI runs for this trip after this request (for UI counter). */
+      generationsUsedForTrip: number;
     }
   | {
       ok: false;
@@ -215,6 +373,7 @@ export async function generateAIPlanAction(input: {
     const { count, error: cErr } = await supabase
       .from("ai_generations")
       .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
       .eq("trip_id", input.tripId)
       .eq("success", true);
 
@@ -253,20 +412,22 @@ export async function generateAIPlanAction(input: {
     ? `Cruise segment: YES — only schedule ship/cruise-line tiles on days from embark (${trip.cruise_embark}) through disembark (${trip.cruise_disembark}), inclusive.`
     : `Cruise segment: NO — do not use any cruise ship, at-sea, port-day, or cruise-excursion tiles.`;
 
-  const userMessage = `Trip details:
-- Region: ${region.name} (${region.country})
-- Dates: ${trip.start_date} to ${trip.end_date}
-- Family: ${trip.adults} adults, ${trip.children} children${childAges}
-- Cruise: ${trip.has_cruise ? `yes, embark ${trip.cruise_embark} disembark ${trip.cruise_disembark}` : "no"}
-- ${cruiseInstruction}
+  const crowdPatterns = getCrowdPatternsForParkIds(
+    parksForPrompt.map((p) => p.id),
+  );
+  const crowdJson = JSON.stringify(crowdPatterns, null, 2);
 
-Available park IDs and names for ${region.name}:
-${parksForPrompt.map((p) => `${p.id}: ${p.name}`).join("\n")}
-
-Family preferences:
-${input.userPrompt.trim()}
-
-Generate the itinerary JSON now.`;
+  let composedUserMessage = "";
+  composedUserMessage = buildPlannerUserMessage({
+    mode: input.mode,
+    userPrompt: input.userPrompt,
+    regionName: `${region.name} (${region.country})`,
+    trip,
+    parksForPrompt,
+    cruiseInstruction,
+    childAges,
+    crowdJson,
+  });
 
   const model = modelForTier(tier);
 
@@ -284,7 +445,7 @@ Generate the itinerary JSON now.`;
           cache_control: { type: "ephemeral" },
         },
       ],
-      messages: [{ role: "user", content: userMessage }],
+      messages: [{ role: "user", content: composedUserMessage }],
     });
 
     const usage = response.usage;
@@ -307,7 +468,7 @@ Generate the itinerary JSON now.`;
       await supabase.from("ai_generations").insert({
         user_id: user.id,
         trip_id: input.tripId,
-        prompt: input.userPrompt,
+        prompt: composedUserMessage,
         model,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
@@ -323,12 +484,14 @@ Generate the itinerary JSON now.`;
       };
     }
 
+    const meta = parseCrowdMetadata(parsed, dateAllow);
+
     const sanitized = sanitizeAssignments(parsed, dateAllow, allowedParkIds);
     if (!sanitized || Object.keys(sanitized).length === 0) {
       await supabase.from("ai_generations").insert({
         user_id: user.id,
         trip_id: input.tripId,
-        prompt: input.userPrompt,
+        prompt: composedUserMessage,
         model,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
@@ -353,7 +516,7 @@ Generate the itinerary JSON now.`;
       await supabase.from("ai_generations").insert({
         user_id: user.id,
         trip_id: input.tripId,
-        prompt: input.userPrompt,
+        prompt: composedUserMessage,
         model,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
@@ -370,13 +533,23 @@ Generate the itinerary JSON now.`;
       };
     }
 
-    const merged = mergeAssignments(trip.assignments, guarded);
+    const preserve =
+      input.preserveExistingSlots !== false;
+    const merged = mergeAiIntoTrip(trip.assignments, guarded, preserve);
     const now = new Date().toISOString();
+
+    const nextPrefs: Record<string, unknown> = {
+      ...(trip.preferences ?? {}),
+    };
+    if (meta.crowd_reasoning) nextPrefs.ai_crowd_summary = meta.crowd_reasoning;
+    if (meta.day_crowd_notes) nextPrefs.ai_day_crowd_notes = meta.day_crowd_notes;
+    nextPrefs.ai_crowd_updated_at = now;
 
     const { error: upErr } = await supabase
       .from("trips")
       .update({
         assignments: merged,
+        preferences: nextPrefs,
         updated_at: now,
         last_opened_at: now,
       })
@@ -387,7 +560,7 @@ Generate the itinerary JSON now.`;
       await supabase.from("ai_generations").insert({
         user_id: user.id,
         trip_id: input.tripId,
-        prompt: input.userPrompt,
+        prompt: composedUserMessage,
         model,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
@@ -399,10 +572,10 @@ Generate the itinerary JSON now.`;
       return { ok: false, error: "AI_ERROR", message: upErr.message };
     }
 
-    await supabase.from("ai_generations").insert({
+    const { error: genInsertErr } = await supabase.from("ai_generations").insert({
       user_id: user.id,
       trip_id: input.tripId,
-      prompt: input.userPrompt,
+      prompt: composedUserMessage,
       model,
       input_tokens: inputTokens,
       output_tokens: outputTokens,
@@ -410,6 +583,25 @@ Generate the itinerary JSON now.`;
       success: true,
       error_message: null,
     });
+
+    if (genInsertErr) {
+      return {
+        ok: false,
+        error: "AI_ERROR",
+        message: `Could not log AI usage: ${genInsertErr.message}. Your plan may have saved — refresh the page.`,
+      };
+    }
+
+    let generationsUsedForTrip = 1;
+    try {
+      const n = await getSuccessfulAiGenerationCountForTrip(
+        input.tripId,
+        user.id,
+      );
+      generationsUsedForTrip = Math.max(1, n);
+    } catch {
+      /* count query failed; insert succeeded so at least 1 */
+    }
 
     const prevLifetime = Number(
       (profile as { ai_generations_lifetime?: number } | null)
@@ -432,6 +624,9 @@ Generate the itinerary JSON now.`;
       tokensUsed: inputTokens + outputTokens,
       model,
       newAchievements,
+      crowdSummary: meta.crowd_reasoning ?? null,
+      dayCrowdNotes: meta.day_crowd_notes ?? null,
+      generationsUsedForTrip,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown AI error";
@@ -439,7 +634,7 @@ Generate the itinerary JSON now.`;
     await supabase2.from("ai_generations").insert({
       user_id: user.id,
       trip_id: input.tripId,
-      prompt: input.userPrompt,
+      prompt: composedUserMessage,
       model: modelForTier(tier),
       input_tokens: inputTokens,
       output_tokens: outputTokens,

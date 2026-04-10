@@ -16,7 +16,10 @@ import { Countdown } from "@/components/planner/Countdown";
 import { EditableTitle } from "@/components/planner/EditableTitle";
 import { Palette } from "@/components/planner/Palette";
 import { SavingIndicator } from "@/components/planner/SavingIndicator";
-import { SmartPlanModal } from "@/components/planner/SmartPlanModal";
+import {
+  SmartPlanModal,
+  type SmartPlanGeneratePayload,
+} from "@/components/planner/SmartPlanModal";
 import { TripSelector } from "@/components/planner/TripSelector";
 import { Wizard } from "@/components/planner/Wizard";
 import { TierLimitModal } from "@/components/paywall/TierLimitModal";
@@ -141,6 +144,12 @@ export function PlannerClient({
 
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
 
+  const regionLabel = useMemo(() => {
+    if (!activeTrip?.region_id) return "your destination";
+    const r = regions.find((x) => x.id === activeTrip.region_id);
+    return r?.short_name ?? r?.name ?? "your destination";
+  }, [activeTrip?.region_id, regions]);
+
   const enqueueAchievementKeys = useCallback(
     (keys: string[]) => {
       const next: AchievementToastItem[] = [];
@@ -160,8 +169,22 @@ export function PlannerClient({
     setAchievementToasts((prev) => prev.filter((x) => x.id !== id));
   }, []);
 
+  /** Merge server counts with local state so refresh never drops below optimistic totals. */
   useEffect(() => {
-    setAiGenByTrip(initialAiCounts);
+    setAiGenByTrip((prev) => {
+      const ids = new Set([
+        ...Object.keys(initialAiCounts),
+        ...Object.keys(prev),
+      ]);
+      const out: Record<string, number> = {};
+      for (const id of ids) {
+        out[id] = Math.max(
+          initialAiCounts[id] ?? 0,
+          prev[id] ?? 0,
+        );
+      }
+      return out;
+    });
   }, [initialAiCounts]);
 
   const beginSaving = useCallback(() => {
@@ -259,14 +282,17 @@ export function PlannerClient({
   }, []);
 
   const handleSmartPlanGenerate = useCallback(
-    async (prompt: string) => {
+    async (payload: SmartPlanGeneratePayload) => {
       if (!activeTripId) return;
       setSmartError(null);
       setIsAiGenerating(true);
       try {
+        const t = trips.find((x) => x.id === activeTripId);
         const res = await generateAIPlanAction({
           tripId: activeTripId,
-          userPrompt: prompt,
+          mode: payload.mode,
+          userPrompt: payload.userPrompt,
+          preserveExistingSlots: !payload.replaceExistingTiles,
         });
         if (!res.ok) {
           if (res.error === "TIER_LIMIT") {
@@ -279,10 +305,26 @@ export function PlannerClient({
           showToast(res.message);
           return;
         }
-        applyLocalPatch(activeTripId, { assignments: res.assignments });
+        const prefPatch: Record<string, unknown> = {
+          ...(t?.preferences ?? {}),
+          ai_crowd_updated_at: new Date().toISOString(),
+        };
+        if (res.crowdSummary != null) {
+          prefPatch.ai_crowd_summary = res.crowdSummary;
+        }
+        if (res.dayCrowdNotes != null) {
+          prefPatch.ai_day_crowd_notes = res.dayCrowdNotes;
+        }
+        applyLocalPatch(activeTripId, {
+          assignments: res.assignments,
+          preferences: prefPatch,
+        });
         setAiGenByTrip((prev) => ({
           ...prev,
-          [activeTripId]: (prev[activeTripId] ?? 0) + 1,
+          [activeTripId]: Math.max(
+            res.generationsUsedForTrip,
+            prev[activeTripId] ?? 0,
+          ),
         }));
         showToast("✨ Plan generated!");
         enqueueAchievementKeys(res.newAchievements);
@@ -298,6 +340,7 @@ export function PlannerClient({
       enqueueAchievementKeys,
       router,
       showToast,
+      trips,
     ],
   );
 
@@ -563,6 +606,17 @@ export function PlannerClient({
             </button>
           </div>
 
+          {typeof activeTrip.preferences?.ai_crowd_summary === "string" &&
+          (activeTrip.preferences.ai_crowd_summary as string).trim() ? (
+            <div
+              className="mt-6 rounded-xl border border-gold/50 bg-white/90 px-4 py-3 font-sans text-sm leading-relaxed text-royal/90 shadow-sm"
+              role="status"
+            >
+              <span className="font-semibold text-royal">Crowd strategy — </span>
+              {activeTrip.preferences.ai_crowd_summary as string}
+            </div>
+          ) : null}
+
           <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,17rem)_1fr]">
             <Palette
               parks={parks}
@@ -666,6 +720,8 @@ export function PlannerClient({
           setSmartOpen(false);
           setSmartError(null);
         }}
+        trip={activeTrip}
+        regionLabel={regionLabel}
         generationsUsedThisTrip={aiGenByTrip[activeTripId] ?? 0}
         showFreeTierNote={isFreeTierForTripLimit(userTier)}
         isGenerating={isAiGenerating}
