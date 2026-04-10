@@ -63,27 +63,67 @@ export interface Agency {
   updated_at: string;
 }
 
+/** Planner / DB trip row (`trips` table). */
+export type SlotType = "am" | "pm" | "lunch" | "dinner";
+
+export type Destination =
+  | "orlando"
+  | "paris"
+  | "tokyo"
+  | "cali"
+  | "cruise"
+  | "custom";
+
+export type Assignment = Partial<Record<SlotType, string>>;
+
+/** Date keys: `${year}-${month}-${day}` without zero-padding (e.g. "2026-8-17"). */
+export type Assignments = Record<string, Assignment>;
+
+export interface Park {
+  id: string;
+  name: string;
+  icon: string | null;
+  bg_colour: string;
+  fg_colour: string;
+  park_group: string;
+  destinations: Destination[];
+  is_custom: boolean;
+  sort_order: number;
+}
+
 export interface Trip {
   id: string;
-  user_id: string;
+  owner_id: string;
   agency_id: string | null;
-  family_name: string | null;
-  adventure_name: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  destination: string | null;
-  has_cruise: boolean | null;
+  family_name: string;
+  adventure_name: string;
+  destination: Destination;
+  start_date: string;
+  end_date: string;
+  has_cruise: boolean;
   cruise_embark: string | null;
   cruise_disembark: string | null;
-  adults: number | null;
-  children: number | null;
-  preferences: Json | null;
-  assignments: Json | null;
-  is_public: boolean | null;
+  assignments: Assignments;
+  preferences: Record<string, unknown>;
+  is_public: boolean;
   public_slug: string | null;
+  adults: number;
+  children: number;
   created_at: string;
   updated_at: string;
 }
+
+/** Data collected by the trip wizard (steps 1–4). */
+export type WizardData = {
+  family_name: string;
+  adventure_name: string;
+  start_date: string;
+  end_date: string;
+  destination: Destination;
+  has_cruise: boolean;
+  cruise_embark: string | null;
+  cruise_disembark: string | null;
+};
 
 export type PurchaseStatus = "pending" | "completed" | "refunded" | "failed";
 

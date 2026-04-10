@@ -11,6 +11,7 @@ const config: Config = {
         royal: "#0B1E5C",
         gold: "#C9A961",
         cream: "#faf8f3",
+        magic: "#2E3192",
       },
     },
   },

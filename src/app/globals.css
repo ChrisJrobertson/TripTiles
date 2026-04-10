@@ -14,6 +14,7 @@
   --color-royal: #0b1e5c;
   --color-gold: #c9a961;
   --color-cream: #faf8f3;
+  --color-magic: #2e3192;
 }
 
 @media (prefers-color-scheme: dark) {

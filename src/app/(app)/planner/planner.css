@@ -1,0 +1,80 @@
+/* Calendar day — 2×2 slot grid: AM/PM taller than Lunch/Dinner */
+.planner-slot-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 3fr 2fr;
+  gap: 2px;
+  min-height: 7.5rem;
+  width: 100%;
+}
+
+.planner-slot-am {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.planner-slot-pm {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.planner-slot-lunch {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.planner-slot-dinner {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.planner-slot {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  border-radius: 4px;
+  padding: 4px;
+  font-size: 0.65rem;
+  line-height: 1.2;
+}
+
+@media (min-width: 640px) {
+  .planner-slot {
+    font-size: 0.7rem;
+  }
+}
+
+.planner-slot-label {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  font-size: 0.55rem;
+  font-weight: 600;
+  opacity: 0.45;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.planner-slot-clear {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  z-index: 2;
+  display: flex;
+  height: 1.25rem;
+  width: 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  font-size: 0.85rem;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.planner-slot-clear:hover {
+  opacity: 1;
+}

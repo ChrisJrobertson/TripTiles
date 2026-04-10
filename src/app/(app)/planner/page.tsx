@@ -1,6 +1,9 @@
-import { SignOutButton } from "@/components/auth/SignOutButton";
-import { requireAuth } from "@/lib/auth/redirects";
+import { PlannerClient } from "@/app/(app)/planner/PlannerClient";
+import { getAllParks } from "@/lib/db/parks";
+import { getUserTrips } from "@/lib/db/trips";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
+import { getCurrentUser } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -31,26 +34,19 @@ export default async function PlannerPage() {
     );
   }
 
-  const user = await requireAuth("/planner");
-  const email = user.email ?? "there";
+  const user = await getCurrentUser();
+  if (!user) redirect("/login?next=/planner");
+
+  const [trips, parks] = await Promise.all([
+    getUserTrips(user.id),
+    getAllParks(),
+  ]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-cream px-6 py-12">
-      <div className="w-full max-w-md rounded-2xl border border-royal/10 bg-white p-8 text-center shadow-lg shadow-royal/5 md:p-10">
-        <h1 className="font-serif text-2xl font-semibold text-royal md:text-3xl">
-          ✨ You&apos;re signed in!
-        </h1>
-        <p className="mt-4 font-serif text-lg text-royal/85">
-          Welcome, {email}
-        </p>
-        <p className="mt-6 font-sans text-sm leading-relaxed text-royal/55">
-          The real planner is coming in Session 3. For now, this proves auth is
-          working.
-        </p>
-        <div className="mt-10 flex justify-center">
-          <SignOutButton />
-        </div>
-      </div>
-    </main>
+    <PlannerClient
+      initialTrips={trips}
+      parks={parks}
+      userEmail={user.email ?? ""}
+    />
   );
 }
