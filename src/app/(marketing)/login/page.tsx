@@ -46,7 +46,12 @@ export default async function LoginPage({ searchParams }: Props) {
 
         <LoginForm next={next} />
 
-        <p className="mt-8 text-center font-sans text-sm text-royal/60">
+        <p className="mt-8 text-center font-sans text-sm leading-relaxed text-royal/65">
+          Don&apos;t have an account? Just sign in — we&apos;ll create one
+          automatically.
+        </p>
+
+        <p className="mt-4 text-center font-sans text-sm text-royal/50">
           <Link href="/" className="text-royal underline underline-offset-2">
             Back to home
           </Link>

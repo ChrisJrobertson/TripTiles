@@ -1,7 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const inputClass =
@@ -13,9 +13,14 @@ type Props = {
 
 export function LoginForm({ next }: Props) {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,6 +50,22 @@ export function LoginForm({ next }: Props) {
       setError("Something went wrong. Please try again.");
       setLoading(false);
     }
+  }
+
+  if (!mounted) {
+    return (
+      <div
+        className="mt-8 space-y-6"
+        aria-busy="true"
+        aria-label="Loading sign-in form"
+      >
+        <div>
+          <div className="mb-2 h-4 w-32 rounded bg-royal/15" />
+          <div className="min-h-12 w-full rounded-lg border-2 border-royal/10 bg-white/60" />
+        </div>
+        <div className="min-h-12 w-full rounded-lg bg-gold/20" />
+      </div>
+    );
   }
 
   return (

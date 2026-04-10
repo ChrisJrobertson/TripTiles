@@ -1,10 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
+import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { type NextRequest, NextResponse } from "next/server";
 
-/**
- * Refreshes the Supabase session and returns a response with updated auth cookies.
- * Use the returned value as the middleware response (or chain redirects from it).
- */
+/** Refreshes the auth session; returns the `NextResponse` to continue (or merge cookies into a redirect). */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -12,13 +10,10 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = getSupabaseUrl();
+  const anonKey = getSupabaseAnonKey();
 
   if (!url || !anonKey) {
-    console.warn(
-      "[TripTiles middleware] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY; skipping auth.",
-    );
     return {
       response: NextResponse.next({
         request: {
