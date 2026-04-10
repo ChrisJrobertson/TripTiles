@@ -1,54 +1,121 @@
 "use client";
 
 import {
-  createTripFromWizard,
-  deleteTrip,
-  type TripUpdateInput,
-  updateTrip,
-  updateTripFromWizard,
+  createTripAction,
+  deleteTripAction,
+  touchTripAction,
+  updateAssignmentsAction,
+  updateTripFromWizardAction,
+  updateTripMetadataAction,
 } from "@/actions/trips";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { Calendar } from "@/components/planner/Calendar";
 import { Countdown } from "@/components/planner/Countdown";
 import { EditableTitle } from "@/components/planner/EditableTitle";
 import { Palette } from "@/components/planner/Palette";
+import { SavingIndicator } from "@/components/planner/SavingIndicator";
 import { SmartPlanModal } from "@/components/planner/SmartPlanModal";
 import { TripSelector } from "@/components/planner/TripSelector";
 import { Wizard } from "@/components/planner/Wizard";
+import { TierLimitModal } from "@/components/paywall/TierLimitModal";
+import { useToast } from "@/lib/toast";
 import type { Assignments, Park, SlotType, Trip } from "@/lib/types";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import "./planner.css";
 
 type Props = {
   initialTrips: Trip[];
   parks: Park[];
+  initialActiveTripId: string | null;
   userEmail: string;
 };
 
-const ASSIGN_SAVE_MS = 450;
+const ASSIGN_DEBOUNCE_MS = 450;
+const SAVE_FLASH_MS = 500;
 
 export function PlannerClient({
   initialTrips,
   parks,
+  initialActiveTripId,
   userEmail,
 }: Props) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const { message: toastMessage, show: showToast } = useToast();
+
   const [trips, setTrips] = useState<Trip[]>(initialTrips);
-  const [activeTripId, setActiveTripId] = useState(
-    () => initialTrips[0]?.id ?? "",
-  );
+  const [activeTripId, setActiveTripId] = useState(() => {
+    if (
+      initialActiveTripId &&
+      initialTrips.some((t) => t.id === initialActiveTripId)
+    ) {
+      return initialActiveTripId;
+    }
+    return initialTrips[0]?.id ?? "";
+  });
   const [selectedParkId, setSelectedParkId] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [tierLimitOpen, setTierLimitOpen] = useState(false);
+
   const [wizardOpen, setWizardOpen] = useState(() => initialTrips.length === 0);
   const [wizardFirstRun, setWizardFirstRun] = useState(
     () => initialTrips.length === 0,
   );
   const [wizardEditId, setWizardEditId] = useState<string | null>(null);
   const [smartOpen, setSmartOpen] = useState(false);
+
   const hintRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const assignSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const assignTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
+
+  const beginSaving = useCallback(() => {
+    if (saveHideTimerRef.current) {
+      clearTimeout(saveHideTimerRef.current);
+      saveHideTimerRef.current = null;
+    }
+    setIsSaving(true);
+  }, []);
+
+  const endSaving = useCallback(() => {
+    saveHideTimerRef.current = setTimeout(() => {
+      setIsSaving(false);
+      saveHideTimerRef.current = null;
+    }, SAVE_FLASH_MS);
+  }, []);
+
+  const withSaving = useCallback(
+    async <T,>(fn: () => Promise<T>): Promise<T> => {
+      beginSaving();
+      try {
+        return await fn();
+      } finally {
+        endSaving();
+      }
+    },
+    [beginSaving, endSaving],
+  );
+
+  useEffect(() => {
+    setTrips(initialTrips);
+    const valid =
+      initialActiveTripId &&
+      initialTrips.some((t) => t.id === initialActiveTripId)
+        ? initialActiveTripId
+        : initialTrips[0]?.id ?? "";
+    setActiveTripId(valid);
+    if (initialTrips.length === 0) {
+      setWizardFirstRun(true);
+      setWizardOpen(true);
+    } else {
+      setWizardOpen(false);
+      setWizardEditId(null);
+    }
+  }, [initialTrips, initialActiveTripId]);
 
   const showHint = useCallback((msg: string) => {
     setHint(msg);
@@ -57,78 +124,48 @@ export function PlannerClient({
   }, []);
 
   const clearAssignTimer = useCallback(() => {
-    if (assignSaveTimerRef.current) {
-      clearTimeout(assignSaveTimerRef.current);
-      assignSaveTimerRef.current = null;
+    if (assignTimerRef.current) {
+      clearTimeout(assignTimerRef.current);
+      assignTimerRef.current = null;
     }
-  }, []);
-
-  const persistPatch = useCallback(async (tripId: string, patch: TripUpdateInput) => {
-    setSaveError(null);
-    const res = await updateTrip(tripId, patch);
-    if (!res.ok) {
-      setSaveError(res.error);
-      return;
-    }
-    setTrips((prev) => prev.map((t) => (t.id === res.trip.id ? res.trip : t)));
   }, []);
 
   const scheduleAssignmentsSave = useCallback(
     (tripId: string, assignments: Assignments) => {
       clearAssignTimer();
-      assignSaveTimerRef.current = setTimeout(() => {
-        assignSaveTimerRef.current = null;
-        void persistPatch(tripId, { assignments });
-      }, ASSIGN_SAVE_MS);
+      assignTimerRef.current = setTimeout(() => {
+        assignTimerRef.current = null;
+        void (async () => {
+          await withSaving(async () => {
+            const res = await updateAssignmentsAction({
+              tripId,
+              assignments,
+            });
+            if (!res.ok) {
+              showToast("Couldn't save — please try again");
+              startTransition(() => router.refresh());
+              return;
+            }
+            startTransition(() => router.refresh());
+          });
+        })();
+      }, ASSIGN_DEBOUNCE_MS);
     },
-    [clearAssignTimer, persistPatch],
+    [clearAssignTimer, router, showToast, withSaving],
   );
 
   useEffect(() => {
-    return () => {
-      clearAssignTimer();
-    };
+    return () => clearAssignTimer();
   }, [clearAssignTimer]);
 
-  const applyLocalPatch = useCallback(
-    (tripId: string, patch: Partial<Trip>) => {
-      const ts = new Date().toISOString();
-      setTrips((prev) =>
-        prev.map((t) =>
-          t.id === tripId ? { ...t, ...patch, updated_at: ts } : t,
-        ),
-      );
-    },
-    [],
-  );
-
-  const updateActiveTrip = useCallback(
-    (patch: Partial<Trip>, opts?: { skipServer?: boolean }) => {
-      if (!activeTripId) return;
-      applyLocalPatch(activeTripId, patch);
-      if (opts?.skipServer) return;
-
-      const serverPatch: TripUpdateInput = {};
-      if ("family_name" in patch && patch.family_name !== undefined) {
-        serverPatch.family_name = patch.family_name;
-      }
-      if ("adventure_name" in patch && patch.adventure_name !== undefined) {
-        serverPatch.adventure_name = patch.adventure_name;
-      }
-      if ("has_cruise" in patch) serverPatch.has_cruise = patch.has_cruise;
-      if ("cruise_embark" in patch) serverPatch.cruise_embark = patch.cruise_embark ?? null;
-      if ("cruise_disembark" in patch) {
-        serverPatch.cruise_disembark = patch.cruise_disembark ?? null;
-      }
-      if ("assignments" in patch) {
-        serverPatch.assignments = patch.assignments ?? {};
-      }
-
-      const hasKeys = Object.keys(serverPatch).length > 0;
-      if (hasKeys) void persistPatch(activeTripId, serverPatch);
-    },
-    [activeTripId, applyLocalPatch, persistPatch],
-  );
+  const applyLocalPatch = useCallback((tripId: string, patch: Partial<Trip>) => {
+    const ts = new Date().toISOString();
+    setTrips((prev) =>
+      prev.map((t) =>
+        t.id === tripId ? { ...t, ...patch, updated_at: ts } : t,
+      ),
+    );
+  }, []);
 
   const onAssign = useCallback(
     (dateKey: string, slot: SlotType, parkId: string) => {
@@ -185,6 +222,8 @@ export function PlannerClient({
     return {};
   };
 
+  const savingVisible = isSaving || isPending;
+
   return (
     <div className="min-h-screen bg-cream pb-16 pt-4">
       <header className="sticky top-0 z-30 border-b border-royal/10 bg-cream/95 px-4 py-3 backdrop-blur">
@@ -202,29 +241,46 @@ export function PlannerClient({
       {activeTrip ? (
         <main className="mx-auto max-w-6xl px-4 py-6">
           <div className="text-center">
-            <h1 className="font-serif text-2xl font-semibold text-royal sm:text-3xl">
-              <EditableTitle
-                key={`${activeTrip.id}-fam`}
-                value={activeTrip.family_name}
-                onSave={(v) => {
-                  const trimmed = v.trim();
-                  applyLocalPatch(activeTrip.id, { family_name: trimmed });
-                  void persistPatch(activeTrip.id, { family_name: trimmed });
-                }}
-                className="inline-block min-w-[4ch]"
-              />
-              <span className="text-royal/50"> — </span>
-              <EditableTitle
-                key={`${activeTrip.id}-adv`}
-                value={activeTrip.adventure_name}
-                onSave={(v) => {
-                  const trimmed = v.trim();
-                  applyLocalPatch(activeTrip.id, { adventure_name: trimmed });
-                  void persistPatch(activeTrip.id, { adventure_name: trimmed });
-                }}
-                className="inline-block min-w-[6ch]"
-              />
-            </h1>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <h1 className="font-serif text-2xl font-semibold text-royal sm:text-3xl">
+                <EditableTitle
+                  key={`${activeTrip.id}-fam`}
+                  value={activeTrip.family_name}
+                  onSave={(v) => {
+                    const trimmed = v.trim();
+                    applyLocalPatch(activeTrip.id, { family_name: trimmed });
+                    void withSaving(async () => {
+                      setSaveError(null);
+                      const res = await updateTripMetadataAction({
+                        tripId: activeTrip.id,
+                        familyName: trimmed,
+                      });
+                      if (!res.ok) setSaveError(res.error);
+                    });
+                  }}
+                  className="inline-block min-w-[4ch]"
+                />
+                <span className="text-royal/50"> — </span>
+                <EditableTitle
+                  key={`${activeTrip.id}-adv`}
+                  value={activeTrip.adventure_name}
+                  onSave={(v) => {
+                    const trimmed = v.trim();
+                    applyLocalPatch(activeTrip.id, { adventure_name: trimmed });
+                    void withSaving(async () => {
+                      setSaveError(null);
+                      const res = await updateTripMetadataAction({
+                        tripId: activeTrip.id,
+                        adventureName: trimmed,
+                      });
+                      if (!res.ok) setSaveError(res.error);
+                    });
+                  }}
+                  className="inline-block min-w-[6ch]"
+                />
+              </h1>
+              <SavingIndicator isSaving={savingVisible} />
+            </div>
             <div className="mt-3">
               <Countdown
                 startDate={activeTrip.start_date}
@@ -237,7 +293,10 @@ export function PlannerClient({
             <TripSelector
               trips={trips}
               activeTripId={activeTripId}
-              onSwitch={setActiveTripId}
+              onSwitch={(id) => {
+                setActiveTripId(id);
+                void touchTripAction(id);
+              }}
               onNew={() => {
                 setWizardEditId(null);
                 setWizardFirstRun(false);
@@ -251,29 +310,20 @@ export function PlannerClient({
               onDelete={() => {
                 if (trips.length <= 1) return;
                 if (
-                  !confirm(
-                    "Delete this trip? This cannot be undone.",
-                  )
+                  !confirm("Are you sure? This can't be undone.")
                 )
                   return;
                 clearAssignTimer();
                 const idToDelete = activeTripId;
-                void (async () => {
-                  const res = await deleteTrip(idToDelete);
+                void withSaving(async () => {
+                  const res = await deleteTripAction(idToDelete);
                   if (!res.ok) {
                     setSaveError(res.error);
+                    showToast("Couldn't delete trip — please try again");
                     return;
                   }
-                  let nextTrips: Trip[] = [];
-                  setTrips((prev) => {
-                    nextTrips = prev.filter((t) => t.id !== idToDelete);
-                    return nextTrips;
-                  });
-                  setActiveTripId((aid) => {
-                    if (aid !== idToDelete) return aid;
-                    return nextTrips[0]?.id ?? "";
-                  });
-                })();
+                  startTransition(() => router.refresh());
+                });
               }}
             />
           </div>
@@ -314,20 +364,47 @@ export function PlannerClient({
             </button>
             <button
               type="button"
-              onClick={() =>
-                updateActiveTrip({
+              onClick={() => {
+                if (!activeTripId) return;
+                applyLocalPatch(activeTripId, {
                   has_cruise: false,
                   cruise_embark: null,
                   cruise_disembark: null,
-                })
-              }
+                });
+                void withSaving(async () => {
+                  setSaveError(null);
+                  const res = await updateTripMetadataAction({
+                    tripId: activeTripId,
+                    hasCruise: false,
+                    cruiseEmbark: null,
+                    cruiseDisembark: null,
+                  });
+                  if (!res.ok) setSaveError(res.error);
+                  else startTransition(() => router.refresh());
+                });
+              }}
               className="rounded-lg border border-royal/20 bg-white px-4 py-2 font-sans text-sm text-royal"
             >
               Reset Cruise
             </button>
             <button
               type="button"
-              onClick={() => updateActiveTrip({ assignments: {} })}
+              onClick={() => {
+                if (!activeTripId) return;
+                applyLocalPatch(activeTripId, { assignments: {} });
+                void withSaving(async () => {
+                  setSaveError(null);
+                  const res = await updateAssignmentsAction({
+                    tripId: activeTripId,
+                    assignments: {},
+                  });
+                  if (!res.ok) {
+                    setSaveError(res.error);
+                    showToast("Couldn't save — please try again");
+                    startTransition(() => router.refresh());
+                  } else startTransition(() => router.refresh());
+                });
+              }}
               className="rounded-lg border border-royal/20 bg-white px-4 py-2 font-sans text-sm text-royal"
             >
               Clear All
@@ -388,21 +465,62 @@ export function PlannerClient({
         }}
         onComplete={async (data) => {
           if (wizardEditId) {
-            const res = await updateTripFromWizard(wizardEditId, data);
-            if (!res.ok) throw new Error(res.error);
-            setTrips((prev) =>
-              prev.map((t) => (t.id === res.trip.id ? res.trip : t)),
-            );
-          } else {
-            const res = await createTripFromWizard(data);
-            if (!res.ok) throw new Error(res.error);
-            setTrips((prev) => [res.trip, ...prev]);
-            setActiveTripId(res.trip.id);
+            await withSaving(async () => {
+              const res = await updateTripFromWizardAction({
+                tripId: wizardEditId,
+                familyName: data.family_name,
+                adventureName: data.adventure_name,
+                destination: data.destination,
+                startDate: data.start_date,
+                endDate: data.end_date,
+                hasCruise: data.has_cruise,
+                cruiseEmbark: data.cruise_embark,
+                cruiseDisembark: data.cruise_disembark,
+              });
+              if (!res.ok) throw new Error(res.error);
+            });
+            startTransition(() => router.refresh());
+            return;
           }
+
+          return await withSaving(async () => {
+            const res = await createTripAction({
+              familyName: data.family_name,
+              adventureName: data.adventure_name,
+              destination: data.destination,
+              startDate: data.start_date,
+              endDate: data.end_date,
+              hasCruise: data.has_cruise,
+              cruiseEmbark: data.cruise_embark,
+              cruiseDisembark: data.cruise_disembark,
+            });
+
+            if (!res.ok) {
+              if (res.error === "TIER_LIMIT") {
+                setTierLimitOpen(true);
+                return false;
+              }
+              throw new Error(res.error);
+            }
+            startTransition(() => router.refresh());
+            return undefined;
+          });
         }}
       />
 
       <SmartPlanModal isOpen={smartOpen} onClose={() => setSmartOpen(false)} />
+
+      <TierLimitModal
+        isOpen={tierLimitOpen}
+        onClose={() => setTierLimitOpen(false)}
+        reason="You already have a trip on the free plan."
+      />
+
+      {toastMessage ? (
+        <div className="fixed bottom-6 left-1/2 z-[80] max-w-[min(90vw,20rem)] -translate-x-1/2 rounded-full bg-royal px-4 py-2 text-center font-sans text-sm text-cream shadow-lg">
+          {toastMessage}
+        </div>
+      ) : null}
     </div>
   );
 }

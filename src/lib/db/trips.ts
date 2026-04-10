@@ -17,6 +17,13 @@ export function mapTripRow(row: Record<string, unknown>): Trip {
   const owner =
     row.owner_id != null ? String(row.owner_id) : String(row.user_id ?? "");
 
+  const updated = String(row.updated_at ?? "");
+  const created = String(row.created_at ?? "");
+  const lastOpened =
+    row.last_opened_at != null
+      ? String(row.last_opened_at)
+      : updated || created;
+
   return {
     id: String(row.id),
     owner_id: owner,
@@ -36,8 +43,9 @@ export function mapTripRow(row: Record<string, unknown>): Trip {
     public_slug: row.public_slug != null ? String(row.public_slug) : null,
     adults: Number(row.adults ?? 2),
     children: Number(row.children ?? 0),
-    created_at: String(row.created_at ?? ""),
-    updated_at: String(row.updated_at ?? ""),
+    created_at: created,
+    updated_at: updated,
+    last_opened_at: lastOpened,
   };
 }
 
@@ -47,7 +55,7 @@ export async function getUserTrips(userId: string): Promise<Trip[]> {
     .from("trips")
     .select("*")
     .eq("owner_id", userId)
-    .order("created_at", { ascending: false });
+    .order("last_opened_at", { ascending: false });
 
   if (error) throw error;
   return (data ?? []).map((r) => mapTripRow(r as Record<string, unknown>));
@@ -63,4 +71,32 @@ export async function getTripById(tripId: string): Promise<Trip | null> {
 
   if (error || !data) return null;
   return mapTripRow(data as Record<string, unknown>);
+}
+
+/** Most recently opened trip for the planner shell, or null if none. */
+export async function getActiveTripForUser(
+  userId: string,
+): Promise<Trip | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("trips")
+    .select("*")
+    .eq("owner_id", userId)
+    .order("last_opened_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return mapTripRow(data as Record<string, unknown>);
+}
+
+export async function getUserTripCount(userId: string): Promise<number> {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("trips")
+    .select("*", { count: "exact", head: true })
+    .eq("owner_id", userId);
+
+  if (error) throw error;
+  return count ?? 0;
 }

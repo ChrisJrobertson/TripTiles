@@ -1,6 +1,6 @@
 import { PlannerClient } from "@/app/(app)/planner/PlannerClient";
 import { getAllParks } from "@/lib/db/parks";
-import { getUserTrips } from "@/lib/db/trips";
+import { getActiveTripForUser, getUserTrips } from "@/lib/db/trips";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
@@ -37,15 +37,17 @@ export default async function PlannerPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/planner");
 
-  const [trips, parks] = await Promise.all([
+  const [trips, parks, activeTrip] = await Promise.all([
     getUserTrips(user.id),
     getAllParks(),
+    getActiveTripForUser(user.id),
   ]);
 
   return (
     <PlannerClient
       initialTrips={trips}
       parks={parks}
+      initialActiveTripId={activeTrip?.id ?? null}
       userEmail={user.email ?? ""}
     />
   );

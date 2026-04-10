@@ -9,7 +9,7 @@ type Props = {
   isFirstRun: boolean;
   initialData: Partial<Trip>;
   onClose: () => void;
-  onComplete: (data: WizardData) => Promise<void>;
+  onComplete: (data: WizardData) => Promise<boolean | void>;
 };
 
 const DEST_OPTIONS: {
@@ -137,8 +137,8 @@ export function Wizard({
     };
     setSubmitting(true);
     try {
-      await onComplete(data);
-      onClose();
+      const close = await onComplete(data);
+      if (close !== false) onClose();
     } catch (e) {
       setError(
         e instanceof Error ? e.message : "Something went wrong. Try again.",

@@ -109,8 +109,10 @@ export interface Trip {
   public_slug: string | null;
   adults: number;
   children: number;
+  /** ISO timestamps from DB */
   created_at: string;
   updated_at: string;
+  last_opened_at: string;
 }
 
 /** Data collected by the trip wizard (steps 1–4). */
