@@ -5,6 +5,7 @@ import { getRegionById } from "@/lib/db/regions";
 import { getParksForRegion } from "@/lib/db/parks";
 import { getTripById } from "@/lib/db/trips";
 import {
+  applyArrivalDayNoThemeParks,
   enforceAiPlanGuardrails,
   requiresCruiseSegment,
   sortDateKeysFromSet,
@@ -78,6 +79,12 @@ Rules:
 - Each day can have any combination of am, pm, lunch, dinner slots, or
   none at all (rest day)
 - Schedule rest days every 3-4 park days, especially with young children
+- For trips longer than one day: the FIRST calendar day is arrival only — do NOT
+  schedule Magic Kingdom, EPCOT, other theme parks, or water parks in AM or PM.
+  Use only flyout, dining codes (owl/tsr/char/specd/villa), or rest/resort/shopping
+  style tiles if needed. Leave AM/PM empty for a quiet arrival if that fits.
+  day_crowd_notes must not say "no park" while assignments still show a park on
+  that day.
 - Fly Out / Arrive (park id flyout) MUST only appear on day 1 (one slot only:
   AM or PM, not both slots with flyout).
 - Fly Home / Depart (park id flyhome) MUST only appear on the final day (one
@@ -474,7 +481,7 @@ export async function generateAIPlanAction(input: {
         output_tokens: outputTokens,
         cost_gbp_pence: null,
         success: false,
-        error_message: "Invalid JSON from model",
+        error: "Invalid JSON from model",
       });
 
       return {
@@ -497,7 +504,7 @@ export async function generateAIPlanAction(input: {
         output_tokens: outputTokens,
         cost_gbp_pence: null,
         success: false,
-        error_message: "No valid assignments after validation",
+        error: "No valid assignments after validation",
       });
 
       return {
@@ -522,7 +529,7 @@ export async function generateAIPlanAction(input: {
         output_tokens: outputTokens,
         cost_gbp_pence: null,
         success: false,
-        error_message: "Plan failed guardrail validation (empty after cleanup)",
+        error: "Plan failed guardrail validation (empty after cleanup)",
       });
 
       return {
@@ -535,7 +542,14 @@ export async function generateAIPlanAction(input: {
 
     const preserve =
       input.preserveExistingSlots !== false;
-    const merged = mergeAiIntoTrip(trip.assignments, guarded, preserve);
+    const mergedRaw = mergeAiIntoTrip(trip.assignments, guarded, preserve);
+    /** Always clear theme parks from day 1 AM/PM after merge — preserve mode
+     * otherwise keeps a previous MK if the model omits that slot. */
+    const merged = applyArrivalDayNoThemeParks(
+      mergedRaw,
+      sortedDateKeys,
+      parksById,
+    );
     const now = new Date().toISOString();
 
     const nextPrefs: Record<string, unknown> = {
@@ -566,7 +580,7 @@ export async function generateAIPlanAction(input: {
         output_tokens: outputTokens,
         cost_gbp_pence: null,
         success: false,
-        error_message: upErr.message,
+        error: upErr.message,
       });
 
       return { ok: false, error: "AI_ERROR", message: upErr.message };
@@ -581,7 +595,7 @@ export async function generateAIPlanAction(input: {
       output_tokens: outputTokens,
       cost_gbp_pence: null,
       success: true,
-      error_message: null,
+      error: null,
     });
 
     if (genInsertErr) {
@@ -640,7 +654,7 @@ export async function generateAIPlanAction(input: {
       output_tokens: outputTokens,
       cost_gbp_pence: null,
       success: false,
-      error_message: msg,
+      error: msg,
     });
 
     return { ok: false, error: "AI_ERROR", message: msg };

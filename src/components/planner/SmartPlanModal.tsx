@@ -212,23 +212,36 @@ export function SmartPlanModal({
             </p>
           )}
 
-          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-royal/15 bg-white/90 px-3 py-2 font-sans text-sm text-royal">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={replaceExistingTiles}
-              onChange={(e) => setReplaceExistingTiles(e.target.checked)}
-              disabled={isGenerating}
-            />
-            <span>
-              <span className="font-medium">Replace tiles I already placed</span>
-              <span className="mt-0.5 block text-xs font-normal text-royal/70">
-                Off (default): AI only fills empty slots and keeps your manual
-                picks. On: AI can overwrite existing parks and dining for slots
-                it returns.
+          <div className="rounded-xl border-2 border-gold/30 bg-gradient-to-b from-white to-cream/90 p-4 shadow-sm">
+            <p className="font-serif text-sm font-semibold tracking-tight text-royal">
+              Your existing calendar
+            </p>
+            <p className="mt-1.5 font-sans text-xs leading-relaxed text-royal/70">
+              <strong className="font-semibold text-royal/85">Default:</strong>{" "}
+              we only fill <strong>empty</strong> AM, PM, lunch, and dinner
+              slots. Tiles you&apos;ve already set are left as-is — nothing is
+              overwritten unless you choose otherwise below.
+            </p>
+            <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-lg border border-royal/15 bg-white/95 p-3 transition hover:border-gold/40">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+                checked={replaceExistingTiles}
+                onChange={(e) => setReplaceExistingTiles(e.target.checked)}
+                disabled={isGenerating}
+              />
+              <span className="min-w-0">
+                <span className="block font-sans text-sm font-semibold text-royal">
+                  Overwrite my existing tiles where the AI suggests something
+                </span>
+                <span className="mt-1 block text-xs leading-relaxed text-royal/65">
+                  Enable this for a full redo: any slot the model outputs can
+                  replace what you had. Leave unchecked to protect your manual
+                  plan.
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+          </div>
 
           <p className="font-sans text-[0.7rem] leading-snug text-royal/55">
             Crowd predictions are based on historical patterns and general

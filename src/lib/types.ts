@@ -210,7 +210,8 @@ export interface AiGeneration {
   output_tokens: number | null;
   cost_gbp_pence: number | null;
   success: boolean | null;
-  error_message: string | null;
+  /** DB column name in Supabase (`ai_generations.error`). */
+  error: string | null;
   created_at: string;
 }
 

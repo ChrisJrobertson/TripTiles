@@ -206,6 +206,39 @@ function isMainVenuePark(p: Park): boolean {
   return MAIN_PARK_GROUPS.has(p.park_group);
 }
 
+/**
+ * First calendar day is arrival: no full theme/water parks in AM/PM (only fly
+ * tiles, dining codes, rest/shopping, etc.). Fixes model text vs slots mismatch
+ * and preserves-merge leaving an old park on day 1.
+ */
+export function applyArrivalDayNoThemeParks(
+  assignments: Assignments,
+  sortedDateKeys: string[],
+  parksById: Map<string, Park>,
+): Assignments {
+  if (sortedDateKeys.length <= 1) return cloneAssignments(assignments);
+
+  const out = cloneAssignments(assignments);
+  const first = sortedDateKeys[0];
+  const day = out[first];
+  if (!day) return out;
+
+  for (const s of ["am", "pm"] as const) {
+    const id = day[s];
+    if (!id) continue;
+    if (DINING_IDS.has(id) || FLYOUT_IDS.has(id) || FLYHOME_IDS.has(id)) {
+      continue;
+    }
+    const p = parksById.get(id);
+    if (p && isMainVenuePark(p)) delete day[s];
+  }
+
+  if (Object.keys(day).length === 0) delete out[first];
+  else out[first] = day;
+
+  return out;
+}
+
 function isRestfulTile(p: Park): boolean {
   const n = p.name.toLowerCase();
   if (/\brest\s*[/&]\s*pool\b|\brest\s*day\b|\blazy\s*day\b/i.test(n)) return true;
@@ -327,5 +360,6 @@ export function enforceAiPlanGuardrails(
   a = stripCruiseOnlyTiles(a, ctx.trip, ctx.parksById);
   a = applyConsecutiveParkRules(a, ctx.sortedDateKeys, ctx.parksById);
   a = applyRestDayConsistency(a, ctx.parksById);
+  a = applyArrivalDayNoThemeParks(a, ctx.sortedDateKeys, ctx.parksById);
   return pruneEmptyDays(a);
 }
