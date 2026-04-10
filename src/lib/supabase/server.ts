@@ -20,7 +20,7 @@ export async function createClient() {
       getAll() {
         return cookieStore.getAll();
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet, headers) {
         try {
           cookiesToSet.forEach(({ name, value, options }) =>
             cookieStore.set(name, value, options),
@@ -28,6 +28,8 @@ export async function createClient() {
         } catch {
           // Called from a Server Component that cannot set cookies; session refresh is skipped.
         }
+        // Cache-Control from Supabase must be applied on full HTTP responses; see route-handler + middleware.
+        void headers;
       },
     },
   });

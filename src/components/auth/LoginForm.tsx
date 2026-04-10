@@ -7,6 +7,15 @@ import { useRouter } from "next/navigation";
 const inputClass =
   "min-h-12 w-full rounded-lg border-2 border-royal/25 bg-white px-4 text-base text-royal outline-none transition focus:border-gold focus:ring-2 focus:ring-gold/40";
 
+/** Prefer `NEXT_PUBLIC_SITE_URL` so magic links match Supabase redirect allowlist in production. */
+function callbackOrigin(): string {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (raw && /^https?:\/\//i.test(raw)) {
+    return raw.replace(/\/$/, "");
+  }
+  return window.location.origin;
+}
+
 type Props = {
   next: string;
 };
@@ -29,7 +38,7 @@ export function LoginForm({ next }: Props) {
 
     try {
       const supabase = createClient();
-      const origin = window.location.origin;
+      const origin = callbackOrigin();
       const callbackUrl = `${origin}/auth/callback?next=${encodeURIComponent(next)}`;
 
       const { error: signError } = await supabase.auth.signInWithOtp({
