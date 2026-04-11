@@ -78,3 +78,13 @@
 .planner-slot-clear:hover {
   opacity: 1;
 }
+
+@media (min-width: 768px) {
+  .planner-slot-grid {
+    min-height: 4.25rem;
+  }
+
+  .planner-slot {
+    padding: 2px;
+  }
+}

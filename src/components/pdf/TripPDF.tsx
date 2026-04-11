@@ -170,8 +170,8 @@ const styles = StyleSheet.create({
   },
   calendarCell: {
     flex: 1,
-    minHeight: 58,
-    padding: 3,
+    minHeight: 34,
+    padding: 2,
     borderWidth: 0.5,
     borderColor: "#e0dcd4",
     justifyContent: "flex-start",
@@ -180,39 +180,42 @@ const styles = StyleSheet.create({
     backgroundColor: "#f4f2ec",
   },
   calendarCellDay: {
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: "bold",
     color: COLOURS.royal,
-    marginBottom: 2,
-  },
-  slotPillRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginTop: 1,
-  },
-  slotPill: {
-    paddingVertical: 1,
-    paddingHorizontal: 3,
-    borderRadius: 2,
-    marginRight: 1,
     marginBottom: 1,
   },
-  slotPillText: {
-    fontSize: 5,
-    color: "#ffffff",
-    textTransform: "uppercase",
+  calendarSlotStack: {
+    marginTop: 1,
+    flexGrow: 1,
+    justifyContent: "flex-start",
+  },
+  calendarSlotRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderLeftWidth: 3,
+    marginBottom: 0.5,
+    paddingLeft: 2,
+    minHeight: 8,
+  },
+  calendarSlotText: {
+    fontSize: 5.5,
+    flex: 1,
+    lineHeight: 1.15,
+  },
+  strategyBlock: {
+    marginBottom: 12,
   },
 });
 
 const SLOT_ORDER = ["am", "pm", "lunch", "dinner"] as const;
 
-function slotLabel(slot: string): string {
-  if (slot === "am") return "AM";
-  if (slot === "pm") return "PM";
-  if (slot === "lunch") return "LUN";
-  if (slot === "dinner") return "DIN";
-  return slot;
-}
+const SLOT_BORDER_PDF: Record<(typeof SLOT_ORDER)[number], string> = {
+  am: COLOURS.royal,
+  pm: "#1a2f75",
+  lunch: COLOURS.gold,
+  dinner: COLOURS.gold,
+};
 
 function buildPdfWeekRows(startIso: string, endIso: string): Date[][] {
   const start = parseDate(startIso);
@@ -243,6 +246,13 @@ function dayCrowdNoteText(
   return sanitizeDayNote(v.trim());
 }
 
+function dayUserNotePdf(trip: Trip, dateKey: string): string {
+  const dnRaw = trip.preferences?.day_notes;
+  if (!dnRaw || typeof dnRaw !== "object" || Array.isArray(dnRaw)) return "";
+  const v = (dnRaw as Record<string, unknown>)[dateKey];
+  return typeof v === "string" ? v.trim() : "";
+}
+
 export interface TripPDFProps {
   trip: Trip;
   parks: Park[];
@@ -267,13 +277,16 @@ export function TripPDF({
 }: TripPDFProps) {
   const itemsById = new Map<string, { name: string; icon?: string | null }>();
   const colourById = new Map<string, string>();
+  const fgById = new Map<string, string>();
   for (const p of parks) {
     itemsById.set(p.id, { name: p.name, icon: p.icon });
     colourById.set(p.id, p.bg_colour);
+    fgById.set(p.id, p.fg_colour);
   }
   for (const t of customTiles) {
     itemsById.set(t.id, { name: t.name, icon: t.icon });
     colourById.set(t.id, t.bg_colour);
+    fgById.set(t.id, t.fg_colour);
   }
 
   const start = parseDate(trip.start_date);
@@ -358,25 +371,14 @@ export function TripPDF({
         ) : null}
       </Page>
 
-      {crowdSummary ? (
-        <Page size="A4" style={styles.page} wrap={false}>
-          {design === "premium" ? <View style={styles.premiumBar} /> : null}
-          <Text style={styles.sectionTitle}>Crowd strategy</Text>
-          <Text style={styles.strategyBody}>{crowdSummary}</Text>
-          {watermark ? (
-            <Text style={styles.watermark} fixed>
-              Made with TripTiles · triptiles.app
-            </Text>
-          ) : null}
-          <Text style={styles.footer} fixed>
-            Generated with TripTiles · triptiles.app · Your holiday, beautifully
-            planned
-          </Text>
-        </Page>
-      ) : null}
-
       <Page size="A4" style={styles.page} wrap>
         {design === "premium" ? <View style={styles.premiumBar} /> : null}
+        {crowdSummary ? (
+          <View style={styles.strategyBlock} wrap>
+            <Text style={styles.sectionTitle}>Crowd strategy</Text>
+            <Text style={styles.strategyBody}>{crowdSummary}</Text>
+          </View>
+        ) : null}
         <Text style={styles.sectionTitle}>Itinerary calendar</Text>
 
         <View style={styles.calendarDowRow} wrap={false}>
@@ -393,7 +395,6 @@ export function TripPDF({
               const cellKey = formatDateKey(d);
               const inTrip = tripDaySet.has(cellKey);
               const dayAssign = assignments[cellKey] ?? {};
-              const hasSlot = SLOT_ORDER.some((s) => Boolean(dayAssign[s]));
 
               return (
                 <View
@@ -408,35 +409,49 @@ export function TripPDF({
                       <Text style={styles.calendarCellDay}>
                         {d.getDate()} {MONTHS_SHORT[d.getMonth()]}
                       </Text>
-                      <View style={styles.slotPillRow}>
+                      <View style={styles.calendarSlotStack}>
                         {SLOT_ORDER.map((slot) => {
                           const id = dayAssign[slot];
-                          if (!id) return null;
-                          const bg = colourById.get(id) ?? COLOURS.royal;
+                          const borderCol = SLOT_BORDER_PDF[slot];
+                          const isMeal =
+                            slot === "lunch" || slot === "dinner";
+                          const mealPrefix = isMeal ? "🍽️ " : "";
+                          const item = id ? itemsById.get(id) : undefined;
+                          const bg = id
+                            ? (colourById.get(id) ?? COLOURS.royal)
+                            : undefined;
+                          const fg = id
+                            ? (fgById.get(id) ?? "#ffffff")
+                            : COLOURS.muted;
+                          const line = item
+                            ? `${mealPrefix}${item.icon ? `${item.icon} ` : ""}${item.name}`
+                            : id
+                              ? "—"
+                              : "";
                           return (
                             <View
                               key={slot}
-                              style={[styles.slotPill, { backgroundColor: bg }]}
+                              style={[
+                                styles.calendarSlotRow,
+                                {
+                                  borderLeftColor: borderCol,
+                                  backgroundColor: bg ?? "transparent",
+                                },
+                              ]}
                             >
-                              <Text style={styles.slotPillText}>
-                                {slotLabel(slot)}
-                              </Text>
+                              {id ? (
+                                <Text
+                                  style={[styles.calendarSlotText, { color: fg }]}
+                                >
+                                  {line}
+                                </Text>
+                              ) : (
+                                <Text style={styles.calendarSlotText}> </Text>
+                              )}
                             </View>
                           );
                         })}
                       </View>
-                      {!hasSlot ? (
-                        <Text
-                          style={{
-                            fontSize: 6,
-                            color: COLOURS.muted,
-                            fontStyle: "italic",
-                            marginTop: 2,
-                          }}
-                        >
-                          Rest
-                        </Text>
-                      ) : null}
                     </>
                   ) : null}
                 </View>
@@ -448,7 +463,8 @@ export function TripPDF({
         {includeNotes
           ? days.map((dayKey, i) => {
               const noteText = dayCrowdNoteText(trip, dayKey);
-              if (!noteText) return null;
+              const userNote = dayUserNotePdf(trip, dayKey);
+              if (!noteText && !userNote) return null;
               const date = parseDate(dayKey);
               const label = date.toLocaleDateString("en-GB", {
                 weekday: "long",
@@ -460,7 +476,14 @@ export function TripPDF({
                   <Text style={styles.dayHeader}>
                     Day {i + 1} · {label}
                   </Text>
-                  <Text style={styles.dayNote}>Why this day: {noteText}</Text>
+                  {noteText ? (
+                    <Text style={styles.dayNote}>Why this day: {noteText}</Text>
+                  ) : null}
+                  {userNote ? (
+                    <Text style={[styles.dayNote, { marginTop: 2 }]}>
+                      Your note: {userNote}
+                    </Text>
+                  ) : null}
                 </View>
               );
             })

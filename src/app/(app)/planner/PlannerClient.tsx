@@ -13,6 +13,7 @@ import { AppNavHeader } from "@/components/app/AppNavHeader";
 import { AchievementToast } from "@/components/gamification/AchievementToast";
 import { deleteCustomTileAction } from "@/actions/custom-tiles";
 import { Calendar } from "@/components/planner/Calendar";
+import { CrowdStrategyBanner } from "@/components/planner/CrowdStrategyBanner";
 import { Countdown } from "@/components/planner/Countdown";
 import { CustomTileModal } from "@/components/planner/CustomTileModal";
 import { DayNotesPanel } from "@/components/planner/DayNotesPanel";
@@ -35,7 +36,6 @@ import { PdfExportButton } from "@/components/planner/PdfExportButton";
 import { TripTimeline } from "@/components/planner/TripTimeline";
 import { Wizard } from "@/components/planner/Wizard";
 import { TierLimitModal } from "@/components/paywall/TierLimitModal";
-import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { trackEvent } from "@/lib/analytics/client";
 import { getTierConfig } from "@/lib/tiers";
 import { useToast } from "@/lib/toast";
@@ -767,15 +767,9 @@ export function PlannerClient({
 
           {typeof activeTrip.preferences?.ai_crowd_summary === "string" &&
           (activeTrip.preferences.ai_crowd_summary as string).trim() ? (
-            <div
-              className="mt-5 rounded-xl border border-gold/40 bg-white px-4 py-3 font-sans text-sm leading-relaxed text-royal/90 shadow-sm"
-              role="status"
-            >
-              <span className="font-semibold text-royal">Crowd strategy — </span>
-              {sanitizeDayNote(
-                (activeTrip.preferences.ai_crowd_summary as string).trim(),
-              )}
-            </div>
+            <CrowdStrategyBanner
+              text={(activeTrip.preferences.ai_crowd_summary as string).trim()}
+            />
           ) : null}
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -821,6 +815,7 @@ export function PlannerClient({
                 onAssign={onAssign}
                 onClear={onClear}
                 onNeedParkFirst={() => showHint("Pick a park first")}
+                onAfterSlotClear={() => showToast("Slot cleared")}
               />
             </div>
           </div>
