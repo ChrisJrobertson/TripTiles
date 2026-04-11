@@ -13,7 +13,7 @@ import {
 } from "@/lib/ai-plan-guardrails";
 import { addDays, formatDateKey, parseDate } from "@/lib/date-helpers";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
-import type { Assignments, CustomTile, SlotType, Trip } from "@/lib/types";
+import type { Assignments, CustomTile, Park, SlotType, Trip } from "@/lib/types";
 import { customTileToPark } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 import { awardAchievementAction } from "@/actions/achievements";
@@ -27,18 +27,9 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY ?? "",
 });
 
-const SYSTEM_PROMPT = `You are a theme park trip planner. Your job is to
-build a JSON itinerary for a family's holiday based on their trip details
-and preferences.
+const SYSTEM_PROMPT = `You are a theme park planner. Output ONLY valid JSON — no markdown fences, no preamble, no text outside the JSON object.
 
-You will receive:
-- The trip's start and end dates
-- The destination region (e.g. Orlando, Paris, Tokyo)
-- A list of available park IDs and their names that the user can choose from
-- The user's family details and free-text preferences
-
-You must return ONLY valid JSON in this shape, with no preamble or explanation.
-Include optional crowd fields whenever CROWD_PATTERNS are provided (see below).
+Include optional crowd fields whenever CROWD_PATTERNS appears in the user message.
 
 {
   "assignments": {
@@ -51,76 +42,30 @@ Include optional crowd fields whenever CROWD_PATTERNS are provided (see below).
   }
 }
 
-DAY NOTES RULES (CRITICAL — applies to crowd_reasoning and day_crowd_notes):
-- Day notes must read like friendly tips from a knowledgeable friend.
-- NEVER include raw crowd scores, numerical calculations, arithmetic
-  expressions, or internal reasoning markers.
-- NEVER write phrases like "(score 7+10=17/2=8.5)", "score N",
-  "crowd index N", or any bracketed numerical reasoning.
-- NEVER explain your math. Users see the WHAT and WHY in plain English,
-  not the HOW you arrived at it.
-- Keep notes under 200 characters where possible.
-- Good example: "Arrive early — Magic Kingdom is quietest before 10am
-  on weekdays."
-- Bad example: "Magic Kingdom on Tuesday (score 6+7=13/2=6.5) because
-  mid-week crowds are lowest."
-- Bad example: "Rest day mid-trip — score 3, lowest of the week."
-- Good rewrite: "Rest day mid-trip to recharge before the busy weekend."
+Output limits (strict):
+- crowd_reasoning: maximum 400 characters, one paragraph only.
+- Each day_crowd_notes value: maximum 150 characters, exactly one sentence (no second sentence).
 
-## Crowd-awareness (when CROWD_PATTERNS appears in the user message)
+DAY NOTES (crowd_reasoning + day_crowd_notes):
+- Friendly, plain-English tips only. No raw scores, arithmetic, formulas, or bracketed score math (e.g. never "(score 7+10=17/2=8.5)", "score N", "crowd index N"). Never explain internal calculations — users get what and why, not how you computed it.
 
-You receive a CROWD_PATTERNS object: per-park day-of-week scores (0–10, higher =
-busier), month scores (0–10), known_events with date ranges and impact flags.
-These are historical-style heuristics — not live data.
-
-When assigning parks to specific dates:
-1. For each candidate date and park, compute an effective score = (day_of_week_score + month_score) / 2 for that calendar month and weekday. If a known_event covers that date: add +2 if impact is very_busy_fri_sat and the date is Friday or Saturday; add +3 if impact is closes_early (note compressed hours — avoid that park that night for families needing a full day, or mention it in day_crowd_notes); +0 for extended_hours unless you explain.
-2. Place the busiest headline parks (often Magic Kingdom, Universal pair, new lands) on trip days with the LOWEST effective scores when you have a choice.
-3. Place naturally calmer parks (e.g. Animal Kingdom, some water parks) on higher-traffic calendar days when you cannot avoid them.
-4. NEVER claim exact wait times, live attendance, or precise percentages not implied by the scores. Use wording like "historically quieter", "typically busier", "usually better mid-week".
-5. Put brief trade-off explanations in crowd_reasoning and/or day_crowd_notes (one line per day you want to highlight, date keys YYYY-M-D unpadded).
-
-If CROWD_PATTERNS is empty or missing rows for some parks, still avoid obvious weekend peaks for major parks using general knowledge, and do not invent numeric wait times.
+CROWD_PATTERNS (when present in the user message): per-park weekday and month scores 0–10 (higher = busier), plus known_events with impacts — heuristics only, not live data.
+- Use patterns internally to put headline parks on lighter days and calmer parks on heavier days when you must.
+- Never claim exact wait times, live attendance, or precise percentages beyond what the scores suggest. Wording like "typically busier", "historically quieter", "usually better mid-week" is OK. Do not paste or describe numeric score arithmetic in user-facing strings.
 
 Rules:
-- Date keys must be in the format YYYY-M-D with NO zero padding (e.g.
-  "2026-7-9" not "2026-07-09")
-- Only use park IDs from the list provided. Do NOT invent park IDs.
-- Each day can have any combination of am, pm, lunch, dinner slots, or
-  none at all (rest day)
-- Schedule rest days every 3-4 park days, especially with young children
-- For trips longer than one day: the FIRST calendar day is arrival only — do NOT
-  schedule Magic Kingdom, EPCOT, other theme parks, or water parks in AM or PM.
-  Use only flyout, dining codes (owl/tsr/char/specd/villa), or rest/resort/shopping
-  style tiles if needed. Leave AM/PM empty for a quiet arrival if that fits.
-  day_crowd_notes must not say "no park" while assignments still show a park on
-  that day.
-- Fly Out / Arrive (park id flyout) MUST only appear on day 1 (one slot only:
-  AM or PM, not both slots with flyout).
-- Fly Home / Depart (park id flyhome) MUST only appear on the final day (one
-  slot only: AM or PM, not both slots with flyhome).
-- Fly Out and Fly Home must NEVER appear on the same calendar day unless the
-  trip is exactly one day long.
-- Cruise tiles (e.g. Ship Pool/Bar, At Sea, Port Day, cruise excursions) may
-  ONLY be placed on days from Cruise Embark through Cruise Disembark when the
-  trip includes a cruise. If the trip has NO cruise segment, you MUST NOT place
-  any ship-only or cruise-line tiles.
-- Do not repeat the SAME main park on consecutive calendar days. A park may
-  appear multiple times across the trip but not on back-to-back days.
-- If a day is meant as downtime (rest / pool / light shopping), keep AM and PM
-  consistent: use restful tiles (pool, spa, resort, shopping, outlets) in both
-  AM and PM — do not pair a rest-style day with a full theme park in the other
-  half-day.
-- For dining, use 'owl' (Quick Service), 'tsr' (Table Service), 'char'
-  (Character Dining), 'specd' (Specialty Dining), 'villa' (Home Cook)
-- Match park choices to the family's stated preferences
-- For young children (under 7), avoid intense thrill parks
-- For teens, lean into thrill parks
-- For families that say "love queueing" or "patient" - schedule full park days
-- For families that say "hate queueing" or "impatient" - shorter park days,
-  more variety
+- Date keys: YYYY-M-D, no zero padding (e.g. "2026-7-9" not "2026-07-09").
+- Only park IDs from the cached list in the system message. Do not invent IDs.
+- Slots am, pm, lunch, dinner optional per day (rest day allowed). Rest every 3–4 park days with young children.
+- Multi-day trips: day 1 is arrival only — no theme or water parks in AM/PM (flyout, owl/tsr/char/specd/villa, rest/resort/shopping only; AM/PM may be empty). day_crowd_notes must not contradict assignments on that day.
+- flyout: day 1 only, one slot (AM or PM). flyhome: final day only, one slot. Not both on the same calendar day unless the trip is exactly one day.
+- Cruise tiles only between embark and disembark when cruise=yes; when cruise=no, no ship/at-sea/port/cruise-excursion tiles.
+- No same headline park on consecutive days.
+- True rest days: restful tiles in both AM and PM — do not pair half-day rest with a full park the other half.
+- Dining codes: owl (quick service), tsr (table), char (character), specd (specialty), villa (home cook).
+- Match family notes: young children avoid intense thrill; teens lean thrill; patient vs impatient queueing families as stated.
 
-Return ONLY the JSON. No markdown code fences. No explanation. No preamble.`;
+Return ONLY the JSON.`;
 
 const SLOT_SET = new Set<SlotType>(["am", "pm", "lunch", "dinner"]);
 
@@ -267,7 +212,7 @@ function parseCrowdMetadata(
   let crowd_reasoning: string | undefined;
   if (typeof obj.crowd_reasoning === "string") {
     const t = obj.crowd_reasoning.trim();
-    if (t) crowd_reasoning = sanitizeDayNote(t.slice(0, 1200));
+    if (t) crowd_reasoning = sanitizeDayNote(t.slice(0, 400));
   }
   const day_crowd_notes: Record<string, string> = {};
   const notes = obj.day_crowd_notes;
@@ -276,7 +221,7 @@ function parseCrowdMetadata(
       if (!allowedDates.has(k)) continue;
       if (typeof v !== "string") continue;
       const s = v.trim();
-      if (s) day_crowd_notes[k] = sanitizeDayNote(s.slice(0, 400));
+      if (s) day_crowd_notes[k] = sanitizeDayNote(s.slice(0, 150));
     }
   }
   return {
@@ -286,30 +231,28 @@ function parseCrowdMetadata(
   };
 }
 
-function buildPlannerUserMessage(params: {
-  mode: "smart" | "custom";
-  userPrompt: string;
-  regionName: string;
-  trip: Trip;
-  parksForPrompt: { id: string; name: string }[];
-  /** User-defined tiles (optional extra lines for Claude). */
-  customTiles: CustomTile[];
-  cruiseInstruction: string;
-  childAges: string;
-  crowdJson: string;
-}): string {
-  const {
-    mode,
-    userPrompt,
-    regionName,
-    trip,
-    parksForPrompt,
-    customTiles,
-    cruiseInstruction,
-    childAges,
-    crowdJson,
-  } = params;
+type AnthropicMessageUsage = {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+};
 
+function inputTokensFromUsage(usage: AnthropicMessageUsage | undefined): number {
+  const u = usage ?? {};
+  return (
+    (u.input_tokens ?? 0) +
+    (u.cache_creation_input_tokens ?? 0) +
+    (u.cache_read_input_tokens ?? 0)
+  );
+}
+
+/** Cached with the system prompt — park IDs the model may use (built-in + custom). */
+function buildParksListSystemText(
+  regionName: string,
+  parksForPrompt: Park[],
+  customTiles: CustomTile[],
+): string {
   const parkLines = parksForPrompt.map((p) => `${p.id}: ${p.name}`).join("\n");
   const customLines =
     customTiles.length > 0
@@ -320,6 +263,27 @@ function buildPlannerUserMessage(params: {
           )
           .join("\n")}`
       : "";
+  return `Available parks for ${regionName}:\n${parkLines}${customLines}`;
+}
+
+function buildPlannerUserMessage(params: {
+  mode: "smart" | "custom";
+  userPrompt: string;
+  regionName: string;
+  trip: Trip;
+  cruiseInstruction: string;
+  childAges: string;
+  crowdJson: string;
+}): string {
+  const {
+    mode,
+    userPrompt,
+    regionName,
+    trip,
+    cruiseInstruction,
+    childAges,
+    crowdJson,
+  } = params;
 
   const crowdSection =
     crowdJson === "{}"
@@ -331,10 +295,7 @@ function buildPlannerUserMessage(params: {
 - Dates: ${trip.start_date} to ${trip.end_date}
 - Family: ${trip.adults} adults, ${trip.children} children${childAges}
 - Cruise: ${trip.has_cruise ? `yes, embark ${trip.cruise_embark} disembark ${trip.cruise_disembark}` : "no"}
-- ${cruiseInstruction}
-
-Available park IDs and names:
-${parkLines}${customLines}`;
+- ${cruiseInstruction}`;
 
   if (mode === "smart") {
     const extra = userPrompt.trim();
@@ -483,14 +444,17 @@ export async function generateAIPlanAction(input: {
   );
   const crowdJson = JSON.stringify(crowdPatterns, null, 2);
 
-  let composedUserMessage = "";
-  composedUserMessage = buildPlannerUserMessage({
+  const parksSystemText = buildParksListSystemText(
+    `${region.name} (${region.country})`,
+    parksForPrompt,
+    customTileRows,
+  );
+
+  const composedUserMessage = buildPlannerUserMessage({
     mode: input.mode,
     userPrompt: input.userPrompt,
     regionName: `${region.name} (${region.country})`,
     trip,
-    parksForPrompt,
-    customTiles: customTileRows,
     cruiseInstruction,
     childAges,
     crowdJson,
@@ -504,25 +468,34 @@ export async function generateAIPlanAction(input: {
   try {
     const response = await anthropic.messages.create({
       model,
-      max_tokens: 8192,
+      max_tokens: 3000,
       system: [
         {
           type: "text",
           text: SYSTEM_PROMPT,
           cache_control: { type: "ephemeral" },
         },
+        {
+          type: "text",
+          text: parksSystemText,
+          cache_control: { type: "ephemeral" },
+        },
       ],
       messages: [{ role: "user", content: composedUserMessage }],
     });
 
-    const usage = response.usage;
-    const cacheCreate = (
-      usage as {
-        cache_creation_input_tokens?: number;
-      }
-    )?.cache_creation_input_tokens;
-    inputTokens = (usage?.input_tokens ?? 0) + (cacheCreate ?? 0);
+    const usage = response.usage as AnthropicMessageUsage | undefined;
+    inputTokens = inputTokensFromUsage(usage);
     outputTokens = usage?.output_tokens ?? 0;
+
+    if (process.env.NODE_ENV === "development") {
+      console.info("[ai] anthropic usage", {
+        input_tokens: usage?.input_tokens,
+        cache_creation_input_tokens: usage?.cache_creation_input_tokens,
+        cache_read_input_tokens: usage?.cache_read_input_tokens,
+        output_tokens: usage?.output_tokens,
+      });
+    }
 
     const textBlock = response.content.find((b) => b.type === "text");
     const rawText =
