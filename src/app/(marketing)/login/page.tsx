@@ -10,7 +10,12 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 type Props = {
-  searchParams: Promise<{ next?: string; error?: string; reason?: string }>;
+  searchParams: Promise<{
+    next?: string;
+    error?: string;
+    reason?: string;
+    email?: string;
+  }>;
 };
 
 export default async function LoginPage({ searchParams }: Props) {
@@ -20,6 +25,8 @@ export default async function LoginPage({ searchParams }: Props) {
   const reason = params.reason?.trim();
   const errorMessage =
     errorKey && ERROR_MESSAGES[errorKey] ? ERROR_MESSAGES[errorKey] : null;
+  const initialEmail =
+    typeof params.email === "string" ? params.email : "";
 
   return (
     <main className="min-h-screen bg-cream px-4 py-12">
@@ -34,8 +41,9 @@ export default async function LoginPage({ searchParams }: Props) {
         <h1 className="mt-8 text-center font-serif text-2xl font-semibold text-royal md:text-3xl">
           Sign in to TripTiles
         </h1>
-        <p className="mt-3 text-center font-serif text-base text-royal/75">
-          We&apos;ll email you a magic link. No passwords required.
+        <p className="mt-3 text-center font-sans text-sm leading-relaxed text-royal/75">
+          Magic link is the quickest way in — or use your password if you
+          created one when you signed up.
         </p>
 
         {errorMessage ? (
@@ -52,14 +60,9 @@ export default async function LoginPage({ searchParams }: Props) {
           </div>
         ) : null}
 
-        <LoginForm next={next} />
+        <LoginForm next={next} initialEmail={initialEmail} />
 
-        <p className="mt-8 text-center font-sans text-sm leading-relaxed text-royal/65">
-          Don&apos;t have an account? Just sign in — we&apos;ll create one
-          automatically.
-        </p>
-
-        <p className="mt-4 text-center font-sans text-sm text-royal/50">
+        <p className="mt-8 text-center font-sans text-sm text-royal/50">
           <Link href="/" className="text-royal underline underline-offset-2">
             Back to home
           </Link>
