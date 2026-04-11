@@ -2,6 +2,7 @@
 
 import { signUpWithPasswordAction } from "@/actions/auth";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
+import { createClient } from "@/lib/supabase/client";
 import { PasswordField } from "@/components/auth/PasswordField";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -10,12 +11,15 @@ import { useMemo, useState } from "react";
 const inputClass =
   "min-h-12 w-full rounded-lg border-2 border-royal/25 bg-white px-4 text-base text-royal outline-none transition focus:border-gold focus:ring-2 focus:ring-gold/40";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function passwordStrength(pw: string): "weak" | "ok" | "strong" {
   if (pw.length < 8) return "weak";
   const hasLower = /[a-z]/.test(pw);
   const hasUpper = /[A-Z]/.test(pw);
   const hasDigit = /\d/.test(pw);
-  const mixed = (hasLower && hasUpper) || (hasLower && hasDigit) || (hasUpper && hasDigit);
+  const mixed =
+    (hasLower && hasUpper) || (hasLower && hasDigit) || (hasUpper && hasDigit);
   if (pw.length >= 12 && mixed) return "strong";
   if (pw.length >= 8 && mixed) return "ok";
   if (pw.length >= 10) return "ok";
@@ -34,10 +38,13 @@ export function SignupForm({ next }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [successEmail, setSuccessEmail] = useState("");
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   const strength = useMemo(() => passwordStrength(password), [password]);
-  const strengthPct =
-    strength === "weak" ? 33 : strength === "ok" ? 66 : 100;
+  const strengthPct = strength === "weak" ? 33 : strength === "ok" ? 66 : 100;
   const strengthColor =
     strength === "weak"
       ? "bg-amber-500"
@@ -48,28 +55,49 @@ export function SignupForm({ next }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setEmailError(null);
+    setPasswordError(null);
+    setConfirmError(null);
+
+    const trimmedEmail = email.trim();
+    if (!EMAIL_RE.test(trimmedEmail)) {
+      setEmailError("Enter a valid email address.");
+      return;
+    }
     if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+      setPasswordError("Password must be at least 8 characters.");
       return;
     }
     if (password !== confirm) {
-      setError("Passwords do not match.");
+      setConfirmError("Passwords must match.");
       return;
     }
+
     setLoading(true);
     try {
-      const r = await signUpWithPasswordAction(email.trim(), password);
+      const r = await signUpWithPasswordAction({
+        email: trimmedEmail,
+        password,
+      });
       if (!r.ok) {
-        setError(r.error);
         setLoading(false);
+        setError(r.error);
         return;
       }
-      if (!r.needsEmailConfirmation) {
+
+      const supabase = createClient();
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
         setLoading(false);
         router.push(safeNextPath(next));
         router.refresh();
         return;
       }
+
+      setSuccessEmail(trimmedEmail);
+      setEmail("");
+      setPassword("");
+      setConfirm("");
       setSuccess(true);
       setLoading(false);
     } catch {
@@ -84,10 +112,12 @@ export function SignupForm({ next }: Props) {
         className="mt-8 rounded-lg border border-gold/40 bg-white px-4 py-5 font-sans text-sm text-royal shadow-sm"
         role="status"
       >
-        <p className="font-semibold text-royal">Check your email to confirm your account</p>
-        <p className="mt-2 text-royal/75">
-          We sent a confirmation link. After you confirm, you can sign in with
-          your password or request a magic link.
+        <p className="leading-relaxed text-royal/90">
+          Check your email - we&apos;ve sent a confirmation link to{" "}
+          <span className="break-all font-semibold text-royal">
+            {successEmail}
+          </span>
+          . Click it to activate your account and get planning.
         </p>
         <p className="mt-4">
           <Link href="/login" className="font-semibold text-gold underline">
@@ -113,19 +143,29 @@ export function SignupForm({ next }: Props) {
           autoComplete="email"
           required
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            setEmailError(null);
+          }}
           className={inputClass}
           placeholder="you@example.com"
+          aria-invalid={emailError ? true : undefined}
         />
+        {emailError ? (
+          <p className="mt-1 font-sans text-xs text-red-700">{emailError}</p>
+        ) : null}
       </div>
 
       <div>
         <PasswordField
           id="signup-password"
           label="Password"
-          helperText="At least 8 characters."
+          helperText="8+ characters"
           value={password}
-          onChange={setPassword}
+          onChange={(v) => {
+            setPassword(v);
+            setPasswordError(null);
+          }}
           autoComplete="new-password"
           minLength={8}
           required
@@ -137,28 +177,48 @@ export function SignupForm({ next }: Props) {
               style={{ width: `${strengthPct}%` }}
             />
           </div>
-          <span className="font-sans text-xs capitalize text-royal/60">
-            {strength}
+          <span className="font-sans text-xs tabular-nums text-royal/60">
+            {password.length} / 8+
           </span>
         </div>
-        <p className="mt-1 font-sans text-xs text-royal/45">
-          {password.length} / 8+ characters (strength is a guide only)
-        </p>
+        {passwordError ? (
+          <p className="mt-1 font-sans text-xs text-red-700">{passwordError}</p>
+        ) : null}
       </div>
 
-      <PasswordField
-        id="signup-confirm"
-        label="Confirm password"
-        value={confirm}
-        onChange={setConfirm}
-        autoComplete="new-password"
-        minLength={8}
-        required
-      />
+      <div>
+        <PasswordField
+          id="signup-confirm"
+          label="Confirm password"
+          value={confirm}
+          onChange={(v) => {
+            setConfirm(v);
+            setConfirmError(null);
+          }}
+          autoComplete="new-password"
+          minLength={8}
+          required
+        />
+        {confirmError ? (
+          <p className="mt-1 font-sans text-xs text-red-700">{confirmError}</p>
+        ) : null}
+      </div>
 
       {error ? (
         <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-800">
-          {error}
+          {error.includes("already exists") ? (
+            <>
+              {error}{" "}
+              <Link
+                href={`/login?next=${encodeURIComponent(next)}`}
+                className="font-semibold underline"
+              >
+                Sign in
+              </Link>
+            </>
+          ) : (
+            error
+          )}
         </p>
       ) : null}
 
@@ -176,18 +236,18 @@ export function SignupForm({ next }: Props) {
 
       <div className="flex items-center gap-3 pt-2">
         <div className="h-px flex-1 bg-royal/15" />
-        <span className="font-sans text-xs text-royal/45">or</span>
+        <span className="font-sans text-xs tracking-wide text-royal/45">
+          ── or ──
+        </span>
         <div className="h-px flex-1 bg-royal/15" />
       </div>
 
-      <p className="text-center font-sans text-sm text-royal/70">
-        <Link
-          href={`/login?next=${encodeURIComponent(next)}${email.trim() ? `&email=${encodeURIComponent(email.trim())}` : ""}`}
-          className="font-semibold text-royal underline decoration-gold/60 underline-offset-2 hover:text-gold"
-        >
-          Use a magic link instead
-        </Link>
-      </p>
+      <Link
+        href={`/login?next=${encodeURIComponent(next)}${email.trim() ? `&email=${encodeURIComponent(email.trim())}` : ""}`}
+        className="flex min-h-11 w-full items-center justify-center rounded-lg border-2 border-gold/70 bg-transparent px-4 font-serif text-sm font-semibold text-royal transition hover:bg-gold/10"
+      >
+        Use a magic link instead
+      </Link>
     </form>
   );
 }

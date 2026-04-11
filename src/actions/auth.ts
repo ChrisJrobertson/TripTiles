@@ -1,50 +1,45 @@
 "use server";
 
 import { safeNextPath } from "@/lib/auth/safe-next-path";
-import { getPublicSiteUrl } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { AuthError } from "@supabase/supabase-js";
 
-function siteOrigin(): string {
-  const s = getPublicSiteUrl().trim();
-  if (s && /^https?:\/\//i.test(s)) return s;
-  return "";
-}
-
-function authCallbackUrl(next: string): string | null {
-  const origin = siteOrigin();
-  const path = safeNextPath(next);
-  if (!origin) return null;
-  return `${origin}/auth/callback?next=${encodeURIComponent(path)}`;
+function publicSiteUrl(): string {
+  const raw = (
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.triptiles.app"
+  ).trim();
+  return raw.replace(/\/$/, "");
 }
 
 function mapSignInError(error: AuthError): string {
-  const code = error.code ?? "";
+  const code = (error.code ?? "").toLowerCase();
   const msg = (error.message ?? "").toLowerCase();
+  const blob = `${code} ${msg}`;
 
   if (
     code === "invalid_credentials" ||
     code === "user_not_found" ||
-    msg.includes("invalid login") ||
-    msg.includes("invalid email or password") ||
-    msg.includes("invalid login credentials") ||
-    msg.includes("user not found") ||
-    msg.includes("no user found")
+    blob.includes("invalid_credentials") ||
+    blob.includes("invalid login") ||
+    blob.includes("invalid email or password") ||
+    blob.includes("invalid login credentials") ||
+    blob.includes("user not found") ||
+    blob.includes("no user found")
   ) {
     return "Incorrect email or password";
   }
   if (code === "email_not_confirmed" || msg.includes("email not confirmed")) {
-    return "Please confirm your email first — check your inbox";
+    return "Please confirm your email first - check your inbox";
   }
   if (
     code === "too_many_requests" ||
-    msg.includes("over_email_send_rate_limit") ||
+    blob.includes("over_email_send_rate_limit") ||
     msg.includes("rate limit") ||
     msg.includes("too many requests") ||
     msg.includes("security purposes")
   ) {
-    return "Too many attempts, try again in a few minutes.";
+    return "Too many attempts. Try again in a few minutes.";
   }
   return "Something went wrong. Please try again.";
 }
@@ -58,23 +53,23 @@ function mapSignUpError(error: AuthError): string {
     msg.includes("already registered") ||
     msg.includes("already been registered")
   ) {
-    return "An account with this email already exists. Try signing in instead.";
+    return "An account with this email already exists. Sign in instead?";
   }
   if (code === "weak_password" || msg.includes("password")) {
-    return error.message || "Choose a stronger password (at least 8 characters).";
+    return error.message || "Password must be at least 8 characters";
   }
-  return error.message || "Something went wrong, try again.";
+  return error.message || "Something went wrong. Please try again.";
 }
 
-export async function signInWithPasswordAction(
-  email: string,
-  password: string,
-  next: string,
-): Promise<
+export async function signInWithPasswordAction(input: {
+  email: string;
+  password: string;
+  next?: string;
+}): Promise<
   { ok: true; redirectTo: string } | { ok: false; error: string }
 > {
-  const trimmedEmail = email.trim();
-  if (!trimmedEmail || !password) {
+  const trimmedEmail = input.email.trim();
+  if (!trimmedEmail || !input.password) {
     return { ok: false, error: "Email and password are required" };
   }
 
@@ -82,7 +77,7 @@ export async function signInWithPasswordAction(
     const supabase = await createClient();
     const { error } = await supabase.auth.signInWithPassword({
       email: trimmedEmail,
-      password,
+      password: input.password,
     });
 
     if (error) {
@@ -91,46 +86,39 @@ export async function signInWithPasswordAction(
 
     revalidatePath("/", "layout");
     revalidatePath("/planner");
-    return { ok: true, redirectTo: safeNextPath(next) };
+    const redirectTo = safeNextPath(input.next);
+    return { ok: true, redirectTo };
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Something went wrong. Please try again.",
+      error:
+        e instanceof Error
+          ? e.message
+          : "Something went wrong. Please try again.",
     };
   }
 }
 
-export async function signUpWithPasswordAction(
-  email: string,
-  password: string,
-): Promise<
-  | { ok: true; needsEmailConfirmation: boolean }
-  | { ok: false; error: string }
-> {
-  const trimmedEmail = email.trim();
-  if (!trimmedEmail || !password) {
-    return { ok: false, error: "Enter your email and password." };
+export async function signUpWithPasswordAction(input: {
+  email: string;
+  password: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const trimmedEmail = input.email.trim();
+  if (!trimmedEmail || !input.password) {
+    return { ok: false, error: "Email and password are required" };
   }
-  if (password.length < 8) {
-    return { ok: false, error: "Password must be at least 8 characters." };
+  if (input.password.length < 8) {
+    return { ok: false, error: "Password must be at least 8 characters" };
   }
 
   try {
-    const cb = authCallbackUrl("/planner");
-    if (!cb) {
-      return {
-        ok: false,
-        error:
-          "Sign-up is not configured: set NEXT_PUBLIC_SITE_URL for confirmation links.",
-      };
-    }
-
+    const siteUrl = publicSiteUrl();
     const supabase = await createClient();
     const { data, error } = await supabase.auth.signUp({
       email: trimmedEmail,
-      password,
+      password: input.password,
       options: {
-        emailRedirectTo: cb,
+        emailRedirectTo: `${siteUrl}/auth/callback?next=/planner`,
       },
     });
 
@@ -138,49 +126,50 @@ export async function signUpWithPasswordAction(
       return { ok: false, error: mapSignUpError(error) };
     }
 
-    const needsEmailConfirmation = !data.session;
-    revalidatePath("/", "layout");
-    return { ok: true, needsEmailConfirmation };
+    if (data.session) {
+      revalidatePath("/", "layout");
+      revalidatePath("/planner");
+    } else {
+      revalidatePath("/", "layout");
+    }
+
+    return { ok: true };
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Something went wrong. Please try again.",
+      error:
+        e instanceof Error
+          ? e.message
+          : "Something went wrong. Please try again.",
     };
   }
 }
 
-export async function resetPasswordAction(
-  email: string,
-): Promise<{ ok: true }> {
-  const trimmed = email.trim();
+export async function resetPasswordAction(input: {
+  email: string;
+}): Promise<{ ok: true }> {
+  const trimmed = input.email.trim();
   if (!trimmed) {
     return { ok: true };
   }
 
   try {
-    const origin = siteOrigin();
-    if (!origin) {
-      return { ok: true };
-    }
-
+    const siteUrl = publicSiteUrl();
     const supabase = await createClient();
-    /** Exchange on server then send user to /reset-password (SSR session + server update password). */
-    const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent("/reset-password")}`;
-
     await supabase.auth.resetPasswordForEmail(trimmed, {
-      redirectTo,
+      redirectTo: `${siteUrl}/auth/callback?next=/reset-password`,
     });
   } catch {
-    // Always succeed from the caller's perspective (no user enumeration).
+    /* always succeed from caller's perspective */
   }
 
   return { ok: true };
 }
 
-export async function updatePasswordAction(
-  newPassword: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!newPassword || newPassword.length < 8) {
+export async function updatePasswordAction(input: {
+  newPassword: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!input.newPassword || input.newPassword.length < 8) {
     return { ok: false, error: "Password must be at least 8 characters" };
   }
 
@@ -193,12 +182,12 @@ export async function updatePasswordAction(
       return {
         ok: false,
         error:
-          "This reset link is invalid or has expired. Request a new one from forgot password.",
+          "This reset link is invalid or has expired. Request a new one.",
       };
     }
 
     const { error } = await supabase.auth.updateUser({
-      password: newPassword,
+      password: input.newPassword,
     });
 
     if (error) {

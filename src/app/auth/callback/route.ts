@@ -29,7 +29,9 @@ function compactReason(msg: string, max = 600): string {
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
-  const next = safeNextPath(searchParams.get("next"));
+  const rawNextParam = searchParams.get("next");
+  const hasExplicitNext = String(rawNextParam ?? "").trim() !== "";
+  const next = safeNextPath(rawNextParam);
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const typeRaw = searchParams.get("type");
@@ -45,10 +47,15 @@ export async function GET(request: NextRequest) {
       `${origin}/login?error=auth_failed&reason=${encodeURIComponent(compactReason(message))}&next=${encodeURIComponent(next)}`,
     );
 
-  /** Password recovery must land on /reset-password so the user can set a new password. */
+  /**
+   * Recovery: honour explicit `next` when present (safe path); otherwise
+   * default to /reset-password. Other flows use `next` (defaults via safeNextPath).
+   */
   const postAuthPath =
     otpTypeFromQuery === "recovery"
-      ? safeNextPath("/reset-password")
+      ? hasExplicitNext
+        ? next
+        : safeNextPath("/reset-password")
       : next;
 
   const successRedirect = () =>

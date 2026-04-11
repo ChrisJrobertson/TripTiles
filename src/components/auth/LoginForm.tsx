@@ -61,7 +61,7 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
       if (signError) {
         const m = signError.message.toLowerCase();
         if (m.includes("rate limit") || m.includes("too many")) {
-          setError("Too many attempts, try again in a few minutes.");
+          setError("Too many attempts. Try again in a few minutes.");
         } else {
           setError("Something went wrong. Please try again.");
         }
@@ -84,11 +84,11 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
     }
     setPasswordLoading(true);
     try {
-      const result = await signInWithPasswordAction(
-        email.trim(),
+      const result = await signInWithPasswordAction({
+        email: email.trim(),
         password,
         next,
-      );
+      });
       if (!result.ok) {
         setError(result.error);
         setPasswordLoading(false);
@@ -120,6 +120,17 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
 
   return (
     <form onSubmit={handleMagicLink} className="mt-8 space-y-5">
+      <div aria-live="polite" role="status">
+        {error ? (
+          <p
+            id="login-error"
+            className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-800"
+          >
+            {error}
+          </p>
+        ) : null}
+      </div>
+
       <div>
         <label
           htmlFor="login-email"
@@ -144,32 +155,12 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
 
       <PasswordField
         label="Password (optional for magic link)"
-        helperText="Leave blank to sign in with a magic link."
+        helperText="Leave blank to sign in with a magic link"
         value={password}
         onChange={setPassword}
         autoComplete="current-password"
         required={false}
       />
-
-      <p className="text-right font-sans text-xs">
-        <Link
-          href={`/forgot-password?email=${encodeURIComponent(email.trim())}`}
-          className="font-medium text-royal/70 underline decoration-gold/50 underline-offset-2 hover:text-gold"
-        >
-          Forgot password?
-        </Link>
-      </p>
-
-      <div aria-live="polite" role="status">
-        {error ? (
-          <p
-            id="login-error"
-            className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-800"
-          >
-            {error}
-          </p>
-        ) : null}
-      </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
         <button
@@ -189,9 +180,20 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
         </button>
       </div>
 
-      <div className="flex items-center gap-3 pt-2">
+      <p className="text-center font-sans text-xs">
+        <Link
+          href={`/forgot-password?email=${encodeURIComponent(email.trim())}`}
+          className="font-medium text-royal/70 underline decoration-gold/50 underline-offset-2 hover:text-gold"
+        >
+          Forgot password?
+        </Link>
+      </p>
+
+      <div className="flex items-center gap-3 pt-1">
         <div className="h-px flex-1 bg-royal/15" />
-        <span className="font-sans text-xs text-royal/45">or</span>
+        <span className="font-sans text-xs tracking-wide text-royal/45">
+          ── or ──
+        </span>
         <div className="h-px flex-1 bg-royal/15" />
       </div>
 
@@ -201,7 +203,7 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
           href={`/signup?next=${encodeURIComponent(next)}`}
           className="font-semibold text-royal underline decoration-gold/60 underline-offset-2 hover:text-gold"
         >
-          Sign up
+          Create one
         </Link>
       </p>
     </form>

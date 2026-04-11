@@ -1,37 +1,17 @@
 "use client";
 
 import { updatePasswordAction } from "@/actions/auth";
-import { createClient } from "@/lib/supabase/client";
 import { PasswordField } from "@/components/auth/PasswordField";
 import { showToast } from "@/lib/toast";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-/**
- * Recovery links should hit `/auth/callback` first so the session is in
- * cookies; then `updatePasswordAction` runs on the server with that session.
- */
 export function ResetPasswordForm() {
   const router = useRouter();
-  const [ready, setReady] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const supabase = createClient();
-    void supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setReady(true);
-    });
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") setReady(true);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,7 +26,7 @@ export function ResetPasswordForm() {
     }
     setLoading(true);
     try {
-      const r = await updatePasswordAction(password);
+      const r = await updatePasswordAction({ newPassword: password });
       if (!r.ok) {
         setError(r.error);
         setLoading(false);
@@ -59,22 +39,6 @@ export function ResetPasswordForm() {
       setError("Something went wrong. Try again.");
       setLoading(false);
     }
-  }
-
-  if (!ready) {
-    return (
-      <div className="mt-8 space-y-3 font-sans text-sm text-royal/70">
-        <p>Checking your reset link…</p>
-        <p className="text-xs text-royal/55">
-          If this page stays here, open the link from your email again or
-          request a new reset from{" "}
-          <Link href="/forgot-password" className="underline">
-            forgot password
-          </Link>
-          .
-        </p>
-      </div>
-    );
   }
 
   return (

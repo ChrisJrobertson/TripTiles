@@ -24,7 +24,7 @@ export function ForgotPasswordForm() {
     e.preventDefault();
     const trimmed = email.trim();
     setLoading(true);
-    await resetPasswordAction(trimmed);
+    await resetPasswordAction({ email: trimmed });
     setLoading(false);
     setSentTo(trimmed || "that address");
     setDone(true);
@@ -36,14 +36,14 @@ export function ForgotPasswordForm() {
         className="mt-8 rounded-lg border border-gold/40 bg-white px-4 py-5 font-sans text-sm text-royal shadow-sm"
         role="status"
       >
-        <p className="font-semibold text-royal">
+        <p className="font-semibold leading-relaxed text-royal">
           Check your email. If an account exists for{" "}
           <span className="break-all text-royal/90">{sentTo}</span>, we&apos;ve
-          sent a reset link.
+          sent a reset link. It&apos;ll arrive in a few seconds.
         </p>
         <p className="mt-4">
           <Link href="/login" className="font-semibold text-gold underline">
-            Back to login
+            Back to sign in
           </Link>
         </p>
       </div>

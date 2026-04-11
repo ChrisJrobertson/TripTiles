@@ -22,15 +22,14 @@ export default function ForgotPasswordPage() {
           Reset your password
         </h1>
         <p className="mt-3 text-center font-sans text-sm text-royal/70">
-          Enter your email and we&apos;ll send you a link to choose a new
-          password.
+          We&apos;ll email you a link to set a new one.
         </p>
         <Suspense fallback={<div className="mt-8 h-32 animate-pulse rounded-lg bg-royal/10" />}>
           <ForgotPasswordForm />
         </Suspense>
         <p className="mt-8 text-center font-sans text-sm text-royal/50">
           <Link href="/login" className="text-royal underline underline-offset-2">
-            Back to login
+            Back to sign in
           </Link>
         </p>
       </div>

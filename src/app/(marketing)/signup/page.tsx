@@ -30,10 +30,20 @@ export default async function SignupPage({ searchParams }: Props) {
           Create your TripTiles account
         </h1>
         <p className="mt-3 text-center font-sans text-sm leading-relaxed text-royal/75">
-          Free account, no credit card. Start planning in seconds.
+          Free account. No credit card. Start planning in seconds.
         </p>
 
         <SignupForm next={next} />
+
+        <p className="mt-6 text-center font-sans text-sm text-royal/70">
+          Already have an account?{" "}
+          <Link
+            href={`/login?next=${encodeURIComponent(next)}`}
+            className="font-semibold text-royal underline decoration-gold/60 underline-offset-2 hover:text-gold"
+          >
+            Sign in
+          </Link>
+        </p>
 
         <p className="mt-8 text-center font-sans text-sm text-royal/50">
           <Link href="/" className="text-royal underline underline-offset-2">
