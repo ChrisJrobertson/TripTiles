@@ -253,10 +253,10 @@ export default function PricingPage() {
         <p className="mt-12 text-center font-sans text-sm text-royal/70">
           Questions? Email{" "}
           <a
-            href="mailto:hello@triptiles.app"
+            href="mailto:hello@triptiles.com"
             className="font-semibold text-royal underline underline-offset-2"
           >
-            hello@triptiles.app
+            hello@triptiles.com
           </a>
         </p>
 

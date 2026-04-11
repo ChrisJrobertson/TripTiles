@@ -1,4 +1,4 @@
-import { FROM_ADDRESS, getResend } from "./client";
+import { FROM_ADDRESS, REPLY_TO_HELLO, getResend } from "./client";
 import { countdownEmailHtml } from "./templates/countdown-3d";
 import { followupEmailHtml } from "./templates/followup-1d";
 import { inviteEmailHtml } from "./templates/invite";
@@ -70,6 +70,7 @@ export async function sendTemplatedEmail(input: {
     const rendered = renderTemplate(input.template, input.data);
     const result = await getResend().emails.send({
       from: FROM_ADDRESS,
+      replyTo: REPLY_TO_HELLO,
       to: [input.to],
       subject: rendered.subject,
       html: rendered.html,

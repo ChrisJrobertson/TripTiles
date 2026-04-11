@@ -30,7 +30,7 @@ export default function PrivacyPage() {
         template privacy policy. We are a small, pre-launch product and aim for
         substantive compliance with UK GDPR principles. If you have specific
         questions about data handling, email us at{" "}
-        <a href="mailto:privacy@triptiles.app">privacy@triptiles.app</a>.
+        <a href="mailto:privacy@triptiles.com">privacy@triptiles.com</a>.
       </p>
       <p className="text-sm text-royal/70">
         <strong>Last updated:</strong> 11 April 2026
@@ -51,10 +51,10 @@ export default function PrivacyPage() {
         </p>
         <p>
           Contact for privacy matters:{" "}
-          <a href="mailto:privacy@triptiles.app">privacy@triptiles.app</a>
+          <a href="mailto:privacy@triptiles.com">privacy@triptiles.com</a>
           <br />
           General enquiries:{" "}
-          <a href="mailto:hello@triptiles.app">hello@triptiles.app</a>
+          <a href="mailto:hello@triptiles.com">hello@triptiles.com</a>
           <br />
           Website: <a href={site}>{site.replace(/^https?:\/\//, "")}</a>
         </p>
@@ -247,7 +247,7 @@ export default function PrivacyPage() {
         </ul>
         <p>
           To exercise a right, email{" "}
-          <a href="mailto:privacy@triptiles.app">privacy@triptiles.app</a>. We
+          <a href="mailto:privacy@triptiles.com">privacy@triptiles.com</a>. We
           will respond within <strong>30 days</strong>. You may also complain to
           the ICO:{" "}
           <a href="https://ico.org.uk" target="_blank" rel="noreferrer">
@@ -273,7 +273,7 @@ export default function PrivacyPage() {
           TripTiles is not directed at children under 13, and we do not knowingly
           collect personal data from children under 13. If you believe a child
           has signed up, contact{" "}
-          <a href="mailto:privacy@triptiles.app">privacy@triptiles.app</a>.
+          <a href="mailto:privacy@triptiles.com">privacy@triptiles.com</a>.
         </p>
       </section>
 
@@ -298,7 +298,7 @@ export default function PrivacyPage() {
       <section id="contact">
         <h2>13. Contact</h2>
         <p>
-          <a href="mailto:privacy@triptiles.app">privacy@triptiles.app</a>
+          <a href="mailto:privacy@triptiles.com">privacy@triptiles.com</a>
         </p>
       </section>
     </LegalArticle>

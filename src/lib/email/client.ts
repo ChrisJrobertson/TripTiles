@@ -9,4 +9,7 @@ export function getResend(): Resend {
   return resendSingleton;
 }
 
-export const FROM_ADDRESS = "TripTiles <hello@triptiles.app>";
+/** Transactional sender — must match a verified domain in Resend. */
+export const FROM_ADDRESS = "TripTiles <noreply@triptiles.com>";
+/** Where human replies to automated mail should land. */
+export const REPLY_TO_HELLO = "hello@triptiles.com";

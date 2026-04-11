@@ -81,7 +81,7 @@ export default function TermsPage() {
         <h2>5. Refunds</h2>
         <p>
           We offer a <strong>30-day money-back guarantee</strong>. Request via{" "}
-          <a href="mailto:hello@triptiles.app">hello@triptiles.app</a> or through
+          <a href="mailto:hello@triptiles.com">hello@triptiles.com</a> or through
           Payhip. After 30 days, refunds are considered case-by-case. Refunded
           accounts revert to the Free tier but your trip data generally remains
           available on Free limits.
@@ -177,10 +177,10 @@ export default function TermsPage() {
         <h2>15. Contact</h2>
         <p>
           General:{" "}
-          <a href="mailto:hello@triptiles.app">hello@triptiles.app</a>
+          <a href="mailto:hello@triptiles.com">hello@triptiles.com</a>
           <br />
           Data protection:{" "}
-          <a href="mailto:privacy@triptiles.app">privacy@triptiles.app</a>
+          <a href="mailto:privacy@triptiles.com">privacy@triptiles.com</a>
         </p>
       </section>
     </LegalArticle>
