@@ -51,6 +51,22 @@ Include optional crowd fields whenever CROWD_PATTERNS are provided (see below).
   }
 }
 
+DAY NOTES RULES (CRITICAL — applies to crowd_reasoning and day_crowd_notes):
+- Day notes must read like friendly tips from a knowledgeable friend.
+- NEVER include raw crowd scores, numerical calculations, arithmetic
+  expressions, or internal reasoning markers.
+- NEVER write phrases like "(score 7+10=17/2=8.5)", "score N",
+  "crowd index N", or any bracketed numerical reasoning.
+- NEVER explain your math. Users see the WHAT and WHY in plain English,
+  not the HOW you arrived at it.
+- Keep notes under 200 characters where possible.
+- Good example: "Arrive early — Magic Kingdom is quietest before 10am
+  on weekdays."
+- Bad example: "Magic Kingdom on Tuesday (score 6+7=13/2=6.5) because
+  mid-week crowds are lowest."
+- Bad example: "Rest day mid-trip — score 3, lowest of the week."
+- Good rewrite: "Rest day mid-trip to recharge before the busy weekend."
+
 ## Crowd-awareness (when CROWD_PATTERNS appears in the user message)
 
 You receive a CROWD_PATTERNS object: per-park day-of-week scores (0–10, higher =
@@ -165,6 +181,43 @@ function stripCodeFences(raw: string): string {
   return t.trim();
 }
 
+/** Strips leaked scoring arithmetic from AI crowd copy; falls back if over-stripped. */
+function sanitizeDayNote(raw: string): string {
+  if (!raw) return raw;
+  const original = raw.trim();
+  let text = original;
+
+  text = text.replace(
+    /\s*[(\[][^)\]]*\b(score|crowd\s*index|index|rating)\b[^)\]]*[)\]]/gi,
+    "",
+  );
+
+  text = text.replace(/\bscore[s]?\s*[:=]?\s*[\d+\-*/=.\s]+/gi, "");
+
+  text = text.replace(
+    /\b\d+\s*[+\-*/]\s*\d+\s*=\s*[\d.]+(?:\s*\/\s*\d+\s*=\s*[\d.]+)?/g,
+    "",
+  );
+
+  text = text.replace(
+    /\b(day\s*rating|crowd|traffic|level)\s*[:=]\s*\d+(?:\s*\/\s*\d+)?/gi,
+    "",
+  );
+
+  text = text.replace(/\(\s*\)/g, "");
+  text = text.replace(/\[\s*\]/g, "");
+  text = text.replace(/\s{2,}/g, " ");
+  text = text.replace(/\s+([,.;:])/g, "$1");
+  text = text.replace(/^[\s,;:.\-–—]+/, "");
+  text = text.replace(/[\s,;:.\-–—]+$/, "");
+  text = text.trim();
+
+  if (text.length === 0 || text.length < 10) {
+    return original.length > 0 ? original : text;
+  }
+  return text;
+}
+
 function allowedDateKeys(startIso: string, endIso: string): Set<string> {
   const keys = new Set<string>();
   let d = parseDate(startIso);
@@ -214,7 +267,7 @@ function parseCrowdMetadata(
   let crowd_reasoning: string | undefined;
   if (typeof obj.crowd_reasoning === "string") {
     const t = obj.crowd_reasoning.trim();
-    if (t) crowd_reasoning = t.slice(0, 1200);
+    if (t) crowd_reasoning = sanitizeDayNote(t.slice(0, 1200));
   }
   const day_crowd_notes: Record<string, string> = {};
   const notes = obj.day_crowd_notes;
@@ -223,7 +276,7 @@ function parseCrowdMetadata(
       if (!allowedDates.has(k)) continue;
       if (typeof v !== "string") continue;
       const s = v.trim();
-      if (s) day_crowd_notes[k] = s.slice(0, 400);
+      if (s) day_crowd_notes[k] = sanitizeDayNote(s.slice(0, 400));
     }
   }
   return {
