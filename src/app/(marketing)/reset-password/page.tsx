@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+/** Session-dependent; avoids static prerender at build (needs cookies / Supabase env). */
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Set new password · TripTiles",
   description: "Choose a new password for your TripTiles account.",
