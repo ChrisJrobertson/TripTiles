@@ -1,8 +1,8 @@
 "use client";
 
 import { GROUP_META, GROUP_ORDER } from "@/lib/group-meta";
-import { legacyDestinationFromRegionId } from "@/lib/legacy-destination";
-import type { CustomTile, Destination, Park } from "@/lib/types";
+import { parkMatchesPlannerRegion } from "@/lib/park-matches-planner-region";
+import type { CustomTile, Park } from "@/lib/types";
 import { useMemo, useState } from "react";
 
 type Props = {
@@ -17,20 +17,6 @@ type Props = {
   onDeleteCustom: (tileId: string) => void;
 };
 
-function matchesDestination(park: Park, dest: Destination): boolean {
-  if (dest === "custom") return true;
-  return park.destinations.includes(dest);
-}
-
-function matchesRegion(park: Park, regionId: string | null): boolean {
-  if (!regionId) return true;
-  if (park.region_ids?.length) {
-    return park.region_ids.includes(regionId);
-  }
-  const legacy = legacyDestinationFromRegionId(regionId);
-  return matchesDestination(park, legacy);
-}
-
 export function Palette({
   parks,
   customTiles,
@@ -44,7 +30,7 @@ export function Palette({
   const [menuTileId, setMenuTileId] = useState<string | null>(null);
 
   const builtInForRegion = useMemo(
-    () => parks.filter((p) => matchesRegion(p, regionId)),
+    () => parks.filter((p) => parkMatchesPlannerRegion(p, regionId)),
     [parks, regionId],
   );
 
@@ -77,7 +63,8 @@ export function Palette({
           if (!meta) return null;
           const groupParks = parks.filter(
             (p) =>
-              p.park_group === groupKey && matchesRegion(p, regionId),
+              p.park_group === groupKey &&
+              parkMatchesPlannerRegion(p, regionId),
           );
           const groupCustom = customTiles.filter(
             (t) => t.park_group === groupKey,

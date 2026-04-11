@@ -29,6 +29,10 @@ export function mapTripRow(row: Record<string, unknown>): Trip {
     ? childAges.map((n) => Number(n))
     : [];
 
+  const prevAss = row.previous_assignments_snapshot;
+  const prevPrefs = row.previous_preferences_snapshot;
+  const prevAt = row.previous_assignments_snapshot_at;
+
   return {
     id: String(row.id),
     owner_id: owner,
@@ -56,6 +60,16 @@ export function mapTripRow(row: Record<string, unknown>): Trip {
     created_at: created,
     updated_at: updated,
     last_opened_at: lastOpened,
+    previous_assignments_snapshot:
+      prevAss && typeof prevAss === "object" && !Array.isArray(prevAss)
+        ? (prevAss as Assignments)
+        : null,
+    previous_preferences_snapshot:
+      prevPrefs && typeof prevPrefs === "object" && !Array.isArray(prevPrefs)
+        ? (prevPrefs as Record<string, unknown>)
+        : null,
+    previous_assignments_snapshot_at:
+      prevAt != null ? String(prevAt) : null,
   };
 }
 

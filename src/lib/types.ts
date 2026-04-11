@@ -209,6 +209,10 @@ export interface Trip {
   last_opened_at: string;
   created_at: string;
   updated_at: string;
+  /** Set before each Smart Plan apply; used for single-step undo. */
+  previous_assignments_snapshot?: Assignments | null;
+  previous_preferences_snapshot?: Record<string, unknown> | null;
+  previous_assignments_snapshot_at?: string | null;
 }
 
 export type AchievementCategory =

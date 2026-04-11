@@ -241,11 +241,63 @@ export async function updateAssignmentsAction(input: {
         assignments: input.assignments,
         updated_at: now,
         last_opened_at: now,
+        previous_assignments_snapshot: null,
+        previous_preferences_snapshot: null,
+        previous_assignments_snapshot_at: null,
       })
       .eq("id", input.tripId)
       .eq("owner_id", user.id);
 
     if (error) return { ok: false, error: error.message };
+    revalidatePlanner();
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
+  }
+}
+
+export async function undoSmartPlanAction(
+  tripId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { ok: false, error: "Not signed in." };
+
+    const supabase = await createClient();
+    const { data: row, error } = await supabase
+      .from("trips")
+      .select(
+        "previous_assignments_snapshot, previous_preferences_snapshot, previous_assignments_snapshot_at",
+      )
+      .eq("id", tripId)
+      .eq("owner_id", user.id)
+      .maybeSingle();
+
+    if (error || !row) return { ok: false, error: "Trip not found." };
+    if (
+      !row.previous_assignments_snapshot_at ||
+      row.previous_assignments_snapshot == null
+    ) {
+      return { ok: false, error: "Nothing to undo." };
+    }
+
+    const { error: upErr } = await supabase
+      .from("trips")
+      .update({
+        assignments: row.previous_assignments_snapshot,
+        preferences: row.previous_preferences_snapshot ?? {},
+        previous_assignments_snapshot: null,
+        previous_preferences_snapshot: null,
+        previous_assignments_snapshot_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", tripId)
+      .eq("owner_id", user.id);
+
+    if (upErr) return { ok: false, error: upErr.message };
     revalidatePlanner();
     return { ok: true };
   } catch (e) {

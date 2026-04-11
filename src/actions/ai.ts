@@ -290,6 +290,8 @@ export async function generateAIPlanAction(input: {
       dayCrowdNotes: Record<string, string> | null;
       /** Successful AI runs for this trip after this request (for UI counter). */
       generationsUsedForTrip: number;
+      /** Same as DB `previous_assignments_snapshot_at` for optimistic UI. */
+      undoSnapshotAt: string;
     }
   | {
       ok: false;
@@ -526,13 +528,16 @@ export async function generateAIPlanAction(input: {
     const preserve =
       input.preserveExistingSlots !== false;
     const mergedRaw = mergeAiIntoTrip(trip.assignments, guarded, preserve);
-    /** Always clear theme parks from day 1 AM/PM after merge — preserve mode
-     * otherwise keeps a previous MK if the model omits that slot. */
-    const merged = applyArrivalDayNoThemeParks(
-      mergedRaw,
-      sortedDateKeys,
-      parksById,
-    );
+    /** After overwrite mode, strip headline parks from day 1 AM/PM. In preserve
+     * mode, do not run this on the merged calendar — it would remove the guest's
+     * manual day-1 picks even when they asked not to overwrite. */
+    const merged = preserve
+      ? mergedRaw
+      : applyArrivalDayNoThemeParks(
+          mergedRaw,
+          sortedDateKeys,
+          parksById,
+        );
     const now = new Date().toISOString();
 
     const nextPrefs: Record<string, unknown> = {
@@ -545,6 +550,9 @@ export async function generateAIPlanAction(input: {
     const { error: upErr } = await supabase
       .from("trips")
       .update({
+        previous_assignments_snapshot: trip.assignments,
+        previous_preferences_snapshot: trip.preferences ?? {},
+        previous_assignments_snapshot_at: now,
         assignments: merged,
         preferences: nextPrefs,
         updated_at: now,
@@ -624,6 +632,7 @@ export async function generateAIPlanAction(input: {
       crowdSummary: meta.crowd_reasoning ?? null,
       dayCrowdNotes: meta.day_crowd_notes ?? null,
       generationsUsedForTrip,
+      undoSnapshotAt: now,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown AI error";

@@ -1,6 +1,12 @@
 "use client";
 
-import { MONTHS_LONG, addDays, formatDateKey, parseDate } from "@/lib/date-helpers";
+import {
+  MONTHS_LONG,
+  addDays,
+  formatDateKey,
+  formatUndoSnapshotHint,
+  parseDate,
+} from "@/lib/date-helpers";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
 import type {
@@ -107,6 +113,9 @@ export type MobileDayViewProps = {
   onMenuExportPdf?: () => void;
   onMenuShare?: () => void;
   onMenuSettings?: () => void;
+  /** When set, mobile menu can offer one-tap undo for the last Smart Plan. */
+  smartPlanUndoSnapshotAt?: string | null;
+  onMenuUndoSmartPlan?: () => void;
 };
 
 function buildTripDays(
@@ -272,6 +281,8 @@ export function MobileDayView({
   onMenuExportPdf,
   onMenuShare,
   onMenuSettings,
+  smartPlanUndoSnapshotAt = null,
+  onMenuUndoSmartPlan,
 }: MobileDayViewProps) {
   void _crowdSummary;
   const notesPanelId = useId();
@@ -569,6 +580,23 @@ export function MobileDayView({
                 }}
               >
                 Export PDF
+              </button>
+            ) : null}
+            {!readOnly &&
+            smartPlanUndoSnapshotAt &&
+            onMenuUndoSmartPlan ? (
+              <button
+                type="button"
+                className="min-h-[48px] rounded-lg px-4 py-3 text-left font-sans text-sm font-medium text-royal/80 active:bg-white"
+                title={`Undo Smart Plan from ${formatUndoSnapshotHint(smartPlanUndoSnapshotAt)}`}
+                aria-label="Undo last Smart Plan generation"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onMenuUndoSmartPlan();
+                }}
+              >
+                <span aria-hidden>↶ </span>
+                Undo Smart Plan
               </button>
             ) : null}
             {onMenuShare ? (

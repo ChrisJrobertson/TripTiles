@@ -5,6 +5,7 @@ import {
   createTripAction,
   deleteTripAction,
   touchTripAction,
+  undoSmartPlanAction,
   updateAssignmentsAction,
   updateTripFromWizardAction,
   updateTripMetadataAction,
@@ -37,6 +38,8 @@ import { PdfExportButton } from "@/components/planner/PdfExportButton";
 import { TripTimeline } from "@/components/planner/TripTimeline";
 import { Wizard } from "@/components/planner/Wizard";
 import { TierLimitModal } from "@/components/paywall/TierLimitModal";
+import { formatUndoSnapshotHint } from "@/lib/date-helpers";
+import { parkMatchesPlannerRegion } from "@/lib/park-matches-planner-region";
 import { trackEvent } from "@/lib/analytics/client";
 import {
   plannerAiDayCrowdNotes,
@@ -162,6 +165,7 @@ export function PlannerClient({
   const [wizardEditId, setWizardEditId] = useState<string | null>(null);
   const [smartOpen, setSmartOpen] = useState(false);
   const [smartError, setSmartError] = useState<string | null>(null);
+  const [smartPlanUndoOpen, setSmartPlanUndoOpen] = useState(false);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiGenByTrip, setAiGenByTrip] = useState(initialAiCounts);
   const [achievementToasts, setAchievementToasts] = useState<
@@ -204,11 +208,6 @@ export function PlannerClient({
     return r?.short_name ?? r?.name ?? "your destination";
   }, [activeTrip?.region_id, regions]);
 
-  const calendarParks = useMemo(
-    () => [...parks, ...customTiles.map(customTileToPark)],
-    [parks, customTiles],
-  );
-
   const mobilePlannerNoteMaps = useMemo(() => {
     if (!activeTrip) {
       return {
@@ -243,6 +242,12 @@ export function PlannerClient({
         t.save_to_library || (t.region_ids?.includes(rid) ?? false),
     );
   }, [customTiles, activeTrip]);
+
+  const calendarParks = useMemo(() => {
+    const rid = resolvePaletteRegionId(activeTrip);
+    const catalog = parks.filter((p) => parkMatchesPlannerRegion(p, rid));
+    return [...catalog, ...customTilesForPalette.map(customTileToPark)];
+  }, [parks, customTilesForPalette, activeTrip]);
 
   const remainingCustomCreates = useMemo(() => {
     if (customTileLimit >= 1000) return 999999;
@@ -468,7 +473,16 @@ export function PlannerClient({
       setSmartError(null);
       setIsAiGenerating(true);
       try {
-        const t = trips.find((x) => x.id === activeTripId);
+        const tripBefore = trips.find((x) => x.id === activeTripId);
+        const snapAssignments = tripBefore?.assignments
+          ? (JSON.parse(
+              JSON.stringify(tripBefore.assignments),
+            ) as Assignments)
+          : ({} as Assignments);
+        const snapPreferences = tripBefore?.preferences
+          ? ({ ...tripBefore.preferences } as Record<string, unknown>)
+          : ({} as Record<string, unknown>);
+        const t = tripBefore;
         const res = await generateAIPlanAction({
           tripId: activeTripId,
           mode: payload.mode,
@@ -501,6 +515,9 @@ export function PlannerClient({
         applyLocalPatch(activeTripId, {
           assignments: res.assignments,
           preferences: prefPatch,
+          previous_assignments_snapshot: snapAssignments,
+          previous_preferences_snapshot: snapPreferences,
+          previous_assignments_snapshot_at: res.undoSnapshotAt,
         });
         setAiGenByTrip((prev) => ({
           ...prev,
@@ -542,6 +559,9 @@ export function PlannerClient({
             ...t,
             assignments: nextAss,
             updated_at: new Date().toISOString(),
+            previous_assignments_snapshot: null,
+            previous_preferences_snapshot: null,
+            previous_assignments_snapshot_at: null,
           };
           scheduleAssignmentsSave(t.id, nextAss);
           return next;
@@ -566,6 +586,9 @@ export function PlannerClient({
             ...t,
             assignments: nextAss,
             updated_at: new Date().toISOString(),
+            previous_assignments_snapshot: null,
+            previous_preferences_snapshot: null,
+            previous_assignments_snapshot_at: null,
           };
           scheduleAssignmentsSave(t.id, nextAss);
           return next;
@@ -574,6 +597,18 @@ export function PlannerClient({
     },
     [activeTripId, scheduleAssignmentsSave],
   );
+
+  const confirmUndoSmartPlan = useCallback(async () => {
+    if (!activeTripId) return;
+    setSmartPlanUndoOpen(false);
+    const res = await undoSmartPlanAction(activeTripId);
+    if (!res.ok) {
+      showToast(res.error);
+      return;
+    }
+    showToast("Smart Plan undone — your previous trip is restored");
+    startTransition(() => router.refresh());
+  }, [activeTripId, router, showToast]);
 
   const wizardInitial = (): Partial<Trip> => {
     if (wizardEditId) {
@@ -755,6 +790,18 @@ export function PlannerClient({
               buttonId="planner-pdf-export-btn"
               onAchievementKeys={(keys) => enqueueAchievementKeys(keys)}
             />
+            {activeTrip.previous_assignments_snapshot_at ? (
+              <button
+                type="button"
+                onClick={() => setSmartPlanUndoOpen(true)}
+                className="flex items-center gap-2 rounded-lg border border-gold/40 px-4 py-2.5 font-sans text-sm font-medium text-royal/80 shadow-sm transition hover:bg-cream active:bg-cream/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+                aria-label="Undo last Smart Plan generation"
+                title={`Undo Smart Plan from ${formatUndoSnapshotHint(activeTrip.previous_assignments_snapshot_at)}`}
+              >
+                <span aria-hidden>↶</span>
+                Undo Smart Plan
+              </button>
+            ) : null}
             <PlannerActionsMenu
               onResetCruise={() => {
                 if (!activeTripId) return;
@@ -777,7 +824,12 @@ export function PlannerClient({
               }}
               onClearAll={() => {
                 if (!activeTripId) return;
-                applyLocalPatch(activeTripId, { assignments: {} });
+                applyLocalPatch(activeTripId, {
+                  assignments: {},
+                  previous_assignments_snapshot: null,
+                  previous_preferences_snapshot: null,
+                  previous_assignments_snapshot_at: null,
+                });
                 void withSaving(async () => {
                   setSaveError(null);
                   const res = await updateAssignmentsAction({
@@ -868,6 +920,10 @@ export function PlannerClient({
                 }
                 onMenuShare={handleMobileMenuShare}
                 onMenuSettings={() => undefined}
+                smartPlanUndoSnapshotAt={
+                  activeTrip.previous_assignments_snapshot_at ?? null
+                }
+                onMenuUndoSmartPlan={() => setSmartPlanUndoOpen(true)}
               />
             </div>
           </div>
@@ -985,6 +1041,51 @@ export function PlannerClient({
           onAssign={onAssign}
           onNeedParkFirst={() => showHint("Pick a park first")}
         />
+      ) : null}
+
+      {smartPlanUndoOpen && activeTrip?.previous_assignments_snapshot_at ? (
+        <div
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-royal/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="undo-smart-plan-title"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-gold/30 bg-cream p-6 shadow-xl">
+            <h2
+              id="undo-smart-plan-title"
+              className="font-display text-lg font-semibold text-royal"
+            >
+              Undo Smart Plan?
+            </h2>
+            <p className="mt-3 font-sans text-sm text-royal/80">
+              This will restore your trip to the state it was in before the
+              last Smart Plan generation. Any AI suggestions will be removed.
+              This cannot be undone.
+            </p>
+            <p className="mt-2 font-sans text-xs text-royal/60">
+              Snapshot:{" "}
+              {formatUndoSnapshotHint(
+                activeTrip.previous_assignments_snapshot_at,
+              )}
+            </p>
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-gold/40 px-4 py-2 font-sans text-sm font-medium text-royal/80 hover:bg-white"
+                onClick={() => setSmartPlanUndoOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-royal px-4 py-2 font-sans text-sm font-medium text-cream hover:bg-royal/90"
+                onClick={() => void confirmUndoSmartPlan()}
+              >
+                Yes, undo it
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       <SmartPlanModal
