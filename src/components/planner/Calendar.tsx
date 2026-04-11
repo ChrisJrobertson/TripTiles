@@ -10,7 +10,12 @@ import {
   startOfWeekMonday,
 } from "@/lib/date-helpers";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
 import type { Assignment, Park, SlotType, Trip } from "@/lib/types";
+import {
+  CrowdLevelIndicator,
+  crowdLevelFromHeuristicTone,
+} from "@/components/planner/CrowdLevelIndicator";
 import {
   useCallback,
   useEffect,
@@ -71,34 +76,6 @@ function dayUserNote(trip: Trip, dateKey: string): string {
   if (!dnRaw || typeof dnRaw !== "object" || Array.isArray(dnRaw)) return "";
   const v = (dnRaw as Record<string, unknown>)[dateKey];
   return typeof v === "string" ? v.trim() : "";
-}
-
-/** Heuristic crowd tone from AI day note text (no numeric level in schema). */
-function crowdToneFromNote(note: string | null): "low" | "mid" | "high" | null {
-  if (!note) return null;
-  const t = note.toLowerCase();
-  if (
-    /\b(quiet|calm|lighter|lowest|easiest|emptier|low crowds?|lighter crowds?)\b/.test(
-      t,
-    )
-  ) {
-    return "low";
-  }
-  if (
-    /\b(busy|heavy|peak|worst|packed|crowded|high crowds?|busier)\b/.test(t)
-  ) {
-    return "high";
-  }
-  return "mid";
-}
-
-function crowdDotMeta(
-  tone: "low" | "mid" | "high",
-): { bg: string; title: string } {
-  if (tone === "low")
-    return { bg: "bg-emerald-600", title: "Crowds: quiet" };
-  if (tone === "high") return { bg: "bg-red-600", title: "Crowds: busy" };
-  return { bg: "bg-amber-500", title: "Crowds: moderate" };
 }
 
 function tripDayNumber(trip: Trip, dateKey: string): number {
@@ -171,7 +148,7 @@ export function Calendar({
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return m;
     for (const [dk, val] of Object.entries(raw)) {
       if (typeof val !== "string" || !val.trim()) continue;
-      m.set(dk, crowdToneFromNote(sanitizeDayNote(val.trim())));
+      m.set(dk, heuristicCrowdToneFromNoteText(sanitizeDayNote(val.trim())));
     }
     return m;
   }, [trip.preferences?.ai_day_crowd_notes]);
@@ -274,7 +251,7 @@ export function Calendar({
               const dayNote = dayUserNote(trip, key);
               const hasInsight = Boolean(crowdLine || dayNote);
               const tone = crowdToneByDateKey.get(key) ?? null;
-              const dot = tone ? crowdDotMeta(tone) : null;
+              const crowdLevel = tone ? crowdLevelFromHeuristicTone(tone) : null;
               const headingDate = formatDayHeading(day);
 
               const openNote = (anchor: DOMRect) => {
@@ -306,13 +283,10 @@ export function Calendar({
                 >
                   <div className="flex items-center justify-between gap-0.5 border-b border-royal/10 px-1 py-0.5 md:py-1">
                     <div className="min-w-0 flex flex-1 items-center justify-center gap-1 text-center">
-                      {dot ? (
-                        <span
-                          className={`hidden h-3 w-3 shrink-0 rounded-full md:inline-block ${dot.bg}`}
-                          title={dot.title}
-                          aria-label={dot.title}
-                          role="img"
-                        />
+                      {crowdLevel ? (
+                        <span className="hidden shrink-0 md:inline-flex">
+                          <CrowdLevelIndicator level={crowdLevel} size="sm" />
+                        </span>
                       ) : null}
                       <span className="font-serif text-lg font-bold leading-none text-royal sm:text-xl">
                         {dayNum}

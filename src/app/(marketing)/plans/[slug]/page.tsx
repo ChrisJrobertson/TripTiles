@@ -1,4 +1,4 @@
-import { Calendar } from "@/components/planner/Calendar";
+import { PublicPlanPlannerShell } from "@/components/marketing/PublicPlanPlannerShell";
 import { CopyPlanLinkButton } from "@/components/marketing/CopyPlanLinkButton";
 import { PublicPlanActions } from "@/components/marketing/PublicPlanActions";
 import { getUserCustomTiles } from "@/lib/db/custom-tiles";
@@ -168,15 +168,7 @@ export default async function PublicPlanPage({ params }: Props) {
             yet. The calendar grid may still show saved assignments.
           </p>
         ) : null}
-        <Calendar
-          trip={trip}
-          parks={parks}
-          selectedParkId={null}
-          readOnly
-          onAssign={() => {}}
-          onClear={() => {}}
-          onNeedParkFirst={() => {}}
-        />
+        <PublicPlanPlannerShell trip={trip} parks={parks} shareUrl={url} />
 
         <section className="mt-12 border-t border-royal/10 pt-10">
           <p className="font-sans text-sm font-semibold text-royal">

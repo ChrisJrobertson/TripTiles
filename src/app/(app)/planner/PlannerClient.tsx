@@ -14,6 +14,7 @@ import { AchievementToast } from "@/components/gamification/AchievementToast";
 import { deleteCustomTileAction } from "@/actions/custom-tiles";
 import { Calendar } from "@/components/planner/Calendar";
 import { CrowdStrategyBanner } from "@/components/planner/CrowdStrategyBanner";
+import { MobileDayView } from "@/components/planner/MobileDayView";
 import { Countdown } from "@/components/planner/Countdown";
 import { CustomTileModal } from "@/components/planner/CustomTileModal";
 import { DayNotesPanel } from "@/components/planner/DayNotesPanel";
@@ -37,6 +38,10 @@ import { TripTimeline } from "@/components/planner/TripTimeline";
 import { Wizard } from "@/components/planner/Wizard";
 import { TierLimitModal } from "@/components/paywall/TierLimitModal";
 import { trackEvent } from "@/lib/analytics/client";
+import {
+  plannerAiDayCrowdNotes,
+  plannerUserDayNotes,
+} from "@/lib/planner-note-maps";
 import { getTierConfig } from "@/lib/tiers";
 import { useToast } from "@/lib/toast";
 import type {
@@ -204,6 +209,25 @@ export function PlannerClient({
     [parks, customTiles],
   );
 
+  const mobilePlannerNoteMaps = useMemo(() => {
+    if (!activeTrip) {
+      return {
+        ai: {} as Record<string, string>,
+        user: {} as Record<string, string>,
+      };
+    }
+    return {
+      ai: plannerAiDayCrowdNotes(activeTrip),
+      user: plannerUserDayNotes(activeTrip),
+    };
+  }, [activeTrip]);
+
+  const mobileCrowdSummaryText = useMemo(() => {
+    if (!activeTrip?.preferences) return null;
+    const s = activeTrip.preferences.ai_crowd_summary;
+    return typeof s === "string" && s.trim() ? s.trim() : null;
+  }, [activeTrip?.preferences]);
+
   const activeRegionLabel = useMemo(() => {
     const rid = activeTrip?.region_id;
     if (!rid) return "Orlando";
@@ -334,6 +358,15 @@ export function PlannerClient({
     if (hintRef.current) clearTimeout(hintRef.current);
     hintRef.current = setTimeout(() => setHint(null), 2200);
   }, []);
+
+  const handleMobileMenuShare = useCallback(() => {
+    const t = trips.find((x) => x.id === activeTripId);
+    const slug = t?.public_slug?.trim();
+    const base = siteUrl.replace(/\/$/, "");
+    const url = slug ? `${base}/plans/${slug}` : window.location.href;
+    void navigator.clipboard?.writeText(url);
+    showToast("Link copied");
+  }, [activeTripId, trips, siteUrl, showToast]);
 
   const handleAddCustom = useCallback(
     (group: string) => {
@@ -786,7 +819,7 @@ export function PlannerClient({
           </div>
 
           <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] lg:gap-8">
-            <div className="space-y-4 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:pr-1">
+            <div className="hidden space-y-4 md:block lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:pr-1">
               {hasAnyAffiliatePartner() ? (
                 <BookTripAffiliatePanel
                   destinationLabel={activeRegionLabel}
@@ -808,14 +841,33 @@ export function PlannerClient({
               />
             </div>
             <div className="min-w-0 w-full">
-              <Calendar
+              <div className="hidden md:block">
+                <Calendar
+                  trip={activeTrip}
+                  parks={calendarParks}
+                  selectedParkId={selectedParkId}
+                  onAssign={onAssign}
+                  onClear={onClear}
+                  onNeedParkFirst={() => showHint("Pick a park first")}
+                  onAfterSlotClear={() => showToast("Slot cleared")}
+                />
+              </div>
+              <MobileDayView
                 trip={activeTrip}
                 parks={calendarParks}
-                selectedParkId={selectedParkId}
+                assignments={activeTrip.assignments ?? {}}
+                dayNotes={mobilePlannerNoteMaps.ai}
+                userDayNotes={mobilePlannerNoteMaps.user}
                 onAssign={onAssign}
                 onClear={onClear}
-                onNeedParkFirst={() => showHint("Pick a park first")}
-                onAfterSlotClear={() => showToast("Slot cleared")}
+                crowdSummary={mobileCrowdSummaryText}
+                readOnly={false}
+                onSelectPark={setSelectedParkId}
+                onMenuExportPdf={() =>
+                  document.getElementById("planner-pdf-export-btn")?.click()
+                }
+                onMenuShare={handleMobileMenuShare}
+                onMenuSettings={() => undefined}
               />
             </div>
           </div>

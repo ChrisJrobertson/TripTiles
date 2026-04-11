@@ -10,6 +10,10 @@ import {
   startOfWeekMonday,
 } from "@/lib/date-helpers";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import {
+  crowdPdfSymbolForTone,
+  heuristicCrowdToneFromNoteText,
+} from "@/lib/planner-crowd-level-meta";
 import type { Assignments, CustomTile, Park, Trip } from "@/lib/types";
 import {
   Document,
@@ -206,6 +210,42 @@ const styles = StyleSheet.create({
   strategyBlock: {
     marginBottom: 12,
   },
+  strategyLegendRow: {
+    flexDirection: "row",
+    marginTop: 8,
+    paddingTop: 6,
+    borderTopWidth: 0.5,
+    borderTopColor: COLOURS.gold,
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  legendLabel: {
+    fontSize: 8,
+    color: COLOURS.gold,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  legendSymbol: {
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+  legendText: {
+    fontSize: 9,
+    color: COLOURS.royal,
+  },
+  calendarCellDayRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    marginBottom: 1,
+  },
 });
 
 const SLOT_ORDER = ["am", "pm", "lunch", "dinner"] as const;
@@ -377,6 +417,30 @@ export function TripPDF({
           <View style={styles.strategyBlock} wrap>
             <Text style={styles.sectionTitle}>Crowd strategy</Text>
             <Text style={styles.strategyBody}>{crowdSummary}</Text>
+            <View style={styles.strategyLegendRow} wrap>
+              <Text style={styles.legendLabel}>Legend:</Text>
+              <View style={styles.legendItem}>
+                <Text style={[styles.legendSymbol, { color: "#22c55e" }]}>
+                  ●
+                </Text>
+                <Text style={styles.legendText}>Quiet</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <Text style={[styles.legendSymbol, { color: "#eab308" }]}>
+                  ◐
+                </Text>
+                <Text style={styles.legendText}>Moderate</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <Text style={[styles.legendSymbol, { color: "#ef4444" }]}>
+                  ▲
+                </Text>
+                <Text style={styles.legendText}>Busy crowds</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <Text style={styles.legendText}>💡 Has tips (day notes)</Text>
+              </View>
+            </View>
           </View>
         ) : null}
         <Text style={styles.sectionTitle}>Itinerary calendar</Text>
@@ -395,6 +459,14 @@ export function TripPDF({
               const cellKey = formatDateKey(d);
               const inTrip = tripDaySet.has(cellKey);
               const dayAssign = assignments[cellKey] ?? {};
+              const crowdNote =
+                inTrip && includeNotes ? dayCrowdNoteText(trip, cellKey) : null;
+              const crowdTone = crowdNote
+                ? heuristicCrowdToneFromNoteText(crowdNote)
+                : null;
+              const crowdSym = crowdTone
+                ? crowdPdfSymbolForTone(crowdTone)
+                : null;
 
               return (
                 <View
@@ -406,9 +478,22 @@ export function TripPDF({
                 >
                   {inTrip ? (
                     <>
-                      <Text style={styles.calendarCellDay}>
-                        {d.getDate()} {MONTHS_SHORT[d.getMonth()]}
-                      </Text>
+                      <View style={styles.calendarCellDayRow}>
+                        <Text style={styles.calendarCellDay}>
+                          {d.getDate()} {MONTHS_SHORT[d.getMonth()]}
+                        </Text>
+                        {crowdSym ? (
+                          <Text
+                            style={{
+                              fontSize: 10,
+                              fontWeight: "bold",
+                              color: crowdSym.color,
+                            }}
+                          >
+                            {crowdSym.symbol}
+                          </Text>
+                        ) : null}
+                      </View>
                       <View style={styles.calendarSlotStack}>
                         {SLOT_ORDER.map((slot) => {
                           const id = dayAssign[slot];

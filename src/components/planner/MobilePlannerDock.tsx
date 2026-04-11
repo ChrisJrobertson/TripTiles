@@ -39,7 +39,7 @@ export function MobilePlannerDock({
   if (!trip || dates.length === 0) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-royal/15 bg-cream/98 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur lg:hidden">
+    <div className="fixed inset-x-0 bottom-0 z-40 hidden border-t border-royal/15 bg-cream/98 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur md:block lg:hidden">
       <p className="mb-2 text-center font-sans text-[0.65rem] font-semibold uppercase tracking-wide text-royal/55">
         Quick place (mobile)
       </p>
