@@ -1,15 +1,30 @@
 import { getAllRegions, getFeaturedRegions } from "@/lib/db/regions";
 import { listPublicTrips } from "@/lib/db/trips";
 import type { Trip } from "@/lib/types";
+import { getPublicSiteUrl } from "@/lib/site";
 import type { Metadata } from "next";
 import Link from "next/link";
 
 export const revalidate = 300;
 
+const site = getPublicSiteUrl() || "https://www.triptiles.app";
+
 export const metadata: Metadata = {
-  title: "Community trip plans · TripTiles",
+  title: "Community trip plans",
   description:
     "Browse real family itineraries from the TripTiles community. Clone any plan to start yours.",
+  openGraph: {
+    title: "Community trip plans · TripTiles",
+    description: "Clone crowd-aware itineraries from the TripTiles community.",
+    url: `${site}/plans`,
+    siteName: "TripTiles",
+    locale: "en_GB",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Community trip plans · TripTiles",
+  },
 };
 
 const PAGE_SIZE = 24;
@@ -54,34 +69,6 @@ export default async function PlansGalleryPage({
 
   return (
     <div className="min-h-screen bg-cream">
-      <header className="border-b border-royal/10 bg-white/90 px-4 py-4">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4">
-          <Link href="/" className="font-serif text-xl font-semibold text-gold">
-            TripTiles
-          </Link>
-          <nav className="flex flex-wrap gap-4 font-sans text-sm text-royal/80">
-            <Link href="/plans" className="font-medium text-royal">
-              Browse plans
-            </Link>
-            <Link href="/pricing" className="hover:text-royal">
-              Pricing
-            </Link>
-            <Link
-              href="/signup?next=/planner"
-              className="font-medium text-royal hover:text-gold"
-            >
-              Sign up
-            </Link>
-            <Link
-              href="/login?next=/planner"
-              className="font-medium text-royal hover:text-gold"
-            >
-              Sign in
-            </Link>
-          </nav>
-        </div>
-      </header>
-
       <main className="mx-auto max-w-6xl px-4 py-12">
         <h1 className="font-serif text-3xl font-semibold text-royal md:text-4xl">
           Trip plans from the TripTiles community

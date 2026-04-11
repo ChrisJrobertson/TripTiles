@@ -30,10 +30,12 @@ import {
 } from "@/components/planner/SmartPlanModal";
 import { TripSelector } from "@/components/planner/TripSelector";
 import { BookTripAffiliatePanel } from "@/components/planner/BookTripAffiliatePanel";
+import { hasAnyAffiliatePartner } from "@/lib/affiliates";
 import { PdfExportButton } from "@/components/planner/PdfExportButton";
 import { TripTimeline } from "@/components/planner/TripTimeline";
 import { Wizard } from "@/components/planner/Wizard";
 import { TierLimitModal } from "@/components/paywall/TierLimitModal";
+import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { trackEvent } from "@/lib/analytics/client";
 import { getTierConfig } from "@/lib/tiers";
 import { useToast } from "@/lib/toast";
@@ -770,7 +772,9 @@ export function PlannerClient({
               role="status"
             >
               <span className="font-semibold text-royal">Crowd strategy — </span>
-              {activeTrip.preferences.ai_crowd_summary as string}
+              {sanitizeDayNote(
+                (activeTrip.preferences.ai_crowd_summary as string).trim(),
+              )}
             </div>
           ) : null}
 
@@ -789,13 +793,15 @@ export function PlannerClient({
 
           <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] lg:gap-8">
             <div className="space-y-4 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:pr-1">
-              <BookTripAffiliatePanel
-                destinationLabel={activeRegionLabel}
-                tripId={activeTrip.id}
-                startDate={activeTrip.start_date}
-                endDate={activeTrip.end_date}
-                siteUrl={siteUrl}
-              />
+              {hasAnyAffiliatePartner() ? (
+                <BookTripAffiliatePanel
+                  destinationLabel={activeRegionLabel}
+                  tripId={activeTrip.id}
+                  startDate={activeTrip.start_date}
+                  endDate={activeTrip.end_date}
+                  siteUrl={siteUrl}
+                />
+              ) : null}
               <Palette
                 parks={parks}
                 customTiles={customTilesForPalette}

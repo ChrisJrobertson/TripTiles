@@ -12,6 +12,7 @@ import { customTileToPark } from "@/lib/types";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { getCurrentUser } from "@/lib/supabase/server";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -99,11 +100,12 @@ export default async function PublicPlanPage({ params }: Props) {
   const destLabel =
     region?.short_name?.trim() || region?.name?.trim() || "Trip";
 
-  const crowd =
+  const crowdRaw =
     typeof trip.preferences?.ai_crowd_summary === "string" &&
     trip.preferences.ai_crowd_summary.trim()
       ? trip.preferences.ai_crowd_summary.trim()
       : null;
+  const crowd = crowdRaw ? sanitizeDayNote(crowdRaw) : null;
 
   return (
     <div className="min-h-screen bg-cream">

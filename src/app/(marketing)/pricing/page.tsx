@@ -96,30 +96,7 @@ function PriceBlock({ tier }: { tier: Tier }) {
 
 export default function PricingPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-cream">
-      <header className="sticky top-0 z-20 border-b border-royal/10 bg-cream/95 px-6 py-4 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <Link
-            href="/"
-            className="font-serif text-xl font-semibold tracking-tight text-gold md:text-2xl"
-          >
-            TripTiles
-          </Link>
-          <nav className="flex items-center gap-4 font-sans text-sm">
-            <Link href="/feedback" className="text-royal/75 hover:text-royal">
-              Feedback
-            </Link>
-            <Link
-              href="/login?next=/planner"
-              className="font-medium text-royal hover:text-gold"
-            >
-              Sign in
-            </Link>
-          </nav>
-        </div>
-      </header>
-
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-14">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-14">
         <p className="text-center font-sans text-xs font-semibold uppercase tracking-widest text-gold">
           Planning your holiday since April 2026
         </p>
@@ -288,7 +265,6 @@ export default function PricingPage() {
             ← Home
           </Link>
         </p>
-      </main>
-    </div>
+    </main>
   );
 }

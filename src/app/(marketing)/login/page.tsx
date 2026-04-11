@@ -1,6 +1,28 @@
 import { LoginForm } from "@/components/auth/LoginForm";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
+import { getPublicSiteUrl } from "@/lib/site";
+import type { Metadata } from "next";
 import Link from "next/link";
+
+const site = getPublicSiteUrl() || "https://www.triptiles.app";
+
+export const metadata: Metadata = {
+  title: "Sign in",
+  description:
+    "Sign in to TripTiles with a magic link or password — theme park trip planner.",
+  openGraph: {
+    title: "Sign in · TripTiles",
+    description: "Magic link or password sign-in for TripTiles.",
+    url: `${site}/login`,
+    siteName: "TripTiles",
+    locale: "en_GB",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Sign in · TripTiles",
+  },
+};
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_link:

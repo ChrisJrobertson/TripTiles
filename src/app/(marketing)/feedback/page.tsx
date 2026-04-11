@@ -25,25 +25,7 @@ export default function FeedbackPage() {
   );
 
   return (
-    <div className="flex min-h-screen flex-col bg-cream">
-      <header className="sticky top-0 z-20 border-b border-royal/10 bg-cream/95 px-6 py-4 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-lg items-center justify-between">
-          <Link
-            href="/"
-            className="font-serif text-xl font-semibold tracking-tight text-gold md:text-2xl"
-          >
-            TripTiles
-          </Link>
-          <Link
-            href="/login?next=/planner"
-            className="font-sans text-sm font-medium text-royal hover:text-gold"
-          >
-            Sign in
-          </Link>
-        </div>
-      </header>
-
-      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-6 py-14">
+    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-6 py-14">
         <h1 className="font-serif text-3xl font-semibold text-royal md:text-4xl">
           Feedback
         </h1>
@@ -79,7 +61,6 @@ export default function FeedbackPage() {
             ← Home
           </Link>
         </p>
-      </main>
-    </div>
+    </main>
   );
 }

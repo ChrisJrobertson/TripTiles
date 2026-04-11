@@ -20,6 +20,7 @@ import { awardAchievementAction } from "@/actions/achievements";
 import { currentUserCanGenerateAI } from "@/lib/entitlements";
 import { getSuccessfulAiGenerationCountForTrip } from "@/lib/db/ai-generations";
 import { getCrowdPatternsForParkIds } from "@/lib/data/crowd-patterns";
+import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { getTierConfig } from "@/lib/tiers";
 import type { UserTier } from "@/lib/types";
 
@@ -27,43 +28,29 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY ?? "",
 });
 
-const SYSTEM_PROMPT = `You are a theme park planner. Output ONLY valid JSON — no markdown fences, no preamble, no text outside the JSON object.
+const SYSTEM_PROMPT = `You are a theme park planner. Output ONLY valid JSON — no markdown, no preamble, no text outside the JSON object.
 
-Include optional crowd fields whenever CROWD_PATTERNS appears in the user message.
+Shape:
+{ "assignments": { "2026-7-9": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-7-14": "…" } }
 
-{
-  "assignments": {
-    "2026-7-9": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" },
-    "2026-7-10": { "am": "ep", "pm": "ep", "dinner": "tsr" }
-  },
-  "crowd_reasoning": "One short paragraph on how you traded off busier vs quieter days (optional but recommended).",
-  "day_crowd_notes": {
-    "2026-7-14": "Why this park on this date vs alternatives — one line."
-  }
-}
+Limits: crowd_reasoning ≤400 chars, one paragraph. Each day_crowd_notes value ≤150 chars, one sentence.
 
-Output limits (strict):
-- crowd_reasoning: maximum 400 characters, one paragraph only.
-- Each day_crowd_notes value: maximum 150 characters, exactly one sentence (no second sentence).
+DAY NOTES RULES (CRITICAL):
+- Sound like a knowledgeable friend. NEVER raw crowd scores, arithmetic, formulas, bracketed maths, "score N", "crowd index N", or how you calculated anything.
+- Good: "Arrive early — Magic Kingdom is quietest before 10am on weekdays." Bad: "Tuesday (score 6+7=13/2=6.5)."
 
-DAY NOTES (crowd_reasoning + day_crowd_notes):
-- Friendly, plain-English tips only. No raw scores, arithmetic, formulas, or bracketed score math (e.g. never "(score 7+10=17/2=8.5)", "score N", "crowd index N"). Never explain internal calculations — users get what and why, not how you computed it.
-
-CROWD_PATTERNS (when present in the user message): per-park weekday and month scores 0–10 (higher = busier), plus known_events with impacts — heuristics only, not live data.
-- Use patterns internally to put headline parks on lighter days and calmer parks on heavier days when you must.
-- Never claim exact wait times, live attendance, or precise percentages beyond what the scores suggest. Wording like "typically busier", "historically quieter", "usually better mid-week" is OK. Do not paste or describe numeric score arithmetic in user-facing strings.
+CROWD_PATTERNS (when in user message): 0–10 heuristics per park/weekday/month — use internally only. Never put numeric score workings in user-facing strings. Never claim live waits or exact attendance.
 
 Rules:
-- Date keys: YYYY-M-D, no zero padding (e.g. "2026-7-9" not "2026-07-09").
-- Only park IDs from the cached list in the system message. Do not invent IDs.
-- Slots am, pm, lunch, dinner optional per day (rest day allowed). Rest every 3–4 park days with young children.
-- Multi-day trips: day 1 is arrival only — no theme or water parks in AM/PM (flyout, owl/tsr/char/specd/villa, rest/resort/shopping only; AM/PM may be empty). day_crowd_notes must not contradict assignments on that day.
-- flyout: day 1 only, one slot (AM or PM). flyhome: final day only, one slot. Not both on the same calendar day unless the trip is exactly one day.
-- Cruise tiles only between embark and disembark when cruise=yes; when cruise=no, no ship/at-sea/port/cruise-excursion tiles.
-- No same headline park on consecutive days.
-- True rest days: restful tiles in both AM and PM — do not pair half-day rest with a full park the other half.
-- Dining codes: owl (quick service), tsr (table), char (character), specd (specialty), villa (home cook).
-- Match family notes: young children avoid intense thrill; teens lean thrill; patient vs impatient queueing families as stated.
+- Date keys YYYY-M-D (no zero-padding). Park IDs only from the cached list in the system message.
+- Slots: am, pm, lunch, dinner optional; rest days OK. Rest every 3–4 park days with young children.
+- Day 1 arrival: no theme/water parks in AM/PM (resort/flyout/dining only; slots may be empty). day_crowd_notes must not contradict day-1 assignments.
+- flyout: day 1 only, one AM or PM. flyhome: last day only, one slot — not both same calendar day unless trip is one day.
+- Cruise tiles only between embark/disembark when cruise=yes.
+- No same headline park on consecutive calendar days.
+- True rest = restful tiles in AM and PM both; no half-rest + full park split.
+- Dining: owl, tsr, char, specd, villa as documented.
+- Honour family notes (young children / teens / queue patience).
 
 Return ONLY the JSON.`;
 
@@ -124,43 +111,6 @@ function stripCodeFences(raw: string): string {
     t = t.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/m, "");
   }
   return t.trim();
-}
-
-/** Strips leaked scoring arithmetic from AI crowd copy; falls back if over-stripped. */
-function sanitizeDayNote(raw: string): string {
-  if (!raw) return raw;
-  const original = raw.trim();
-  let text = original;
-
-  text = text.replace(
-    /\s*[(\[][^)\]]*\b(score|crowd\s*index|index|rating)\b[^)\]]*[)\]]/gi,
-    "",
-  );
-
-  text = text.replace(/\bscore[s]?\s*[:=]?\s*[\d+\-*/=.\s]+/gi, "");
-
-  text = text.replace(
-    /\b\d+\s*[+\-*/]\s*\d+\s*=\s*[\d.]+(?:\s*\/\s*\d+\s*=\s*[\d.]+)?/g,
-    "",
-  );
-
-  text = text.replace(
-    /\b(day\s*rating|crowd|traffic|level)\s*[:=]\s*\d+(?:\s*\/\s*\d+)?/gi,
-    "",
-  );
-
-  text = text.replace(/\(\s*\)/g, "");
-  text = text.replace(/\[\s*\]/g, "");
-  text = text.replace(/\s{2,}/g, " ");
-  text = text.replace(/\s+([,.;:])/g, "$1");
-  text = text.replace(/^[\s,;:.\-–—]+/, "");
-  text = text.replace(/[\s,;:.\-–—]+$/, "");
-  text = text.trim();
-
-  if (text.length === 0 || text.length < 10) {
-    return original.length > 0 ? original : text;
-  }
-  return text;
 }
 
 function allowedDateKeys(startIso: string, endIso: string): Set<string> {

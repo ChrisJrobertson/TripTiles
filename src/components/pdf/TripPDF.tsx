@@ -9,6 +9,7 @@ import {
   parseDate,
   startOfWeekMonday,
 } from "@/lib/date-helpers";
+import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import type { Assignments, CustomTile, Park, Trip } from "@/lib/types";
 import {
   Document,
@@ -238,7 +239,8 @@ function dayCrowdNoteText(
   const raw = trip.preferences?.ai_day_crowd_notes;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const v = (raw as Record<string, unknown>)[dateKey];
-  return typeof v === "string" && v.trim() ? v.trim() : null;
+  if (typeof v !== "string" || !v.trim()) return null;
+  return sanitizeDayNote(v.trim());
 }
 
 export interface TripPDFProps {
@@ -289,7 +291,7 @@ export function TripPDF({
     includeNotes &&
     typeof trip.preferences?.ai_crowd_summary === "string" &&
     trip.preferences.ai_crowd_summary.trim()
-      ? trip.preferences.ai_crowd_summary.trim()
+      ? sanitizeDayNote(trip.preferences.ai_crowd_summary.trim())
       : null;
 
   return (

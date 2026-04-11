@@ -1,5 +1,7 @@
 "use client";
 
+import { logClientError } from "@/lib/telemetry/log-error";
+import Link from "next/link";
 import { useEffect } from "react";
 
 export default function GlobalError({
@@ -10,28 +12,51 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("[TripTiles global]", error);
+    void logClientError(error, { boundary: "global" });
   }, [error]);
 
   return (
     <html lang="en">
-      <body className="bg-[#faf8f3] text-[#0b1e5c] antialiased">
-        <main className="flex min-h-screen flex-col items-center justify-center px-6 py-16">
-          <div className="w-full max-w-md rounded-2xl border border-[#0b1e5c]/15 bg-white p-8 text-center shadow-lg">
-            <h1 className="text-2xl font-semibold">TripTiles hit a snag</h1>
-            <p className="mt-3 text-sm leading-relaxed opacity-80">
-              Please refresh the page. If the problem continues, contact support
-              or try again in a moment.
-            </p>
+      <body style={{ margin: 0, background: "#FAF8F3", color: "#0B1E5C" }}>
+        <div style={{ padding: 40, maxWidth: 520, fontFamily: "Georgia, serif" }}>
+          <h1 style={{ fontSize: "1.75rem" }}>Something went wrong</h1>
+          <p style={{ fontFamily: "system-ui, sans-serif", lineHeight: 1.5 }}>
+            We&apos;ve logged this and will look into it. You can try again or
+            head home.
+          </p>
+          <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
             <button
               type="button"
               onClick={() => reset()}
-              className="mt-8 rounded-lg bg-[#0b1e5c] px-5 py-2.5 text-sm font-semibold text-[#faf8f3]"
+              style={{
+                padding: "10px 18px",
+                borderRadius: 8,
+                border: "none",
+                background: "#C9A961",
+                color: "#0B1E5C",
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
             >
-              Reload
+              Try again
             </button>
+            <Link
+              href="/"
+              style={{
+                display: "inline-block",
+                padding: "10px 18px",
+                borderRadius: 8,
+                border: "2px solid #0B1E5C",
+                color: "#0B1E5C",
+                textDecoration: "none",
+                fontFamily: "system-ui, sans-serif",
+                fontWeight: 600,
+              }}
+            >
+              Go home
+            </Link>
           </div>
-        </main>
+        </div>
       </body>
     </html>
   );

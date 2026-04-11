@@ -5,6 +5,7 @@ import { updateSession } from "@/lib/supabase/update-session";
 
 const PROTECTED_PREFIXES = [
   "/planner",
+  "/onboarding",
   "/admin",
   "/agency",
   "/achievements",
@@ -72,6 +73,11 @@ export const config = {
     "/reset-password/:path*",
     "/planner",
     "/planner/:path*",
+    "/onboarding",
+    "/onboarding/:path*",
+    "/privacy",
+    "/terms",
+    "/cookies",
     "/achievements",
     "/achievements/:path*",
     "/settings",

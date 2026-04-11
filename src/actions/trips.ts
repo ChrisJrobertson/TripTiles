@@ -135,6 +135,8 @@ export async function updateTripMetadataAction(input: {
   regionId?: string;
   startDate?: string;
   endDate?: string;
+  adults?: number;
+  children?: number;
   hasCruise?: boolean;
   cruiseEmbark?: string | null;
   cruiseDisembark?: string | null;
@@ -162,6 +164,12 @@ export async function updateTripMetadataAction(input: {
     }
     if (input.startDate !== undefined) body.start_date = input.startDate;
     if (input.endDate !== undefined) body.end_date = input.endDate;
+    if (input.adults !== undefined) {
+      body.adults = Math.max(1, Math.floor(Number(input.adults)));
+    }
+    if (input.children !== undefined) {
+      body.children = Math.max(0, Math.floor(Number(input.children)));
+    }
     if (input.hasCruise === true) {
       body.has_cruise = true;
       if (input.cruiseEmbark !== undefined) body.cruise_embark = input.cruiseEmbark;

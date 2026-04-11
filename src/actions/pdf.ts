@@ -5,7 +5,7 @@ import { getParksForRegion } from "@/lib/db/parks";
 import { getRegionById } from "@/lib/db/regions";
 import { getUserCustomTiles } from "@/lib/db/custom-tiles";
 import { getCurrentTier } from "@/lib/entitlements";
-import { buildAffiliateUrl } from "@/lib/affiliates";
+import { buildAffiliateUrl, hasAnyAffiliatePartner } from "@/lib/affiliates";
 import { getTierConfig } from "@/lib/tiers";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type { CustomTile, Park, Trip } from "@/lib/types";
@@ -57,29 +57,32 @@ export async function getPdfExportContextAction(tripId: string): Promise<
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.triptiles.app"
   ).replace(/\/$/, "");
 
-  const bookingLinks: Array<{ label: string; url: string }> = [
-    {
-      label: `Find hotels in ${destLabel}`,
-      url: `${siteUrl}${buildAffiliateUrl({
-        provider: "booking",
-        productType: "hotel",
-        destinationName: destLabel,
-        checkIn: trip.start_date,
-        checkOut: trip.end_date,
-        tripId: trip.id,
-      })}`,
-    },
-    {
-      label: `Book experiences in ${destLabel}`,
-      url: `${siteUrl}${buildAffiliateUrl({
-        provider: "getyourguide",
-        productType: "experience",
-        destinationName: destLabel,
-        searchQuery: `${destLabel} tours and tickets`,
-        tripId: trip.id,
-      })}`,
-    },
-  ];
+  const bookingLinks: Array<{ label: string; url: string }> =
+    hasAnyAffiliatePartner()
+      ? [
+          {
+            label: `Find hotels in ${destLabel}`,
+            url: `${siteUrl}${buildAffiliateUrl({
+              provider: "booking",
+              productType: "hotel",
+              destinationName: destLabel,
+              checkIn: trip.start_date,
+              checkOut: trip.end_date,
+              tripId: trip.id,
+            })}`,
+          },
+          {
+            label: `Book experiences in ${destLabel}`,
+            url: `${siteUrl}${buildAffiliateUrl({
+              provider: "getyourguide",
+              productType: "experience",
+              destinationName: destLabel,
+              searchQuery: `${destLabel} tours and tickets`,
+              tripId: trip.id,
+            })}`,
+          },
+        ]
+      : [];
 
   return {
     ok: true,

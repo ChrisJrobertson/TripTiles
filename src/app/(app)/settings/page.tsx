@@ -1,4 +1,5 @@
 import { AppNavHeader } from "@/components/app/AppNavHeader";
+import { SettingsAccountPanel } from "@/components/settings/SettingsAccountPanel";
 import { getTierConfig } from "@/lib/tiers";
 import { getUserTripCount } from "@/lib/db/trips";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
@@ -46,10 +47,13 @@ export default async function SettingsPage() {
   if (!user) redirect("/login?next=/settings");
 
   const supabase = await createClient();
+  const identities = user.identities ?? [];
+  const hasPasswordAuth = identities.some((i) => i.provider === "email");
+
   const [profileRes, purchasesRes, tripCount] = await Promise.all([
     supabase
       .from("profiles")
-      .select("tier")
+      .select("tier, display_name")
       .eq("id", user.id)
       .maybeSingle(),
     supabase
@@ -64,6 +68,13 @@ export default async function SettingsPage() {
 
   const tier = (profileRes.data?.tier as UserTier) ?? "free";
   const cfg = getTierConfig(tier);
+  const displayName =
+    profileRes.data &&
+    typeof profileRes.data === "object" &&
+    "display_name" in profileRes.data
+      ? (profileRes.data.display_name as string | null)
+      : null;
+  const profileCreated = user.created_at ?? null;
   const purchases = (purchasesRes.data ?? []) as PurchaseRow[];
   const freeMax = getTierConfig("free").features.max_trips ?? 1;
 
@@ -79,6 +90,17 @@ export default async function SettingsPage() {
         <h1 className="font-serif text-3xl font-semibold text-royal">
           Settings
         </h1>
+
+        <div className="mt-10">
+          <SettingsAccountPanel
+            email={user.email ?? ""}
+            displayName={displayName}
+            createdAt={profileCreated}
+            tierLabel={cfg.name}
+            tierBadge={cfg.badge_emoji}
+            hasPasswordAuth={hasPasswordAuth}
+          />
+        </div>
 
         <section className="mt-10 rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
           <h2 className="font-serif text-xl font-semibold text-royal">Billing</h2>

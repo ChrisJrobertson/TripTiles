@@ -57,6 +57,11 @@ export default async function PlannerPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/planner");
 
+  const trips = await getUserTrips(user.id);
+  if (trips.length === 0) {
+    redirect("/onboarding");
+  }
+
   const sp = await searchParams;
   const purchaseHighlight =
     firstParam(sp.purchase) === "pending" ||
@@ -72,7 +77,6 @@ export default async function PlannerPage({
       : null;
 
   const [
-    trips,
     parks,
     regions,
     activeTrip,
@@ -81,7 +85,6 @@ export default async function PlannerPage({
     customTiles,
     customTileLimit,
   ] = await Promise.all([
-      getUserTrips(user.id),
       getAllParks(),
       getAllRegions(),
       getActiveTripForUser(user.id),

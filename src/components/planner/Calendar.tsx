@@ -9,6 +9,7 @@ import {
   parseDate,
   startOfWeekMonday,
 } from "@/lib/date-helpers";
+import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import type { Assignment, Park, SlotType, Trip } from "@/lib/types";
 
 type Props = {
@@ -47,7 +48,8 @@ function dayCrowdNote(
   const raw = trip.preferences?.ai_day_crowd_notes;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const v = (raw as Record<string, unknown>)[dateKey];
-  return typeof v === "string" && v.trim() ? v.trim() : null;
+  if (typeof v !== "string" || !v.trim()) return null;
+  return sanitizeDayNote(v.trim());
 }
 
 function buildWeeks(trip: Trip): Date[][] {

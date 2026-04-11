@@ -57,6 +57,32 @@ export function buildGetYourGuideDeepLink(opts: {
   return `https://www.getyourguide.com/s/?${params.toString()}`;
 }
 
+export function hasRealBookingPartnerId(): boolean {
+  const id = process.env.NEXT_PUBLIC_BOOKING_AFFILIATE_ID?.trim();
+  return (
+    typeof id === "string" &&
+    id.length > 0 &&
+    id !== "placeholder" &&
+    id !== "TODO" &&
+    !id.toUpperCase().startsWith("TEST")
+  );
+}
+
+export function hasRealGygPartnerId(): boolean {
+  const id = process.env.NEXT_PUBLIC_GYG_PARTNER_ID?.trim();
+  return (
+    typeof id === "string" &&
+    id.length > 0 &&
+    id !== "placeholder" &&
+    id !== "TODO" &&
+    !id.toUpperCase().startsWith("TEST")
+  );
+}
+
+export function hasAnyAffiliatePartner(): boolean {
+  return hasRealBookingPartnerId() || hasRealGygPartnerId();
+}
+
 export function resolveProviderUrl(opts: AffiliateLinkOptions): string {
   const bookingAid =
     process.env.NEXT_PUBLIC_BOOKING_AFFILIATE_ID ?? "placeholder";
@@ -65,6 +91,9 @@ export function resolveProviderUrl(opts: AffiliateLinkOptions): string {
 
   switch (opts.provider) {
     case "booking":
+      if (!hasRealBookingPartnerId()) {
+        return "https://www.booking.com/";
+      }
       return buildBookingDeepLink({
         destinationName: opts.destinationName ?? "Orlando",
         checkIn: opts.checkIn,
@@ -72,6 +101,9 @@ export function resolveProviderUrl(opts: AffiliateLinkOptions): string {
         aid: bookingAid,
       });
     case "getyourguide":
+      if (!hasRealGygPartnerId()) {
+        return "https://www.getyourguide.com/";
+      }
       return buildGetYourGuideDeepLink({
         searchQuery:
           opts.searchQuery ?? opts.destinationName ?? "theme park tickets",

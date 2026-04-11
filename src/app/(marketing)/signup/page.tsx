@@ -1,11 +1,27 @@
 import { SignupForm } from "@/components/auth/SignupForm";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
+import { getPublicSiteUrl } from "@/lib/site";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+const site = getPublicSiteUrl() || "https://www.triptiles.app";
+
 export const metadata: Metadata = {
-  title: "Create account · TripTiles",
-  description: "Create your free TripTiles account and start planning.",
+  title: "Create account",
+  description:
+    "Create your free TripTiles account — theme park planner with AI and PDF export.",
+  openGraph: {
+    title: "Create account · TripTiles",
+    description: "Free TripTiles account — no credit card required.",
+    url: `${site}/signup`,
+    siteName: "TripTiles",
+    locale: "en_GB",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Create account · TripTiles",
+  },
 };
 
 type Props = {
