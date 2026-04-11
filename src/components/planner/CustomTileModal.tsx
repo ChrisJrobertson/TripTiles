@@ -86,6 +86,8 @@ type Props = {
   tilesUsedCount: number;
   freeTierCap?: number;
   onSuccess: (tile: CustomTile, newAchievements: string[]) => void;
+  /** Opens parent paywall flow (e.g. TierLimitModal) instead of inline error. */
+  onTierLimitReached?: () => void;
 };
 
 export function CustomTileModal({
@@ -99,6 +101,7 @@ export function CustomTileModal({
   tilesUsedCount,
   freeTierCap = 5,
   onSuccess,
+  onTierLimitReached,
 }: Props) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -199,6 +202,11 @@ export function CustomTileModal({
           return;
         }
         if (res.error === "TIER_LIMIT") {
+          if (onTierLimitReached) {
+            onTierLimitReached();
+            onClose();
+            return;
+          }
           setTierError(
             "You've used all 5 custom tiles on the free plan. Upgrade to Pro for unlimited custom tiles.",
           );

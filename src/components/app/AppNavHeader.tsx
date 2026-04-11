@@ -8,6 +8,7 @@ import { usePathname } from "next/navigation";
 const NAV = [
   { href: "/planner", label: "Planner" },
   { href: "/achievements", label: "Passport" },
+  { href: "/settings", label: "Settings" },
 ] as const;
 
 function tierLabel(tier: UserTier | null): string {
@@ -98,7 +99,7 @@ export function AppNavHeader({
           {isFree ? (
             <Link
               href="/pricing"
-              className="font-sans text-xs font-semibold text-gold underline-offset-2 hover:underline"
+              className="rounded-full bg-gold/90 px-3 py-1 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-gold"
             >
               Upgrade
             </Link>

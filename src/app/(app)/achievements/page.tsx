@@ -5,6 +5,7 @@ import {
   getUserAchievements,
 } from "@/lib/db/achievements";
 import { getUserTripCount } from "@/lib/db/trips";
+import { getTierConfig } from "@/lib/tiers";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type { UserTier } from "@/lib/types";
@@ -69,7 +70,7 @@ export default async function AchievementsPage() {
         userEmail={user.email ?? ""}
         userTier={raw?.tier ?? null}
         tripCount={tripCount}
-        freeTripLimit={1}
+        freeTripLimit={getTierConfig("free").features.max_trips ?? 1}
       />
       <AchievementsClient
         definitions={definitions}

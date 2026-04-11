@@ -1,10 +1,8 @@
 "use server";
 
 import { awardAchievementAction } from "@/actions/achievements";
-import {
-  getCustomTileLimit,
-  getUserCustomTiles,
-} from "@/lib/db/custom-tiles";
+import { currentUserCanCreateCustomTile } from "@/lib/entitlements";
+import { getUserCustomTiles } from "@/lib/db/custom-tiles";
 import { GROUP_ORDER } from "@/lib/group-meta";
 import type { Assignments, CustomTile, SlotType } from "@/lib/types";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
@@ -142,12 +140,7 @@ export async function createCustomTileAction(
     return { ok: false, error: "VALIDATION", message: v.message };
   }
 
-  const supabase = await createClient();
-  const existing = await getUserCustomTiles(user.id);
-  const countBefore = existing.length;
-  const limit = await getCustomTileLimit(user.id);
-
-  if (countBefore >= limit) {
+  if (!(await currentUserCanCreateCustomTile())) {
     return {
       ok: false,
       error: "TIER_LIMIT",
@@ -155,6 +148,10 @@ export async function createCustomTileAction(
         "You've reached your custom tile limit for your plan. Upgrade for more.",
     };
   }
+
+  const supabase = await createClient();
+  const existing = await getUserCustomTiles(user.id);
+  const countBefore = existing.length;
 
   const id = newCustomTileId();
   const now = new Date().toISOString();

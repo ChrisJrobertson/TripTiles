@@ -4,13 +4,11 @@ import {
   awardAchievementAction,
   checkAndAwardMilestonesAction,
 } from "@/actions/achievements";
-import { getUserTripCount } from "@/lib/db/trips";
+import { currentUserCanCreateTrip } from "@/lib/entitlements";
 import { legacyDestinationFromRegionId } from "@/lib/legacy-destination";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type { Assignments, Destination } from "@/lib/types";
 import { revalidatePath } from "next/cache";
-
-const FREE_TIER_TRIP_LIMIT = 1;
 
 function revalidatePlanner() {
   revalidatePath("/planner");
@@ -24,20 +22,6 @@ function randomPublicSlug(): string {
     return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
   }
   return `t${Date.now().toString(36)}`;
-}
-
-type ProfileTierRow = { tier: string };
-
-async function getProfileTier(userId: string): Promise<string | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("tier")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error || !data) return null;
-  return (data as ProfileTierRow).tier ?? null;
 }
 
 // ---- Create ----
@@ -58,12 +42,8 @@ export async function createTripAction(input: {
     const user = await getCurrentUser();
     if (!user) return { ok: false, error: "Not signed in." };
 
-    const tier = await getProfileTier(user.id);
-    if (tier === "free" || tier === null) {
-      const count = await getUserTripCount(user.id);
-      if (count >= FREE_TIER_TRIP_LIMIT) {
-        return { ok: false, error: "TIER_LIMIT" };
-      }
+    if (!(await currentUserCanCreateTrip())) {
+      return { ok: false, error: "TIER_LIMIT" };
     }
 
     const legacyDestination = legacyDestinationFromRegionId(input.regionId);

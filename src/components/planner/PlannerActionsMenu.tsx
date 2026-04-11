@@ -6,6 +6,7 @@ type Props = {
   onResetCruise: () => void;
   onClearAll: () => void;
   onPrint: () => void;
+  onExportPdf?: () => void;
 };
 
 /**
@@ -15,6 +16,7 @@ export function PlannerActionsMenu({
   onResetCruise,
   onClearAll,
   onPrint,
+  onExportPdf,
 }: Props) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
 
@@ -65,6 +67,19 @@ export function PlannerActionsMenu({
         >
           Print calendar
         </button>
+        {onExportPdf ? (
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              onExportPdf();
+              closeMenu();
+            }}
+            className="block w-full px-4 py-2.5 text-left font-sans text-sm text-royal transition hover:bg-cream"
+          >
+            Export to PDF
+          </button>
+        ) : null}
       </div>
     </details>
   );

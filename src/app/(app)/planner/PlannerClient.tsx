@@ -28,10 +28,13 @@ import {
   type SmartPlanGeneratePayload,
 } from "@/components/planner/SmartPlanModal";
 import { TripSelector } from "@/components/planner/TripSelector";
+import { BookTripAffiliatePanel } from "@/components/planner/BookTripAffiliatePanel";
+import { PdfExportButton } from "@/components/planner/PdfExportButton";
 import { TripTimeline } from "@/components/planner/TripTimeline";
 import { Wizard } from "@/components/planner/Wizard";
 import { TierLimitModal } from "@/components/paywall/TierLimitModal";
 import { trackEvent } from "@/lib/analytics/client";
+import { getTierConfig } from "@/lib/tiers";
 import { useToast } from "@/lib/toast";
 import type {
   AchievementDefinition,
@@ -77,8 +80,8 @@ type Props = {
 
 const ASSIGN_DEBOUNCE_MS = 450;
 const SAVE_FLASH_MS = 500;
-/** Must match server-side enforcement in `createTripAction`. */
-const FREE_TIER_TRIP_LIMIT = 1;
+/** Must match server-side enforcement via `getTierConfig("free")`. */
+const FREE_TIER_TRIP_LIMIT = getTierConfig("free").features.max_trips ?? 1;
 
 function isFreeTierForTripLimit(tier: UserTier | null): boolean {
   return tier === null || tier === "free";
@@ -153,9 +156,9 @@ export function PlannerClient({
   const [achievementToasts, setAchievementToasts] = useState<
     AchievementToastItem[]
   >([]);
-  const [tierLimitVariant, setTierLimitVariant] = useState<"trips" | "ai">(
-    "trips",
-  );
+  const [tierLimitVariant, setTierLimitVariant] = useState<
+    "trips" | "ai" | "custom"
+  >("trips");
   const [tierLimitReason, setTierLimitReason] = useState(
     "You already have a trip on the free plan.",
   );
@@ -193,6 +196,13 @@ export function PlannerClient({
     () => [...parks, ...customTiles.map(customTileToPark)],
     [parks, customTiles],
   );
+
+  const activeRegionLabel = useMemo(() => {
+    const rid = activeTrip?.region_id;
+    if (!rid) return "Orlando";
+    const r = regions.find((x) => x.id === rid);
+    return r?.short_name?.trim() || r?.name?.trim() || "Orlando";
+  }, [activeTrip?.region_id, regions]);
 
   const customTilesForPalette = useMemo(() => {
     const rid = resolvePaletteRegionId(activeTrip);
@@ -411,7 +421,9 @@ export function PlannerClient({
         if (!res.ok) {
           if (res.error === "TIER_LIMIT") {
             setTierLimitVariant("ai");
-            setTierLimitReason(res.message);
+            setTierLimitReason(
+              "You've used all 5 AI plans for this trip. Upgrade to Pro for unlimited AI.",
+            );
             setTierLimitOpen(true);
             return;
           }
@@ -605,7 +617,7 @@ export function PlannerClient({
                 if (shouldBlockNewTripWizard(trips.length, userTier)) {
                   setTierLimitVariant("trips");
                   setTierLimitReason(
-                    "You already have a trip on the free plan.",
+                    "You've used your 1 free trip. Upgrade to Pro for unlimited trips.",
                   );
                   setTierLimitOpen(true);
                   return;
@@ -680,6 +692,12 @@ export function PlannerClient({
             >
               Smart Plan ✨
             </button>
+            <PdfExportButton
+              tripId={activeTripId}
+              disabled={!activeTripId}
+              buttonId="planner-pdf-export-btn"
+              onAchievementKeys={(keys) => enqueueAchievementKeys(keys)}
+            />
             <PlannerActionsMenu
               onResetCruise={() => {
                 if (!activeTripId) return;
@@ -717,6 +735,9 @@ export function PlannerClient({
                 });
               }}
               onPrint={() => window.print()}
+              onExportPdf={() =>
+                document.getElementById("planner-pdf-export-btn")?.click()
+              }
             />
           </section>
 
@@ -742,7 +763,14 @@ export function PlannerClient({
           </div>
 
           <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] lg:gap-8">
-            <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:pr-1">
+            <div className="space-y-4 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:pr-1">
+              <BookTripAffiliatePanel
+                destinationLabel={activeRegionLabel}
+                tripId={activeTrip.id}
+                startDate={activeTrip.start_date}
+                endDate={activeTrip.end_date}
+                siteUrl={siteUrl}
+              />
               <Palette
                 parks={parks}
                 customTiles={customTilesForPalette}
@@ -857,7 +885,7 @@ export function PlannerClient({
               if (res.error === "TIER_LIMIT") {
                 setTierLimitVariant("trips");
                 setTierLimitReason(
-                  "You already have a trip on the free plan.",
+                  "You've used your 1 free trip. Upgrade to Pro for unlimited trips.",
                 );
                 setTierLimitOpen(true);
                 return false;
@@ -910,6 +938,13 @@ export function PlannerClient({
           showFreeTierTileCounter={isFreeTierForTripLimit(userTier)}
           tilesUsedCount={customTiles.length}
           onSuccess={handleCustomTileSuccess}
+          onTierLimitReached={() => {
+            setTierLimitVariant("custom");
+            setTierLimitReason(
+              "You've created all 5 custom tiles on the free plan. Upgrade to Pro for unlimited custom tiles.",
+            );
+            setTierLimitOpen(true);
+          }}
         />
       ) : null}
 

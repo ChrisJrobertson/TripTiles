@@ -72,7 +72,7 @@ export default function MarketingHomePage() {
         </section>
 
         <section className="border-t border-royal/10 bg-white/60 px-6 py-16">
-          <div className="mx-auto grid max-w-5xl gap-10 md:grid-cols-3 md:gap-8">
+          <div className="mx-auto grid max-w-5xl gap-10 sm:grid-cols-2 lg:grid-cols-4 md:gap-8">
             {[
               {
                 step: "1",
@@ -88,6 +88,11 @@ export default function MarketingHomePage() {
                 step: "3",
                 title: "Smart Plan (optional)",
                 body: "Generate an AI draft that respects arrival day, cruise nights, and crowd hints.",
+              },
+              {
+                step: "4",
+                title: "Export & book",
+                body: "📄 Export beautiful PDFs — watermarked on Free, premium design on Premium. Book hotels and experiences through partner links that support TripTiles.",
               },
             ].map((item) => (
               <div key={item.step} className="text-left">

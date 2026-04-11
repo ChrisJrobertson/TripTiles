@@ -35,7 +35,30 @@ export function tierFromPayhipProductLink(
   return PAYHIP_PRODUCT_TO_TIER[key] ?? null;
 }
 
-export function buyerEmailFromPayload(body: PayhipWebhookBody): string | null {
+/** Match Payhip product title when permalink slug is absent or unknown. */
+export function tierFromPayhipItemName(itemName: unknown): UserTier {
+  const s = String(itemName ?? "").toLowerCase();
+  if (s.includes("premium")) return "premium";
+  if (s.includes("family")) return "family";
+  if (s.includes("pro")) return "pro";
+  console.warn(
+    "[payhip] item_name did not clearly match a tier; defaulting to pro",
+  );
+  return "pro";
+}
+
+export function resolvePayhipPurchaseTier(
+  productLink: unknown,
+  itemName: unknown,
+): UserTier {
+  const fromLink = tierFromPayhipProductLink(productLink);
+  if (fromLink) return fromLink;
+  return tierFromPayhipItemName(itemName);
+}
+
+export function buyerEmailFromPayload(
+  body: PayhipWebhookBody | Record<string, unknown>,
+): string | null {
   const e = body.email;
   if (typeof e === "string" && e.includes("@")) return e.trim();
   const alt = body["buyer_email"] ?? body["customer_email"];
@@ -47,7 +70,7 @@ export function buyerEmailFromPayload(body: PayhipWebhookBody): string | null {
 export function payhipEventGrantsAccess(type: string | undefined): boolean {
   if (!type) return false;
   const t = type.toLowerCase();
-  if (t === "paid") return true;
+  if (t === "paid" || t === "sale") return true;
   if (t.includes("subscription")) {
     return (
       t.includes("created") ||

@@ -8,6 +8,7 @@ const PROTECTED_PREFIXES = [
   "/admin",
   "/agency",
   "/achievements",
+  "/settings",
 ] as const;
 
 let loggedMissingSupabaseEnv = false;
@@ -67,6 +68,8 @@ export const config = {
     "/planner/:path*",
     "/achievements",
     "/achievements/:path*",
+    "/settings",
+    "/settings/:path*",
     "/pricing",
     "/pricing/:path*",
     "/feedback",

@@ -17,24 +17,15 @@ import type { Assignments, CustomTile, SlotType, Trip } from "@/lib/types";
 import { customTileToPark } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 import { awardAchievementAction } from "@/actions/achievements";
+import { currentUserCanGenerateAI } from "@/lib/entitlements";
 import { getSuccessfulAiGenerationCountForTrip } from "@/lib/db/ai-generations";
 import { getCrowdPatternsForParkIds } from "@/lib/data/crowd-patterns";
+import { getTierConfig } from "@/lib/tiers";
+import type { UserTier } from "@/lib/types";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY ?? "",
 });
-
-const FREE_TIER_AI_PER_TRIP = 5;
-
-const MODEL_BY_TIER: Record<string, string> = {
-  free: "claude-haiku-4-5",
-  pro: "claude-haiku-4-5",
-  family: "claude-haiku-4-5",
-  premium: "claude-sonnet-4-6",
-  concierge: "claude-sonnet-4-6",
-  agent_staff: "claude-haiku-4-5",
-  agent_admin: "claude-haiku-4-5",
-};
 
 const SYSTEM_PROMPT = `You are a theme park trip planner. Your job is to
 build a JSON itinerary for a family's holiday based on their trip details
@@ -117,9 +108,9 @@ Return ONLY the JSON. No markdown code fences. No explanation. No preamble.`;
 
 const SLOT_SET = new Set<SlotType>(["am", "pm", "lunch", "dinner"]);
 
-function modelForTier(tier: string | null): string {
-  const t = tier ?? "free";
-  return MODEL_BY_TIER[t] ?? MODEL_BY_TIER.free;
+function anthropicModelForTier(tier: string | null): string {
+  const t = (tier ?? "free") as UserTier;
+  return getTierConfig(t).features.ai_model;
 }
 
 /** Incoming overwrites the same day/slot keys (full overlay). */
@@ -391,21 +382,12 @@ export async function generateAIPlanAction(input: {
 
   const tier = (profile as { tier?: string } | null)?.tier ?? null;
 
-  if (tier === "free" || tier === null) {
-    const { count, error: cErr } = await supabase
-      .from("ai_generations")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("trip_id", input.tripId)
-      .eq("success", true);
-
-    if (!cErr && (count ?? 0) >= FREE_TIER_AI_PER_TRIP) {
-      return {
-        ok: false,
-        error: "TIER_LIMIT",
-        message: "Free plan AI generation limit reached for this trip.",
-      };
-    }
+  if (!(await currentUserCanGenerateAI(input.tripId))) {
+    return {
+      ok: false,
+      error: "TIER_LIMIT",
+      message: "Free plan AI generation limit reached for this trip.",
+    };
   }
 
   const builtInParks = await getParksForRegion(rid);
@@ -461,7 +443,7 @@ export async function generateAIPlanAction(input: {
     crowdJson,
   });
 
-  const model = modelForTier(tier);
+  const model = anthropicModelForTier(tier);
 
   let inputTokens = 0;
   let outputTokens = 0;
@@ -674,7 +656,7 @@ export async function generateAIPlanAction(input: {
       user_id: user.id,
       trip_id: input.tripId,
       prompt: composedUserMessage,
-      model: modelForTier(tier),
+      model: anthropicModelForTier(tier),
       input_tokens: inputTokens,
       output_tokens: outputTokens,
       cost_gbp_pence: null,
