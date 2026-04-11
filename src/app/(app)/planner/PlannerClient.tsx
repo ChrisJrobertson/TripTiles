@@ -74,6 +74,8 @@ type Props = {
   siteUrl: string;
   /** Show post-checkout help (URL param from marketing). */
   purchaseHighlight: boolean;
+  /** After cloning a public plan: custom tiles removed from source (from `?tile_scrubbed=`). */
+  initialTileScrubNotice: number | null;
   initialCustomTiles: CustomTile[];
   /** From `user_custom_tile_limit` RPC. */
   customTileLimit: number;
@@ -117,6 +119,7 @@ export function PlannerClient({
   aiGenerationCountsByTrip: initialAiCounts,
   siteUrl,
   purchaseHighlight,
+  initialTileScrubNotice,
   initialCustomTiles,
   customTileLimit,
 }: Props) {
@@ -177,6 +180,7 @@ export function PlannerClient({
   const hintRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const assignTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tileScrubToastShown = useRef(false);
 
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
 
@@ -237,6 +241,23 @@ export function PlannerClient({
   const dismissAchievementToast = useCallback((id: string) => {
     setAchievementToasts((prev) => prev.filter((x) => x.id !== id));
   }, []);
+
+  useEffect(() => {
+    if (
+      tileScrubToastShown.current ||
+      initialTileScrubNotice == null ||
+      initialTileScrubNotice <= 0
+    ) {
+      return;
+    }
+    tileScrubToastShown.current = true;
+    const n = initialTileScrubNotice;
+    showToast(
+      `${n} custom tile${n === 1 ? "" : "s"} were removed because they belonged to the original planner. You can add your own!`,
+    );
+    router.replace("/planner");
+    router.refresh();
+  }, [initialTileScrubNotice, router, showToast]);
 
   /** Merge server counts with local state so refresh never drops below optimistic totals. */
   useEffect(() => {

@@ -1,6 +1,14 @@
 "use client";
 
-import { addDays, formatDateKey, parseDate } from "@/lib/date-helpers";
+import {
+  DAYS_OF_WEEK,
+  MONTHS_SHORT,
+  addDays,
+  endOfWeekSunday,
+  formatDateKey,
+  parseDate,
+  startOfWeekMonday,
+} from "@/lib/date-helpers";
 import type { Assignments, CustomTile, Park, Trip } from "@/lib/types";
 import {
   Document,
@@ -62,15 +70,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 1.45,
     color: COLOURS.royal,
-  },
-  weekLabel: {
-    fontSize: 10,
-    fontWeight: "bold",
-    color: COLOURS.gold,
-    marginTop: 10,
-    marginBottom: 6,
-    textTransform: "uppercase",
-    letterSpacing: 1,
   },
   dayHeader: {
     fontSize: 15,
@@ -147,6 +146,61 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     width: "100%",
   },
+  calendarDowRow: {
+    flexDirection: "row",
+    marginBottom: 6,
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: COLOURS.gold,
+  },
+  calendarDowCell: {
+    flex: 1,
+    alignItems: "center",
+  },
+  calendarDowText: {
+    fontSize: 7,
+    fontWeight: "bold",
+    color: COLOURS.muted,
+    textTransform: "uppercase",
+  },
+  calendarWeekRow: {
+    flexDirection: "row",
+    marginBottom: 2,
+  },
+  calendarCell: {
+    flex: 1,
+    minHeight: 58,
+    padding: 3,
+    borderWidth: 0.5,
+    borderColor: "#e0dcd4",
+    justifyContent: "flex-start",
+  },
+  calendarCellOut: {
+    backgroundColor: "#f4f2ec",
+  },
+  calendarCellDay: {
+    fontSize: 8,
+    fontWeight: "bold",
+    color: COLOURS.royal,
+    marginBottom: 2,
+  },
+  slotPillRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 1,
+  },
+  slotPill: {
+    paddingVertical: 1,
+    paddingHorizontal: 3,
+    borderRadius: 2,
+    marginRight: 1,
+    marginBottom: 1,
+  },
+  slotPillText: {
+    fontSize: 5,
+    color: "#ffffff",
+    textTransform: "uppercase",
+  },
 });
 
 const SLOT_ORDER = ["am", "pm", "lunch", "dinner"] as const;
@@ -157,6 +211,24 @@ function slotLabel(slot: string): string {
   if (slot === "lunch") return "LUN";
   if (slot === "dinner") return "DIN";
   return slot;
+}
+
+function buildPdfWeekRows(startIso: string, endIso: string): Date[][] {
+  const start = parseDate(startIso);
+  const end = parseDate(endIso);
+  const gridStart = startOfWeekMonday(start);
+  const gridEnd = endOfWeekSunday(end);
+  const rows: Date[][] = [];
+  let cur = new Date(gridStart);
+  while (cur <= gridEnd) {
+    const row: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+      row.push(new Date(cur));
+      cur = addDays(cur, 1);
+    }
+    rows.push(row);
+  }
+  return rows;
 }
 
 function dayCrowdNoteText(
@@ -192,11 +264,14 @@ export function TripPDF({
   includeNotes = true,
 }: TripPDFProps) {
   const itemsById = new Map<string, { name: string; icon?: string | null }>();
+  const colourById = new Map<string, string>();
   for (const p of parks) {
     itemsById.set(p.id, { name: p.name, icon: p.icon });
+    colourById.set(p.id, p.bg_colour);
   }
   for (const t of customTiles) {
     itemsById.set(t.id, { name: t.name, icon: t.icon });
+    colourById.set(t.id, t.bg_colour);
   }
 
   const start = parseDate(trip.start_date);
@@ -207,6 +282,8 @@ export function TripPDF({
   }
 
   const assignments = (trip.assignments ?? {}) as Assignments;
+  const weekRows = buildPdfWeekRows(trip.start_date, trip.end_date);
+  const tripDaySet = new Set(days);
 
   const crowdSummary =
     includeNotes &&
@@ -298,68 +375,94 @@ export function TripPDF({
 
       <Page size="A4" style={styles.page} wrap>
         {design === "premium" ? <View style={styles.premiumBar} /> : null}
-        <Text style={styles.sectionTitle}>Your day-by-day itinerary</Text>
+        <Text style={styles.sectionTitle}>Itinerary calendar</Text>
 
-        {days.map((dayKey, i) => {
-          const dayAssign = assignments[dayKey] ?? {};
-          const date = parseDate(dayKey);
-          const label = date.toLocaleDateString("en-GB", {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-          });
-          const hasSlot = SLOT_ORDER.some((s) => Boolean(dayAssign[s]));
-          const noteText = includeNotes ? dayCrowdNoteText(trip, dayKey) : null;
-
-          return (
-            <View key={dayKey}>
-              {i % 7 === 0 ? (
-                <Text style={styles.weekLabel}>
-                  Trip week {Math.floor(i / 7) + 1} · starting{" "}
-                  {date.toLocaleDateString("en-GB", {
-                    weekday: "short",
-                    day: "numeric",
-                    month: "short",
-                  })}
-                </Text>
-              ) : null}
-              <View wrap={false}>
-                <Text style={styles.dayHeader}>
-                  Day {i + 1} · {label}
-                </Text>
-                {SLOT_ORDER.map((slot) => {
-                  const id = dayAssign[slot];
-                  if (!id) return null;
-                  const item = itemsById.get(id);
-                  const line = item
-                    ? `${item.icon ? `${item.icon} ` : ""}${item.name}`
-                    : `(${id})`;
-                  return (
-                    <View key={slot} style={styles.slot}>
-                      <Text style={styles.slotLabel}>{slotLabel(slot)}</Text>
-                      <Text style={styles.slotValue}>{line}</Text>
-                    </View>
-                  );
-                })}
-                {!hasSlot ? (
-                  <Text
-                    style={{
-                      fontSize: 9,
-                      color: COLOURS.muted,
-                      paddingLeft: 8,
-                      fontStyle: "italic",
-                    }}
-                  >
-                    Rest day — nothing planned yet
-                  </Text>
-                ) : null}
-                {noteText ? (
-                  <Text style={styles.dayNote}>Why this day: {noteText}</Text>
-                ) : null}
-              </View>
+        <View style={styles.calendarDowRow} wrap={false}>
+          {DAYS_OF_WEEK.map((dow) => (
+            <View key={dow} style={styles.calendarDowCell}>
+              <Text style={styles.calendarDowText}>{dow}</Text>
             </View>
-          );
-        })}
+          ))}
+        </View>
+
+        {weekRows.map((week, wi) => (
+          <View key={wi} style={styles.calendarWeekRow} wrap={false}>
+            {week.map((d) => {
+              const cellKey = formatDateKey(d);
+              const inTrip = tripDaySet.has(cellKey);
+              const dayAssign = assignments[cellKey] ?? {};
+              const hasSlot = SLOT_ORDER.some((s) => Boolean(dayAssign[s]));
+
+              return (
+                <View
+                  key={cellKey}
+                  style={[
+                    styles.calendarCell,
+                    !inTrip ? styles.calendarCellOut : {},
+                  ]}
+                >
+                  {inTrip ? (
+                    <>
+                      <Text style={styles.calendarCellDay}>
+                        {d.getDate()} {MONTHS_SHORT[d.getMonth()]}
+                      </Text>
+                      <View style={styles.slotPillRow}>
+                        {SLOT_ORDER.map((slot) => {
+                          const id = dayAssign[slot];
+                          if (!id) return null;
+                          const bg = colourById.get(id) ?? COLOURS.royal;
+                          return (
+                            <View
+                              key={slot}
+                              style={[styles.slotPill, { backgroundColor: bg }]}
+                            >
+                              <Text style={styles.slotPillText}>
+                                {slotLabel(slot)}
+                              </Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                      {!hasSlot ? (
+                        <Text
+                          style={{
+                            fontSize: 6,
+                            color: COLOURS.muted,
+                            fontStyle: "italic",
+                            marginTop: 2,
+                          }}
+                        >
+                          Rest
+                        </Text>
+                      ) : null}
+                    </>
+                  ) : null}
+                </View>
+              );
+            })}
+          </View>
+        ))}
+
+        {includeNotes
+          ? days.map((dayKey, i) => {
+              const noteText = dayCrowdNoteText(trip, dayKey);
+              if (!noteText) return null;
+              const date = parseDate(dayKey);
+              const label = date.toLocaleDateString("en-GB", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+              });
+              return (
+                <View key={`note-${dayKey}`} wrap={false}>
+                  <Text style={styles.dayHeader}>
+                    Day {i + 1} · {label}
+                  </Text>
+                  <Text style={styles.dayNote}>Why this day: {noteText}</Text>
+                </View>
+              );
+            })
+          : null}
 
         {includeNotes &&
         bookingAffiliateLinks &&

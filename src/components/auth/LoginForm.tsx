@@ -61,9 +61,9 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
       if (signError) {
         const m = signError.message.toLowerCase();
         if (m.includes("rate limit") || m.includes("too many")) {
-          setError("Too many attempts. Try again in a few minutes.");
+          setError("Too many attempts, try again in a few minutes.");
         } else {
-          setError(signError.message);
+          setError("Something went wrong. Please try again.");
         }
         setMagicLoading(false);
         return;
@@ -79,7 +79,7 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
   async function handlePasswordSignIn() {
     setError(null);
     if (!email.trim() || !password) {
-      setError("Enter your email and password to sign in with a password.");
+      setError("Email and password are required");
       return;
     }
     setPasswordLoading(true);
@@ -143,7 +143,7 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
       </div>
 
       <PasswordField
-        label="Password (optional)"
+        label="Password (optional for magic link)"
         helperText="Leave blank to sign in with a magic link."
         value={password}
         onChange={setPassword}
@@ -151,16 +151,14 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
         required={false}
       />
 
-      {password.trim().length > 0 ? (
-        <p className="text-right font-sans text-xs">
-          <Link
-            href={`/forgot-password?email=${encodeURIComponent(email.trim())}`}
-            className="font-medium text-royal underline decoration-gold/60 underline-offset-2 hover:text-gold"
-          >
-            Forgot password?
-          </Link>
-        </p>
-      ) : null}
+      <p className="text-right font-sans text-xs">
+        <Link
+          href={`/forgot-password?email=${encodeURIComponent(email.trim())}`}
+          className="font-medium text-royal/70 underline decoration-gold/50 underline-offset-2 hover:text-gold"
+        >
+          Forgot password?
+        </Link>
+      </p>
 
       <div aria-live="polite" role="status">
         {error ? (

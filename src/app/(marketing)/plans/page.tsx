@@ -67,6 +67,12 @@ export default async function PlansGalleryPage({
               Pricing
             </Link>
             <Link
+              href="/signup?next=/planner"
+              className="font-medium text-royal hover:text-gold"
+            >
+              Sign up
+            </Link>
+            <Link
               href="/login?next=/planner"
               className="font-medium text-royal hover:text-gold"
             >

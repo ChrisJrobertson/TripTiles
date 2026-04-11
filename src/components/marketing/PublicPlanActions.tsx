@@ -31,7 +31,11 @@ export function PublicPlanActions({ sourceTripId, slug, isAuthed }: Props) {
       }
       return;
     }
-    router.replace("/planner");
+    const dest =
+      r.skippedCustomTiles > 0
+        ? `/planner?tile_scrubbed=${r.skippedCustomTiles}`
+        : "/planner";
+    router.replace(dest);
     router.refresh();
   }, [sourceTripId, router]);
 

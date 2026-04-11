@@ -63,6 +63,14 @@ export default async function PlannerPage({
     firstParam(sp.checkout) === "success" ||
     firstParam(sp.upgraded) === "pending";
 
+  const tileScrubRaw = firstParam(sp.tile_scrubbed);
+  const initialTileScrubNotice =
+    tileScrubRaw !== undefined &&
+    tileScrubRaw !== "" &&
+    !Number.isNaN(Number(tileScrubRaw))
+      ? Math.max(0, Math.floor(Number(tileScrubRaw)))
+      : null;
+
   const [
     trips,
     parks,
@@ -110,6 +118,7 @@ export default async function PlannerPage({
       aiGenerationCountsByTrip={aiGenerationCountsByTrip}
       siteUrl={siteUrl}
       purchaseHighlight={purchaseHighlight}
+      initialTileScrubNotice={initialTileScrubNotice}
       initialCustomTiles={customTiles}
       customTileLimit={customTileLimit}
     />

@@ -1,14 +1,16 @@
 "use client";
 
+import { updatePasswordAction } from "@/actions/auth";
 import { createClient } from "@/lib/supabase/client";
 import { PasswordField } from "@/components/auth/PasswordField";
+import { showToast } from "@/lib/toast";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 /**
- * Supabase recovery links establish the session in the browser (URL hash).
- * `updateUser` must run on the client so the recovery session is present.
+ * Recovery links should hit `/auth/callback` first so the session is in
+ * cookies; then `updatePasswordAction` runs on the server with that session.
  */
 export function ResetPasswordForm() {
   const router = useRouter();
@@ -44,15 +46,13 @@ export function ResetPasswordForm() {
     }
     setLoading(true);
     try {
-      const supabase = createClient();
-      const { error: upErr } = await supabase.auth.updateUser({
-        password,
-      });
-      if (upErr) {
-        setError(upErr.message);
+      const r = await updatePasswordAction(password);
+      if (!r.ok) {
+        setError(r.error);
         setLoading(false);
         return;
       }
+      showToast("Password updated. You're signed in.");
       router.push("/planner");
       router.refresh();
     } catch {

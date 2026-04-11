@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const typeRaw = searchParams.get("type");
+  const otpTypeFromQuery = parseEmailOtpType(typeRaw);
 
   const loginInvalid = () =>
     NextResponse.redirect(
@@ -44,7 +45,14 @@ export async function GET(request: NextRequest) {
       `${origin}/login?error=auth_failed&reason=${encodeURIComponent(compactReason(message))}&next=${encodeURIComponent(next)}`,
     );
 
-  const successRedirect = () => NextResponse.redirect(`${origin}${next}`);
+  /** Password recovery must land on /reset-password so the user can set a new password. */
+  const postAuthPath =
+    otpTypeFromQuery === "recovery"
+      ? safeNextPath("/reset-password")
+      : next;
+
+  const successRedirect = () =>
+    NextResponse.redirect(`${origin}${postAuthPath}`);
 
   // 1) PKCE (OAuth, email OTP with code exchange)
   if (code) {

@@ -13,7 +13,7 @@ export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
 
   useEffect(() => {
     const q = searchParams.get("email");
@@ -22,14 +22,11 @@ export function ForgotPasswordForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
+    const trimmed = email.trim();
     setLoading(true);
-    const r = await resetPasswordAction(email.trim());
+    await resetPasswordAction(trimmed);
     setLoading(false);
-    if (!r.ok) {
-      setError(r.error);
-      return;
-    }
+    setSentTo(trimmed || "that address");
     setDone(true);
   }
 
@@ -40,7 +37,9 @@ export function ForgotPasswordForm() {
         role="status"
       >
         <p className="font-semibold text-royal">
-          If an account exists with this email, a reset link has been sent.
+          Check your email. If an account exists for{" "}
+          <span className="break-all text-royal/90">{sentTo}</span>, we&apos;ve
+          sent a reset link.
         </p>
         <p className="mt-4">
           <Link href="/login" className="font-semibold text-gold underline">
@@ -71,11 +70,6 @@ export function ForgotPasswordForm() {
           placeholder="you@example.com"
         />
       </div>
-      {error ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-800">
-          {error}
-        </p>
-      ) : null}
       <button
         type="submit"
         disabled={loading}

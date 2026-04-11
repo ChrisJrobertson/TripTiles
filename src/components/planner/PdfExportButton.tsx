@@ -111,9 +111,8 @@ export function PdfExportButton({
               Export PDF
             </h2>
             <p className="mt-2 font-sans text-sm text-royal/70">
-              Choose a printable version. “Without notes” is compact for the
-              fridge; “With notes” includes crowd strategy, day tips, and
-              booking links.
+              Pick a layout: full detail for your binder, or a compact calendar
+              for the fridge.
             </p>
 
             <fieldset className="mt-5 space-y-3 font-sans text-sm text-royal">
@@ -127,9 +126,9 @@ export function PdfExportButton({
                   onChange={() => setIncludeNotes(true)}
                 />
                 <span>
-                  <span className="font-semibold">With notes</span>
+                  <span className="font-semibold">With notes and tips</span>
                   <span className="mt-0.5 block text-royal/65">
-                    Crowd strategy, per-day tips, and booking links
+                    Strategy summary, per-day tips, and booking links
                   </span>
                 </span>
               </label>
@@ -142,9 +141,9 @@ export function PdfExportButton({
                   onChange={() => setIncludeNotes(false)}
                 />
                 <span>
-                  <span className="font-semibold">Without notes</span>
+                  <span className="font-semibold">Clean printable version</span>
                   <span className="mt-0.5 block text-royal/65">
-                    Cover page and itinerary only — clean and compact
+                    Cover and calendar only — perfect for the fridge
                   </span>
                 </span>
               </label>

@@ -25,31 +25,28 @@ function mapSignInError(error: AuthError): string {
 
   if (
     code === "invalid_credentials" ||
+    code === "user_not_found" ||
     msg.includes("invalid login") ||
     msg.includes("invalid email or password") ||
-    msg.includes("invalid login credentials")
+    msg.includes("invalid login credentials") ||
+    msg.includes("user not found") ||
+    msg.includes("no user found")
   ) {
-    return "Incorrect password. Try again or use a magic link.";
+    return "Incorrect email or password";
   }
   if (code === "email_not_confirmed" || msg.includes("email not confirmed")) {
-    return "Check your email to confirm your account first.";
-  }
-  if (
-    msg.includes("user not found") ||
-    msg.includes("no user found") ||
-    code === "user_not_found"
-  ) {
-    return "No account with this email. Sign up instead?";
+    return "Please confirm your email first — check your inbox";
   }
   if (
     code === "too_many_requests" ||
+    msg.includes("over_email_send_rate_limit") ||
     msg.includes("rate limit") ||
     msg.includes("too many requests") ||
     msg.includes("security purposes")
   ) {
-    return "Too many attempts. Try again in a few minutes.";
+    return "Too many attempts, try again in a few minutes.";
   }
-  return "Something went wrong, try again.";
+  return "Something went wrong. Please try again.";
 }
 
 function mapSignUpError(error: AuthError): string {
@@ -78,7 +75,7 @@ export async function signInWithPasswordAction(
 > {
   const trimmedEmail = email.trim();
   if (!trimmedEmail || !password) {
-    return { ok: false, error: "Enter your email and password." };
+    return { ok: false, error: "Email and password are required" };
   }
 
   try {
@@ -98,7 +95,7 @@ export async function signInWithPasswordAction(
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Something went wrong.",
+      error: e instanceof Error ? e.message : "Something went wrong. Please try again.",
     };
   }
 }
@@ -147,33 +144,69 @@ export async function signUpWithPasswordAction(
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Something went wrong.",
+      error: e instanceof Error ? e.message : "Something went wrong. Please try again.",
     };
   }
 }
 
 export async function resetPasswordAction(
   email: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true }> {
   const trimmed = email.trim();
   if (!trimmed) {
-    return { ok: false, error: "Enter your email address." };
+    return { ok: true };
   }
 
   try {
     const origin = siteOrigin();
     if (!origin) {
-      return { ok: false, error: "Server configuration error." };
+      return { ok: true };
     }
 
     const supabase = await createClient();
-    /** User lands here with a recovery session (hash or PKCE); /reset-password handles password update. */
-    const redirectTo = `${origin}/reset-password`;
+    /** Exchange on server then send user to /reset-password (SSR session + server update password). */
+    const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent("/reset-password")}`;
 
     await supabase.auth.resetPasswordForEmail(trimmed, {
       redirectTo,
     });
+  } catch {
+    // Always succeed from the caller's perspective (no user enumeration).
+  }
 
+  return { ok: true };
+}
+
+export async function updatePasswordAction(
+  newPassword: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!newPassword || newPassword.length < 8) {
+    return { ok: false, error: "Password must be at least 8 characters" };
+  }
+
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return {
+        ok: false,
+        error:
+          "This reset link is invalid or has expired. Request a new one from forgot password.",
+      };
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+
+    revalidatePath("/", "layout");
+    revalidatePath("/planner");
     return { ok: true };
   } catch (e) {
     return {

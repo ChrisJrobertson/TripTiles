@@ -42,8 +42,7 @@ export default async function LoginPage({ searchParams }: Props) {
           Sign in to TripTiles
         </h1>
         <p className="mt-3 text-center font-sans text-sm leading-relaxed text-royal/75">
-          Magic link is the quickest way in — or use your password if you
-          created one when you signed up.
+          Welcome back. Use a magic link or your password.
         </p>
 
         {errorMessage ? (

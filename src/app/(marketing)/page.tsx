@@ -43,6 +43,12 @@ export default async function MarketingHomePage() {
               Feedback
             </Link>
             <Link
+              href="/signup?next=/planner"
+              className="font-medium text-royal hover:text-gold"
+            >
+              Sign up
+            </Link>
+            <Link
               href="/login?next=/planner"
               className="font-medium text-royal hover:text-gold"
             >
@@ -214,6 +220,9 @@ export default async function MarketingHomePage() {
               </Link>
               <Link href="/feedback" className="hover:text-royal">
                 Feedback
+              </Link>
+              <Link href="/signup?next=/planner" className="hover:text-royal">
+                Sign up
               </Link>
               <Link href="/login?next=/planner" className="hover:text-royal">
                 Sign in

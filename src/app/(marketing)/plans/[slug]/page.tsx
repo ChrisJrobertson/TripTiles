@@ -109,12 +109,12 @@ export default async function PublicPlanPage({ params }: Props) {
     <div className="min-h-screen bg-cream">
       <div className="border-b border-royal/10 bg-gold/15 px-4 py-3 text-center font-sans text-sm text-royal">
         <Link
-          href="/login?next=/planner"
+          href="/signup?next=/planner"
           className="font-semibold underline decoration-gold/80"
         >
-          Start planning your own trip
+          Start planning your own trip for free
         </Link>
-        <span className="text-royal/70"> — free to try.</span>
+        <span className="text-royal/70"> — no credit card.</span>
       </div>
 
       <header className="border-b border-royal/10 bg-white/90 px-4 py-5">
