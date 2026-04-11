@@ -26,16 +26,11 @@ type Props = {
 
 export function LoginForm({ next, initialEmail = "" }: Props) {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [magicLoading, setMagicLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (initialEmail) setEmail(initialEmail);
@@ -100,22 +95,6 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
       setError("Something went wrong. Please try again.");
       setPasswordLoading(false);
     }
-  }
-
-  if (!mounted) {
-    return (
-      <div
-        className="mt-8 space-y-6"
-        aria-busy="true"
-        aria-label="Loading sign-in form"
-      >
-        <div>
-          <div className="mb-2 h-4 w-32 rounded bg-royal/15" />
-          <div className="min-h-12 w-full rounded-lg border-2 border-royal/10 bg-white/60" />
-        </div>
-        <div className="min-h-12 w-full rounded-lg bg-gold/20" />
-      </div>
-    );
   }
 
   return (

@@ -44,6 +44,11 @@ export default async function LoginPage({ searchParams }: Props) {
         <p className="mt-3 text-center font-sans text-sm leading-relaxed text-royal/75">
           Welcome back. Use a magic link or your password.
         </p>
+        <p className="mt-2 text-center font-sans text-xs leading-relaxed text-royal/60">
+          Use the email you registered with (there is no separate username). Fill in the password field and choose{" "}
+          <span className="font-semibold text-royal/75">Sign in with password</span>, or leave password empty and use{" "}
+          <span className="font-semibold text-royal/75">Send magic link</span>.
+        </p>
 
         {errorMessage ? (
           <div
