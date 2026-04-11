@@ -8,6 +8,8 @@ type Props = {
   isPublic: boolean;
   publicSlug: string | null;
   siteUrl: string;
+  cloneCount?: number;
+  viewCount?: number;
 };
 
 export function ShareTripPanel({
@@ -15,6 +17,8 @@ export function ShareTripPanel({
   isPublic: initialPublic,
   publicSlug: initialSlug,
   siteUrl,
+  cloneCount = 0,
+  viewCount = 0,
 }: Props) {
   const [isPublic, setIsPublic] = useState(initialPublic);
   const [publicSlug, setPublicSlug] = useState(initialSlug);
@@ -28,7 +32,7 @@ export function ShareTripPanel({
 
   const base = siteUrl.replace(/\/$/, "") || "";
   const shareUrl =
-    publicSlug && base ? `${base}/p/${publicSlug}` : "";
+    publicSlug && base ? `${base}/plans/${publicSlug}` : "";
 
   const onToggle = useCallback(
     async (enabled: boolean) => {
@@ -43,7 +47,11 @@ export function ShareTripPanel({
         setIsPublic(res.isPublic);
         setPublicSlug(res.publicSlug);
         if (res.isPublic && res.publicSlug) {
-          setMsg("Anyone with the link can view — not edit.");
+          setMsg(
+            "Anyone with the link can view your plan and clone it. Your name stays private.",
+          );
+        } else {
+          setMsg("This trip is private again. Your link is saved if you re-publish.");
         }
       } finally {
         setLoading(false);
@@ -65,7 +73,7 @@ export function ShareTripPanel({
   return (
     <div className="rounded-xl border border-royal/10 bg-white px-4 py-3 font-sans text-sm text-royal shadow-sm">
       <p className="font-sans text-xs font-semibold text-royal/70">
-        Share read-only link
+        Community sharing
       </p>
       <label className="mt-2 flex cursor-pointer items-center gap-2">
         <input
@@ -75,8 +83,11 @@ export function ShareTripPanel({
           disabled={loading}
           onChange={(e) => void onToggle(e.target.checked)}
         />
-        <span>Enable public link</span>
+        <span>Make this trip public</span>
       </label>
+      <p className="mt-2 text-xs leading-relaxed text-royal/60">
+        {cloneCount} clones · {viewCount} views on the public page
+      </p>
       {isPublic && shareUrl ? (
         <div className="mt-2 flex flex-wrap gap-2">
           <code className="max-w-full flex-1 truncate rounded bg-cream px-2 py-1 text-xs">
@@ -87,7 +98,7 @@ export function ShareTripPanel({
             onClick={() => void copy()}
             className="rounded-lg bg-royal px-3 py-1 text-xs font-semibold text-cream"
           >
-            Copy
+            Copy link
           </button>
         </div>
       ) : null}

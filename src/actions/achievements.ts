@@ -4,6 +4,7 @@ import {
   getAchievementDefinitions,
   getUserAchievements,
 } from "@/lib/db/achievements";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -51,6 +52,34 @@ export async function awardAchievementAction(
       ok: false,
       error: e instanceof Error ? e.message : "Unknown error",
     };
+  }
+}
+
+/** Server-only: award another user (e.g. original plan owner on clone milestones). */
+export async function tryAwardAchievementForUserId(
+  userId: string,
+  achievementKey: string,
+): Promise<void> {
+  try {
+    const admin = createServiceRoleClient();
+    const { data: existing } = await admin
+      .from("achievements")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("achievement_key", achievementKey)
+      .maybeSingle();
+    if (existing) return;
+    const { error } = await admin.from("achievements").insert({
+      user_id: userId,
+      achievement_key: achievementKey,
+      earned_at: new Date().toISOString(),
+      metadata: {},
+    });
+    if (error && error.code !== "23505") {
+      console.warn("[achievements] tryAwardAchievementForUserId:", error.message);
+    }
+  } catch (e) {
+    console.warn("[achievements] tryAwardAchievementForUserId:", e);
   }
 }
 

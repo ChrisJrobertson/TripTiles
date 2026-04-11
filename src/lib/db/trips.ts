@@ -48,6 +48,8 @@ export function mapTripRow(row: Record<string, unknown>): Trip {
     notes: row.notes != null ? String(row.notes) : null,
     is_public: Boolean(row.is_public),
     public_slug: row.public_slug != null ? String(row.public_slug) : null,
+    clone_count: Number(row.clone_count ?? 0),
+    view_count: Number(row.view_count ?? 0),
     adults: Number(row.adults ?? 2),
     children: Number(row.children ?? 0),
     child_ages,
@@ -125,4 +127,34 @@ export async function getTripByPublicSlug(
 
   if (error || !data) return null;
   return mapTripRow(data as Record<string, unknown>);
+}
+
+/** Gallery listing (no owner PII). Caller resolves `region_id` → labels. */
+export async function listPublicTrips(input: {
+  regionId: string | null;
+  limit: number;
+  offset: number;
+}): Promise<Trip[]> {
+  const supabase = await createClient();
+  let q = supabase
+    .from("trips")
+    .select("*")
+    .eq("is_public", true)
+    .order("clone_count", { ascending: false })
+    .order("view_count", { ascending: false })
+    .order("created_at", { ascending: false })
+    .range(input.offset, input.offset + input.limit - 1);
+
+  if (input.regionId) {
+    q = q.eq("region_id", input.regionId);
+  }
+
+  const { data, error } = await q;
+  if (error) throw error;
+
+  return (data ?? []).map((r) => mapTripRow(r as Record<string, unknown>));
+}
+
+export async function getFeaturedPublicTrips(limit: number): Promise<Trip[]> {
+  return listPublicTrips({ regionId: null, limit, offset: 0 });
 }

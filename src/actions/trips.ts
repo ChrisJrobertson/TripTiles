@@ -3,26 +3,34 @@
 import {
   awardAchievementAction,
   checkAndAwardMilestonesAction,
+  tryAwardAchievementForUserId,
 } from "@/actions/achievements";
+import { getUserCustomTiles } from "@/lib/db/custom-tiles";
+import { getUserTripCount, mapTripRow } from "@/lib/db/trips";
 import { currentUserCanCreateTrip } from "@/lib/entitlements";
+import { syncTripLifecycleEmailQueue } from "@/lib/email/schedule-trip-emails";
 import { legacyDestinationFromRegionId } from "@/lib/legacy-destination";
+import { defaultPublicTripSlug, slugifyAdventureName } from "@/lib/slug";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
-import type { Assignments, Destination } from "@/lib/types";
+import type { Assignments, Assignment, Destination } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 
 function revalidatePlanner() {
   revalidatePath("/planner");
 }
 
-function randomPublicSlug(): string {
+function randomSlugSuffix(): string {
   const c = globalThis.crypto;
   if (c?.getRandomValues) {
-    const b = new Uint8Array(9);
+    const b = new Uint8Array(4);
     c.getRandomValues(b);
     return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
   }
   return `t${Date.now().toString(36)}`;
 }
+
+const SLOT_TYPES = ["am", "pm", "lunch", "dinner"] as const;
 
 // ---- Create ----
 export async function createTripAction(input: {
@@ -100,6 +108,14 @@ export async function createTripAction(input: {
     const milestoneKeys = await checkAndAwardMilestonesAction();
     newAchievements.push(...milestoneKeys);
 
+    await syncTripLifecycleEmailQueue({
+      supabase,
+      userId: user.id,
+      tripId: String(inserted.id),
+      startDate: input.startDate,
+      endDate: input.endDate,
+    });
+
     revalidatePlanner();
     return { ok: true, tripId: String(inserted.id), newAchievements };
   } catch (e) {
@@ -166,6 +182,30 @@ export async function updateTripMetadataAction(input: {
       .eq("owner_id", user.id);
 
     if (error) return { ok: false, error: error.message };
+
+    if (input.startDate !== undefined || input.endDate !== undefined) {
+      const { data: row } = await supabase
+        .from("trips")
+        .select("start_date, end_date")
+        .eq("id", input.tripId)
+        .eq("owner_id", user.id)
+        .maybeSingle();
+      if (
+        row &&
+        typeof row === "object" &&
+        "start_date" in row &&
+        "end_date" in row
+      ) {
+        await syncTripLifecycleEmailQueue({
+          supabase,
+          userId: user.id,
+          tripId: input.tripId,
+          startDate: String(row.start_date),
+          endDate: String(row.end_date),
+        });
+      }
+    }
+
     revalidatePlanner();
     return { ok: true };
   } catch (e) {
@@ -287,7 +327,7 @@ export async function updateTripFromWizardAction(input: {
   });
 }
 
-/** Enable/disable read-only public link (`/p/[slug]`). */
+/** Enable/disable read-only public link (`/plans/[slug]`). Slug is kept when disabled. */
 export async function updateTripSharingAction(input: {
   tripId: string;
   enabled: boolean;
@@ -295,45 +335,97 @@ export async function updateTripSharingAction(input: {
   | { ok: true; publicSlug: string | null; isPublic: boolean }
   | { ok: false; error: string }
 > {
+  if (!input.enabled) {
+    const r = await unpublishTripAction(input.tripId);
+    if (!r.ok) return r;
+    return { ok: true, publicSlug: r.publicSlug, isPublic: false };
+  }
+  return publishTripAction(input.tripId);
+}
+
+export async function unpublishTripAction(
+  tripId: string,
+): Promise<
+  { ok: true; publicSlug: string | null } | { ok: false; error: string }
+> {
   try {
     const user = await getCurrentUser();
     if (!user) return { ok: false, error: "Not signed in." };
 
     const supabase = await createClient();
-
-    if (!input.enabled) {
-      const { error } = await supabase
-        .from("trips")
-        .update({
-          is_public: false,
-          public_slug: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", input.tripId)
-        .eq("owner_id", user.id);
-
-      if (error) return { ok: false, error: error.message };
-      revalidatePlanner();
-      revalidatePath("/p", "layout");
-      return { ok: true, publicSlug: null, isPublic: false };
-    }
-
-    const { data: existing, error: loadErr } = await supabase
+    const { data: row, error: loadErr } = await supabase
       .from("trips")
       .select("public_slug")
-      .eq("id", input.tripId)
+      .eq("id", tripId)
       .eq("owner_id", user.id)
       .maybeSingle();
 
     if (loadErr) return { ok: false, error: loadErr.message };
-
-    const existingSlug =
-      existing &&
-      typeof existing === "object" &&
-      "public_slug" in existing &&
-      existing.public_slug
-        ? String(existing.public_slug)
+    const slug =
+      row &&
+      typeof row === "object" &&
+      "public_slug" in row &&
+      row.public_slug != null
+        ? String(row.public_slug)
         : null;
+
+    const { error } = await supabase
+      .from("trips")
+      .update({
+        is_public: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", tripId)
+      .eq("owner_id", user.id);
+
+    if (error) return { ok: false, error: error.message };
+    revalidatePlanner();
+    revalidatePath("/plans");
+    if (slug) revalidatePath(`/plans/${slug}`);
+    return { ok: true, publicSlug: slug };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
+  }
+}
+
+export async function publishTripAction(
+  tripId: string,
+): Promise<
+  | { ok: true; publicSlug: string; isPublic: boolean; newAchievements: string[] }
+  | { ok: false; error: string }
+> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { ok: false, error: "Not signed in." };
+
+    const supabase = await createClient();
+    const { data: tripRow, error: loadErr } = await supabase
+      .from("trips")
+      .select("id, adventure_name, public_slug, is_public")
+      .eq("id", tripId)
+      .eq("owner_id", user.id)
+      .maybeSingle();
+
+    if (loadErr) return { ok: false, error: loadErr.message };
+    if (!tripRow || typeof tripRow !== "object" || !("id" in tripRow)) {
+      return { ok: false, error: "Trip not found." };
+    }
+
+    const id = String(tripRow.id);
+    const adventureName = String(
+      "adventure_name" in tripRow ? tripRow.adventure_name ?? "" : "",
+    );
+    const wasPublic =
+      "is_public" in tripRow ? Boolean(tripRow.is_public) : false;
+    const existingSlug =
+      "public_slug" in tripRow && tripRow.public_slug != null
+        ? String(tripRow.public_slug)
+        : null;
+
+    const newAchievements: string[] = [];
 
     if (existingSlug) {
       const { error } = await supabase
@@ -342,17 +434,31 @@ export async function updateTripSharingAction(input: {
           is_public: true,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", input.tripId)
+        .eq("id", tripId)
         .eq("owner_id", user.id);
 
       if (error) return { ok: false, error: error.message };
+      if (!wasPublic) {
+        const sh = await awardAchievementAction("first_share");
+        if (sh.ok && sh.justEarned) newAchievements.push("first_share");
+      }
       revalidatePlanner();
-      revalidatePath(`/p/${existingSlug}`);
-      return { ok: true, publicSlug: existingSlug, isPublic: true };
+      revalidatePath("/plans");
+      revalidatePath(`/plans/${existingSlug}`);
+      return {
+        ok: true,
+        publicSlug: existingSlug,
+        isPublic: true,
+        newAchievements,
+      };
     }
 
-    for (let i = 0; i < 10; i++) {
-      const slug = randomPublicSlug();
+    const base = defaultPublicTripSlug(id, adventureName);
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const slug =
+        attempt === 0
+          ? base
+          : `${slugifyAdventureName(adventureName)}-${randomSlugSuffix()}`;
       const { error } = await supabase
         .from("trips")
         .update({
@@ -360,13 +466,21 @@ export async function updateTripSharingAction(input: {
           public_slug: slug,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", input.tripId)
+        .eq("id", tripId)
         .eq("owner_id", user.id);
 
       if (!error) {
+        const sh = await awardAchievementAction("first_share");
+        if (sh.ok && sh.justEarned) newAchievements.push("first_share");
         revalidatePlanner();
-        revalidatePath(`/p/${slug}`);
-        return { ok: true, publicSlug: slug, isPublic: true };
+        revalidatePath("/plans");
+        revalidatePath(`/plans/${slug}`);
+        return {
+          ok: true,
+          publicSlug: slug,
+          isPublic: true,
+          newAchievements,
+        };
       }
       const code = (error as { code?: string }).code;
       if (code !== "23505") {
@@ -374,6 +488,169 @@ export async function updateTripSharingAction(input: {
       }
     }
     return { ok: false, error: "Could not allocate a unique share link." };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
+  }
+}
+
+function scrubAssignmentsForClone(
+  assignments: Assignments,
+  sourceOwnerCustomTileIds: Set<string>,
+): Assignments {
+  const out: Assignments = {};
+  for (const [dayKey, slots] of Object.entries(assignments)) {
+    if (!slots || typeof slots !== "object") continue;
+    const next: Assignment = {};
+    for (const slot of SLOT_TYPES) {
+      const v = slots[slot];
+      if (!v || typeof v !== "string") continue;
+      if (sourceOwnerCustomTileIds.has(v)) continue;
+      next[slot] = v;
+    }
+    if (Object.keys(next).length > 0) out[dayKey] = next;
+  }
+  return out;
+}
+
+export async function cloneTripAction(
+  sourceTripId: string,
+): Promise<
+  | {
+      ok: true;
+      newTripId: string;
+      newAchievements: string[];
+      skippedCustomTiles: number;
+    }
+  | { ok: false; error: string }
+> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { ok: false, error: "Not signed in." };
+
+    if (!(await currentUserCanCreateTrip())) {
+      return { ok: false, error: "TIER_LIMIT" };
+    }
+
+    const supabase = await createClient();
+    const { data: rawSource, error: srcErr } = await supabase
+      .from("trips")
+      .select("*")
+      .eq("id", sourceTripId)
+      .maybeSingle();
+
+    if (srcErr || !rawSource) return { ok: false, error: "Trip not found." };
+
+    const source = mapTripRow(rawSource as Record<string, unknown>);
+    const canClone =
+      source.is_public || source.owner_id === user.id;
+    if (!canClone) return { ok: false, error: "Trip not found." };
+
+    const ownerCustom = await getUserCustomTiles(source.owner_id);
+    const customIds = new Set(ownerCustom.map((t) => t.id));
+    const cleaned = scrubAssignmentsForClone(source.assignments, customIds);
+    const countSlots = (a: Assignments) => {
+      let n = 0;
+      for (const s of Object.values(a)) {
+        for (const slot of SLOT_TYPES) {
+          if (s[slot]) n += 1;
+        }
+      }
+      return n;
+    };
+    const skippedCustomTiles =
+      countSlots(source.assignments) - countSlots(cleaned);
+
+    const tripCount = await getUserTripCount(user.id);
+    const adventureName =
+      tripCount === 0
+        ? `${source.adventure_name.trim()} (cloned)`
+        : source.adventure_name.trim();
+
+    const legacyDestination = source.region_id
+      ? legacyDestinationFromRegionId(source.region_id)
+      : source.destination;
+
+    const row = {
+      owner_id: user.id,
+      region_id: source.region_id,
+      family_name: source.family_name.trim(),
+      adventure_name: adventureName,
+      destination: legacyDestination,
+      start_date: source.start_date,
+      end_date: source.end_date,
+      has_cruise: source.has_cruise,
+      cruise_embark: source.cruise_embark,
+      cruise_disembark: source.cruise_disembark,
+      assignments: cleaned,
+      preferences: { ...source.preferences },
+      is_public: false,
+      public_slug: null as string | null,
+      adults: source.adults,
+      children: source.children,
+      child_ages: [...source.child_ages],
+      notes: source.notes,
+    };
+
+    const { data: inserted, error: insErr } = await supabase
+      .from("trips")
+      .insert(row)
+      .select("id")
+      .single();
+
+    if (insErr || !inserted?.id) {
+      return { ok: false, error: insErr?.message ?? "Insert failed." };
+    }
+
+    const newTripId = String(inserted.id);
+    const newAchievements: string[] = [];
+
+    const fc = await awardAchievementAction("first_clone");
+    if (fc.ok && fc.justEarned) newAchievements.push("first_clone");
+
+    try {
+      const admin = createServiceRoleClient();
+      const { data: srcMeta } = await admin
+        .from("trips")
+        .select("clone_count, owner_id")
+        .eq("id", sourceTripId)
+        .maybeSingle();
+      const prev = Number(
+        (srcMeta as { clone_count?: number } | null)?.clone_count ?? 0,
+      );
+      const ownerId = String(
+        (srcMeta as { owner_id?: string } | null)?.owner_id ?? source.owner_id,
+      );
+      const next = prev + 1;
+      await admin
+        .from("trips")
+        .update({ clone_count: next })
+        .eq("id", sourceTripId);
+      if (next === 10) {
+        await tryAwardAchievementForUserId(ownerId, "clones_10");
+      }
+    } catch {
+      /* non-fatal */
+    }
+
+    await syncTripLifecycleEmailQueue({
+      supabase,
+      userId: user.id,
+      tripId: newTripId,
+      startDate: source.start_date,
+      endDate: source.end_date,
+    });
+
+    revalidatePlanner();
+    revalidatePath("/plans");
+    return {
+      ok: true,
+      newTripId,
+      newAchievements,
+      skippedCustomTiles,
+    };
   } catch (e) {
     return {
       ok: false,
@@ -421,7 +698,7 @@ export async function updateTripPreferencesPatchAction(input: {
 
     if (error) return { ok: false, error: error.message };
     revalidatePlanner();
-    revalidatePath("/p", "layout");
+    revalidatePath("/plans");
     return { ok: true };
   } catch (e) {
     return {

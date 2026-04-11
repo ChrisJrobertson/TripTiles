@@ -22,6 +22,7 @@ import { Palette } from "@/components/planner/Palette";
 import { PlannerActionsMenu } from "@/components/planner/PlannerActionsMenu";
 import { PlannerTopNotices } from "@/components/planner/PlannerTopNotices";
 import { SavingIndicator } from "@/components/planner/SavingIndicator";
+import { FamilyInvitePanel } from "@/components/planner/FamilyInvitePanel";
 import { ShareTripPanel } from "@/components/planner/ShareTripPanel";
 import {
   SmartPlanModal,
@@ -752,13 +753,16 @@ export function PlannerClient({
             </div>
           ) : null}
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <ShareTripPanel
               tripId={activeTrip.id}
               isPublic={activeTrip.is_public}
               publicSlug={activeTrip.public_slug}
               siteUrl={siteUrl}
+              cloneCount={activeTrip.clone_count ?? 0}
+              viewCount={activeTrip.view_count ?? 0}
             />
+            <FamilyInvitePanel tripId={activeTrip.id} userTier={userTier} />
             <DayNotesPanel trip={activeTrip} tripId={activeTrip.id} />
           </div>
 

@@ -202,6 +202,10 @@ export interface Trip {
   notes: string | null;
   is_public: boolean;
   public_slug: string | null;
+  /** Total clones of this trip (public viral loop). */
+  clone_count?: number;
+  /** Public plan page views (best-effort). */
+  view_count?: number;
   last_opened_at: string;
   created_at: string;
   updated_at: string;

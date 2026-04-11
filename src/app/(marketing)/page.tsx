@@ -1,5 +1,10 @@
+import { getAllRegions } from "@/lib/db/regions";
+import { getFeaturedPublicTrips } from "@/lib/db/trips";
+import type { Trip } from "@/lib/types";
 import type { Metadata } from "next";
 import Link from "next/link";
+
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "TripTiles — Visual theme park trip planner",
@@ -7,15 +12,30 @@ export const metadata: Metadata = {
     "Plan your theme park holiday on one calendar — parks, dining, Smart Plan AI, and Trip Passport stamps.",
 };
 
-export default function MarketingHomePage() {
+export default async function MarketingHomePage() {
+  let featuredTrips: Trip[] = [];
+  try {
+    featuredTrips = await getFeaturedPublicTrips(6);
+  } catch {
+    featuredTrips = [];
+  }
+  const allRegions = await getAllRegions().catch(() => []);
+  const regionById = new Map(allRegions.map((r) => [r.id, r]));
+
   return (
     <div className="flex min-h-screen flex-col bg-cream">
       <header className="sticky top-0 z-20 border-b border-royal/10 bg-cream/95 px-6 py-4 backdrop-blur-sm">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
-          <span className="font-serif text-xl font-semibold tracking-tight text-gold md:text-2xl">
+          <Link
+            href="/"
+            className="font-serif text-xl font-semibold tracking-tight text-gold md:text-2xl"
+          >
             TripTiles
-          </span>
+          </Link>
           <nav className="flex flex-wrap items-center justify-end gap-x-5 gap-y-2 font-sans text-sm">
+            <Link href="/plans" className="text-royal/80 hover:text-royal">
+              Browse plans
+            </Link>
             <Link href="/pricing" className="text-royal/80 hover:text-royal">
               Pricing
             </Link>
@@ -70,6 +90,57 @@ export default function MarketingHomePage() {
             </div>
           </div>
         </section>
+
+        {featuredTrips.length > 0 ? (
+          <section className="border-t border-royal/10 bg-white/70 px-6 py-16">
+            <div className="mx-auto max-w-5xl">
+              <h2 className="text-center font-serif text-2xl font-semibold text-royal md:text-3xl">
+                Loved by families
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-center font-sans text-sm text-royal/75">
+                Real itineraries shared by the community. Open a plan or clone
+                it into your account.
+              </p>
+              <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {featuredTrips.map((trip) => {
+                  const slug = trip.public_slug;
+                  if (!slug) return null;
+                  const reg = trip.region_id
+                    ? regionById.get(trip.region_id)
+                    : null;
+                  return (
+                    <li key={trip.id}>
+                      <Link
+                        href={`/plans/${slug}`}
+                        className="block h-full rounded-2xl border border-royal/10 bg-cream p-5 text-left shadow-sm transition hover:border-gold/40 hover:shadow-md"
+                      >
+                        <p className="font-sans text-xs font-semibold uppercase tracking-wide text-gold">
+                          {(reg?.flag_emoji ?? "").trim()}{" "}
+                          {reg?.short_name?.trim() || reg?.name || "Trip"}
+                        </p>
+                        <p className="mt-2 font-serif text-lg font-semibold text-royal">
+                          {trip.adventure_name}
+                        </p>
+                        <p className="mt-2 font-sans text-xs text-royal/55">
+                          {trip.clone_count ?? 0} clones · {trip.view_count ?? 0}{" "}
+                          views
+                        </p>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="mt-10 text-center">
+                <Link
+                  href="/plans"
+                  className="inline-flex min-h-11 items-center justify-center rounded-lg border border-royal/20 bg-white px-6 py-2.5 font-sans text-sm font-semibold text-royal transition hover:border-gold/50"
+                >
+                  See all community plans
+                </Link>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         <section className="border-t border-royal/10 bg-white/60 px-6 py-16">
           <div className="mx-auto grid max-w-5xl gap-10 sm:grid-cols-2 lg:grid-cols-4 md:gap-8">
@@ -135,6 +206,9 @@ export default function MarketingHomePage() {
               TripTiles
             </span>
             <div className="flex flex-wrap justify-center gap-6 font-sans text-sm text-royal/70">
+              <Link href="/plans" className="hover:text-royal">
+                Browse plans
+              </Link>
               <Link href="/pricing" className="hover:text-royal">
                 Pricing
               </Link>
