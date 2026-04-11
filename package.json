@@ -8,7 +8,8 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
-    "smoke": "node --env-file=.env.local --import tsx scripts/smoke-test-supabase.ts"
+    "smoke": "node --env-file=.env.local --import tsx scripts/smoke-test-supabase.ts",
+    "deploy:vercel": "vercel --prod --yes"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.87.0",
@@ -30,6 +31,7 @@
     "eslint-config-next": "15.5.15",
     "tailwindcss": "^4",
     "tsx": "^4.19.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vercel": "^50.44.0"
   }
 }
