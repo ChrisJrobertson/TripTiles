@@ -46,7 +46,10 @@ import {
   plannerUserDayNotes,
 } from "@/lib/planner-note-maps";
 import { getTierConfig } from "@/lib/tiers";
-import { useToast } from "@/lib/toast";
+import {
+  notifyStaleServerActionIfNeeded,
+  showToast,
+} from "@/lib/toast";
 import type {
   AchievementDefinition,
   Assignments,
@@ -138,7 +141,6 @@ export function PlannerClient({
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const { message: toastMessage, show: showToast } = useToast();
 
   const achievementDefByKey = useMemo(
     () => new Map(achievementDefs.map((d) => [d.key, d])),
@@ -292,7 +294,7 @@ export function PlannerClient({
     );
     router.replace("/planner");
     router.refresh();
-  }, [initialTileScrubNotice, router, showToast]);
+  }, [initialTileScrubNotice, router]);
 
   useEffect(() => {
     if (!initialOpenSmartPlan) return;
@@ -386,7 +388,7 @@ export function PlannerClient({
     const url = slug ? `${base}/plans/${slug}` : window.location.href;
     void navigator.clipboard?.writeText(url);
     showToast("Link copied");
-  }, [activeTripId, trips, siteUrl, showToast]);
+  }, [activeTripId, trips, siteUrl]);
 
   const handleAddCustom = useCallback(
     (group: string) => {
@@ -418,7 +420,7 @@ export function PlannerClient({
       setCustomTiles((prev) => prev.filter((t) => t.id !== tileId));
       startTransition(() => router.refresh());
     },
-    [router, showToast],
+    [router],
   );
 
   const handleCustomTileSuccess = useCallback(
@@ -466,7 +468,7 @@ export function PlannerClient({
         })();
       }, ASSIGN_DEBOUNCE_MS);
     },
-    [clearAssignTimer, router, showToast, withSaving],
+    [clearAssignTimer, router, withSaving],
   );
 
   useEffect(() => {
@@ -546,6 +548,15 @@ export function PlannerClient({
         enqueueAchievementKeys(res.newAchievements);
         setSmartOpen(false);
         startTransition(() => router.refresh());
+      } catch (e) {
+        if (notifyStaleServerActionIfNeeded(e)) {
+          setSmartError(null);
+          return;
+        }
+        const msg =
+          e instanceof Error ? e.message : "Something went wrong. Try again.";
+        setSmartError(msg);
+        showToast(msg);
       } finally {
         setIsAiGenerating(false);
       }
@@ -555,7 +566,6 @@ export function PlannerClient({
       applyLocalPatch,
       enqueueAchievementKeys,
       router,
-      showToast,
       trips,
     ],
   );
@@ -623,7 +633,7 @@ export function PlannerClient({
     }
     showToast("Smart Plan undone — your previous trip is restored");
     startTransition(() => router.refresh());
-  }, [activeTripId, router, showToast]);
+  }, [activeTripId, router]);
 
   const wizardInitial = (): Partial<Trip> => {
     if (wizardEditId) {
@@ -1162,11 +1172,6 @@ export function PlannerClient({
         ))}
       </div>
 
-      {toastMessage ? (
-        <div className="fixed bottom-6 left-1/2 z-[80] max-w-[min(90vw,20rem)] -translate-x-1/2 rounded-full bg-royal px-4 py-2 text-center font-sans text-sm text-cream shadow-lg">
-          {toastMessage}
-        </div>
-      ) : null}
     </div>
   );
 }

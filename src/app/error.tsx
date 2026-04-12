@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  isStaleServerActionError,
+  notifyStaleServerActionIfNeeded,
+} from "@/lib/toast";
 import Link from "next/link";
 import { useEffect } from "react";
 
@@ -10,8 +14,11 @@ export default function AppError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const staleAction = isStaleServerActionError(error);
+
   useEffect(() => {
     console.error("[TripTiles]", error);
+    notifyStaleServerActionIfNeeded(error);
   }, [error]);
 
   return (
@@ -21,8 +28,21 @@ export default function AppError({
           Something went wrong
         </h1>
         <p className="mt-3 font-sans text-sm leading-relaxed text-royal/75">
-          Your work is usually saved automatically. Try again — if this keeps
-          happening, use Feedback from the menu and we&apos;ll dig in.
+          {staleAction ? (
+            <>
+              This page is out of date compared to the server — usually after
+              we ship an update.{" "}
+              <strong className="font-semibold text-royal">
+                Refresh the page
+              </strong>{" "}
+              and try again; your trip data is still saved.
+            </>
+          ) : (
+            <>
+              Your work is usually saved automatically. Try again — if this
+              keeps happening, use Feedback from the menu and we&apos;ll dig in.
+            </>
+          )}
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <button

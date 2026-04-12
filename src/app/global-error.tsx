@@ -1,5 +1,6 @@
 "use client";
 
+import { isStaleServerActionError } from "@/lib/toast";
 import { logClientError } from "@/lib/telemetry/log-error";
 import Link from "next/link";
 import { useEffect } from "react";
@@ -11,6 +12,8 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const staleAction = isStaleServerActionError(error);
+
   useEffect(() => {
     void logClientError(error, { boundary: "global" });
   }, [error]);
@@ -21,8 +24,18 @@ export default function GlobalError({
         <div style={{ padding: 40, maxWidth: 520, fontFamily: "Georgia, serif" }}>
           <h1 style={{ fontSize: "1.75rem" }}>Something went wrong</h1>
           <p style={{ fontFamily: "system-ui, sans-serif", lineHeight: 1.5 }}>
-            We&apos;ve logged this and will look into it. You can try again or
-            head home.
+            {staleAction ? (
+              <>
+                This page is out of date compared to the server (for example
+                after an update). Refresh the page, then try again — your data
+                is still on the server.
+              </>
+            ) : (
+              <>
+                We&apos;ve logged this and will look into it. You can try again
+                or head home.
+              </>
+            )}
           </p>
           <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
             <button
