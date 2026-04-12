@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     template: "%s · TripTiles",
   },
   description:
-    "AI-powered trip planner for theme park holidays worldwide. Build beautiful, printable itineraries for Disney, Universal, and 300+ parks across 45 destinations.",
+    "Ellie-powered trip planner for theme park holidays worldwide. Build beautiful, printable itineraries for Disney, Universal, and 300+ parks across 45 destinations.",
   keywords: [
     "theme park planner",
     "Disney World itinerary",
@@ -47,7 +47,7 @@ export const metadata: Metadata = {
     creator: "@triptiles",
     title: "TripTiles",
     description:
-      "Plan theme park trips on one visual calendar — AI itineraries, PDF export, Trip Passport.",
+      "Plan theme park trips on one visual calendar — Smart Plan, PDF export, Trip Passport.",
   },
 };
 

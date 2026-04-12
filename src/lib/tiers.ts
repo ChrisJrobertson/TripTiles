@@ -103,7 +103,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     name: "Premium",
     price_gbp: 59.99,
     price_pence: 5999,
-    description: "The best AI plans and premium extras",
+    description: "The richest Smart Plan experience and premium extras",
     payhip_url: envPayhipUrl("premium"),
     features: {
       max_trips: null,

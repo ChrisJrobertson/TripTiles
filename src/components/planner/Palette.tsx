@@ -1,6 +1,8 @@
 "use client";
 
+import { RegionalDiningSection } from "@/components/planner/RegionalDiningSection";
 import { GROUP_META, GROUP_ORDER } from "@/lib/group-meta";
+import { isCruisePaletteTileName } from "@/lib/cruise-tiles";
 import { parkMatchesPlannerRegion } from "@/lib/park-matches-planner-region";
 import type { CustomTile, Park } from "@/lib/types";
 import { useMemo, useState } from "react";
@@ -10,6 +12,8 @@ type Props = {
   customTiles: CustomTile[];
   /** `regions.id` for the active trip; filters via `park.region_ids`. */
   regionId: string | null;
+  /** When false, cruise/ship tiles are hidden from the drawer (client-side). */
+  showCruiseTiles: boolean;
   selectedParkId: string | null;
   onSelectPark: (id: string | null) => void;
   onAddCustom: (group: string) => void;
@@ -21,6 +25,7 @@ export function Palette({
   parks,
   customTiles,
   regionId,
+  showCruiseTiles,
   selectedParkId,
   onSelectPark,
   onAddCustom,
@@ -29,10 +34,11 @@ export function Palette({
 }: Props) {
   const [menuTileId, setMenuTileId] = useState<string | null>(null);
 
-  const builtInForRegion = useMemo(
-    () => parks.filter((p) => parkMatchesPlannerRegion(p, regionId)),
-    [parks, regionId],
-  );
+  const builtInForRegion = useMemo(() => {
+    const raw = parks.filter((p) => parkMatchesPlannerRegion(p, regionId));
+    if (showCruiseTiles) return raw;
+    return raw.filter((p) => !isCruisePaletteTileName(p.name));
+  }, [parks, regionId, showCruiseTiles]);
 
   const hasCatalog = builtInForRegion.length > 0;
   const hasCustom = customTiles.length > 0;
@@ -64,7 +70,8 @@ export function Palette({
           const groupParks = parks.filter(
             (p) =>
               p.park_group === groupKey &&
-              parkMatchesPlannerRegion(p, regionId),
+              parkMatchesPlannerRegion(p, regionId) &&
+              (showCruiseTiles || !isCruisePaletteTileName(p.name)),
           );
           const groupCustom = customTiles.filter(
             (t) => t.park_group === groupKey,
@@ -207,6 +214,7 @@ export function Palette({
           );
         })}
       </div>
+      <RegionalDiningSection regionId={regionId} />
     </aside>
   );
 }

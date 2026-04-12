@@ -9,7 +9,7 @@ const site = getPublicSiteUrl() || "https://www.triptiles.app";
 export const metadata: Metadata = {
   title: "Create account",
   description:
-    "Create your free TripTiles account — theme park planner with AI and PDF export.",
+    "Create your free TripTiles account — theme park planner with Smart Plan and PDF export.",
   openGraph: {
     title: "Create account · TripTiles",
     description: "Free TripTiles account — no credit card required.",

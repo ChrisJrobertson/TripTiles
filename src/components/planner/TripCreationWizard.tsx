@@ -16,7 +16,7 @@ import type {
 } from "@/lib/types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { TripThemePicker } from "./TripThemePicker";
 
 export type TripCreationWizardProps = {
@@ -25,6 +25,8 @@ export type TripCreationWizardProps = {
   includeWelcome: boolean;
   firstName?: string;
   onCancel: () => void;
+  /** Called after the trip is created successfully (closes planner overlay). */
+  onTripCreated?: () => void;
   /** Full-page onboarding vs modal overlay from planner. */
   variant?: "page" | "modal";
 };
@@ -47,11 +49,13 @@ export function TripCreationWizard({
   includeWelcome,
   firstName,
   onCancel,
+  onTripCreated,
   variant = "page",
 }: TripCreationWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(includeWelcome ? 0 : 1);
   const [regionId, setRegionId] = useState<string | null>(null);
+  const [includesCruise, setIncludesCruise] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [adults, setAdults] = useState(2);
@@ -89,6 +93,10 @@ export function TripCreationWizard({
       (p) => !p.is_custom && parkMatchesPlannerRegion(p, regionId),
     );
   }, [parks, regionId]);
+
+  useEffect(() => {
+    if (regionId === "cruise") setIncludesCruise(true);
+  }, [regionId]);
 
   const maxStep = 7;
   const progressLabel = includeWelcome
@@ -158,13 +166,14 @@ export function TripCreationWizard({
     setBusy(true);
     setErr(null);
     try {
+      const hasCruise = regionId === "cruise" || includesCruise;
       const res = await createTripAction({
         familyName: "My family",
         adventureName: name,
         regionId,
         startDate,
         endDate,
-        hasCruise: false,
+        hasCruise,
         adults,
         children,
         childAges,
@@ -183,6 +192,7 @@ export function TripCreationWizard({
         return;
       }
       await touchTripAction(res.tripId);
+      onTripCreated?.();
       if (planPath === "ai") {
         router.replace("/planner?autoGenerate=true");
       } else {
@@ -210,6 +220,8 @@ export function TripCreationWizard({
     adults,
     colourTheme,
     router,
+    onTripCreated,
+    includesCruise,
   ]);
 
   const featured = useMemo(
@@ -291,6 +303,44 @@ export function TripCreationWizard({
                 </button>
               ))}
             </div>
+            {regionId ? (
+              <div className="mt-5 rounded-xl border border-royal/15 bg-cream/80 p-4">
+                <p className="font-sans text-sm font-semibold text-royal">
+                  Does your trip include a cruise?
+                </p>
+                {regionId === "cruise" ? (
+                  <p className="mt-2 font-sans text-sm text-royal/75">
+                    You&apos;ve picked a cruise-focused region — ship and port
+                    tiles stay available in your drawer.
+                  </p>
+                ) : (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIncludesCruise(false)}
+                      className={`min-h-[44px] flex-1 rounded-lg border px-3 py-2 font-sans text-sm font-semibold transition ${
+                        !includesCruise
+                          ? "border-royal bg-royal text-cream"
+                          : "border-royal/25 bg-white text-royal"
+                      }`}
+                    >
+                      No
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIncludesCruise(true)}
+                      className={`min-h-[44px] flex-1 rounded-lg border px-3 py-2 font-sans text-sm font-semibold transition ${
+                        includesCruise
+                          ? "border-royal bg-royal text-cream"
+                          : "border-royal/25 bg-white text-royal"
+                      }`}
+                    >
+                      Yes
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -437,12 +487,12 @@ export function TripCreationWizard({
                   ✨
                 </span>
                 <span className="mt-2 font-serif text-lg font-semibold text-royal">
-                  Let AI build my plan
+                  Let Ellie build my plan
                 </span>
                 <p className="mt-2 flex-1 font-sans text-sm text-royal/80">
-                  Answer a few questions about your trip and Claude AI will
-                  create a complete day-by-day itinerary in seconds. Tweak
-                  everything afterwards.
+                  Answer a few questions about your trip and Ellie will create a
+                  complete day-by-day itinerary in seconds. Tweak everything
+                  afterwards.
                 </p>
                 <span className="mt-2 inline-block rounded-full border border-gold/40 px-2 py-0.5 font-sans text-[0.65rem] font-semibold text-royal">
                   Smart Plan ✨
@@ -559,7 +609,7 @@ export function TripCreationWizard({
 
             <section>
               <h2 className="font-sans text-sm font-semibold text-royal">
-                Anything else Claude should know? (optional)
+                Anything else Ellie should know? (optional)
               </h2>
               <textarea
                 className="mt-2 min-h-[100px] w-full rounded-lg border-2 border-royal/20 px-3 py-2 font-sans text-sm"

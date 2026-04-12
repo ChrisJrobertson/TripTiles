@@ -19,7 +19,7 @@ const DEFAULT_FREE_CAP = 5;
 export type SmartPlanGeneratePayload = {
   mode: "smart" | "custom";
   userPrompt: string;
-  /** When true, AI overwrites existing calendar tiles where it outputs a slot. */
+  /** When true, Smart Plan overwrites existing calendar tiles where it outputs a slot. */
   replaceExistingTiles: boolean;
   /** Smart mode only — saved to the trip before generation. */
   planningPreferences?: TripPlanningPreferences | null;
@@ -141,10 +141,10 @@ export function SmartPlanModal({
           id="smart-plan-title"
           className="font-serif text-xl font-semibold text-royal"
         >
-          Let AI build your itinerary
+          Let Ellie build your itinerary
         </h2>
         <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
-          Tell Claude your priorities and it&apos;ll fill your calendar with
+          Tell Ellie your priorities — Ellie will fill your calendar with
           the best parks, dining, and activities for your family.
         </p>
         <p className="mt-1 font-sans text-xs leading-relaxed text-royal/60">
@@ -156,7 +156,7 @@ export function SmartPlanModal({
           className="mt-4 rounded-xl border border-amber-200/90 bg-amber-50/95 px-3 py-2.5 font-sans text-xs leading-relaxed text-royal/90"
           role="note"
         >
-          <strong className="font-semibold text-royal">AI disclaimer:</strong>{" "}
+          <strong className="font-semibold text-royal">Smart Plan disclaimer:</strong>{" "}
           Smart Plan is a draft. It can make mistakes — always verify park
           hours, refurbishments, and reservations with official sources before
           you travel.
@@ -316,7 +316,7 @@ export function SmartPlanModal({
 
                 <section>
                   <h3 className="font-sans text-sm font-semibold text-royal">
-                    Anything else Claude should know? (optional)
+                    Anything else Ellie should know? (optional)
                   </h3>
                   <textarea
                     className="mt-2 min-h-[88px] w-full resize-y rounded-lg border border-royal/25 px-3 py-2 font-sans text-sm text-royal placeholder:text-royal/35"
@@ -371,7 +371,7 @@ export function SmartPlanModal({
             </p>
           ) : (
             <p className="font-sans text-xs text-royal/60">
-              Your plan includes premium AI models and higher limits.
+              Your plan includes premium Smart Plan models and higher limits.
             </p>
           )}
 
@@ -395,7 +395,7 @@ export function SmartPlanModal({
               />
               <span className="min-w-0">
                 <span className="block font-sans text-sm font-semibold text-royal">
-                  Overwrite my existing tiles where the AI suggests something
+                  Overwrite my existing tiles where Smart Plan suggests something
                 </span>
                 <span className="mt-1 block text-xs leading-relaxed text-royal/65">
                   Enable this for a full redo: any slot the model outputs can

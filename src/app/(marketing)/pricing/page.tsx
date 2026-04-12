@@ -9,7 +9,7 @@ const siteUrl =
 export const metadata: Metadata = {
   title: "Pricing - TripTiles",
   description:
-    "One-time pricing for TripTiles — unlimited trips, Smart Plan AI, and Trip Passport. No subscriptions.",
+    "One-time pricing for TripTiles — unlimited trips, Smart Plan with Ellie, and Trip Passport. No subscriptions.",
   openGraph: {
     title: "Pricing - TripTiles",
     description:
@@ -54,7 +54,7 @@ const FAQ = [
   },
   {
     q: "Why is Premium worth it?",
-    a: "Premium uses Claude Sonnet for noticeably richer itineraries, plus premium PDF layout and priority email support.",
+    a: "Premium uses our Sonnet-based Smart Plan for noticeably richer itineraries, plus premium PDF layout and priority email support.",
   },
   {
     q: "Is my data safe?",
@@ -153,8 +153,8 @@ export default function PricingPage() {
                   <li className="flex gap-2">
                     <span className="text-gold">✓</span>
                     {cfg.features.max_ai_per_trip == null
-                      ? "Unlimited AI plans (Smart Plan)"
-                      : `${cfg.features.max_ai_per_trip} AI plans per trip`}
+                      ? "Unlimited Smart Plan"
+                      : `${cfg.features.max_ai_per_trip} Smart Plan runs per trip`}
                   </li>
                   <li className="flex gap-2">
                     <span className="text-gold">✓</span>
@@ -181,7 +181,7 @@ export default function PricingPage() {
                   {cfg.features.ai_model === "claude-sonnet-4-6" ? (
                     <li className="flex gap-2">
                       <span className="text-gold">✓</span>
-                      Enhanced AI with Claude Sonnet
+                      Enhanced Smart Plan (Sonnet model)
                     </li>
                   ) : null}
                   {cfg.features.pdf_design === "premium" ? (

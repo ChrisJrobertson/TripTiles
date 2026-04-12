@@ -28,7 +28,7 @@ export function EmptyCalendarCta({ onGenerateAi, onAddManually }: Props) {
           onClick={onGenerateAi}
           className="min-h-[44px] flex-1 rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 py-3 font-serif text-sm font-semibold text-royal shadow-sm transition hover:opacity-95"
         >
-          Generate AI plan ✨
+          Ask El&apos;s to plan ✨
         </button>
         <button
           type="button"

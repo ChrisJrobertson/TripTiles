@@ -49,7 +49,7 @@ export default async function Image() {
             opacity: 0.9,
           }}
         >
-          300+ parks · 45 destinations · AI-powered
+          300+ parks · 45 destinations · Ellie-powered
         </div>
       </div>
     ),

@@ -14,11 +14,11 @@ const site = getPublicSiteUrl() || "https://www.triptiles.app";
 export const metadata: Metadata = {
   title: "TripTiles — Plan your theme park trips in minutes",
   description:
-    "AI-powered itineraries for Disney, Universal, and 300+ parks worldwide. Beautiful PDFs. Family-friendly pricing.",
+    "Ellie-powered itineraries for Disney, Universal, and 300+ parks worldwide. Beautiful PDFs. Family-friendly pricing.",
   openGraph: {
     title: "TripTiles — Plan your theme park trips in minutes",
     description:
-      "AI itineraries, crowd-aware scheduling, and print-ready PDFs for theme park holidays.",
+      "Smart Plan itineraries, crowd-aware scheduling, and print-ready PDFs for theme park holidays.",
     url: site,
     siteName: "TripTiles",
     locale: "en_GB",
@@ -29,15 +29,15 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "TripTiles",
     description:
-      "Plan theme park trips on one visual calendar — AI, PDFs, Trip Passport.",
+      "Plan theme park trips on one visual calendar — Smart Plan, PDFs, Trip Passport.",
   },
 };
 
 const FEATURES = [
   {
     icon: "🤖",
-    title: "AI trip planning",
-    body: "Claude AI drafts a day-by-day plan using crowd patterns and your group.",
+    title: "Ellie-powered planning",
+    body: "Ellie drafts a day-by-day plan using crowd patterns and your group.",
   },
   {
     icon: "📅",
@@ -80,8 +80,8 @@ const FAQ = [
     a: "Yes — a free account saves your trips, achievements, and Smart Plan history.",
   },
   {
-    q: "How accurate are the AI plans?",
-    a: "Claude uses heuristic crowd data — always verify park hours and tickets before you travel.",
+    q: "How accurate are Smart Plan drafts?",
+    a: "Ellie uses heuristic crowd data — always verify park hours and tickets before you travel.",
   },
   {
     q: "Can I share with my family?",
@@ -122,7 +122,7 @@ export default async function MarketingHomePage() {
               Plan your theme park trip in minutes, not hours
             </h1>
             <p className="mt-6 max-w-xl font-sans text-lg leading-relaxed text-royal/80">
-              Plan every detail yourself, or let AI build your itinerary in
+              Plan every detail yourself, or let Ellie build your itinerary in
               seconds — then export a beautiful PDF to take with you. Disney,
               Universal, and 300+ parks worldwide. Family-friendly pricing.
             </p>
@@ -194,7 +194,7 @@ export default async function MarketingHomePage() {
                 Fill your calendar
               </h3>
               <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
-                Drag tiles on yourself, or run Smart Plan and let Claude draft
+                Drag tiles on yourself, or run Smart Plan and let Ellie draft
                 days from crowd patterns, your dates, and group size — then edit
                 freely.
               </p>
@@ -327,7 +327,7 @@ export default async function MarketingHomePage() {
               <p className="mt-2 font-serif text-3xl text-gold">£0</p>
               <p className="mt-3 font-sans text-xs text-royal/70">
                 {tierFree.features.max_trips ?? 1} trip ·{" "}
-                {tierFree.features.max_ai_per_trip ?? 5} AI plans per trip
+                {tierFree.features.max_ai_per_trip ?? 5} Smart Plan runs per trip
               </p>
             </div>
             <div className="rounded-2xl border-2 border-gold/50 bg-white p-6 text-center shadow-md">
@@ -341,7 +341,7 @@ export default async function MarketingHomePage() {
                 £{tierPro.price_gbp.toFixed(2)}
               </p>
               <p className="mt-3 font-sans text-xs text-royal/70">
-                Unlimited trips, AI, and custom tiles
+                Unlimited trips, Smart Plan, and custom tiles
               </p>
             </div>
             <div className="rounded-2xl border border-royal/10 bg-cream p-6 text-center">
@@ -363,7 +363,7 @@ export default async function MarketingHomePage() {
                 £{tierPremium.price_gbp.toFixed(2)}
               </p>
               <p className="mt-3 font-sans text-xs text-royal/70">
-                Enhanced AI (Claude Sonnet)
+                Enhanced Smart Plan (Sonnet model)
               </p>
             </div>
           </div>

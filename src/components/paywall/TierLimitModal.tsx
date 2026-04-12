@@ -25,7 +25,7 @@ function headingFor(v: Variant): string {
 function subFor(v: Variant): string {
   switch (v) {
     case "ai":
-      return "Pro and above include unlimited AI plans for every trip.";
+      return "Pro and above include unlimited Smart Plan for every trip.";
     case "custom":
       return "Pro and above include unlimited custom tiles for your calendar.";
     default:

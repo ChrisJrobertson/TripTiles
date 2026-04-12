@@ -15,6 +15,8 @@ import type { UserTier } from "@/lib/types";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+/** Smart Plan server action can run up to Vercel Pro limit while generating. */
+export const maxDuration = 60;
 
 function firstParam(
   v: string | string[] | undefined,

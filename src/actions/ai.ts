@@ -21,6 +21,7 @@ import { currentUserCanGenerateAI } from "@/lib/entitlements";
 import { getSuccessfulAiGenerationCountForTrip } from "@/lib/db/ai-generations";
 import { getCrowdPatternsForParkIds } from "@/lib/data/crowd-patterns";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { formatRegionalDiningForPrompt } from "@/data/regional-dining";
 import { formatPlanningPreferencesForPrompt } from "@/lib/planning-preferences-prompt";
 import { getTierConfig } from "@/lib/tiers";
 import type { UserTier } from "@/lib/types";
@@ -227,6 +228,8 @@ function buildPlannerUserMessage(params: {
   crowdJson: string;
   /** Structured wizard answers (optional). */
   wizardContext: string | null;
+  /** Nearby dining names for day-note hints only (optional). */
+  diningHint: string | null;
 }): string {
   const {
     mode,
@@ -237,6 +240,7 @@ function buildPlannerUserMessage(params: {
     childAges,
     crowdJson,
     wizardContext,
+    diningHint,
   } = params;
 
   const crowdSection =
@@ -253,13 +257,19 @@ function buildPlannerUserMessage(params: {
 
   const wiz = wizardContext?.trim();
   const wizBlock = wiz ? `\n${wiz}\n` : "";
+  const dine = diningHint?.trim();
+  const dineBlock = dine ? `\n${dine}\n` : "";
+  const cruiseTilePolicy = trip.has_cruise
+    ? "CRUISE TILES: This trip includes a cruise segment. Include cruise embark/disembark and ship activities where appropriate when they fit the dates."
+    : "CRUISE TILES: This trip does not include a cruise. Do not suggest or assign cruise-only, ship-only, or port-excursion tiles (for example at sea, ship pool, shore excursion) unless the traveller has explicitly asked for them in their notes.";
 
   if (mode === "smart") {
     const extra = userPrompt.trim();
     return `${coreTrip}
 
 ${crowdSection}
-${wizBlock}
+${wizBlock}${dineBlock}${cruiseTilePolicy}
+
 SMART PLAN MODE — build a full itinerary using crowd patterns to place busier parks on historically lighter days within this window. The user did not write a long custom brief.
 ${extra ? `Optional family notes from the user:\n${extra}\n` : ""}
 Generate the itinerary JSON now (include crowd_reasoning and day_crowd_notes when possible).`;
@@ -268,7 +278,8 @@ Generate the itinerary JSON now (include crowd_reasoning and day_crowd_notes whe
   return `${coreTrip}
 
 ${crowdSection}
-${wizBlock}
+${wizBlock}${dineBlock}${cruiseTilePolicy}
+
 CUSTOM PROMPT MODE — apply the traveller's preferences first, then use crowd patterns to improve date choices.
 
 Traveller's own words:
@@ -359,7 +370,7 @@ export async function generateAIPlanAction(input: {
     return {
       ok: false,
       error: "TIER_LIMIT",
-      message: "Free plan AI generation limit reached for this trip.",
+      message: "Free plan Smart Plan limit reached for this trip.",
     };
   }
 
@@ -418,6 +429,8 @@ export async function generateAIPlanAction(input: {
         )
       : null;
 
+  const diningHint = formatRegionalDiningForPrompt(trip.region_id);
+
   const composedUserMessage = buildPlannerUserMessage({
     mode: input.mode,
     userPrompt: input.userPrompt,
@@ -427,6 +440,7 @@ export async function generateAIPlanAction(input: {
     childAges,
     crowdJson,
     wizardContext,
+    diningHint,
   });
 
   const model = anthropicModelForTier(tier);
@@ -489,7 +503,7 @@ export async function generateAIPlanAction(input: {
       return {
         ok: false,
         error: "AI_ERROR",
-        message: "The AI returned invalid JSON. Try again.",
+        message: "Ellie returned something we couldn't read. Try again.",
       };
     }
 
@@ -610,7 +624,7 @@ export async function generateAIPlanAction(input: {
       return {
         ok: false,
         error: "AI_ERROR",
-        message: `Could not log AI usage: ${genInsertErr.message}. Your plan may have saved — refresh the page.`,
+        message: `Could not log usage: ${genInsertErr.message}. Your plan may have saved — refresh the page.`,
       };
     }
 
@@ -652,7 +666,7 @@ export async function generateAIPlanAction(input: {
       undoSnapshotAt: now,
     };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Unknown AI error";
+    const msg = e instanceof Error ? e.message : "Unknown error";
     const supabase2 = await createClient();
     await supabase2.from("ai_generations").insert({
       user_id: user.id,

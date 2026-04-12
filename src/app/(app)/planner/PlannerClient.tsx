@@ -43,7 +43,13 @@ import { TripThemePicker } from "@/components/planner/TripThemePicker";
 import { Wizard } from "@/components/planner/Wizard";
 import { TierLimitModal } from "@/components/paywall/TierLimitModal";
 import { formatUndoSnapshotHint } from "@/lib/date-helpers";
+import { isCruisePaletteTileName } from "@/lib/cruise-tiles";
 import { parkMatchesPlannerRegion } from "@/lib/park-matches-planner-region";
+import {
+  sleep,
+  SMART_PLAN_CLIENT_TIMEOUT_MS,
+  withTimeout,
+} from "@/lib/smart-plan-client";
 import { trackEvent } from "@/lib/analytics/client";
 import {
   plannerAiDayCrowdNotes,
@@ -130,6 +136,39 @@ function resolvePaletteRegionId(trip: Trip | null): string | null {
   if (trip.region_id) return trip.region_id;
   if (trip.destination !== "custom") return trip.destination;
   return null;
+}
+
+type SmartGenResult = Awaited<ReturnType<typeof generateAIPlanAction>>;
+
+/** One automatic retry after 2s for timeouts and generic Smart Plan failures. */
+async function runSmartPlanWithTimeoutAndRetry(
+  run: () => Promise<SmartGenResult>,
+  notify: (msg: string) => void,
+): Promise<SmartGenResult> {
+  let res: SmartGenResult;
+  try {
+    res = await withTimeout(run(), SMART_PLAN_CLIENT_TIMEOUT_MS);
+  } catch {
+    res = {
+      ok: false,
+      error: "AI_ERROR",
+      message: "Smart Plan timed out before finishing.",
+    };
+  }
+  if (res.ok) return res;
+  if (res.error === "TIER_LIMIT" || res.error === "NOT_AUTHED") return res;
+  notify("Still working on your plan — hold tight…");
+  await sleep(2000);
+  try {
+    return await withTimeout(run(), SMART_PLAN_CLIENT_TIMEOUT_MS);
+  } catch {
+    return {
+      ok: false,
+      error: "AI_ERROR",
+      message:
+        "Ellie couldn't generate your plan — try again from the planner, or build it yourself.",
+    };
+  }
 }
 
 type AchievementToastItem = { id: string; def: AchievementDefinition };
@@ -276,15 +315,21 @@ export function PlannerClient({
   const calendarParks = useMemo(() => {
     const rid = resolvePaletteRegionId(activeTrip);
     const catalog = parks.filter((p) => parkMatchesPlannerRegion(p, rid));
-    return [...catalog, ...customTilesForPalette.map(customTileToPark)];
+    const filtered =
+      activeTrip?.has_cruise
+        ? catalog
+        : catalog.filter((p) => !isCruisePaletteTileName(p.name));
+    return [...filtered, ...customTilesForPalette.map(customTileToPark)];
   }, [parks, customTilesForPalette, activeTrip]);
 
   const smartPlanParks = useMemo(() => {
     const rid = resolvePaletteRegionId(activeTrip);
     if (!rid) return [];
-    return parks.filter(
+    const raw = parks.filter(
       (p) => !p.is_custom && parkMatchesPlannerRegion(p, rid),
     );
+    if (activeTrip?.has_cruise) return raw;
+    return raw.filter((p) => !isCruisePaletteTileName(p.name));
   }, [parks, activeTrip]);
 
   const remainingCustomCreates = useMemo(() => {
@@ -532,6 +577,28 @@ export function PlannerClient({
     [activeTripId, applyLocalPatch, router],
   );
 
+  const handleTripIncludesCruiseChange = useCallback(
+    async (next: boolean) => {
+      if (!activeTripId) return;
+      const cur = trips.find((t) => t.id === activeTripId);
+      applyLocalPatch(activeTripId, {
+        has_cruise: next,
+        ...(next ? {} : { cruise_embark: null, cruise_disembark: null }),
+      });
+      const res = await updateTripMetadataAction({
+        tripId: activeTripId,
+        hasCruise: next,
+        cruiseEmbark: next ? cur?.cruise_embark ?? null : null,
+        cruiseDisembark: next ? cur?.cruise_disembark ?? null : null,
+      });
+      if (!res.ok) {
+        showToast(res.error);
+        startTransition(() => router.refresh());
+      }
+    },
+    [activeTripId, trips, applyLocalPatch, router],
+  );
+
   const handleSmartPlanGenerate = useCallback(
     async (payload: SmartPlanGeneratePayload) => {
       if (!activeTripId) return;
@@ -562,23 +629,30 @@ export function PlannerClient({
           ? ({ ...tripBefore.preferences } as Record<string, unknown>)
           : ({} as Record<string, unknown>);
         const t = tripBefore;
-        const res = await generateAIPlanAction({
-          tripId: activeTripId,
-          mode: payload.mode,
-          userPrompt: payload.userPrompt,
-          preserveExistingSlots: !payload.replaceExistingTiles,
-        });
+        const res = await runSmartPlanWithTimeoutAndRetry(
+          () =>
+            generateAIPlanAction({
+              tripId: activeTripId,
+              mode: payload.mode,
+              userPrompt: payload.userPrompt,
+              preserveExistingSlots: !payload.replaceExistingTiles,
+            }),
+          showToast,
+        );
         if (!res.ok) {
           if (res.error === "TIER_LIMIT") {
             setTierLimitVariant("ai");
             setTierLimitReason(
-              "You've used all 5 AI plans for this trip. Upgrade to Pro for unlimited AI.",
+              "You've used all 5 Smart Plan runs on the free tier for this trip. Upgrade to Pro for unlimited Smart Plan.",
             );
             setTierLimitOpen(true);
             return;
           }
-          setSmartError(res.message);
-          showToast(res.message);
+          const errMsg =
+            res.message ||
+            "Ellie couldn't generate your plan — try again, or build the calendar yourself.";
+          setSmartError(errMsg);
+          showToast(errMsg);
           return;
         }
         const prefPatch: Record<string, unknown> = {
@@ -648,21 +722,28 @@ export function PlannerClient({
         const snapPreferences = tripBefore?.preferences
           ? ({ ...tripBefore.preferences } as Record<string, unknown>)
           : ({} as Record<string, unknown>);
-        const res = await generateAIPlanAction({
-          tripId: activeTripId,
-          mode: "smart",
-          userPrompt: "",
-          preserveExistingSlots: true,
-        });
+        const res = await runSmartPlanWithTimeoutAndRetry(
+          () =>
+            generateAIPlanAction({
+              tripId: activeTripId,
+              mode: "smart",
+              userPrompt: "",
+              preserveExistingSlots: true,
+            }),
+          showToast,
+        );
         if (!res.ok) {
           if (res.error === "TIER_LIMIT") {
             setTierLimitVariant("ai");
             setTierLimitReason(
-              "You've used all 5 AI plans for this trip. Upgrade to Pro for unlimited AI.",
+              "You've used all 5 Smart Plan runs on the free tier for this trip. Upgrade to Pro for unlimited Smart Plan.",
             );
             setTierLimitOpen(true);
           } else {
-            showToast(res.message);
+            showToast(
+              res.message ||
+                "Ellie couldn't generate your plan — you can try again from the planner, or build it yourself.",
+            );
           }
           startTransition(() => router.replace("/planner"));
           return;
@@ -703,7 +784,9 @@ export function PlannerClient({
           return;
         }
         showToast(
-          e instanceof Error ? e.message : "Smart Plan could not run.",
+          e instanceof Error
+            ? e.message
+            : "Ellie couldn't generate your plan — you can try again from the planner, or build it yourself.",
         );
         startTransition(() => router.replace("/planner"));
       } finally {
@@ -1024,6 +1107,29 @@ export function PlannerClient({
               onExportPdf={() =>
                 document.getElementById("planner-pdf-export-btn")?.click()
               }
+              cruiseSection={
+                activeTrip ? (
+                  <div className="px-3 py-2">
+                    <p className="font-sans text-xs font-semibold text-royal/70">
+                      Cruise segment
+                    </p>
+                    <label className="mt-2 flex min-h-[44px] cursor-pointer items-center justify-between gap-3 rounded-lg border border-royal/15 bg-white px-3 py-2">
+                      <span className="font-sans text-sm text-royal">
+                        Show cruise &amp; ship tiles in the drawer
+                      </span>
+                      <input
+                        type="checkbox"
+                        className="h-5 w-5 shrink-0 rounded border-royal/35 accent-royal"
+                        checked={activeTrip.has_cruise}
+                        onChange={(e) =>
+                          void handleTripIncludesCruiseChange(e.target.checked)
+                        }
+                        aria-label="Show cruise and ship tiles in the parks drawer"
+                      />
+                    </label>
+                  </div>
+                ) : null
+              }
               colourSection={
                 activeTrip ? (
                   <div className="px-2 pb-2 pt-2">
@@ -1078,6 +1184,7 @@ export function PlannerClient({
                 parks={parks}
                 customTiles={customTilesForPalette}
                 regionId={resolvePaletteRegionId(activeTrip)}
+                showCruiseTiles={activeTrip.has_cruise}
                 selectedParkId={selectedParkId}
                 onSelectPark={setSelectedParkId}
                 onAddCustom={handleAddCustom}
@@ -1190,6 +1297,10 @@ export function PlannerClient({
             parks={parks}
             includeWelcome={false}
             variant="modal"
+            onTripCreated={() => {
+              setWizardOpen(false);
+              setWizardFirstRun(false);
+            }}
             onCancel={() => {
               setWizardOpen(false);
               setWizardFirstRun(false);
@@ -1254,7 +1365,8 @@ export function PlannerClient({
             </h2>
             <p className="mt-3 font-sans text-sm text-royal/80">
               This will restore your trip to the state it was in before the
-              last Smart Plan generation. Any AI suggestions will be removed.
+              last Smart Plan generation. Any Smart Plan suggestions will be
+              removed.
               This cannot be undone.
             </p>
             <p className="mt-2 font-sans text-xs text-royal/60">
@@ -1310,8 +1422,8 @@ export function PlannerClient({
             className="inline-block h-10 w-10 animate-spin rounded-full border-2 border-cream/30 border-t-cream"
             aria-hidden
           />
-          <p className="max-w-sm font-serif text-lg font-semibold">
-            Claude is building your itinerary…
+            <p className="max-w-sm font-serif text-lg font-semibold">
+            Ellie is building your itinerary…
           </p>
           <p className="max-w-xs font-sans text-sm text-cream/85">
             This usually takes a few seconds. Your calendar will fill in
