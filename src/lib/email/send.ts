@@ -3,6 +3,7 @@ import { countdownEmailHtml } from "./templates/countdown-3d";
 import { followupEmailHtml } from "./templates/followup-1d";
 import { inviteEmailHtml } from "./templates/invite";
 import { shareNotificationEmailHtml } from "./templates/share-notification";
+import { tripReminderEmailHtml } from "./templates/trip-reminder";
 import { welcomeEmailHtml } from "./templates/welcome";
 
 export type EmailTemplate =
@@ -11,7 +12,8 @@ export type EmailTemplate =
   | "invite"
   | "welcome"
   | "share_notification"
-  | "year_review";
+  | "year_review"
+  | "trip_reminder";
 
 function renderTemplate(
   template: EmailTemplate,
@@ -53,6 +55,18 @@ function renderTemplate(
         html: `<p>Year in review is coming soon.</p>`,
         text: "Year in review is coming soon.",
       };
+    case "trip_reminder":
+      return tripReminderEmailHtml({
+        adventureName: String(data.adventureName ?? "Your trip"),
+        destinationName: String(data.destinationName ?? "your destination"),
+        tripUrl: String(data.tripUrl ?? ""),
+        daysBefore: Number(data.daysBefore ?? 0),
+        subject: String(data.subject ?? "Trip reminder"),
+        bulletLines: Array.isArray(data.bulletLines)
+          ? (data.bulletLines as unknown[]).map((x) => String(x))
+          : [],
+        siteUrl: String(data.siteUrl ?? "https://www.triptiles.app"),
+      });
   }
 }
 

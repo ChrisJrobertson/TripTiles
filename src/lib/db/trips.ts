@@ -83,6 +83,22 @@ export function mapTripRow(row: Record<string, unknown>): Trip {
     colour_theme: normaliseThemeKey(
       row.colour_theme != null ? String(row.colour_theme) : undefined,
     ),
+    email_reminders:
+      row.email_reminders === undefined || row.email_reminders === null
+        ? true
+        : Boolean(row.email_reminders),
+    gallery_owner_label:
+      row.gallery_owner_label != null && String(row.gallery_owner_label).trim()
+        ? String(row.gallery_owner_label).trim()
+        : null,
+    budget_target:
+      row.budget_target != null && row.budget_target !== ""
+        ? Number(row.budget_target)
+        : null,
+    budget_currency:
+      row.budget_currency != null && String(row.budget_currency).trim()
+        ? String(row.budget_currency)
+        : "GBP",
   };
 }
 
@@ -206,30 +222,91 @@ export async function getTripByPublicSlug(
   return mapTripRow(data as Record<string, unknown>);
 }
 
+export type PublicTripListSort = "clones" | "newest" | "longest";
+export type PublicTripLengthBucket = "short" | "medium" | "long";
+
+export function tripCalendarDayCount(trip: {
+  start_date: string;
+  end_date: string;
+}): number {
+  const s = new Date(trip.start_date).getTime();
+  const e = new Date(trip.end_date).getTime();
+  if (Number.isNaN(s) || Number.isNaN(e) || e < s) return 1;
+  return Math.floor((e - s) / 86400000) + 1;
+}
+
+function lengthBucketForTrip(
+  trip: { start_date: string; end_date: string },
+): PublicTripLengthBucket {
+  const n = tripCalendarDayCount(trip);
+  if (n <= 5) return "short";
+  if (n <= 10) return "medium";
+  return "long";
+}
+
 /** Gallery listing (no owner PII). Caller resolves `region_id` → labels. */
 export async function listPublicTrips(input: {
   regionId: string | null;
   limit: number;
   offset: number;
+  sort?: PublicTripListSort;
+  lengthBucket?: PublicTripLengthBucket | null;
 }): Promise<Trip[]> {
   const supabase = await createClient();
-  let q = supabase
-    .from("trips")
-    .select("*")
-    .eq("is_public", true)
-    .order("clone_count", { ascending: false })
-    .order("view_count", { ascending: false })
-    .order("created_at", { ascending: false })
-    .range(input.offset, input.offset + input.limit - 1);
+  const sort = input.sort ?? "clones";
+  const needsMemory =
+    Boolean(input.lengthBucket) || sort === "longest";
 
-  if (input.regionId) {
-    q = q.eq("region_id", input.regionId);
+  const buildBase = () => {
+    let q = supabase.from("trips").select("*").eq("is_public", true);
+    if (input.regionId) q = q.eq("region_id", input.regionId);
+    return q;
+  };
+
+  if (!needsMemory) {
+    let q = buildBase();
+    if (sort === "newest") {
+      q = q.order("created_at", { ascending: false });
+    } else {
+      q = q
+        .order("clone_count", { ascending: false })
+        .order("created_at", { ascending: false });
+    }
+    const { data, error } = await q.range(
+      input.offset,
+      input.offset + input.limit - 1,
+    );
+    if (error) throw error;
+    return (data ?? []).map((r) => mapTripRow(r as Record<string, unknown>));
   }
 
-  const { data, error } = await q;
+  const cap = 250;
+  let q = buildBase();
+  if (sort === "newest") {
+    q = q.order("created_at", { ascending: false });
+  } else {
+    q = q
+      .order("clone_count", { ascending: false })
+      .order("created_at", { ascending: false });
+  }
+  const { data, error } = await q.range(0, cap - 1);
   if (error) throw error;
 
-  return (data ?? []).map((r) => mapTripRow(r as Record<string, unknown>));
+  let list = (data ?? []).map((r) => mapTripRow(r as Record<string, unknown>));
+  if (input.lengthBucket) {
+    list = list.filter((t) => lengthBucketForTrip(t) === input.lengthBucket);
+  }
+  if (sort === "longest") {
+    list = [...list].sort(
+      (a, b) => tripCalendarDayCount(b) - tripCalendarDayCount(a),
+    );
+  } else if (sort === "newest") {
+    list = [...list].sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+  }
+  return list.slice(input.offset, input.offset + input.limit);
 }
 
 export async function getFeaturedPublicTrips(limit: number): Promise<Trip[]> {

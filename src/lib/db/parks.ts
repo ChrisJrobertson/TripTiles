@@ -7,6 +7,7 @@ function mapPark(row: Record<string, unknown>): Park {
     ? rawRegions.map(String)
     : [];
 
+  const aff = row.affiliate_ticket_url;
   return {
     id: String(row.id),
     name: String(row.name),
@@ -24,6 +25,8 @@ function mapPark(row: Record<string, unknown>): Park {
     region_ids,
     is_custom: Boolean(row.is_custom),
     sort_order: Number(row.sort_order ?? 100),
+    affiliate_ticket_url:
+      aff == null || aff === "" ? null : String(aff),
   };
 }
 

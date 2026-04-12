@@ -3,6 +3,7 @@
 import { RegionalDiningSection } from "@/components/planner/RegionalDiningSection";
 import { GROUP_META, GROUP_ORDER } from "@/lib/group-meta";
 import { isCruisePaletteTileName } from "@/lib/cruise-tiles";
+import { isNamedRestaurantPark } from "@/lib/named-restaurant-tiles";
 import { parkMatchesPlannerRegion } from "@/lib/park-matches-planner-region";
 import { parkChromaTileStyle } from "@/lib/theme-colours";
 import type { ThemeKey } from "@/lib/themes";
@@ -83,6 +84,15 @@ export function Palette({
           );
           if (groupParks.length === 0 && groupCustom.length === 0) return null;
 
+          const genericDiningParks =
+            groupKey === "dining"
+              ? groupParks.filter((p) => !isNamedRestaurantPark(p))
+              : groupParks;
+          const restaurantDiningParks =
+            groupKey === "dining"
+              ? groupParks.filter((p) => isNamedRestaurantPark(p))
+              : [];
+
           return (
             <details
               key={groupKey}
@@ -92,37 +102,122 @@ export function Palette({
               <summary className="cursor-pointer select-none px-3 py-2 font-sans text-sm font-semibold text-royal">
                 {meta.label}
               </summary>
-              <div className="flex flex-wrap gap-2 px-3 pb-3 pt-1">
-                {groupParks.map((park) => {
-                  const selected = selectedParkId === park.id;
-                  return (
-                    <button
-                      key={park.id}
-                      type="button"
-                      onClick={() =>
-                        onSelectPark(selected ? null : park.id)
-                      }
-                      className={`inline-flex max-w-full items-center gap-1 rounded-full px-3 py-2 text-left font-sans text-xs font-medium transition hover:brightness-[1.06] ${
-                        selected
-                          ? "scale-105 ring-2 ring-[color:var(--tt-ring)] ring-offset-1 ring-offset-cream"
-                          : ""
-                      }`}
-                      style={parkChromaTileStyle(
-                        park.bg_colour,
-                        park.fg_colour,
-                        colourTheme,
-                      )}
-                    >
-                      {park.icon ? (
-                        <span className="shrink-0" aria-hidden>
-                          {park.icon}
-                        </span>
-                      ) : null}
-                      <span className="truncate">{park.name}</span>
-                    </button>
-                  );
-                })}
+              <div className="flex flex-col gap-2 px-3 pb-3 pt-1">
+                {groupKey === "dining" && genericDiningParks.length > 0 ? (
+                  <div>
+                    <p className="mb-1.5 px-0.5 font-sans text-[0.65rem] font-semibold uppercase tracking-wide text-royal/55">
+                      Dining
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {genericDiningParks.map((park) => {
+                        const selected = selectedParkId === park.id;
+                        return (
+                          <button
+                            key={park.id}
+                            type="button"
+                            onClick={() =>
+                              onSelectPark(selected ? null : park.id)
+                            }
+                            className={`inline-flex max-w-full items-center gap-1 rounded-full px-3 py-2 text-left font-sans text-xs font-medium transition hover:brightness-[1.06] ${
+                              selected
+                                ? "scale-105 ring-2 ring-[color:var(--tt-ring)] ring-offset-1 ring-offset-cream"
+                                : ""
+                            }`}
+                            style={parkChromaTileStyle(
+                              park.bg_colour,
+                              park.fg_colour,
+                              colourTheme,
+                            )}
+                          >
+                            {park.icon ? (
+                              <span className="shrink-0" aria-hidden>
+                                {park.icon}
+                              </span>
+                            ) : null}
+                            <span className="truncate">{park.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : groupKey !== "dining" ? (
+                  <div className="flex flex-wrap gap-2">
+                    {groupParks.map((park) => {
+                      const selected = selectedParkId === park.id;
+                      return (
+                        <button
+                          key={park.id}
+                          type="button"
+                          onClick={() =>
+                            onSelectPark(selected ? null : park.id)
+                          }
+                          className={`inline-flex max-w-full items-center gap-1 rounded-full px-3 py-2 text-left font-sans text-xs font-medium transition hover:brightness-[1.06] ${
+                            selected
+                              ? "scale-105 ring-2 ring-[color:var(--tt-ring)] ring-offset-1 ring-offset-cream"
+                              : ""
+                          }`}
+                          style={parkChromaTileStyle(
+                            park.bg_colour,
+                            park.fg_colour,
+                            colourTheme,
+                          )}
+                        >
+                          {park.icon ? (
+                            <span className="shrink-0" aria-hidden>
+                              {park.icon}
+                            </span>
+                          ) : null}
+                          <span className="truncate">{park.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
 
+                {groupKey === "dining" && restaurantDiningParks.length > 0 ? (
+                  <details
+                    open
+                    className="rounded-lg border border-royal/8 bg-white/40"
+                  >
+                    <summary className="cursor-pointer select-none px-2 py-1.5 font-sans text-xs font-semibold text-royal">
+                      Restaurants
+                    </summary>
+                    <div className="flex flex-wrap gap-2 px-2 pb-2 pt-0.5">
+                      {restaurantDiningParks.map((park) => {
+                        const selected = selectedParkId === park.id;
+                        return (
+                          <button
+                            key={park.id}
+                            type="button"
+                            data-tier-gate="none"
+                            onClick={() =>
+                              onSelectPark(selected ? null : park.id)
+                            }
+                            className={`inline-flex max-w-full items-center gap-1 rounded-full px-3 py-2 text-left font-sans text-xs font-medium transition hover:brightness-[1.06] ${
+                              selected
+                                ? "scale-105 ring-2 ring-[color:var(--tt-ring)] ring-offset-1 ring-offset-cream"
+                                : ""
+                            }`}
+                            style={parkChromaTileStyle(
+                              park.bg_colour,
+                              park.fg_colour,
+                              colourTheme,
+                            )}
+                          >
+                            {park.icon ? (
+                              <span className="shrink-0" aria-hidden>
+                                {park.icon}
+                              </span>
+                            ) : null}
+                            <span className="truncate">{park.name}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </details>
+                ) : null}
+
+                <div className="flex flex-wrap gap-2">
                 {groupCustom.map((tile) => {
                   const selected = selectedParkId === tile.id;
                   const menuOpen = menuTileId === tile.id;
@@ -216,6 +311,7 @@ export function Palette({
                   <span className="text-lg leading-none">+</span>
                   <span>Add custom</span>
                 </button>
+                </div>
               </div>
             </details>
           );

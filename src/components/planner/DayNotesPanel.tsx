@@ -35,7 +35,10 @@ export function DayNotesPanel({ trip, tripId }: Props) {
   }
 
   return (
-    <details className="rounded-xl border border-royal/10 bg-white/90 px-3 py-2 font-sans text-sm text-royal shadow-sm">
+    <details
+      open
+      className="rounded-xl border border-royal/10 bg-white/90 px-3 py-2 font-sans text-sm text-royal shadow-sm"
+    >
       <summary className="cursor-pointer font-sans text-xs font-semibold text-royal/75">
         Day notes — closures, hours
       </summary>

@@ -51,6 +51,9 @@ export function PdfExportButton({
               withNotes ? result.bookingLinks : undefined
             }
             includeNotes={withNotes}
+            budgetItems={result.budgetItems}
+            checklistItems={result.checklistItems}
+            temperatureUnit={result.temperatureUnit}
           />,
         ).toBlob();
 

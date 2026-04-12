@@ -1,5 +1,7 @@
+import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { formatDateKey, parseDate } from "@/lib/date-helpers";
-import type { Assignments, Park, Trip } from "@/lib/types";
+import { isCruisePaletteTileName } from "@/lib/cruise-tiles";
+import type { Assignment, Assignments, Park, Trip } from "@/lib/types";
 
 const DINING_IDS = new Set(["owl", "tsr", "char", "specd", "villa"]);
 const FLYOUT_IDS = new Set(["flyout"]);
@@ -16,17 +18,11 @@ const MAIN_PARK_GROUPS = new Set([
 /** Tiles that only make sense when the trip includes a cruise segment. */
 export function requiresCruiseSegment(p: Park): boolean {
   if (p.park_group === "excursions") return true;
-  const n = p.name.toLowerCase();
-  if (/\bship\s*pool\b|\bat\s*sea\b|\bport\s*day\b|cruise\s*[—–-]\s*at\s*sea/i.test(n)) {
-    return true;
-  }
-  if (/cruise\s*[—–-]\s*(embark|disembark)/i.test(n)) return true;
+  if (isCruisePaletteTileName(p.name)) return true;
   return false;
 }
 
-function cloneDaySlots(
-  day: Partial<Record<"am" | "pm" | "lunch" | "dinner", string>>,
-): Partial<Record<"am" | "pm" | "lunch" | "dinner", string>> {
+function cloneDaySlots(day: Assignment): Assignment {
   return { ...day };
 }
 
@@ -61,7 +57,7 @@ function dayKeyTime(key: string): number {
 }
 
 function stripFlyFromDay(
-  day: Partial<Record<"am" | "pm" | "lunch" | "dinner", string>>,
+  day: Assignment,
   stripFlyout: boolean,
   stripFlyhome: boolean,
 ): void {
@@ -72,10 +68,10 @@ function stripFlyFromDay(
     "dinner",
   ];
   for (const s of slots) {
-    const v = day[s];
-    if (!v) continue;
-    if (stripFlyout && FLYOUT_IDS.has(v)) delete day[s];
-    if (stripFlyhome && FLYHOME_IDS.has(v)) delete day[s];
+    const id = getParkIdFromSlotValue(day[s]);
+    if (!id) continue;
+    if (stripFlyout && FLYOUT_IDS.has(id)) delete day[s];
+    if (stripFlyhome && FLYHOME_IDS.has(id)) delete day[s];
   }
 }
 
@@ -102,20 +98,20 @@ export function applyFlyBookendRules(
       let flyouts = 0;
       let flyhomes = 0;
       for (const s of ["am", "pm", "lunch", "dinner"] as const) {
-        const v = day[s];
-        if (v && FLYOUT_IDS.has(v)) flyouts++;
-        if (v && FLYHOME_IDS.has(v)) flyhomes++;
+        const id = getParkIdFromSlotValue(day[s]);
+        if (id && FLYOUT_IDS.has(id)) flyouts++;
+        if (id && FLYHOME_IDS.has(id)) flyhomes++;
       }
       if (flyouts > 1 || flyhomes > 1) {
         let seenO = false;
         let seenH = false;
         for (const s of ["am", "pm", "lunch", "dinner"] as const) {
-          const v = day[s];
-          if (v && FLYOUT_IDS.has(v)) {
+          const id = getParkIdFromSlotValue(day[s]);
+          if (id && FLYOUT_IDS.has(id)) {
             if (seenO) delete day[s];
             else seenO = true;
           }
-          if (v && FLYHOME_IDS.has(v)) {
+          if (id && FLYHOME_IDS.has(id)) {
             if (seenH) delete day[s];
             else seenH = true;
           }
@@ -128,8 +124,8 @@ export function applyFlyBookendRules(
       stripFlyFromDay(day, false, true);
       let seenFlyout = false;
       for (const s of ["am", "pm", "lunch", "dinner"] as const) {
-        const v = day[s];
-        if (v && FLYOUT_IDS.has(v)) {
+        const id = getParkIdFromSlotValue(day[s]);
+        if (id && FLYOUT_IDS.has(id)) {
           if (seenFlyout) delete day[s];
           else seenFlyout = true;
         }
@@ -138,8 +134,8 @@ export function applyFlyBookendRules(
       stripFlyFromDay(day, true, false);
       let seenFlyhome = false;
       for (const s of ["am", "pm", "lunch", "dinner"] as const) {
-        const v = day[s];
-        if (v && FLYHOME_IDS.has(v)) {
+        const id = getParkIdFromSlotValue(day[s]);
+        if (id && FLYHOME_IDS.has(id)) {
           if (seenFlyhome) delete day[s];
           else seenFlyhome = true;
         }
@@ -174,7 +170,7 @@ export function stripCruiseOnlyTiles(
     if (!day) continue;
 
     for (const slot of ["am", "pm", "lunch", "dinner"] as const) {
-      const id = day[slot];
+      const id = getParkIdFromSlotValue(day[slot]);
       if (!id) continue;
       const p = parksById.get(id);
       if (!p || !requiresCruiseSegment(p)) continue;
@@ -224,7 +220,7 @@ export function applyArrivalDayNoThemeParks(
   if (!day) return out;
 
   for (const s of ["am", "pm"] as const) {
-    const id = day[s];
+    const id = getParkIdFromSlotValue(day[s]);
     if (!id) continue;
     if (DINING_IDS.has(id) || FLYOUT_IDS.has(id) || FLYHOME_IDS.has(id)) {
       continue;
@@ -265,7 +261,7 @@ export function applyRestDayConsistency(
     const amPmSlots = ["am", "pm"] as const;
     let hasRest = false;
     for (const s of amPmSlots) {
-      const id = day[s];
+      const id = getParkIdFromSlotValue(day[s]);
       if (!id) continue;
       const p = parksById.get(id);
       if (p && isRestfulTile(p)) hasRest = true;
@@ -274,7 +270,7 @@ export function applyRestDayConsistency(
     if (!hasRest) continue;
 
     for (const s of amPmSlots) {
-      const id = day[s];
+      const id = getParkIdFromSlotValue(day[s]);
       if (!id) continue;
       const p = parksById.get(id);
       if (p && isMainVenuePark(p)) delete day[s];
@@ -295,12 +291,10 @@ export function applyConsecutiveParkRules(
 ): Assignments {
   const out = cloneAssignments(assignments);
 
-  function venueIdsForDay(
-    day: Partial<Record<"am" | "pm" | "lunch" | "dinner", string>>,
-  ): Set<string> {
+  function venueIdsForDay(day: Assignment): Set<string> {
     const set = new Set<string>();
     for (const s of ["am", "pm"] as const) {
-      const id = day[s];
+      const id = getParkIdFromSlotValue(day[s]);
       if (!id) continue;
       if (DINING_IDS.has(id) || FLYOUT_IDS.has(id) || FLYHOME_IDS.has(id)) {
         continue;
@@ -324,7 +318,7 @@ export function applyConsecutiveParkRules(
 
     for (const badId of dup) {
       for (const s of ["pm", "am"] as const) {
-        if (day2[s] === badId) {
+        if (getParkIdFromSlotValue(day2[s]) === badId) {
           delete day2[s];
           break;
         }

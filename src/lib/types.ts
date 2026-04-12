@@ -34,6 +34,8 @@ export interface Profile {
   id: string;
   email: string | null;
   display_name: string | null;
+  /** When true, skip marketing-style emails including trip milestone reminders. */
+  email_marketing_opt_out?: boolean;
   tier: UserTier;
   referral_code: string;
   referred_by: string | null;
@@ -77,7 +79,12 @@ export type Destination =
   | "cruise"
   | "custom";
 
-export type Assignment = Partial<Record<SlotType, string>>;
+/** Slot payload: legacy string = park id only, or object with optional start time (HH:mm). */
+export type SlotAssignmentValue =
+  | string
+  | { parkId: string; time?: string };
+
+export type Assignment = Partial<Record<SlotType, SlotAssignmentValue>>;
 
 /** Date keys: `${year}-${month}-${day}` without zero-padding (e.g. "2026-8-17"). */
 export type Assignments = Record<string, Assignment>;
@@ -121,6 +128,8 @@ export interface Park {
   region_ids: string[];
   is_custom: boolean;
   sort_order: number;
+  /** Optional table booking deep link (named restaurant tiles). */
+  affiliate_ticket_url?: string | null;
 }
 
 /** User-created palette tile (`custom_tiles` table). */
@@ -193,8 +202,55 @@ export function customTileToPark(tile: CustomTile): Park {
     region_ids: tile.region_ids ?? [],
     is_custom: true,
     sort_order: 10000,
+    affiliate_ticket_url: null,
   };
 }
+
+export type BudgetCategory =
+  | "flights"
+  | "accommodation"
+  | "tickets"
+  | "dining"
+  | "transport"
+  | "insurance"
+  | "cruise"
+  | "shopping"
+  | "other";
+
+export interface TripBudgetItem {
+  id: string;
+  trip_id: string;
+  category: BudgetCategory;
+  label: string;
+  amount: number;
+  currency: string;
+  is_paid: boolean;
+  notes: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ChecklistCategory =
+  | "packing_essentials"
+  | "packing_clothing"
+  | "packing_kids"
+  | "packing_tech"
+  | "before_you_go"
+  | "at_the_park";
+
+export interface TripChecklistItem {
+  id: string;
+  trip_id: string;
+  category: ChecklistCategory;
+  label: string;
+  is_checked: boolean;
+  is_custom: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+export type TemperatureUnit = "c" | "f";
 
 export interface Trip {
   id: string;
@@ -216,6 +272,10 @@ export interface Trip {
   assignments: Assignments;
   preferences: Record<string, unknown>;
   notes: string | null;
+  /** Optional total trip budget (same currency as line items by convention). */
+  budget_target: number | null;
+  /** ISO currency code for display (amounts are not converted). */
+  budget_currency: string;
   is_public: boolean;
   public_slug: string | null;
   /** Total clones of this trip (public viral loop). */
@@ -233,6 +293,10 @@ export interface Trip {
   planning_preferences: TripPlanningPreferences | null;
   /** Planner UI palette (`src/lib/themes.ts`). */
   colour_theme: ThemeKey;
+  /** When false, milestone reminder emails are skipped for this trip. */
+  email_reminders: boolean;
+  /** First name + last initial for public gallery cards; set when publishing. */
+  gallery_owner_label: string | null;
 }
 
 export type AchievementCategory =

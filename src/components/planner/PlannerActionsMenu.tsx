@@ -11,6 +11,8 @@ type Props = {
   cruiseSection?: ReactNode;
   /** Optional block (e.g. colour theme picker) shown below standard actions. */
   colourSection?: ReactNode;
+  /** Optional block (e.g. per-trip email reminders toggle). */
+  remindersSection?: ReactNode;
 };
 
 /**
@@ -23,6 +25,7 @@ export function PlannerActionsMenu({
   onExportPdf,
   cruiseSection,
   colourSection,
+  remindersSection,
 }: Props) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
 
@@ -91,6 +94,9 @@ export function PlannerActionsMenu({
         ) : null}
         {colourSection ? (
           <div className="border-t border-royal/10">{colourSection}</div>
+        ) : null}
+        {remindersSection ? (
+          <div className="border-t border-royal/10">{remindersSection}</div>
         ) : null}
       </div>
     </details>

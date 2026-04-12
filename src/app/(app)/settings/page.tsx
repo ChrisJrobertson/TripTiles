@@ -4,7 +4,9 @@ import { getTierConfig } from "@/lib/tiers";
 import { getUserTripCount } from "@/lib/db/trips";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
-import type { UserTier } from "@/lib/types";
+import { TemperatureUnitSettings } from "@/components/settings/TemperatureUnitSettings";
+import { EmailPreferencesSettings } from "@/components/settings/EmailPreferencesSettings";
+import type { TemperatureUnit, UserTier } from "@/lib/types";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -53,7 +55,7 @@ export default async function SettingsPage() {
   const [profileRes, purchasesRes, tripCount] = await Promise.all([
     supabase
       .from("profiles")
-      .select("tier, display_name")
+      .select("tier, display_name, temperature_unit, email_marketing_opt_out")
       .eq("id", user.id)
       .maybeSingle(),
     supabase
@@ -77,6 +79,20 @@ export default async function SettingsPage() {
   const profileCreated = user.created_at ?? null;
   const purchases = (purchasesRes.data ?? []) as PurchaseRow[];
   const freeMax = getTierConfig("free").features.max_trips ?? 1;
+  const initialTemperatureUnit: TemperatureUnit =
+    profileRes.data &&
+    typeof profileRes.data === "object" &&
+    "temperature_unit" in profileRes.data &&
+    (profileRes.data as { temperature_unit?: string }).temperature_unit ===
+      "f"
+      ? "f"
+      : "c";
+  const emailMarketingOptOut = Boolean(
+    profileRes.data &&
+      typeof profileRes.data === "object" &&
+      (profileRes.data as { email_marketing_opt_out?: boolean })
+        .email_marketing_opt_out === true,
+  );
 
   return (
     <div className="min-h-screen bg-cream pb-16 pt-0">
@@ -90,6 +106,20 @@ export default async function SettingsPage() {
         <h1 className="font-serif text-3xl font-semibold text-royal">
           Settings
         </h1>
+
+        <section className="mt-10 rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
+          <h2 className="font-serif text-xl font-semibold text-royal">
+            Planner display
+          </h2>
+          <TemperatureUnitSettings initial={initialTemperatureUnit} />
+        </section>
+
+        <section className="mt-10 rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
+          <h2 className="font-serif text-xl font-semibold text-royal">
+            Email preferences
+          </h2>
+          <EmailPreferencesSettings initialOptOut={emailMarketingOptOut} />
+        </section>
 
         <div className="mt-10">
           <SettingsAccountPanel

@@ -7,9 +7,11 @@ import {
   formatUndoSnapshotHint,
   parseDate,
 } from "@/lib/date-helpers";
+import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
 import { parkChromaTileStyle } from "@/lib/theme-colours";
+import { dayConditionRow } from "@/lib/planner-day-conditions";
 import {
   normaliseThemeKey,
   themedEmptySlotSurfaceStyle,
@@ -19,6 +21,7 @@ import type {
   Assignments,
   Park,
   SlotType,
+  TemperatureUnit,
   Trip,
 } from "@/lib/types";
 import Link from "next/link";
@@ -36,8 +39,15 @@ import {
 } from "./CrowdLevelIndicator";
 import { MobileBottomBar } from "./MobileBottomBar";
 import { MobileParksDrawer } from "./MobileParksDrawer";
+import { DayTimelinePanel } from "@/components/planner/DayTimelinePanel";
 
 const SWIPE_THRESHOLD = 50;
+
+const CROWD_DOT: Record<"quiet" | "moderate" | "busy", string> = {
+  quiet: "#22C55E",
+  moderate: "#EAB308",
+  busy: "#EF4444",
+};
 
 const SLOTS: { key: SlotType; label: string }[] = [
   { key: "am", label: "AM" },
@@ -116,6 +126,18 @@ export type MobileDayViewProps = {
   /** When set, mobile menu can offer one-tap undo for the last Smart Plan. */
   smartPlanUndoSnapshotAt?: string | null;
   onMenuUndoSmartPlan?: () => void;
+  /** Region id for static weather/crowd (defaults to `trip.region_id`). */
+  plannerRegionId?: string | null;
+  temperatureUnit?: TemperatureUnit;
+  /** Persist `preferences.day_notes` for the active day. */
+  onSaveUserDayNote?: (dateKey: string, text: string) => void;
+  /** Pro+ custom slot times on the day timeline. */
+  timelineUnlocked?: boolean;
+  onSlotTimeChange?: (
+    dateKey: string,
+    slot: SlotType,
+    timeHHmm: string,
+  ) => void;
 };
 
 function buildTripDays(
@@ -249,10 +271,27 @@ function MobileSlotCard({
           {meta.label}
         </div>
         {park ? (
-          <div className="truncate font-sans text-lg font-medium" style={{ color: "inherit" }}>
-            {mealPrefix(slot)}
-            {park.icon ? `${park.icon} ` : ""}
-            {park.name}
+          <div style={{ color: "inherit" }}>
+            <div className="truncate font-sans text-lg font-medium">
+              {mealPrefix(slot)}
+              {park.icon ? `${park.icon} ` : ""}
+              {park.name}
+            </div>
+            {(slot === "lunch" || slot === "dinner") &&
+            park.affiliate_ticket_url &&
+            park.affiliate_ticket_url.trim() !== "" ? (
+              <a
+                href={park.affiliate_ticket_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-block font-sans text-sm font-semibold underline underline-offset-2 opacity-90"
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+              >
+                Book a table →
+              </a>
+            ) : null}
           </div>
         ) : readOnly ? (
           <p className="font-sans text-sm italic text-royal/45">—</p>
@@ -297,9 +336,18 @@ export function MobileDayView({
   onMenuSettings,
   smartPlanUndoSnapshotAt = null,
   onMenuUndoSmartPlan,
+  plannerRegionId,
+  temperatureUnit = "c",
+  onSaveUserDayNote,
+  timelineUnlocked = false,
+  onSlotTimeChange,
 }: MobileDayViewProps) {
   void _crowdSummary;
   const notesPanelId = useId();
+  const regionForConditions = plannerRegionId ?? trip.region_id;
+  const [mobileNotesHidden, setMobileNotesHidden] = useState(false);
+  const [mobileNoteDraft, setMobileNoteDraft] = useState("");
+  const mobileNoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const days = useMemo(
     () => buildTripDays(trip, dayNotes, userDayNotes),
     [trip, dayNotes, userDayNotes],
@@ -324,12 +372,16 @@ export function MobileDayView({
     if (days.length === 0) return;
     const ti = days.findIndex((d) => isSameDay(d.date, new Date()));
     setActiveIndex(ti >= 0 ? ti : 0);
+    setMobileDayLayout("grid");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset when switching trips
   }, [trip.id]);
 
   const [parksDrawerOpen, setParksDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dayNotesOpen, setDayNotesOpen] = useState(false);
+  const [mobileDayLayout, setMobileDayLayout] = useState<"grid" | "timeline">(
+    "grid",
+  );
   const [pendingSlot, setPendingSlot] = useState<{
     dateKey: string;
     slot: SlotType;
@@ -350,6 +402,37 @@ export function MobileDayView({
     Math.max(0, days.length - 1),
   );
   const activeDay = days[safeIndex]!;
+
+  useEffect(() => {
+    setMobileNoteDraft(activeDay.userNote);
+  }, [activeDay.dateKey, activeDay.userNote]);
+
+  const flushMobileDayNote = useCallback(
+    (dateKey: string, text: string) => {
+      if (!onSaveUserDayNote) return;
+      onSaveUserDayNote(dateKey, text.slice(0, 500));
+    },
+    [onSaveUserDayNote],
+  );
+
+  const queueMobileDayNote = useCallback(
+    (dateKey: string, text: string) => {
+      if (!onSaveUserDayNote) return;
+      if (mobileNoteTimer.current) clearTimeout(mobileNoteTimer.current);
+      mobileNoteTimer.current = setTimeout(() => {
+        mobileNoteTimer.current = null;
+        flushMobileDayNote(dateKey, text);
+      }, 500);
+    },
+    [flushMobileDayNote, onSaveUserDayNote],
+  );
+
+  useEffect(
+    () => () => {
+      if (mobileNoteTimer.current) clearTimeout(mobileNoteTimer.current);
+    },
+    [],
+  );
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     touchStartX.current = e.targetTouches[0]?.clientX ?? null;
@@ -462,6 +545,30 @@ export function MobileDayView({
             <div className="font-sans text-sm text-royal/70">
               {formatDateLong(activeDay.date)}
             </div>
+            {(() => {
+              const dc = dayConditionRow(
+                regionForConditions,
+                activeDay.date,
+                temperatureUnit,
+              );
+              if (!dc) return null;
+              return (
+                <div
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs text-royal/75"
+                  title={dc.tooltip}
+                >
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: CROWD_DOT[dc.crowd] }}
+                    aria-hidden
+                  />
+                  <span className="whitespace-nowrap font-sans text-[11px]">
+                    {dc.conditions.weatherEmoji}
+                    {dc.tempLabel}
+                  </span>
+                </div>
+              );
+            })()}
             {activeDay.crowdDot && activeDay.crowdLabel ? (
               <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-gold/30 bg-cream px-3 py-1">
                 <CrowdLevelIndicator
@@ -475,25 +582,127 @@ export function MobileDayView({
             ) : null}
           </div>
 
-          <div className="space-y-3">
-            {SLOTS.map(({ key: slot }) => {
-              const ass = assignments[activeDay.dateKey] ?? {};
-              const id = ass[slot];
-              return (
-                <MobileSlotCard
-                  key={slot}
-                  slot={slot}
-                  dateKey={activeDay.dateKey}
-                  assignmentId={id}
-                  parkById={parkById}
-                  readOnly={readOnly}
-                  onClear={onClear}
-                  onTapAdd={() => openParksForSlot(activeDay.dateKey, slot)}
-                  colourTheme={colourTheme}
-                />
-              );
-            })}
+          <div className="mb-3 flex gap-1 rounded-lg bg-cream/80 p-0.5">
+            <button
+              type="button"
+              className={`min-h-11 flex-1 rounded-md px-2 font-sans text-xs font-semibold ${
+                mobileDayLayout === "grid"
+                  ? "bg-white text-royal shadow-sm"
+                  : "text-royal/65"
+              }`}
+              onClick={() => setMobileDayLayout("grid")}
+            >
+              Grid
+            </button>
+            <button
+              type="button"
+              disabled={!timelineUnlocked}
+              title={
+                !timelineUnlocked
+                  ? "Timeline editing is a Pro feature"
+                  : undefined
+              }
+              className={`min-h-11 flex-1 rounded-md px-2 font-sans text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
+                mobileDayLayout === "timeline"
+                  ? "bg-white text-royal shadow-sm"
+                  : "text-royal/65"
+              }`}
+              onClick={() => {
+                if (timelineUnlocked) setMobileDayLayout("timeline");
+              }}
+            >
+              <span className="inline-flex items-center justify-center gap-1">
+                Timeline
+                {!timelineUnlocked ? (
+                  <span className="rounded bg-gold/35 px-1 text-[0.55rem] font-bold text-royal">
+                    Pro
+                  </span>
+                ) : null}
+              </span>
+            </button>
           </div>
+
+          {mobileDayLayout === "grid" ? (
+            <div className="space-y-3">
+              {SLOTS.map(({ key: slot }) => {
+                const ass = assignments[activeDay.dateKey] ?? {};
+                const id = getParkIdFromSlotValue(ass[slot]);
+                return (
+                  <MobileSlotCard
+                    key={slot}
+                    slot={slot}
+                    dateKey={activeDay.dateKey}
+                    assignmentId={id}
+                    parkById={parkById}
+                    readOnly={readOnly}
+                    onClear={onClear}
+                    onTapAdd={() => openParksForSlot(activeDay.dateKey, slot)}
+                    colourTheme={colourTheme}
+                  />
+                );
+              })}
+            </div>
+          ) : onSlotTimeChange ? (
+            <DayTimelinePanel
+              day={assignments[activeDay.dateKey] ?? {}}
+              parks={parks}
+              colourTheme={colourTheme}
+              unlocked={timelineUnlocked}
+              onTimeChange={(slot, time) =>
+                onSlotTimeChange(activeDay.dateKey, slot, time)
+              }
+            />
+          ) : null}
+
+          {!readOnly && onSaveUserDayNote ? (
+            <div className="mt-4 rounded-xl border border-royal/10 bg-white/90 p-3">
+              <div className="flex min-h-11 items-center justify-between gap-2">
+                <span className="font-sans text-xs font-semibold text-royal/70">
+                  Day notes
+                </span>
+                <button
+                  type="button"
+                  className="min-h-11 rounded px-2 font-sans text-xs text-royal/55 underline decoration-royal/25"
+                  onClick={() => setMobileNotesHidden((v) => !v)}
+                >
+                  {mobileNotesHidden ? "Show" : "Hide"}
+                </button>
+              </div>
+              {!mobileNotesHidden ? (
+                <>
+                  <textarea
+                    rows={3}
+                    maxLength={500}
+                    value={mobileNoteDraft}
+                    placeholder="Add notes for this day — tips, reminders, bookings…"
+                    className="mt-1 w-full min-h-[5.5rem] resize-y rounded-lg border border-royal/20 bg-cream/40 px-3 py-2 font-sans text-sm text-royal placeholder:text-royal/40 focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/40"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setMobileNoteDraft(v);
+                      queueMobileDayNote(activeDay.dateKey, v);
+                    }}
+                    onBlur={() => {
+                      if (mobileNoteTimer.current) {
+                        clearTimeout(mobileNoteTimer.current);
+                        mobileNoteTimer.current = null;
+                      }
+                      flushMobileDayNote(activeDay.dateKey, mobileNoteDraft);
+                    }}
+                  />
+                  {mobileNoteDraft.length > 400 ? (
+                    <p className="mt-1 text-right font-sans text-[10px] text-royal/55">
+                      {mobileNoteDraft.length}/500
+                    </p>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
+          ) : activeDay.userNote ? (
+            <p className="mt-4 font-sans text-sm italic leading-relaxed text-royal/60">
+              <span aria-hidden>📝 </span>
+              {activeDay.userNote}
+            </p>
+          ) : null}
 
           {hasTips ? (
             <button

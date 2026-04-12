@@ -41,6 +41,8 @@ export function PublicPlanPlannerShell({ trip, parks, shareUrl }: Props) {
           onAssign={() => {}}
           onClear={() => {}}
           onNeedParkFirst={() => {}}
+          plannerRegionId={trip.region_id}
+          temperatureUnit="c"
         />
       </div>
       <MobileDayView
@@ -53,6 +55,8 @@ export function PublicPlanPlannerShell({ trip, parks, shareUrl }: Props) {
         onClear={() => {}}
         crowdSummary={crowd}
         readOnly
+        plannerRegionId={trip.region_id}
+        temperatureUnit="c"
         onMenuShare={() => {
           void navigator.clipboard?.writeText(shareUrl);
         }}

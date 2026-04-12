@@ -4,7 +4,8 @@ import { awardAchievementAction } from "@/actions/achievements";
 import { currentUserCanCreateCustomTile } from "@/lib/entitlements";
 import { getUserCustomTiles } from "@/lib/db/custom-tiles";
 import { GROUP_ORDER } from "@/lib/group-meta";
-import type { Assignments, CustomTile, SlotType } from "@/lib/types";
+import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
+import type { Assignments, Assignment, CustomTile } from "@/lib/types";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
@@ -23,10 +24,11 @@ function stripTileFromAssignments(
   const out: Assignments = {};
   for (const [day, slots] of Object.entries(assignments)) {
     if (!slots || typeof slots !== "object") continue;
-    const next: Partial<Record<SlotType, string>> = {};
-    for (const [slot, pid] of Object.entries(slots)) {
-      if (pid === tileId) continue;
-      next[slot as SlotType] = pid;
+    const next: Assignment = {};
+    for (const slot of ["am", "pm", "lunch", "dinner"] as const) {
+      const v = slots[slot];
+      if (getParkIdFromSlotValue(v) === tileId) continue;
+      if (v !== undefined) next[slot] = v;
     }
     if (Object.keys(next).length > 0) out[day] = next;
   }

@@ -4,11 +4,50 @@ import { awardAchievementAction } from "@/actions/achievements";
 import { getParksForRegion } from "@/lib/db/parks";
 import { getRegionById } from "@/lib/db/regions";
 import { getUserCustomTiles } from "@/lib/db/custom-tiles";
+import { mapTripRow } from "@/lib/db/trips";
 import { getCurrentTier } from "@/lib/entitlements";
 import { buildAffiliateUrl, hasAnyAffiliatePartner } from "@/lib/affiliates";
 import { getTierConfig } from "@/lib/tiers";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
-import type { CustomTile, Park, Trip } from "@/lib/types";
+import type {
+  BudgetCategory,
+  ChecklistCategory,
+  CustomTile,
+  Park,
+  TemperatureUnit,
+  Trip,
+  TripBudgetItem,
+  TripChecklistItem,
+} from "@/lib/types";
+
+function mapBudgetRow(r: Record<string, unknown>): TripBudgetItem {
+  return {
+    id: String(r.id),
+    trip_id: String(r.trip_id),
+    category: r.category as BudgetCategory,
+    label: String(r.label ?? ""),
+    amount: Number(r.amount ?? 0),
+    currency: String(r.currency ?? "GBP"),
+    is_paid: Boolean(r.is_paid),
+    notes: r.notes != null ? String(r.notes) : null,
+    sort_order: Number(r.sort_order ?? 0),
+    created_at: String(r.created_at ?? ""),
+    updated_at: String(r.updated_at ?? ""),
+  };
+}
+
+function mapChecklistRow(r: Record<string, unknown>): TripChecklistItem {
+  return {
+    id: String(r.id),
+    trip_id: String(r.trip_id),
+    category: r.category as ChecklistCategory,
+    label: String(r.label ?? ""),
+    is_checked: Boolean(r.is_checked),
+    is_custom: Boolean(r.is_custom),
+    sort_order: Number(r.sort_order ?? 0),
+    created_at: String(r.created_at ?? ""),
+  };
+}
 
 export async function getPdfExportContextAction(tripId: string): Promise<
   | {
@@ -20,6 +59,9 @@ export async function getPdfExportContextAction(tripId: string): Promise<
       design: "standard" | "premium";
       familyName: string;
       bookingLinks: Array<{ label: string; url: string }>;
+      budgetItems: TripBudgetItem[];
+      checklistItems: TripChecklistItem[];
+      temperatureUnit: TemperatureUnit;
     }
   | { ok: false; error: string }
 > {
@@ -37,15 +79,54 @@ export async function getPdfExportContextAction(tripId: string): Promise<
 
   if (tripErr || !tripRow) return { ok: false, error: "TRIP_NOT_FOUND" };
 
-  const trip = tripRow as Trip;
+  const trip = mapTripRow(tripRow as Record<string, unknown>);
   const regionId = trip.region_id ?? "orlando";
 
-  const [parks, customTiles, region, tier] = await Promise.all([
+  const [
+    parks,
+    customTiles,
+    region,
+    tier,
+    budgetRes,
+    checklistRes,
+    profileRes,
+  ] = await Promise.all([
     getParksForRegion(regionId),
     getUserCustomTiles(user.id),
     getRegionById(regionId),
     getCurrentTier(),
+    supabase
+      .from("trip_budget_items")
+      .select("*")
+      .eq("trip_id", tripId)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("trip_checklist_items")
+      .select("*")
+      .eq("trip_id", tripId)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("profiles")
+      .select("temperature_unit")
+      .eq("id", user.id)
+      .maybeSingle(),
   ]);
+
+  const budgetItems = (budgetRes.data ?? []).map((x) =>
+    mapBudgetRow(x as Record<string, unknown>),
+  );
+  const checklistItems = (checklistRes.data ?? []).map((x) =>
+    mapChecklistRow(x as Record<string, unknown>),
+  );
+
+  const temperatureUnit: TemperatureUnit =
+    profileRes.data &&
+    typeof profileRes.data === "object" &&
+    "temperature_unit" in profileRes.data &&
+    (profileRes.data as { temperature_unit?: string }).temperature_unit ===
+      "f"
+      ? "f"
+      : "c";
 
   const config = getTierConfig(tier);
   const destLabel =
@@ -93,6 +174,9 @@ export async function getPdfExportContextAction(tripId: string): Promise<
     design: config.features.pdf_design,
     familyName: trip.family_name?.trim() || "Your family",
     bookingLinks,
+    budgetItems,
+    checklistItems,
+    temperatureUnit,
   };
 }
 

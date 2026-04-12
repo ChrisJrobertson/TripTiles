@@ -1,5 +1,9 @@
 "use client";
 
+import {
+  assignmentWithUpdatedSlotTime,
+  countFilledSlots,
+} from "@/lib/assignment-slots";
 import { generateAIPlanAction } from "@/actions/ai";
 import {
   deleteTripAction,
@@ -10,13 +14,17 @@ import {
   updateTripFromWizardAction,
   updateTripMetadataAction,
   updateTripPlanningPreferencesAction,
+  updateTripPreferencesPatchAction,
 } from "@/actions/trips";
 import { AppNavHeader } from "@/components/app/AppNavHeader";
 import { AchievementToast } from "@/components/gamification/AchievementToast";
 import { deleteCustomTileAction } from "@/actions/custom-tiles";
 import { Calendar } from "@/components/planner/Calendar";
+import { CompareDaysPanel } from "@/components/planner/CompareDaysPanel";
 import { CrowdStrategyBanner } from "@/components/planner/CrowdStrategyBanner";
 import { MobileDayView } from "@/components/planner/MobileDayView";
+import { TripBudgetView } from "@/components/planner/TripBudgetView";
+import { TripChecklistView } from "@/components/planner/TripChecklistView";
 import { Countdown } from "@/components/planner/Countdown";
 import { CustomTileModal } from "@/components/planner/CustomTileModal";
 import { DayNotesPanel } from "@/components/planner/DayNotesPanel";
@@ -37,12 +45,14 @@ import { BookTripAffiliatePanel } from "@/components/planner/BookTripAffiliatePa
 import { hasAnyAffiliatePartner } from "@/lib/affiliates";
 import { PdfExportButton } from "@/components/planner/PdfExportButton";
 import { TripTimeline } from "@/components/planner/TripTimeline";
+import { TripStatsCard } from "@/components/planner/TripStatsCard";
 import { EmptyCalendarCta } from "@/components/planner/EmptyCalendarCta";
 import { TripCreationWizard } from "@/components/planner/TripCreationWizard";
 import { TripThemePicker } from "@/components/planner/TripThemePicker";
 import { Wizard } from "@/components/planner/Wizard";
 import { TierLimitModal } from "@/components/paywall/TierLimitModal";
 import { formatUndoSnapshotHint } from "@/lib/date-helpers";
+import { buildSurpriseDayPlan } from "@/lib/surprise-day";
 import { isCruisePaletteTileName } from "@/lib/cruise-tiles";
 import { parkMatchesPlannerRegion } from "@/lib/park-matches-planner-region";
 import {
@@ -67,11 +77,13 @@ import {
 } from "@/lib/toast";
 import type {
   AchievementDefinition,
+  Assignment,
   Assignments,
   CustomTile,
   Park,
   Region,
   SlotType,
+  TemperatureUnit,
   Trip,
   UserTier,
 } from "@/lib/types";
@@ -111,6 +123,12 @@ type Props = {
   initialAutoGenerate?: boolean;
   /** From `user_custom_tile_limit` RPC. */
   customTileLimit: number;
+  /** From `?tab=` on the planner URL. */
+  plannerTab?: "planner" | "budget" | "checklist";
+  /** From `profiles.temperature_unit` for calendar weather labels. */
+  temperatureUnit?: TemperatureUnit;
+  /** When true, milestone reminder emails are suppressed for every trip. */
+  emailMarketingOptOut?: boolean;
 };
 
 const ASSIGN_DEBOUNCE_MS = 450;
@@ -152,7 +170,7 @@ async function runSmartPlanWithTimeoutAndRetry(
     res = {
       ok: false,
       error: "AI_ERROR",
-      message: "Smart Plan timed out before finishing.",
+      message: "Ellie is still working — this pass hit the time limit.",
     };
   }
   if (res.ok) return res;
@@ -189,6 +207,9 @@ export function PlannerClient({
   initialOpenSmartPlan = false,
   initialAutoGenerate = false,
   customTileLimit,
+  plannerTab = "planner",
+  temperatureUnit = "c",
+  emailMarketingOptOut = false,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -251,8 +272,20 @@ export function PlannerClient({
   const smartPlanOpenedFromQueryRef = useRef(false);
   const autoGenerateConsumedRef = useRef(false);
   const [fullPageAiBusy, setFullPageAiBusy] = useState(false);
+  const [compareMode, setCompareMode] = useState(false);
+  const [surpriseUndo, setSurpriseUndo] = useState<{
+    tripId: string;
+    dateKey: string;
+    prevDay: Assignment | undefined;
+    prevUserNote: string;
+  } | null>(null);
 
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
+
+  const timelineUnlocked =
+    userTier === "pro" ||
+    userTier === "family" ||
+    userTier === "premium";
 
   const shellThemeStyle = useMemo(
     () =>
@@ -266,9 +299,7 @@ export function PlannerClient({
 
   const hasAnyAssignment = useMemo(() => {
     if (!activeTrip) return false;
-    return Object.values(activeTrip.assignments).some(
-      (a) => a && Object.keys(a).length > 0,
-    );
+    return countFilledSlots(activeTrip.assignments) > 0;
   }, [activeTrip]);
 
   const regionLabel = useMemo(() => {
@@ -444,13 +475,15 @@ export function PlannerClient({
         : initialTrips[0]?.id ?? "";
     setActiveTripId(valid);
     if (initialTrips.length === 0) {
-      setWizardFirstRun(true);
-      setWizardOpen(true);
+      if (!initialAutoGenerate) {
+        setWizardFirstRun(true);
+        setWizardOpen(true);
+      }
     } else {
       setWizardOpen(false);
       setWizardEditId(null);
     }
-  }, [initialTrips, initialActiveTripId]);
+  }, [initialTrips, initialActiveTripId, initialAutoGenerate]);
 
   const showHint = useCallback((msg: string) => {
     setHint(msg);
@@ -551,6 +584,16 @@ export function PlannerClient({
   useEffect(() => {
     return () => clearAssignTimer();
   }, [clearAssignTimer]);
+
+  useEffect(() => {
+    if (!surpriseUndo) return;
+    const id = window.setTimeout(() => setSurpriseUndo(null), 5000);
+    return () => window.clearTimeout(id);
+  }, [surpriseUndo]);
+
+  useEffect(() => {
+    setCompareMode(false);
+  }, [activeTripId]);
 
   const applyLocalPatch = useCallback((tripId: string, patch: Partial<Trip>) => {
     const ts = new Date().toISOString();
@@ -713,7 +756,9 @@ export function PlannerClient({
     void (async () => {
       setFullPageAiBusy(true);
       try {
-        const tripBefore = trips.find((x) => x.id === activeTripId);
+        const tripBefore =
+          trips.find((x) => x.id === activeTripId) ??
+          initialTrips.find((x) => x.id === activeTripId);
         const snapAssignments = tripBefore?.assignments
           ? (JSON.parse(
               JSON.stringify(tripBefore.assignments),
@@ -796,10 +841,11 @@ export function PlannerClient({
   }, [
     initialAutoGenerate,
     activeTripId,
-    trips,
     applyLocalPatch,
     enqueueAchievementKeys,
     router,
+    initialTrips,
+    trips,
   ]);
 
   const onAssign = useCallback(
@@ -855,6 +901,261 @@ export function PlannerClient({
     [activeTripId, scheduleAssignmentsSave],
   );
 
+  const onSlotTimeChange = useCallback(
+    (dateKey: string, slot: SlotType, timeHHmm: string) => {
+      if (!activeTripId) return;
+      setTrips((prev) =>
+        prev.map((t) => {
+          if (t.id !== activeTripId) return t;
+          const nextAss = assignmentWithUpdatedSlotTime(
+            t.assignments,
+            dateKey,
+            slot,
+            timeHHmm,
+          );
+          if (nextAss === t.assignments) return t;
+          scheduleAssignmentsSave(t.id, nextAss);
+          return {
+            ...t,
+            assignments: nextAss,
+            updated_at: new Date().toISOString(),
+            previous_assignments_snapshot: null,
+            previous_preferences_snapshot: null,
+            previous_assignments_snapshot_at: null,
+          };
+        }),
+      );
+    },
+    [activeTripId, scheduleAssignmentsSave],
+  );
+
+  const onTransferSlot = useCallback(
+    (
+      fromDate: string,
+      fromSlot: SlotType,
+      toDate: string,
+      toSlot: SlotType,
+    ) => {
+      if (!activeTripId) return;
+      setTrips((prev) =>
+        prev.map((t) => {
+          if (t.id !== activeTripId) return t;
+          const nextAss: Assignments = { ...t.assignments };
+          const da = { ...(nextAss[fromDate] ?? {}) };
+          const db = { ...(nextAss[toDate] ?? {}) };
+          const a = da[fromSlot];
+          const b = db[toSlot];
+          if (a === undefined && b === undefined) return t;
+          if (a !== undefined) db[toSlot] = a;
+          else delete db[toSlot];
+          if (b !== undefined) da[fromSlot] = b;
+          else delete da[fromSlot];
+          if (Object.keys(da).length === 0) delete nextAss[fromDate];
+          else nextAss[fromDate] = da;
+          if (Object.keys(db).length === 0) delete nextAss[toDate];
+          else nextAss[toDate] = db;
+          scheduleAssignmentsSave(t.id, nextAss);
+          return {
+            ...t,
+            assignments: nextAss,
+            updated_at: new Date().toISOString(),
+            previous_assignments_snapshot: null,
+            previous_preferences_snapshot: null,
+            previous_assignments_snapshot_at: null,
+          };
+        }),
+      );
+    },
+    [activeTripId, scheduleAssignmentsSave],
+  );
+
+  const handleTripEmailReminders = useCallback(
+    async (enabled: boolean) => {
+      if (!activeTripId) return;
+      applyLocalPatch(activeTripId, { email_reminders: enabled });
+      const res = await updateTripMetadataAction({
+        tripId: activeTripId,
+        emailReminders: enabled,
+      });
+      if (!res.ok) {
+        showToast(res.error);
+        startTransition(() => router.refresh());
+      }
+    },
+    [activeTripId, applyLocalPatch, router],
+  );
+
+  const undoSurpriseFill = useCallback(() => {
+    if (!surpriseUndo || !activeTripId) return;
+    const { tripId, dateKey, prevDay, prevUserNote } = surpriseUndo;
+    const tripRef = trips.find((x) => x.id === tripId);
+    const prefBase =
+      tripRef?.preferences && typeof tripRef.preferences === "object"
+        ? { ...tripRef.preferences }
+        : {};
+    const rawNotes = prefBase.day_notes;
+    const noteBase =
+      rawNotes && typeof rawNotes === "object" && !Array.isArray(rawNotes)
+        ? { ...(rawNotes as Record<string, string>) }
+        : {};
+    const mergedForApi = { ...noteBase };
+    if (prevUserNote.trim()) mergedForApi[dateKey] = prevUserNote;
+    else delete mergedForApi[dateKey];
+
+    setSurpriseUndo(null);
+    setTrips((prev) =>
+      prev.map((trip) => {
+        if (trip.id !== tripId) return trip;
+        const nextAss: Assignments = { ...trip.assignments };
+        if (prevDay && Object.keys(prevDay).length > 0) {
+          nextAss[dateKey] = { ...prevDay };
+        } else {
+          delete nextAss[dateKey];
+        }
+        scheduleAssignmentsSave(trip.id, nextAss);
+        const tripPref =
+          trip.preferences && typeof trip.preferences === "object"
+            ? { ...trip.preferences }
+            : {};
+        return {
+          ...trip,
+          assignments: nextAss,
+          preferences: { ...tripPref, day_notes: mergedForApi },
+          updated_at: new Date().toISOString(),
+          previous_assignments_snapshot: null,
+          previous_preferences_snapshot: null,
+          previous_assignments_snapshot_at: null,
+        };
+      }),
+    );
+    void (async () => {
+      const res = await updateTripPreferencesPatchAction({
+        tripId,
+        patch: { day_notes: mergedForApi },
+      });
+      if (!res.ok) showToast(res.error);
+    })();
+    showToast("Surprise plan removed.");
+  }, [surpriseUndo, activeTripId, trips, scheduleAssignmentsSave]);
+
+  const handleSurpriseMe = useCallback(
+    (preferredDateKey?: string | null) => {
+      if (!activeTripId) return;
+      const t = trips.find((x) => x.id === activeTripId);
+      if (!t) return;
+      const res = buildSurpriseDayPlan({
+        trip: t,
+        parks,
+        preferredDateKey: preferredDateKey ?? undefined,
+      });
+      if (!res) {
+        showToast(
+          "No empty days to fill — clear a day or extend your trip dates.",
+        );
+        return;
+      }
+      const userNotes = plannerUserDayNotes(t);
+      const prevUserNote = userNotes[res.dateKey] ?? "";
+      const prevDay = t.assignments[res.dateKey];
+      const surpriseLine =
+        "Surprise plan — feel free to swap anything out!";
+      const noteMerged = prevUserNote.trim()
+        ? `${prevUserNote.trim()}\n\n${surpriseLine}`
+        : surpriseLine;
+
+      const rawNotes = t.preferences?.day_notes;
+      const noteBase =
+        rawNotes &&
+        typeof rawNotes === "object" &&
+        !Array.isArray(rawNotes)
+          ? { ...(rawNotes as Record<string, string>) }
+          : {};
+      const mergedNotesForServer = { ...noteBase, [res.dateKey]: noteMerged };
+
+      setSurpriseUndo({
+        tripId: t.id,
+        dateKey: res.dateKey,
+        prevDay: prevDay ? { ...prevDay } : undefined,
+        prevUserNote,
+      });
+
+      setTrips((prev) =>
+        prev.map((trip) => {
+          if (trip.id !== activeTripId) return trip;
+          const nextAss: Assignments = { ...trip.assignments };
+          nextAss[res.dateKey] = { ...res.assignment };
+          scheduleAssignmentsSave(trip.id, nextAss);
+          const prefBase =
+            trip.preferences && typeof trip.preferences === "object"
+              ? { ...trip.preferences }
+              : {};
+          return {
+            ...trip,
+            assignments: nextAss,
+            preferences: {
+              ...prefBase,
+              day_notes: mergedNotesForServer,
+            },
+            updated_at: new Date().toISOString(),
+            previous_assignments_snapshot: null,
+            previous_preferences_snapshot: null,
+            previous_assignments_snapshot_at: null,
+          };
+        }),
+      );
+
+      void (async () => {
+        const r = await updateTripPreferencesPatchAction({
+          tripId: activeTripId,
+          patch: { day_notes: mergedNotesForServer },
+        });
+        if (!r.ok) showToast(r.error);
+      })();
+
+      const label = new Date(`${res.dateKey}T12:00:00`).toLocaleDateString(
+        "en-GB",
+        { weekday: "short", day: "numeric", month: "short" },
+      );
+      showToast(`Ellie filled ${label} with a surprise plan! 🎲`);
+    },
+    [activeTripId, trips, parks, scheduleAssignmentsSave],
+  );
+
+  const onSaveDayNote = useCallback(
+    async (dateKey: string, text: string) => {
+      if (!activeTripId) return;
+      const t = trips.find((x) => x.id === activeTripId);
+      if (!t) return;
+      const raw = t.preferences?.day_notes;
+      const base =
+        raw && typeof raw === "object" && !Array.isArray(raw)
+          ? { ...(raw as Record<string, string>) }
+          : {};
+      const mergedNotes = { ...base, [dateKey]: text };
+      const prefsBase =
+        t.preferences &&
+        typeof t.preferences === "object" &&
+        !Array.isArray(t.preferences)
+          ? { ...t.preferences }
+          : {};
+      applyLocalPatch(activeTripId, {
+        preferences: {
+          ...prefsBase,
+          day_notes: mergedNotes,
+        },
+      });
+      const res = await updateTripPreferencesPatchAction({
+        tripId: activeTripId,
+        patch: { day_notes: mergedNotes },
+      });
+      if (!res.ok) {
+        showToast(res.error);
+        startTransition(() => router.refresh());
+      }
+    },
+    [activeTripId, trips, applyLocalPatch, router],
+  );
+
   const confirmUndoSmartPlan = useCallback(async () => {
     if (!activeTripId) return;
     setSmartPlanUndoOpen(false);
@@ -876,6 +1177,7 @@ export function PlannerClient({
   };
 
   const savingVisible = isSaving || isPending;
+  const showPlannerShell = plannerTab === "planner";
 
   return (
     <div
@@ -1050,6 +1352,13 @@ export function PlannerClient({
               buttonId="planner-pdf-export-btn"
               onAchievementKeys={(keys) => enqueueAchievementKeys(keys)}
             />
+            <button
+              type="button"
+              className="hidden rounded-lg border border-royal/20 bg-white px-4 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition hover:bg-cream md:inline-flex"
+              onClick={() => setCompareMode(true)}
+            >
+              Compare days
+            </button>
             {activeTrip.previous_assignments_snapshot_at ? (
               <button
                 type="button"
@@ -1146,105 +1455,193 @@ export function PlannerClient({
                   </div>
                 ) : null
               }
+              remindersSection={
+                activeTrip ? (
+                  <div className="px-3 py-2">
+                    <p className="font-sans text-xs font-semibold text-royal/70">
+                      Email reminders
+                    </p>
+                    <label className="mt-2 flex min-h-[44px] cursor-pointer items-center justify-between gap-3 rounded-lg border border-royal/15 bg-white px-3 py-2">
+                      <span className="font-sans text-sm text-royal">
+                        Send me email reminders for this trip
+                      </span>
+                      <input
+                        type="checkbox"
+                        className="h-5 w-5 shrink-0 rounded border-royal/35 accent-royal"
+                        checked={activeTrip.email_reminders !== false}
+                        disabled={emailMarketingOptOut}
+                        onChange={(e) =>
+                          void handleTripEmailReminders(e.target.checked)
+                        }
+                        aria-label="Send email reminders for this trip"
+                      />
+                    </label>
+                    {emailMarketingOptOut ? (
+                      <p className="mt-2 font-sans text-xs text-royal/60">
+                        You&apos;ve opted out of marketing emails in Settings —
+                        we won&apos;t send trip reminders.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null
+              }
             />
           </section>
 
-          {typeof activeTrip.preferences?.ai_crowd_summary === "string" &&
+          {showPlannerShell &&
+          typeof activeTrip.preferences?.ai_crowd_summary === "string" &&
           (activeTrip.preferences.ai_crowd_summary as string).trim() ? (
             <CrowdStrategyBanner
               text={(activeTrip.preferences.ai_crowd_summary as string).trim()}
             />
           ) : null}
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <ShareTripPanel
-              tripId={activeTrip.id}
-              isPublic={activeTrip.is_public}
-              publicSlug={activeTrip.public_slug}
-              siteUrl={siteUrl}
-              cloneCount={activeTrip.clone_count ?? 0}
-              viewCount={activeTrip.view_count ?? 0}
-            />
-            <FamilyInvitePanel tripId={activeTrip.id} userTier={userTier} />
-            <DayNotesPanel trip={activeTrip} tripId={activeTrip.id} />
-          </div>
+          {showPlannerShell ? (
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <ShareTripPanel
+                tripId={activeTrip.id}
+                isPublic={activeTrip.is_public}
+                publicSlug={activeTrip.public_slug}
+                siteUrl={siteUrl}
+                cloneCount={activeTrip.clone_count ?? 0}
+                viewCount={activeTrip.view_count ?? 0}
+              />
+              <FamilyInvitePanel tripId={activeTrip.id} userTier={userTier} />
+              <DayNotesPanel trip={activeTrip} tripId={activeTrip.id} />
+            </div>
+          ) : null}
 
-          <div className="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] lg:gap-8">
-            <div className="hidden space-y-4 md:block lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:pr-1">
-              {hasAnyAffiliatePartner() ? (
-                <BookTripAffiliatePanel
-                  destinationLabel={activeRegionLabel}
-                  tripId={activeTrip.id}
-                  startDate={activeTrip.start_date}
-                  endDate={activeTrip.end_date}
-                  siteUrl={siteUrl}
-                />
-              ) : null}
-              <Palette
-                parks={parks}
-                customTiles={customTilesForPalette}
-                regionId={resolvePaletteRegionId(activeTrip)}
-                showCruiseTiles={activeTrip.has_cruise}
-                colourTheme={normaliseThemeKey(activeTrip.colour_theme)}
-                selectedParkId={selectedParkId}
-                onSelectPark={setSelectedParkId}
-                onAddCustom={handleAddCustom}
-                onEditCustom={handleEditCustom}
-                onDeleteCustom={handleDeleteCustom}
+          {plannerTab === "budget" ? (
+            <div className="mt-8 w-full max-w-4xl">
+              <TripBudgetView
+                trip={activeTrip}
+                onTripPatch={(patch) => applyLocalPatch(activeTrip.id, patch)}
               />
             </div>
-            <div className="relative min-w-0 w-full">
-              {!hasAnyAssignment ? (
-                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-3 sm:p-4">
-                  <div className="pointer-events-auto w-full max-w-md">
-                    <EmptyCalendarCta
-                      onGenerateAi={() => {
-                        setSmartError(null);
-                        setSmartOpen(true);
-                      }}
-                      onAddManually={() =>
-                        showHint(
-                          "Pick a park from the list, then tap a day slot to place it.",
-                        )
-                      }
+          ) : plannerTab === "checklist" ? (
+            <div className="mt-8 w-full max-w-4xl">
+              <TripChecklistView trip={activeTrip} />
+            </div>
+          ) : (
+            <div
+              className={`mt-8 grid items-start gap-6 ${
+                compareMode
+                  ? ""
+                  : "lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] lg:gap-8"
+              }`}
+            >
+              {!compareMode ? (
+                <div className="hidden space-y-4 md:block lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:pr-1">
+                  {hasAnyAffiliatePartner() ? (
+                    <BookTripAffiliatePanel
+                      destinationLabel={activeRegionLabel}
+                      tripId={activeTrip.id}
+                      startDate={activeTrip.start_date}
+                      endDate={activeTrip.end_date}
+                      siteUrl={siteUrl}
                     />
-                  </div>
+                  ) : null}
+                  <Palette
+                    parks={parks}
+                    customTiles={customTilesForPalette}
+                    regionId={resolvePaletteRegionId(activeTrip)}
+                    showCruiseTiles={activeTrip.has_cruise}
+                    colourTheme={normaliseThemeKey(activeTrip.colour_theme)}
+                    selectedParkId={selectedParkId}
+                    onSelectPark={setSelectedParkId}
+                    onAddCustom={handleAddCustom}
+                    onEditCustom={handleEditCustom}
+                    onDeleteCustom={handleDeleteCustom}
+                  />
                 </div>
               ) : null}
-              <div className="hidden md:block">
-                <Calendar
-                  trip={activeTrip}
-                  parks={calendarParks}
-                  selectedParkId={selectedParkId}
-                  onAssign={onAssign}
-                  onClear={onClear}
-                  onNeedParkFirst={() => showHint("Pick a park first")}
-                  onAfterSlotClear={() => showToast("Slot cleared")}
-                />
+              <div className="relative min-w-0 w-full">
+                {compareMode ? (
+                  <CompareDaysPanel
+                    trip={activeTrip}
+                    parks={calendarParks}
+                    assignments={activeTrip.assignments ?? {}}
+                    colourTheme={normaliseThemeKey(activeTrip.colour_theme)}
+                    plannerRegionId={resolvePaletteRegionId(activeTrip)}
+                    temperatureUnit={temperatureUnit}
+                    userDayNotes={mobilePlannerNoteMaps.user}
+                    onSaveUserDayNote={onSaveDayNote}
+                    onTransferSlot={onTransferSlot}
+                    onExit={() => setCompareMode(false)}
+                  />
+                ) : (
+                  <>
+                    {!hasAnyAssignment ? (
+                      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-3 sm:p-4">
+                        <div className="pointer-events-auto w-full max-w-md">
+                          <EmptyCalendarCta
+                            onGenerateAi={() => {
+                              setSmartError(null);
+                              setSmartOpen(true);
+                            }}
+                            onAddManually={() =>
+                              showHint(
+                                "Pick a park from the list, then tap a day slot to place it.",
+                              )
+                            }
+                            onSurpriseMe={() => handleSurpriseMe(null)}
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+                    <TripStatsCard
+                      trip={activeTrip}
+                      parks={calendarParks}
+                      destinationLabel={activeRegionLabel}
+                      onToast={showToast}
+                    />
+                    <div className="hidden md:block">
+                      <Calendar
+                        trip={activeTrip}
+                        parks={calendarParks}
+                        selectedParkId={selectedParkId}
+                        onAssign={onAssign}
+                        onClear={onClear}
+                        onNeedParkFirst={() => showHint("Pick a park first")}
+                        onAfterSlotClear={() => showToast("Slot cleared")}
+                        plannerRegionId={resolvePaletteRegionId(activeTrip)}
+                        temperatureUnit={temperatureUnit}
+                        onSaveDayNote={onSaveDayNote}
+                        timelineUnlocked={timelineUnlocked}
+                        onSlotTimeChange={onSlotTimeChange}
+                      />
+                    </div>
+                    <MobileDayView
+                      trip={activeTrip}
+                      parks={calendarParks}
+                      assignments={activeTrip.assignments ?? {}}
+                      dayNotes={mobilePlannerNoteMaps.ai}
+                      userDayNotes={mobilePlannerNoteMaps.user}
+                      onAssign={onAssign}
+                      onClear={onClear}
+                      crowdSummary={mobileCrowdSummaryText}
+                      readOnly={false}
+                      onSelectPark={setSelectedParkId}
+                      onMenuExportPdf={() =>
+                        document.getElementById("planner-pdf-export-btn")?.click()
+                      }
+                      onMenuShare={handleMobileMenuShare}
+                      onMenuSettings={() => undefined}
+                      smartPlanUndoSnapshotAt={
+                        activeTrip.previous_assignments_snapshot_at ?? null
+                      }
+                      onMenuUndoSmartPlan={() => setSmartPlanUndoOpen(true)}
+                      plannerRegionId={resolvePaletteRegionId(activeTrip)}
+                      temperatureUnit={temperatureUnit}
+                      onSaveUserDayNote={onSaveDayNote}
+                      timelineUnlocked={timelineUnlocked}
+                      onSlotTimeChange={onSlotTimeChange}
+                    />
+                  </>
+                )}
               </div>
-              <MobileDayView
-                trip={activeTrip}
-                parks={calendarParks}
-                assignments={activeTrip.assignments ?? {}}
-                dayNotes={mobilePlannerNoteMaps.ai}
-                userDayNotes={mobilePlannerNoteMaps.user}
-                onAssign={onAssign}
-                onClear={onClear}
-                crowdSummary={mobileCrowdSummaryText}
-                readOnly={false}
-                onSelectPark={setSelectedParkId}
-                onMenuExportPdf={() =>
-                  document.getElementById("planner-pdf-export-btn")?.click()
-                }
-                onMenuShare={handleMobileMenuShare}
-                onMenuSettings={() => undefined}
-                smartPlanUndoSnapshotAt={
-                  activeTrip.previous_assignments_snapshot_at ?? null
-                }
-                onMenuUndoSmartPlan={() => setSmartPlanUndoOpen(true)}
-              />
             </div>
-          </div>
+          )}
         </main>
       ) : (
         <main className="mx-auto max-w-lg px-4 py-16 text-center">
@@ -1267,7 +1664,7 @@ export function PlannerClient({
               <span className="text-gold" aria-hidden>
                 ✓
               </span>
-              <span>Smart Plan suggests a draft itinerary (optional)</span>
+              <span>Smart Plan with Ellie suggests a draft itinerary (optional)</span>
             </li>
             <li className="flex gap-2">
               <span className="text-gold" aria-hidden>
@@ -1463,6 +1860,21 @@ export function PlannerClient({
         variant={tierLimitVariant}
         reason={tierLimitReason}
       />
+
+      {surpriseUndo ? (
+        <div className="fixed bottom-24 left-1/2 z-[92] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-2xl border border-royal/15 bg-white px-4 py-3 shadow-xl safe-area-inset-bottom">
+          <span className="text-center font-sans text-sm text-royal">
+            Undo surprise fill?
+          </span>
+          <button
+            type="button"
+            onClick={undoSurpriseFill}
+            className="min-h-11 rounded-lg bg-royal px-5 font-sans text-sm font-semibold text-cream transition hover:bg-royal/90"
+          >
+            Undo
+          </button>
+        </div>
+      ) : null}
 
       <div
         className="pointer-events-none fixed right-4 top-20 z-[85] flex max-w-[min(22rem,calc(100vw-2rem))] flex-col gap-2"

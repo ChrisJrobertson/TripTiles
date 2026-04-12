@@ -123,8 +123,9 @@ function rgbToHex(r: number, g: number, b: number): string {
   return `#${x(r)}${x(g)}${x(b)}`;
 }
 
-const PASTEL_L_MIN = 0.7;
-const PASTEL_L_MAX = 0.92;
+const PASTEL_L_MIN = 0.68;
+const PASTEL_L_MAX = 0.9;
+const PASTEL_S_FLOOR = 0.07;
 
 /**
  * Softens a hex catalogue colour for the active theme. Classic returns the
@@ -139,6 +140,7 @@ export function applyThemeToColour(hex: string, theme: ThemeTransform): string {
   let { h, s, l } = rgbToHsl(rgb.r, rgb.g, rgb.b);
   l = clamp(l + (1 - l) * theme.lighten, 0, 1);
   s = clamp(s * (1 - theme.desaturate), 0, 1);
+  s = Math.max(PASTEL_S_FLOOR, s);
   h = (h + theme.hueShift + 360) % 360;
   l = clamp(l, PASTEL_L_MIN, PASTEL_L_MAX);
   const out = hslToRgb(h, s, l);

@@ -13,7 +13,15 @@ import {
 } from "@/lib/ai-plan-guardrails";
 import { addDays, formatDateKey, parseDate } from "@/lib/date-helpers";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
-import type { Assignments, CustomTile, Park, SlotType, Trip } from "@/lib/types";
+import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
+import type {
+  Assignment,
+  Assignments,
+  CustomTile,
+  Park,
+  SlotType,
+  Trip,
+} from "@/lib/types";
 import { customTileToPark } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 import { awardAchievementAction } from "@/actions/achievements";
@@ -23,6 +31,7 @@ import { getCrowdPatternsForParkIds } from "@/lib/data/crowd-patterns";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { formatRegionalDiningForPrompt } from "@/data/regional-dining";
 import { formatPlanningPreferencesForPrompt } from "@/lib/planning-preferences-prompt";
+import { isNamedRestaurantPark } from "@/lib/named-restaurant-tiles";
 import { getTierConfig } from "@/lib/tiers";
 import type { UserTier } from "@/lib/types";
 
@@ -33,9 +42,10 @@ const anthropic = new Anthropic({
 const SYSTEM_PROMPT = `You are a theme park planner. Output ONLY valid JSON — no markdown, no preamble, no text outside the JSON object.
 
 Shape:
-{ "assignments": { "2026-7-9": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-7-14": "…" } }
+{ "assignments": { "2026-7-9": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-7-14": "…" }, "planner_day_notes": { "2026-7-9": "…" } }
 
 Limits: crowd_reasoning ≤400 chars, one paragraph. Each day_crowd_notes value ≤150 chars, one sentence.
+Each planner_day_notes value ≤350 chars: practical tips for THAT day only (hours, virtual queues, rest-day ideas). Omit keys with no specific tip.
 
 DAY NOTES RULES (CRITICAL):
 - Sound like a knowledgeable friend. NEVER raw crowd scores, arithmetic, formulas, bracketed maths, "score N", "crowd index N", or how you calculated anything.
@@ -93,12 +103,13 @@ function mergeAiIntoTrip(
   const out: Assignments = { ...base };
   for (const [day, slots] of Object.entries(incoming)) {
     if (!slots || typeof slots !== "object") continue;
-    const dayOut: Partial<Record<SlotType, string>> = { ...(out[day] ?? {}) };
+    const dayOut: Assignment = { ...(out[day] ?? {}) };
     for (const [slot, pid] of Object.entries(slots)) {
       if (!SLOT_SET.has(slot as SlotType)) continue;
       if (typeof pid !== "string") continue;
       const cur = dayOut[slot as SlotType];
-      if (cur !== undefined && cur !== "") continue;
+      const curId = getParkIdFromSlotValue(cur);
+      if (curId !== undefined && curId !== "") continue;
       dayOut[slot as SlotType] = pid;
     }
     if (Object.keys(dayOut).length > 0) out[day] = dayOut;
@@ -158,6 +169,7 @@ function parseCrowdMetadata(
 ): {
   crowd_reasoning?: string;
   day_crowd_notes?: Record<string, string>;
+  planner_day_notes?: Record<string, string>;
 } {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const obj = raw as Record<string, unknown>;
@@ -176,10 +188,22 @@ function parseCrowdMetadata(
       if (s) day_crowd_notes[k] = sanitizeDayNote(s.slice(0, 150));
     }
   }
+  const planner_day_notes: Record<string, string> = {};
+  const pNotes = obj.planner_day_notes;
+  if (pNotes && typeof pNotes === "object" && !Array.isArray(pNotes)) {
+    for (const [k, v] of Object.entries(pNotes as Record<string, unknown>)) {
+      if (!allowedDates.has(k)) continue;
+      if (typeof v !== "string") continue;
+      const s = v.trim();
+      if (s) planner_day_notes[k] = sanitizeDayNote(s.slice(0, 350));
+    }
+  }
   return {
     crowd_reasoning,
     day_crowd_notes:
       Object.keys(day_crowd_notes).length > 0 ? day_crowd_notes : undefined,
+    planner_day_notes:
+      Object.keys(planner_day_notes).length > 0 ? planner_day_notes : undefined,
   };
 }
 
@@ -230,6 +254,8 @@ function buildPlannerUserMessage(params: {
   wizardContext: string | null;
   /** Nearby dining names for day-note hints only (optional). */
   diningHint: string | null;
+  /** Named assignable restaurant tiles for this region (optional). */
+  namedRestaurantHint: string | null;
 }): string {
   const {
     mode,
@@ -241,6 +267,7 @@ function buildPlannerUserMessage(params: {
     crowdJson,
     wizardContext,
     diningHint,
+    namedRestaurantHint,
   } = params;
 
   const crowdSection =
@@ -259,6 +286,8 @@ function buildPlannerUserMessage(params: {
   const wizBlock = wiz ? `\n${wiz}\n` : "";
   const dine = diningHint?.trim();
   const dineBlock = dine ? `\n${dine}\n` : "";
+  const namedRest = namedRestaurantHint?.trim();
+  const namedRestBlock = namedRest ? `\n${namedRest}\n` : "";
   const cruiseTilePolicy = trip.has_cruise
     ? "CRUISE TILES: This trip includes a cruise segment. Include cruise embark/disembark and ship activities where appropriate when they fit the dates."
     : "CRUISE TILES: This trip does not include a cruise. Do not suggest or assign cruise-only, ship-only, or port-excursion tiles (for example at sea, ship pool, shore excursion) unless the traveller has explicitly asked for them in their notes.";
@@ -268,24 +297,28 @@ function buildPlannerUserMessage(params: {
     return `${coreTrip}
 
 ${crowdSection}
-${wizBlock}${dineBlock}${cruiseTilePolicy}
+${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}
 
 SMART PLAN MODE — build a full itinerary using crowd patterns to place busier parks on historically lighter days within this window. The user did not write a long custom brief.
 ${extra ? `Optional family notes from the user:\n${extra}\n` : ""}
-Generate the itinerary JSON now (include crowd_reasoning and day_crowd_notes when possible).`;
+For each trip day, add planner_day_notes with 1–2 practical tips tied to that date and the parks you assign (rope drop times, virtual queues, rest-day ideas, dining). Keep each value concise. Skip generic advice that applies to every day.
+
+Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and planner_day_notes when possible).`;
   }
 
   return `${coreTrip}
 
 ${crowdSection}
-${wizBlock}${dineBlock}${cruiseTilePolicy}
+${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}
 
 CUSTOM PROMPT MODE — apply the traveller's preferences first, then use crowd patterns to improve date choices.
 
 Traveller's own words:
 ${userPrompt.trim() || "(empty — rely on trip defaults only.)"}
 
-Generate the itinerary JSON now (include crowd_reasoning and day_crowd_notes when possible).`;
+For each trip day, add planner_day_notes with 1–2 practical tips tied to that date and the parks you assign. Keep each value concise.
+
+Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and planner_day_notes when possible).`;
 }
 
 export async function generateAIPlanAction(input: {
@@ -431,6 +464,16 @@ export async function generateAIPlanAction(input: {
 
   const diningHint = formatRegionalDiningForPrompt(trip.region_id);
 
+  const namedRestaurantNames = builtFiltered
+    .filter(isNamedRestaurantPark)
+    .map((p) => p.name.trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+  const namedRestaurantHint =
+    namedRestaurantNames.length > 0
+      ? `NAMED_RESTAURANT_TILES: The following named restaurants are available as dining tiles for this region: ${namedRestaurantNames.join(", ")}. You may assign 1–2 of these to Lunch or Dinner slots where appropriate, using their exact names. Prefer named restaurants over generic "Table Service" or "Quick Service" tiles where a specific restaurant fits the day's location and vibe.`
+      : null;
+
   const composedUserMessage = buildPlannerUserMessage({
     mode: input.mode,
     userPrompt: input.userPrompt,
@@ -441,6 +484,7 @@ export async function generateAIPlanAction(input: {
     crowdJson,
     wizardContext,
     diningHint,
+    namedRestaurantHint,
   });
 
   const model = anthropicModelForTier(tier);
@@ -577,6 +621,14 @@ export async function generateAIPlanAction(input: {
     if (meta.crowd_reasoning) nextPrefs.ai_crowd_summary = meta.crowd_reasoning;
     if (meta.day_crowd_notes) nextPrefs.ai_day_crowd_notes = meta.day_crowd_notes;
     nextPrefs.ai_crowd_updated_at = now;
+    if (meta.planner_day_notes) {
+      const prevDn = trip.preferences?.day_notes;
+      const baseDn =
+        prevDn && typeof prevDn === "object" && !Array.isArray(prevDn)
+          ? { ...(prevDn as Record<string, string>) }
+          : {};
+      nextPrefs.day_notes = { ...baseDn, ...meta.planner_day_notes };
+    }
 
     const { error: upErr } = await supabase
       .from("trips")

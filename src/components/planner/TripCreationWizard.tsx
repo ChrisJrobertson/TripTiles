@@ -194,10 +194,10 @@ export function TripCreationWizard({
       await touchTripAction(res.tripId);
       onTripCreated?.();
       if (planPath === "ai") {
-        router.replace("/planner?autoGenerate=true");
-      } else {
-        router.replace("/planner");
+        window.location.assign("/planner?autoGenerate=true");
+        return;
       }
+      router.replace("/planner");
       router.refresh();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Something went wrong.");

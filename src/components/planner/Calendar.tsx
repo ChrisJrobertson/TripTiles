@@ -9,11 +9,14 @@ import {
   parseDate,
   startOfWeekMonday,
 } from "@/lib/date-helpers";
+import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
+import { DayTimelinePanel } from "@/components/planner/DayTimelinePanel";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
 import { parkChromaTileStyle } from "@/lib/theme-colours";
 import { normaliseThemeKey, themedEmptySlotSurfaceStyle } from "@/lib/themes";
-import type { Assignment, Park, SlotType, Trip } from "@/lib/types";
+import { dayConditionRow } from "@/lib/planner-day-conditions";
+import type { Assignment, Park, SlotType, TemperatureUnit, Trip } from "@/lib/types";
 import {
   CrowdLevelIndicator,
   crowdLevelFromHeuristicTone,
@@ -28,6 +31,12 @@ import {
   useState,
 } from "react";
 
+const CROWD_DOT: Record<"quiet" | "moderate" | "busy", string> = {
+  quiet: "#22C55E",
+  moderate: "#EAB308",
+  busy: "#EF4444",
+};
+
 type Props = {
   trip: Trip;
   parks: Park[];
@@ -39,6 +48,18 @@ type Props = {
   onAfterSlotClear?: () => void;
   /** Read-only grid (e.g. public share page). */
   readOnly?: boolean;
+  /** Region for static weather/crowd overlay (defaults to `trip.region_id`). */
+  plannerRegionId?: string | null;
+  temperatureUnit?: TemperatureUnit;
+  /** Persist user day notes (`preferences.day_notes`). */
+  onSaveDayNote?: (dateKey: string, text: string) => void;
+  /** Pro+ timeline editing for this day popover. */
+  timelineUnlocked?: boolean;
+  onSlotTimeChange?: (
+    dateKey: string,
+    slot: SlotType,
+    timeHHmm: string,
+  ) => void;
 };
 
 const SLOTS: { key: SlotType; label: string; area: string }[] = [
@@ -135,9 +156,18 @@ export function Calendar({
   onNeedParkFirst,
   onAfterSlotClear,
   readOnly = false,
+  plannerRegionId,
+  temperatureUnit = "c",
+  onSaveDayNote,
+  timelineUnlocked = false,
+  onSlotTimeChange,
 }: Props) {
   const parkById = new Map(parks.map((p) => [p.id, p]));
   const themeKey = normaliseThemeKey(trip.colour_theme);
+  const regionForConditions = plannerRegionId ?? trip.region_id;
+  const [editingNoteKey, setEditingNoteKey] = useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const noteSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const weeks = buildWeeks(trip);
   const crowdToneByDateKey = useMemo(() => {
     const m = new Map<string, "low" | "mid" | "high" | null>();
@@ -153,6 +183,9 @@ export function Calendar({
   const [notePopover, setNotePopover] = useState<NotePopoverState | null>(
     null,
   );
+  const [dayPopoverTab, setDayPopoverTab] = useState<"details" | "timeline">(
+    "details",
+  );
   const [popoverDeskPos, setPopoverDeskPos] = useState<{
     top: number;
     left: number;
@@ -162,6 +195,7 @@ export function Calendar({
   const closeNotePopover = useCallback(() => {
     setNotePopover(null);
     setPopoverDeskPos(null);
+    setDayPopoverTab("details");
   }, []);
 
   useEffect(() => {
@@ -204,6 +238,33 @@ export function Calendar({
       document.removeEventListener("touchstart", onPointer);
     };
   }, [notePopover, closeNotePopover]);
+
+  const flushDayNoteSave = useCallback(
+    (dateKey: string, text: string) => {
+      if (!onSaveDayNote) return;
+      onSaveDayNote(dateKey, text.slice(0, 500));
+    },
+    [onSaveDayNote],
+  );
+
+  const queueDayNoteSave = useCallback(
+    (dateKey: string, text: string) => {
+      if (!onSaveDayNote) return;
+      if (noteSaveTimer.current) clearTimeout(noteSaveTimer.current);
+      noteSaveTimer.current = setTimeout(() => {
+        noteSaveTimer.current = null;
+        flushDayNoteSave(dateKey, text);
+      }, 500);
+    },
+    [flushDayNoteSave, onSaveDayNote],
+  );
+
+  useEffect(
+    () => () => {
+      if (noteSaveTimer.current) clearTimeout(noteSaveTimer.current);
+    },
+    [],
+  );
 
   return (
     <div className="w-full min-w-0 overflow-x-auto">
@@ -259,6 +320,7 @@ export function Calendar({
                   dayNote,
                   anchorRect: anchor,
                 };
+                setDayPopoverTab("details");
                 setNotePopover(next);
                 if (
                   typeof window !== "undefined" &&
@@ -273,14 +335,37 @@ export function Calendar({
               const isPopoverThisDay =
                 notePopover?.dateKey === key && hasInsight;
 
+              const dc = dayConditionRow(
+                regionForConditions,
+                day,
+                temperatureUnit,
+              );
+
               return (
                 <div
                   key={key}
                   className="flex min-h-[8rem] flex-col rounded-md border border-royal/15 bg-white sm:min-h-[9rem] md:min-h-[5.75rem]"
                 >
                   <div className="flex items-center justify-between gap-0.5 border-b border-royal/10 px-1 py-0.5 md:py-1">
-                    <div className="min-w-0 flex flex-1 items-center justify-center gap-1 text-center">
-                      {crowdLevel ? (
+                    <div className="min-w-0 flex flex-1 flex-wrap items-center justify-center gap-1 text-center">
+                      {dc ? (
+                        <span
+                          className="inline-flex shrink-0 items-center gap-0.5"
+                          title={dc.tooltip}
+                        >
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{
+                              backgroundColor: CROWD_DOT[dc.crowd],
+                            }}
+                            aria-hidden
+                          />
+                          <span className="whitespace-nowrap font-sans text-[10px] leading-none text-royal/75">
+                            {dc.conditions.weatherEmoji}
+                            {dc.tempLabel}
+                          </span>
+                        </span>
+                      ) : crowdLevel ? (
                         <span className="hidden shrink-0 md:inline-flex">
                           <CrowdLevelIndicator level={crowdLevel} size="sm" />
                         </span>
@@ -320,7 +405,7 @@ export function Calendar({
                   </div>
                   <div className="planner-slot-grid flex-1 p-0.5">
                     {SLOTS.map(({ key: slot, label, area }) => {
-                      const pid = ass[slot];
+                      const pid = getParkIdFromSlotValue(ass[slot]);
                       const park = pid ? parkById.get(pid) : undefined;
                       const isMeal = slot === "lunch" || slot === "dinner";
                       const mealPrefix = isMeal ? "🍽️ " : "";
@@ -410,6 +495,21 @@ export function Calendar({
                                 {park.icon ? `${park.icon} ` : ""}
                                 {park.name}
                               </span>
+                              {isMeal &&
+                              park.affiliate_ticket_url &&
+                              park.affiliate_ticket_url.trim() !== "" ? (
+                                <a
+                                  href={park.affiliate_ticket_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="mt-0.5 block w-full truncate text-left font-sans text-[0.55rem] font-semibold underline underline-offset-2 opacity-90 hover:opacity-100"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                  }}
+                                >
+                                  Book a table →
+                                </a>
+                              ) : null}
                             </div>
                           ) : (
                             <span
@@ -423,6 +523,71 @@ export function Calendar({
                       );
                     })}
                   </div>
+                  {!readOnly && onSaveDayNote ? (
+                    <div className="border-t border-royal/10 px-1 py-1">
+                      {editingNoteKey === key ? (
+                        <div className="space-y-0.5">
+                          <textarea
+                            className="min-h-[2.75rem] max-h-40 w-full resize-y rounded border border-royal/20 bg-cream/40 px-2 py-1.5 font-sans text-xs text-royal placeholder:text-royal/40 focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/40"
+                            rows={3}
+                            maxLength={500}
+                            value={noteDraft}
+                            placeholder="Add notes for this day — tips, reminders, bookings…"
+                            aria-label={`Notes for ${headingDate}`}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setNoteDraft(v);
+                              queueDayNoteSave(key, v);
+                            }}
+                            onBlur={() => {
+                              if (noteSaveTimer.current) {
+                                clearTimeout(noteSaveTimer.current);
+                                noteSaveTimer.current = null;
+                              }
+                              flushDayNoteSave(key, noteDraft);
+                              setEditingNoteKey(null);
+                            }}
+                            autoFocus
+                          />
+                          {noteDraft.length > 400 ? (
+                            <p className="text-right font-sans text-[10px] text-royal/55">
+                              {noteDraft.length}/500
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="min-h-11 w-full rounded px-1 py-1 text-left font-sans text-xs italic text-royal/55 transition hover:bg-cream/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 md:min-h-0 md:py-0.5"
+                          onClick={() => {
+                            setEditingNoteKey(key);
+                            setNoteDraft(dayUserNote(trip, key));
+                          }}
+                        >
+                          {dayUserNote(trip, key) ? (
+                            <>
+                              <span aria-hidden>📝 </span>
+                              <span className="line-clamp-1">
+                                {dayUserNote(trip, key).slice(0, 60)}
+                                {dayUserNote(trip, key).length > 60
+                                  ? "…"
+                                  : ""}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="not-italic text-royal/45">
+                              Add note…
+                            </span>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  ) : dayUserNote(trip, key) ? (
+                    <p className="border-t border-royal/10 px-1 py-0.5 font-sans text-[10px] italic leading-snug text-royal/55">
+                      <span aria-hidden>📝 </span>
+                      {dayUserNote(trip, key)}
+                    </p>
+                  ) : null}
                 </div>
               );
             })}
@@ -469,18 +634,77 @@ export function Calendar({
                 ×
               </button>
             </div>
-            {notePopover.crowdLine ? (
-              <p className="mb-2 font-sans text-xs leading-relaxed text-royal/85">
-                <span className="font-semibold text-royal">Why this day: </span>
-                {notePopover.crowdLine}
+            <div className="mb-2 flex gap-1 rounded-lg bg-cream/80 p-0.5">
+              <button
+                type="button"
+                className={`min-h-9 flex-1 rounded-md px-2 font-sans text-xs font-semibold ${
+                  dayPopoverTab === "details"
+                    ? "bg-white text-royal shadow-sm"
+                    : "text-royal/65"
+                }`}
+                onClick={() => setDayPopoverTab("details")}
+              >
+                Details
+              </button>
+              <button
+                type="button"
+                disabled={!timelineUnlocked}
+                title={
+                  !timelineUnlocked
+                    ? "Timeline editing is a Pro feature"
+                    : undefined
+                }
+                className={`min-h-9 flex-1 rounded-md px-2 font-sans text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
+                  dayPopoverTab === "timeline"
+                    ? "bg-white text-royal shadow-sm"
+                    : "text-royal/65"
+                }`}
+                onClick={() => {
+                  if (timelineUnlocked) setDayPopoverTab("timeline");
+                }}
+              >
+                <span className="inline-flex items-center justify-center gap-1">
+                  Timeline
+                  {!timelineUnlocked ? (
+                    <span className="rounded bg-gold/35 px-1 py-0 text-[0.55rem] font-bold text-royal">
+                      Pro
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+            </div>
+            {dayPopoverTab === "details" ? (
+              <>
+                {notePopover.crowdLine ? (
+                  <p className="mb-2 font-sans text-xs leading-relaxed text-royal/85">
+                    <span className="font-semibold text-royal">
+                      Why this day:{" "}
+                    </span>
+                    {notePopover.crowdLine}
+                  </p>
+                ) : null}
+                {notePopover.dayNote ? (
+                  <p className="font-sans text-xs leading-relaxed text-royal/85">
+                    <span className="font-semibold text-royal">Your note: </span>
+                    {notePopover.dayNote}
+                  </p>
+                ) : null}
+              </>
+            ) : onSlotTimeChange ? (
+              <DayTimelinePanel
+                day={trip.assignments[notePopover.dateKey] ?? {}}
+                parks={parks}
+                colourTheme={themeKey}
+                unlocked={timelineUnlocked}
+                onTimeChange={(slot, time) =>
+                  onSlotTimeChange(notePopover.dateKey, slot, time)
+                }
+              />
+            ) : (
+              <p className="font-sans text-xs text-royal/60">
+                Timeline is unavailable.
               </p>
-            ) : null}
-            {notePopover.dayNote ? (
-              <p className="font-sans text-xs leading-relaxed text-royal/85">
-                <span className="font-semibold text-royal">Your note: </span>
-                {notePopover.dayNote}
-              </p>
-            ) : null}
+            )}
           </div>
         </>
       ) : null}

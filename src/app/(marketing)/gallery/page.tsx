@@ -11,20 +11,21 @@ export const revalidate = 300;
 const site = getPublicSiteUrl() || "https://www.triptiles.app";
 
 export const metadata: Metadata = {
-  title: "Community trip plans",
+  title: "Trip ideas gallery",
   description:
-    "Browse real family itineraries from the TripTiles community. Clone any plan to start yours.",
+    "Browse public family itineraries for theme park holidays. Clone any plan to start yours.",
   openGraph: {
-    title: "Community trip plans · TripTiles",
-    description: "Clone crowd-aware itineraries from the TripTiles community.",
-    url: `${site}/plans`,
+    title: "Trip ideas gallery · TripTiles",
+    description:
+      "Public itineraries from the TripTiles community — inspiration you can clone.",
+    url: `${site}/gallery`,
     siteName: "TripTiles",
     locale: "en_GB",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Community trip plans · TripTiles",
+    title: "Trip ideas gallery · TripTiles",
   },
 };
 
@@ -47,7 +48,7 @@ function normaliseLength(
   return null;
 }
 
-export default async function PlansGalleryPage({
+export default async function GalleryPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -65,14 +66,15 @@ export default async function PlansGalleryPage({
     <div className="min-h-screen bg-cream">
       <main className="mx-auto max-w-6xl px-4 py-12">
         <h1 className="font-serif text-3xl font-semibold text-royal md:text-4xl">
-          Trip plans from the TripTiles community
+          Trip ideas gallery
         </h1>
         <p className="mt-3 max-w-2xl font-sans text-base text-royal/75">
-          Browse real family itineraries. Clone any plan to start yours.
+          Every plan here was shared on purpose by its owner — browse for
+          inspiration, then clone to your account and make it yours.
         </p>
 
         <PublicTripsGallery
-          basePath="/plans"
+          basePath="/gallery"
           regionFilter={regionFilter}
           offset={offset}
           sort={sort}

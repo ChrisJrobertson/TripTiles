@@ -11,7 +11,7 @@ import { getActiveTripForUser, getUserTrips } from "@/lib/db/trips";
 import { getPublicSiteUrl } from "@/lib/site";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
-import type { UserTier } from "@/lib/types";
+import type { TemperatureUnit, UserTier } from "@/lib/types";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +23,13 @@ function firstParam(
 ): string | undefined {
   if (Array.isArray(v)) return v[0];
   return v;
+}
+
+function normalisePlannerTab(
+  raw: string | undefined,
+): "planner" | "budget" | "checklist" {
+  if (raw === "budget" || raw === "checklist") return raw;
+  return "planner";
 }
 
 export default async function PlannerPage({
@@ -72,6 +79,7 @@ export default async function PlannerPage({
 
   const initialOpenSmartPlan = firstParam(sp.openSmartPlan) === "true";
   const initialAutoGenerate = firstParam(sp.autoGenerate) === "true";
+  const plannerTab = normalisePlannerTab(firstParam(sp.tab));
 
   const tileScrubRaw = firstParam(sp.tile_scrubbed);
   const initialTileScrubNotice =
@@ -85,7 +93,7 @@ export default async function PlannerPage({
     parks,
     regions,
     activeTrip,
-    profileTier,
+    profileBundle,
     achievementDefs,
     customTiles,
     customTileLimit,
@@ -93,15 +101,29 @@ export default async function PlannerPage({
       getAllParks(),
       getAllRegions(),
       getActiveTripForUser(user.id),
-      (async (): Promise<UserTier | null> => {
+      (async (): Promise<{
+        tier: UserTier | null;
+        temperatureUnit: TemperatureUnit;
+        emailMarketingOptOut: boolean;
+      }> => {
         const supabase = await createClient();
         const { data } = await supabase
           .from("profiles")
-          .select("tier")
+          .select("tier, temperature_unit, email_marketing_opt_out")
           .eq("id", user.id)
           .maybeSingle();
-        if (!data || typeof data !== "object" || !("tier" in data)) return null;
-        return data.tier as UserTier;
+        if (!data || typeof data !== "object" || !("tier" in data)) {
+          return { tier: null, temperatureUnit: "c", emailMarketingOptOut: false };
+        }
+        const tu = (data as { temperature_unit?: string | null })
+          .temperature_unit;
+        const em = (data as { email_marketing_opt_out?: boolean | null })
+          .email_marketing_opt_out;
+        return {
+          tier: data.tier as UserTier,
+          temperatureUnit: tu === "f" ? "f" : "c",
+          emailMarketingOptOut: em === true,
+        };
       })(),
       getAchievementDefinitions(),
       getUserCustomTiles(user.id),
@@ -113,6 +135,9 @@ export default async function PlannerPage({
     await getSuccessfulAiGenerationCountsForTrips(tripIds, user.id);
 
   const siteUrl = getPublicSiteUrl() || "http://localhost:3001";
+  const profileTier = profileBundle.tier;
+  const initialTemperatureUnit = profileBundle.temperatureUnit;
+  const emailMarketingOptOut = profileBundle.emailMarketingOptOut;
 
   return (
     <PlannerClient
@@ -131,6 +156,9 @@ export default async function PlannerPage({
       initialTileScrubNotice={initialTileScrubNotice}
       initialCustomTiles={customTiles}
       customTileLimit={customTileLimit}
+      plannerTab={plannerTab}
+      temperatureUnit={initialTemperatureUnit}
+      emailMarketingOptOut={emailMarketingOptOut}
     />
   );
 }

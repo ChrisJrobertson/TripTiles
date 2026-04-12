@@ -10,17 +10,22 @@ import { getUserTripCount, mapTripRow } from "@/lib/db/trips";
 import { currentUserCanCreateTrip } from "@/lib/entitlements";
 import { syncTripLifecycleEmailQueue } from "@/lib/email/schedule-trip-emails";
 import { legacyDestinationFromRegionId } from "@/lib/legacy-destination";
+import { formatGalleryOwnerLabel } from "@/lib/format-gallery-owner";
 import { defaultPublicTripSlug, slugifyAdventureName } from "@/lib/slug";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { normaliseThemeKey, type ThemeKey } from "@/lib/themes";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
+import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import type {
   Assignments,
   Assignment,
   Destination,
+  SlotAssignmentValue,
   TripPlanningPreferences,
 } from "@/lib/types";
 import { revalidatePath } from "next/cache";
+import { seedTripChecklistIfEmptyAction } from "@/actions/checklist";
+import { syncTripReminderRows } from "@/lib/trip-reminder-seed";
 
 function revalidatePlanner() {
   revalidatePath("/planner");
@@ -100,6 +105,10 @@ export async function createTripAction(input: {
       planning_preferences: input.planningPreferences ?? null,
       colour_theme: normaliseThemeKey(input.colourTheme),
       notes: null as string | null,
+      budget_target: null as number | null,
+      budget_currency: "GBP",
+      email_reminders: true,
+      gallery_owner_label: null as string | null,
     };
 
     const { data: inserted, error } = await supabase
@@ -139,6 +148,19 @@ export async function createTripAction(input: {
       endDate: input.endDate,
     });
 
+    const seed = await seedTripChecklistIfEmptyAction({
+      tripId: String(inserted.id),
+      regionId: input.regionId,
+      startDate: input.startDate,
+      children,
+      hasCruise,
+    });
+    if (!seed.ok) {
+      console.warn("Checklist seed skipped:", seed.error);
+    }
+
+    await syncTripReminderRows(supabase, String(inserted.id), input.startDate);
+
     revalidatePlanner();
     return { ok: true, tripId: String(inserted.id), newAchievements };
   } catch (e) {
@@ -163,6 +185,7 @@ export async function updateTripMetadataAction(input: {
   hasCruise?: boolean;
   cruiseEmbark?: string | null;
   cruiseDisembark?: string | null;
+  emailReminders?: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const user = await getCurrentUser();
@@ -204,6 +227,9 @@ export async function updateTripMetadataAction(input: {
       body.cruise_embark = null;
       body.cruise_disembark = null;
     }
+    if (input.emailReminders !== undefined) {
+      body.email_reminders = input.emailReminders;
+    }
 
     const supabase = await createClient();
     const { error } = await supabase
@@ -234,6 +260,13 @@ export async function updateTripMetadataAction(input: {
           startDate: String(row.start_date),
           endDate: String(row.end_date),
         });
+        if (input.startDate !== undefined) {
+          await syncTripReminderRows(
+            supabase,
+            input.tripId,
+            String(row.start_date),
+          );
+        }
       }
     }
 
@@ -514,6 +547,7 @@ export async function unpublishTripAction(
       .from("trips")
       .update({
         is_public: false,
+        gallery_owner_label: null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", tripId)
@@ -568,11 +602,23 @@ export async function publishTripAction(
 
     const newAchievements: string[] = [];
 
+    const { data: prof } = await supabase
+      .from("profiles")
+      .select("display_name, email")
+      .eq("id", user.id)
+      .maybeSingle();
+    const profRow = prof as { display_name?: string | null; email?: string | null } | null;
+    const galleryLabel = formatGalleryOwnerLabel(
+      profRow?.display_name ?? null,
+      profRow?.email ?? null,
+    );
+
     if (existingSlug) {
       const { error } = await supabase
         .from("trips")
         .update({
           is_public: true,
+          gallery_owner_label: galleryLabel,
           updated_at: new Date().toISOString(),
         })
         .eq("id", tripId)
@@ -605,6 +651,7 @@ export async function publishTripAction(
         .update({
           is_public: true,
           public_slug: slug,
+          gallery_owner_label: galleryLabel,
           updated_at: new Date().toISOString(),
         })
         .eq("id", tripId)
@@ -646,10 +693,11 @@ function scrubAssignmentsForClone(
     if (!slots || typeof slots !== "object") continue;
     const next: Assignment = {};
     for (const slot of SLOT_TYPES) {
-      const v = slots[slot];
-      if (!v || typeof v !== "string") continue;
-      if (sourceOwnerCustomTileIds.has(v)) continue;
-      next[slot] = v;
+      const v = slots[slot] as SlotAssignmentValue | undefined;
+      const pid = getParkIdFromSlotValue(v);
+      if (!pid) continue;
+      if (sourceOwnerCustomTileIds.has(pid)) continue;
+      if (v !== undefined) next[slot] = v;
     }
     if (Object.keys(next).length > 0) out[dayKey] = next;
   }
@@ -696,7 +744,7 @@ export async function cloneTripAction(
       let n = 0;
       for (const s of Object.values(a)) {
         for (const slot of SLOT_TYPES) {
-          if (s[slot]) n += 1;
+          if (getParkIdFromSlotValue(s[slot])) n += 1;
         }
       }
       return n;
@@ -733,6 +781,12 @@ export async function cloneTripAction(
       children: source.children,
       child_ages: [...source.child_ages],
       notes: source.notes,
+      planning_preferences: source.planning_preferences,
+      colour_theme: source.colour_theme,
+      budget_target: source.budget_target,
+      budget_currency: source.budget_currency,
+      email_reminders: true,
+      gallery_owner_label: null as string | null,
     };
 
     const { data: inserted, error: insErr } = await supabase
@@ -747,6 +801,17 @@ export async function cloneTripAction(
 
     const newTripId = String(inserted.id);
     const newAchievements: string[] = [];
+
+    const seedClone = await seedTripChecklistIfEmptyAction({
+      tripId: newTripId,
+      regionId: source.region_id ?? "orlando",
+      startDate: source.start_date,
+      children: source.children,
+      hasCruise: source.has_cruise,
+    });
+    if (!seedClone.ok) {
+      console.warn("Checklist seed (clone):", seedClone.error);
+    }
 
     const fc = await awardAchievementAction("first_clone");
     if (fc.ok && fc.justEarned) newAchievements.push("first_clone");

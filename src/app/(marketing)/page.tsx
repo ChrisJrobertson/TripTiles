@@ -238,6 +238,14 @@ export default async function MarketingHomePage() {
               </li>
             ))}
           </ul>
+          <p className="mt-10 text-center">
+            <Link
+              href="/gallery"
+              className="inline-flex min-h-11 items-center font-sans text-sm font-semibold text-royal underline decoration-gold/50 underline-offset-4 transition hover:text-royal/80"
+            >
+              Browse trip ideas →
+            </Link>
+          </p>
         </div>
       </section>
 
@@ -251,7 +259,7 @@ export default async function MarketingHomePage() {
               {featuredRegions.slice(0, 8).map((r) => (
                 <Link
                   key={r.id}
-                  href={`/plans?region=${encodeURIComponent(r.id)}`}
+                  href={`/gallery?region=${encodeURIComponent(r.id)}`}
                   className="rounded-xl border border-royal/10 bg-cream p-4 text-left shadow-sm transition hover:border-gold/50"
                 >
                   <span className="text-2xl" aria-hidden>

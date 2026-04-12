@@ -1,5 +1,11 @@
-import { parseDate } from "@/lib/date-helpers";
+import { formatDateKey, parseDate } from "@/lib/date-helpers";
 import { sendTemplatedEmail, type EmailTemplate } from "@/lib/email/send";
+import {
+  reminderDefaultBullets,
+  reminderExtraLines,
+  reminderSubject,
+} from "@/lib/trip-reminder-copy";
+import { reminderTriggerDateKey } from "@/lib/trip-reminder-seed";
 import { getSupabaseUrl } from "@/lib/supabase/env";
 import { createClient } from "@supabase/supabase-js";
 import type { NextRequest } from "next/server";
@@ -198,6 +204,123 @@ async function handleCronRequest(request: NextRequest) {
       })
       .eq("id", id);
     results.sent += 1;
+  }
+
+  const todayKey = formatDateKey(new Date());
+
+  const { data: pendingRem, error: remErr } = await supabase
+    .from("trip_reminders")
+    .select("id, trip_id, days_before")
+    .is("sent_at", null)
+    .limit(200);
+
+  if (remErr) {
+    results.errors.push(`trip_reminders: ${remErr.message}`);
+  } else {
+    for (const row of pendingRem ?? []) {
+      const remId = String((row as { id: string }).id);
+      const tripId = String((row as { trip_id: string }).trip_id);
+      const daysBefore = Number((row as { days_before: number }).days_before);
+
+      const { data: trip } = await supabase
+        .from("trips")
+        .select(
+          "start_date, adventure_name, region_id, owner_id, email_reminders",
+        )
+        .eq("id", tripId)
+        .maybeSingle();
+
+      if (!trip || typeof trip !== "object") {
+        await supabase.from("trip_reminders").delete().eq("id", remId);
+        continue;
+      }
+
+      const t = trip as {
+        start_date: string;
+        adventure_name: string;
+        region_id: string | null;
+        owner_id: string;
+        email_reminders: boolean | null;
+      };
+
+      if (t.email_reminders === false) {
+        continue;
+      }
+
+      const triggerKey = reminderTriggerDateKey(t.start_date, daysBefore);
+      if (triggerKey !== todayKey) continue;
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("email, email_marketing_opt_out")
+        .eq("id", t.owner_id)
+        .maybeSingle();
+
+      const pr = profile as {
+        email?: string | null;
+        email_marketing_opt_out?: boolean | null;
+      } | null;
+
+      if (pr?.email_marketing_opt_out === true) {
+        continue;
+      }
+
+      const to =
+        pr && typeof pr.email === "string" ? pr.email.trim() : "";
+      if (!to) {
+        await supabase
+          .from("trip_reminders")
+          .update({ sent_at: new Date().toISOString() })
+          .eq("id", remId);
+        continue;
+      }
+
+      let destinationName = "your destination";
+      if (t.region_id) {
+        const { data: reg } = await supabase
+          .from("regions")
+          .select("short_name, name")
+          .eq("id", t.region_id)
+          .maybeSingle();
+        if (reg && typeof reg === "object") {
+          const r = reg as { short_name?: string; name?: string };
+          destinationName =
+            (r.short_name?.trim() || r.name?.trim() || destinationName) ??
+            destinationName;
+        }
+      }
+
+      const tripUrl = `${siteUrl}/planner`;
+      const subject = reminderSubject(daysBefore);
+      const extras = reminderExtraLines(daysBefore, t.region_id);
+      const bulletLines = [...reminderDefaultBullets(daysBefore), ...extras];
+
+      const sendResult = await sendTemplatedEmail({
+        to,
+        template: "trip_reminder" as EmailTemplate,
+        data: {
+          siteUrl,
+          adventureName: t.adventure_name,
+          destinationName,
+          tripUrl,
+          daysBefore,
+          subject,
+          bulletLines,
+        },
+      });
+
+      if (!sendResult.ok) {
+        results.failed += 1;
+        results.errors.push(`reminder ${remId}: ${sendResult.error}`);
+        continue;
+      }
+
+      await supabase
+        .from("trip_reminders")
+        .update({ sent_at: new Date().toISOString() })
+        .eq("id", remId);
+      results.sent += 1;
+    }
   }
 
   return NextResponse.json(results);
