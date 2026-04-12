@@ -1,8 +1,9 @@
 import type { CSSProperties } from "react";
 
 /**
- * Planner colour presets (per-trip). PDF export stays on brand defaults.
- * Non-classic themes use soft pastel primaries (high lightness) with dark text for contrast.
+ * Planner colour themes (per trip). Values apply to park tiles and accents —
+ * not the planner page background (see `bg-cream` on the planner shell).
+ * PDF export stays on brand defaults.
  */
 export const THEME_KEYS = [
   "classic",
@@ -19,81 +20,72 @@ export type ThemeDefinition = {
   name: string;
   /** User-facing label (UK copy). */
   label: string;
-  primary: string;
+  /** Main park tile / slot fill. */
+  tile: string;
+  /** Borders, badges, secondary highlights. */
   accent: string;
-  background: string;
-  primarySoft: string;
-  accentSoft: string;
-  text: string;
-  textMuted: string;
+  /** Outer tile border (may include alpha). */
+  tileBorder: string;
+  /** Selected rings, Smart Plan CTA background. */
+  ring: string;
+  /** Tile label text on pastel fills (dark). */
+  tileText: string;
 };
 
 export const THEMES: Record<ThemeKey, ThemeDefinition> = {
   classic: {
     name: "Classic",
     label: "Classic",
-    primary: "#0B1E5C",
+    tile: "#D6DCE9",
     accent: "#C9A961",
-    background: "#FAF8F3",
-    primarySoft: "#1a2f75",
-    accentSoft: "#dcc89a",
-    text: "#0B1E5C",
-    textMuted: "#5c6480",
+    tileBorder: "rgba(11, 30, 92, 0.2)",
+    ring: "#0B1E5C",
+    tileText: "#1A1A2E",
   },
   pastel: {
     name: "Pastel Dream",
     label: "Pastel dream",
-    primary: "#8FA3BF",
-    accent: "#E0B8A0",
-    background: "#F7F2EE",
-    primarySoft: "#a8b8ce",
-    accentSoft: "#edd0c0",
-    text: "#3d4a5c",
-    textMuted: "#6b7280",
+    tile: "#D8E2F0",
+    accent: "#F2D5C4",
+    tileBorder: "rgba(143, 163, 191, 0.3)",
+    ring: "#8FA3BF",
+    tileText: "#1A1A2E",
   },
   sunset: {
     name: "Sunset",
     label: "Sunset",
-    primary: "#C4929E",
-    accent: "#F0C5A8",
-    background: "#FDF5F0",
-    primarySoft: "#d4b0b8",
-    accentSoft: "#f5dcc8",
-    text: "#5c3d45",
-    textMuted: "#7a6a6f",
+    tile: "#F5D6DC",
+    accent: "#F9DFC8",
+    tileBorder: "rgba(196, 146, 158, 0.3)",
+    ring: "#C4929E",
+    tileText: "#1A1A2E",
   },
   ocean: {
     name: "Ocean",
     label: "Ocean",
-    primary: "#7FB5BF",
-    accent: "#B5DFDF",
-    background: "#F2F8F8",
-    primarySoft: "#9fcad2",
-    accentSoft: "#d4ecec",
-    text: "#2D5C63",
-    textMuted: "#5a757a",
+    tile: "#D0ECEF",
+    accent: "#C8EDED",
+    tileBorder: "rgba(127, 181, 191, 0.3)",
+    ring: "#7FB5BF",
+    tileText: "#1A1A2E",
   },
   garden: {
     name: "Garden",
     label: "Garden",
-    primary: "#8FB5A3",
-    accent: "#D4E4B8",
-    background: "#F5F8F2",
-    primarySoft: "#aac9b9",
-    accentSoft: "#e4efd0",
-    text: "#3d5247",
-    textMuted: "#5f6d66",
+    tile: "#D6E8DC",
+    accent: "#E4EFC8",
+    tileBorder: "rgba(143, 181, 163, 0.3)",
+    ring: "#8FB5A3",
+    tileText: "#1A1A2E",
   },
   berry: {
     name: "Berry",
     label: "Berry",
-    primary: "#B88FAD",
-    accent: "#E4C4DA",
-    background: "#FAF4F8",
-    primarySoft: "#cca9c2",
-    accentSoft: "#efd9e8",
-    text: "#4a3d46",
-    textMuted: "#6d5f68",
+    tile: "#EDD8E8",
+    accent: "#F0D8EA",
+    tileBorder: "rgba(184, 143, 173, 0.3)",
+    ring: "#B88FAD",
+    tileText: "#1A1A2E",
   },
 } as const;
 
@@ -105,16 +97,42 @@ export function normaliseThemeKey(v: string | null | undefined): ThemeKey {
   return isThemeKey(v) ? v : "classic";
 }
 
-/** Inline style object for CSS variables consumed by planner subtree. */
+/** Inline style object for CSS variables consumed by the planner subtree. */
 export function plannerThemeStyleVars(key: ThemeKey): CSSProperties {
   const t = THEMES[key];
   return {
-    "--tt-primary": t.primary,
+    "--tt-tile": t.tile,
     "--tt-accent": t.accent,
-    "--tt-bg": t.background,
-    "--tt-primary-soft": t.primarySoft,
-    "--tt-accent-soft": t.accentSoft,
-    "--tt-text": t.text,
-    "--tt-text-muted": t.textMuted,
+    "--tt-tile-border": t.tileBorder,
+    "--tt-ring": t.ring,
+    "--tt-tile-text": t.tileText,
+  } as CSSProperties;
+}
+
+const CATEGORY_STRIP_FALLBACK = "#C9A961";
+
+/**
+ * Themed catalogue / calendar tile: pastel tile body, full border, 4px
+ * category strip (park or custom `bg_colour`) on the left.
+ */
+export function themedTileChromeStyle(
+  categoryColour: string | null | undefined,
+): CSSProperties {
+  const strip =
+    typeof categoryColour === "string" && categoryColour.startsWith("#")
+      ? categoryColour
+      : CATEGORY_STRIP_FALLBACK;
+  return {
+    backgroundColor: "var(--tt-tile)",
+    color: "var(--tt-tile-text)",
+    border: "1px solid var(--tt-tile-border)",
+    borderLeft: `4px solid ${strip}`,
+  } as CSSProperties;
+}
+
+/** Empty calendar / mobile slot background: ~10% theme tint on white. */
+export function themedEmptySlotSurfaceStyle(): CSSProperties {
+  return {
+    backgroundColor: "color-mix(in srgb, var(--tt-tile) 10%, #ffffff)",
   } as CSSProperties;
 }

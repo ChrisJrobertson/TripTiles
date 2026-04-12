@@ -9,6 +9,10 @@ import {
 } from "@/lib/date-helpers";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
+import {
+  themedEmptySlotSurfaceStyle,
+  themedTileChromeStyle,
+} from "@/lib/themes";
 import type {
   Assignments,
   Park,
@@ -52,12 +56,6 @@ function crowdLabel(tone: "low" | "mid" | "high"): string {
   if (tone === "low") return "quiet";
   if (tone === "high") return "busy";
   return "moderate";
-}
-
-function slotBorderColor(slot: SlotType): string {
-  if (slot === "am") return "#0B1E5C";
-  if (slot === "pm") return "#1a2f75";
-  return "#C9A961";
 }
 
 function mealPrefix(slot: SlotType): string {
@@ -226,17 +224,23 @@ function MobileSlotCard({
   const meta = SLOTS.find((s) => s.key === slot)!;
   const park = assignmentId ? parkById.get(assignmentId) : undefined;
 
+  const shellStyle = park
+    ? themedTileChromeStyle(park.bg_colour)
+    : themedEmptySlotSurfaceStyle();
+
   return (
     <div
-      className="flex min-h-[64px] items-center gap-3 rounded-lg bg-white px-4 py-3 shadow-sm"
-      style={{ borderLeftWidth: 4, borderLeftColor: slotBorderColor(slot) }}
+      className={`flex min-h-[64px] items-center gap-3 rounded-lg border border-royal/10 px-4 py-3 shadow-sm ${
+        park ? "hover:brightness-[1.05]" : ""
+      }`}
+      style={shellStyle}
     >
       <div className="min-w-0 flex-1">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-royal/60">
           {meta.label}
         </div>
         {park ? (
-          <div className="truncate font-sans text-lg font-medium text-royal">
+          <div className="truncate font-sans text-lg font-medium text-[color:var(--tt-tile-text)]">
             {mealPrefix(slot)}
             {park.icon ? `${park.icon} ` : ""}
             {park.name}

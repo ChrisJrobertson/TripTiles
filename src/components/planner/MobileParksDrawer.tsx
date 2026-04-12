@@ -1,5 +1,6 @@
 "use client";
 
+import { themedTileChromeStyle } from "@/lib/themes";
 import type { Park, SlotType } from "@/lib/types";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
@@ -179,11 +180,8 @@ export function MobileParksDrawer({
                       key={park.id}
                       type="button"
                       onClick={() => handlePick(park.id)}
-                      className="min-h-[44px] rounded-lg border border-gold/30 bg-white px-4 py-3 text-left font-sans text-sm font-medium text-royal transition active:bg-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
-                      style={{
-                        borderLeftWidth: 4,
-                        borderLeftColor: park.bg_colour ?? "#C9A961",
-                      }}
+                      className="min-h-[44px] rounded-lg px-4 py-3 text-left font-sans text-sm font-medium transition hover:brightness-[1.05] active:brightness-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--tt-ring)]/50"
+                      style={themedTileChromeStyle(park.bg_colour)}
                     >
                       {park.icon ? `${park.icon} ` : ""}
                       {park.name}

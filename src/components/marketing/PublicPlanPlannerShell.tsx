@@ -6,6 +6,7 @@ import {
   plannerAiDayCrowdNotes,
   plannerUserDayNotes,
 } from "@/lib/planner-note-maps";
+import { normaliseThemeKey, plannerThemeStyleVars } from "@/lib/themes";
 import type { Park, Trip } from "@/lib/types";
 import { useMemo } from "react";
 
@@ -24,8 +25,13 @@ export function PublicPlanPlannerShell({ trip, parks, shareUrl }: Props) {
       ? trip.preferences.ai_crowd_summary.trim()
       : null;
 
+  const themeShellStyle = useMemo(
+    () => plannerThemeStyleVars(normaliseThemeKey(trip.colour_theme)),
+    [trip.colour_theme],
+  );
+
   return (
-    <>
+    <div style={themeShellStyle}>
       <div className="hidden md:block">
         <Calendar
           trip={trip}
@@ -51,6 +57,6 @@ export function PublicPlanPlannerShell({ trip, parks, shareUrl }: Props) {
           void navigator.clipboard?.writeText(shareUrl);
         }}
       />
-    </>
+    </div>
   );
 }

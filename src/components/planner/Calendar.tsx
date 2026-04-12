@@ -11,11 +11,16 @@ import {
 } from "@/lib/date-helpers";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
+import {
+  themedEmptySlotSurfaceStyle,
+  themedTileChromeStyle,
+} from "@/lib/themes";
 import type { Assignment, Park, SlotType, Trip } from "@/lib/types";
 import {
   CrowdLevelIndicator,
   crowdLevelFromHeuristicTone,
 } from "@/components/planner/CrowdLevelIndicator";
+import type { CSSProperties } from "react";
 import {
   useCallback,
   useEffect,
@@ -44,13 +49,6 @@ const SLOTS: { key: SlotType; label: string; area: string }[] = [
   { key: "lunch", label: "LUN", area: "planner-slot-lunch" },
   { key: "dinner", label: "DIN", area: "planner-slot-dinner" },
 ];
-
-const SLOT_BORDER_MD: Record<SlotType, string> = {
-  am: "md:border-l-[4px] md:border-l-[#0B1E5C]",
-  pm: "md:border-l-[4px] md:border-l-[#1a2f75]",
-  lunch: "md:border-l-[4px] md:border-l-[#C9A961]",
-  dinner: "md:border-l-[4px] md:border-l-[#C9A961]",
-};
 
 function stripTime(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
@@ -325,28 +323,31 @@ export function Calendar({
                     {SLOTS.map(({ key: slot, label, area }) => {
                       const pid = ass[slot];
                       const park = pid ? parkById.get(pid) : undefined;
-                      const borderMd = SLOT_BORDER_MD[slot];
                       const isMeal = slot === "lunch" || slot === "dinner";
                       const mealPrefix = isMeal ? "🍽️ " : "";
                       const slotAria = park
                         ? `${label} slot: ${park.name}`
                         : `${label} slot: empty`;
+                      const emptySlotStyle: CSSProperties | undefined = park
+                        ? undefined
+                        : themedEmptySlotSurfaceStyle();
+                      const filledSlotStyle: CSSProperties | undefined =
+                        park
+                          ? themedTileChromeStyle(park.bg_colour)
+                          : undefined;
                       return (
                         <div
                           key={slot}
-                          className={`group planner-slot relative flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-transparent ${borderMd} ${area} ${
+                          className={`group planner-slot relative flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-royal/10 ${area} ${
+                            park
+                              ? "transition hover:brightness-[1.06]"
+                              : ""
+                          } ${
                             readOnly || park
                               ? ""
-                              : "cursor-pointer bg-cream/50 hover:bg-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 focus-visible:ring-inset md:bg-cream/40"
+                              : "cursor-pointer hover:brightness-[1.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--tt-ring)]/50 focus-visible:ring-inset"
                           }`}
-                          style={
-                            park
-                              ? {
-                                  backgroundColor: park.bg_colour,
-                                  color: park.fg_colour,
-                                }
-                              : undefined
-                          }
+                          style={park ? filledSlotStyle : emptySlotStyle}
                           role={readOnly || park ? undefined : "button"}
                           tabIndex={readOnly || park ? undefined : 0}
                           aria-label={slotAria}
@@ -390,7 +391,7 @@ export function Calendar({
                               {!readOnly ? (
                                 <button
                                   type="button"
-                                  className="planner-slot-clear relative right-auto top-auto z-[1] flex h-5 w-5 shrink-0 items-center justify-center opacity-100 transition-opacity duration-150 md:opacity-0 md:group-hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-gold/60"
+                                  className="planner-slot-clear relative right-auto top-auto z-[1] flex h-5 w-5 shrink-0 items-center justify-center opacity-100 transition-opacity duration-150 md:opacity-0 md:group-hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-[color:var(--tt-ring)]/55"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     onClear(key, slot);

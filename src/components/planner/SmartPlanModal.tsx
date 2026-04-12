@@ -434,12 +434,12 @@ export function SmartPlanModal({
             <button
               type="submit"
               disabled={isGenerating || !canSubmit}
-              className="min-h-[44px] min-w-[12rem] flex-1 rounded-lg bg-gold px-4 py-3 font-serif text-sm font-semibold text-royal shadow-sm transition hover:brightness-105 disabled:opacity-60"
+              className="min-h-[44px] min-w-[12rem] flex-1 rounded-lg bg-[color:var(--tt-ring)] px-4 py-3 font-serif text-sm font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-60"
             >
               {isGenerating ? (
                 <span className="inline-flex items-center justify-center gap-2">
                   <span
-                    className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-royal/30 border-t-royal"
+                    className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white"
                     aria-hidden
                   />
                   Generating your plan…

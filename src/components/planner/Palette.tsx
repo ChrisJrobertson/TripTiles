@@ -4,6 +4,7 @@ import { RegionalDiningSection } from "@/components/planner/RegionalDiningSectio
 import { GROUP_META, GROUP_ORDER } from "@/lib/group-meta";
 import { isCruisePaletteTileName } from "@/lib/cruise-tiles";
 import { parkMatchesPlannerRegion } from "@/lib/park-matches-planner-region";
+import { themedTileChromeStyle } from "@/lib/themes";
 import type { CustomTile, Park } from "@/lib/types";
 import { useMemo, useState } from "react";
 
@@ -97,15 +98,12 @@ export function Palette({
                       onClick={() =>
                         onSelectPark(selected ? null : park.id)
                       }
-                      className={`inline-flex max-w-full items-center gap-1 rounded-full px-3 py-2 text-left font-sans text-xs font-medium transition ${
+                      className={`inline-flex max-w-full items-center gap-1 rounded-full px-3 py-2 text-left font-sans text-xs font-medium transition hover:brightness-[1.06] ${
                         selected
-                          ? "scale-105 ring-2 ring-royal ring-offset-1"
-                          : "hover:opacity-95"
+                          ? "scale-105 ring-2 ring-[color:var(--tt-ring)] ring-offset-1 ring-offset-cream"
+                          : ""
                       }`}
-                      style={{
-                        backgroundColor: park.bg_colour,
-                        color: park.fg_colour,
-                      }}
+                      style={themedTileChromeStyle(park.bg_colour)}
                     >
                       {park.icon ? (
                         <span className="shrink-0" aria-hidden>
@@ -130,15 +128,12 @@ export function Palette({
                         onClick={() =>
                           onSelectPark(selected ? null : tile.id)
                         }
-                        className={`relative inline-flex max-w-[calc(100%-1.75rem)] items-center gap-1 rounded-full pl-3 pr-2 py-2 text-left font-sans text-xs font-medium transition ${
+                        className={`relative inline-flex max-w-[calc(100%-1.75rem)] items-center gap-1 rounded-full pl-3 pr-2 py-2 text-left font-sans text-xs font-medium transition hover:brightness-[1.06] ${
                           selected
-                            ? "scale-105 ring-2 ring-royal ring-offset-1"
-                            : "hover:opacity-95"
+                            ? "scale-105 ring-2 ring-[color:var(--tt-ring)] ring-offset-1 ring-offset-cream"
+                            : ""
                         }`}
-                        style={{
-                          backgroundColor: tile.bg_colour,
-                          color: tile.fg_colour,
-                        }}
+                        style={themedTileChromeStyle(tile.bg_colour)}
                         title="Your custom tile"
                       >
                         <span
