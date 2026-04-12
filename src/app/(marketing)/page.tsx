@@ -1,3 +1,4 @@
+import { TwoPathPlanningSection } from "@/components/marketing/TwoPathPlanningSection";
 import { getFeaturedRegions } from "@/lib/db/regions";
 import { getFeaturedPublicTrips } from "@/lib/db/trips";
 import { getPublicSiteUrl } from "@/lib/site";
@@ -121,8 +122,9 @@ export default async function MarketingHomePage() {
               Plan your theme park trip in minutes, not hours
             </h1>
             <p className="mt-6 max-w-xl font-sans text-lg leading-relaxed text-royal/80">
-              AI-powered itineraries for Disney, Universal, and 300+ parks
-              worldwide. Beautiful PDFs. Family-friendly pricing.
+              Plan every detail yourself, or let AI build your itinerary in
+              seconds — then export a beautiful PDF to take with you. Disney,
+              Universal, and 300+ parks worldwide. Family-friendly pricing.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <Link
@@ -151,7 +153,8 @@ export default async function MarketingHomePage() {
                 Planner preview
               </p>
               <p className="mt-3 font-sans text-sm text-royal/60">
-                Drag parks onto your stay — Smart Plan fills the gaps.
+                Drag everything yourself, or tap Smart Plan for a first draft —
+                then tweak.
               </p>
             </div>
           </div>
@@ -163,7 +166,14 @@ export default async function MarketingHomePage() {
           <h2 className="text-center font-serif text-2xl font-semibold text-royal md:text-3xl">
             How it works
           </h2>
-          <div className="mt-10 grid gap-10 md:grid-cols-3">
+          <p className="mx-auto mt-3 max-w-2xl text-center font-sans text-sm text-royal/70">
+            Two paths, one calendar — pick what fits your family, then refine
+            whenever you like.
+          </p>
+          <div className="mt-12">
+            <TwoPathPlanningSection />
+          </div>
+          <div className="mt-16 grid gap-10 md:grid-cols-3">
             <div className="text-center">
               <p className="text-3xl" aria-hidden>
                 🌍
@@ -178,14 +188,15 @@ export default async function MarketingHomePage() {
             </div>
             <div className="text-center">
               <p className="text-3xl" aria-hidden>
-                ✨
+                📅
               </p>
               <h3 className="mt-3 font-serif text-lg font-semibold text-royal">
-                Let AI build your plan
+                Fill your calendar
               </h3>
               <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
-                Claude crafts a day-by-day itinerary from crowd patterns, your
-                dates, and group size.
+                Drag tiles on yourself, or run Smart Plan and let Claude draft
+                days from crowd patterns, your dates, and group size — then edit
+                freely.
               </p>
             </div>
             <div className="text-center">

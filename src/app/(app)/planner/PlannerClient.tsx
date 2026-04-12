@@ -87,6 +87,8 @@ type Props = {
   /** After cloning a public plan: custom tiles removed from source (from `?tile_scrubbed=`). */
   initialTileScrubNotice: number | null;
   initialCustomTiles: CustomTile[];
+  /** From `?openSmartPlan=true` (e.g. post-onboarding AI path). */
+  initialOpenSmartPlan?: boolean;
   /** From `user_custom_tile_limit` RPC. */
   customTileLimit: number;
 };
@@ -131,6 +133,7 @@ export function PlannerClient({
   purchaseHighlight,
   initialTileScrubNotice,
   initialCustomTiles,
+  initialOpenSmartPlan = false,
   customTileLimit,
 }: Props) {
   const router = useRouter();
@@ -192,6 +195,7 @@ export function PlannerClient({
   const assignTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tileScrubToastShown = useRef(false);
+  const smartPlanOpenedFromQueryRef = useRef(false);
 
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
 
@@ -289,6 +293,17 @@ export function PlannerClient({
     router.replace("/planner");
     router.refresh();
   }, [initialTileScrubNotice, router, showToast]);
+
+  useEffect(() => {
+    if (!initialOpenSmartPlan) return;
+    if (smartPlanOpenedFromQueryRef.current) return;
+    if (!activeTripId) return;
+    smartPlanOpenedFromQueryRef.current = true;
+    setSmartOpen(true);
+    startTransition(() => {
+      router.replace("/planner", { scroll: false });
+    });
+  }, [initialOpenSmartPlan, activeTripId, router]);
 
   /** Merge server counts with local state so refresh never drops below optimistic totals. */
   useEffect(() => {

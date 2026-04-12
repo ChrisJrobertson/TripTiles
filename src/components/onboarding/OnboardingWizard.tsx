@@ -2,9 +2,11 @@
 
 import {
   createTripAction,
+  touchTripAction,
   updateTripMetadataAction,
   updateTripPreferencesPatchAction,
 } from "@/actions/trips";
+import { TwoPathPlanningSection } from "@/components/marketing/TwoPathPlanningSection";
 import type { Region } from "@/lib/types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -34,6 +36,8 @@ export function OnboardingWizard({ firstName, regions }: Props) {
   const [vibe, setVibe] = useState<string>("balanced");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  /** After first trip is created, user must pick manual vs AI before planner. */
+  const [postCreateTripId, setPostCreateTripId] = useState<string | null>(null);
 
   const selectedRegion = useMemo(
     () => regions.find((r) => r.id === regionId) ?? null,
@@ -91,8 +95,8 @@ export function OnboardingWizard({ firstName, regions }: Props) {
       setBusy(false);
       return;
     }
-    router.push("/planner");
-    router.refresh();
+    setPostCreateTripId(r.tripId);
+    setBusy(false);
   }, [
     regionId,
     startDate,
@@ -102,7 +106,6 @@ export function OnboardingWizard({ firstName, regions }: Props) {
     adults,
     children,
     vibe,
-    router,
   ]);
 
   const featured = useMemo(
@@ -111,8 +114,46 @@ export function OnboardingWizard({ firstName, regions }: Props) {
   );
   const grid = featured.length > 0 ? featured : regions.slice(0, 24);
 
+  const navigateAfterStartChoice = useCallback(
+    async (openSmartPlan: boolean) => {
+      if (!postCreateTripId) return;
+      await touchTripAction(postCreateTripId);
+      setPostCreateTripId(null);
+      if (openSmartPlan) {
+        router.replace("/planner?openSmartPlan=true");
+      } else {
+        router.replace("/planner");
+      }
+      router.refresh();
+    },
+    [postCreateTripId, router],
+  );
+
   return (
     <div className="min-h-screen bg-cream px-4 py-10">
+      {postCreateTripId ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-[rgba(11,30,92,0.92)] p-4 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="post-onboarding-start-title"
+        >
+          <div className="my-auto w-full max-w-2xl rounded-2xl border border-gold/40 bg-cream px-5 py-8 shadow-2xl sm:px-10 sm:py-10">
+            <p
+              id="post-onboarding-start-title"
+              className="sr-only"
+            >
+              Choose how to start planning your trip
+            </p>
+            <TwoPathPlanningSection
+              variant="onboardingChoice"
+              onPickManual={() => void navigateAfterStartChoice(false)}
+              onPickAi={() => void navigateAfterStartChoice(true)}
+            />
+          </div>
+        </div>
+      ) : null}
+
       <div className="absolute right-4 top-4">
         <button
           type="button"

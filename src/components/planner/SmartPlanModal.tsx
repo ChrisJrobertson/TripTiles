@@ -96,11 +96,12 @@ export function SmartPlanModal({
           id="smart-plan-title"
           className="font-serif text-xl font-semibold text-royal"
         >
-          Smart Plan ✨
+          Let AI build your itinerary
         </h2>
-        <p className="mt-2 font-sans text-sm text-royal/75">
-          Crowd-aware scheduling uses patterns we ship in-app — not live park
-          data.
+        <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
+          Tell Claude your priorities and it&apos;ll fill your calendar with
+          parks, dining, and activities that suit your family. Crowd-aware
+          scheduling uses patterns we ship in-app — not live park data.
         </p>
 
         <div
@@ -113,10 +114,9 @@ export function SmartPlanModal({
           you travel.
         </div>
         <p className="mt-2 font-sans text-[0.7rem] leading-snug text-royal/55">
-          <strong className="text-royal/70">Undo:</strong> leave &quot;Overwrite
-          existing tiles&quot; off and run again, use{" "}
-          <strong>Clear All</strong> for this trip, or refresh the page to sync
-          from the server.
+          <strong className="text-royal/70">Tip:</strong> leave &quot;Overwrite
+          existing tiles&quot; off to keep what you&apos;ve placed; use{" "}
+          <strong>↶ Undo Smart Plan</strong> after a run if you want to revert.
         </p>
 
         <div
@@ -135,7 +135,7 @@ export function SmartPlanModal({
                 : "text-royal/80 hover:bg-cream"
             }`}
           >
-            Smart Plan (recommended)
+            Smart Plan
           </button>
           <button
             type="button"
@@ -302,6 +302,10 @@ export function SmartPlanModal({
               )}
             </button>
           </div>
+          <p className="mt-4 text-left font-sans text-xs leading-relaxed text-royal/55">
+            Prefer to plan manually? You can always drag parks onto your
+            calendar instead — Smart Plan is optional.
+          </p>
         </form>
       </div>
     </div>
