@@ -21,6 +21,7 @@ import { currentUserCanGenerateAI } from "@/lib/entitlements";
 import { getSuccessfulAiGenerationCountForTrip } from "@/lib/db/ai-generations";
 import { getCrowdPatternsForParkIds } from "@/lib/data/crowd-patterns";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { formatPlanningPreferencesForPrompt } from "@/lib/planning-preferences-prompt";
 import { getTierConfig } from "@/lib/tiers";
 import type { UserTier } from "@/lib/types";
 
@@ -224,6 +225,8 @@ function buildPlannerUserMessage(params: {
   cruiseInstruction: string;
   childAges: string;
   crowdJson: string;
+  /** Structured wizard answers (optional). */
+  wizardContext: string | null;
 }): string {
   const {
     mode,
@@ -233,6 +236,7 @@ function buildPlannerUserMessage(params: {
     cruiseInstruction,
     childAges,
     crowdJson,
+    wizardContext,
   } = params;
 
   const crowdSection =
@@ -247,13 +251,16 @@ function buildPlannerUserMessage(params: {
 - Cruise: ${trip.has_cruise ? `yes, embark ${trip.cruise_embark} disembark ${trip.cruise_disembark}` : "no"}
 - ${cruiseInstruction}`;
 
+  const wiz = wizardContext?.trim();
+  const wizBlock = wiz ? `\n${wiz}\n` : "";
+
   if (mode === "smart") {
     const extra = userPrompt.trim();
     return `${coreTrip}
 
 ${crowdSection}
-
-SMART PLAN (recommended) MODE — build a full itinerary using crowd patterns to place busier parks on historically lighter days within this window. The user did not write a long custom brief.
+${wizBlock}
+SMART PLAN MODE — build a full itinerary using crowd patterns to place busier parks on historically lighter days within this window. The user did not write a long custom brief.
 ${extra ? `Optional family notes from the user:\n${extra}\n` : ""}
 Generate the itinerary JSON now (include crowd_reasoning and day_crowd_notes when possible).`;
   }
@@ -261,7 +268,7 @@ Generate the itinerary JSON now (include crowd_reasoning and day_crowd_notes whe
   return `${coreTrip}
 
 ${crowdSection}
-
+${wizBlock}
 CUSTOM PROMPT MODE — apply the traveller's preferences first, then use crowd patterns to improve date choices.
 
 Traveller's own words:
@@ -402,6 +409,15 @@ export async function generateAIPlanAction(input: {
     customTileRows,
   );
 
+  const parkIdToName = new Map(parksForPrompt.map((p) => [p.id, p.name]));
+  const wizardContext =
+    trip.planning_preferences != null
+      ? formatPlanningPreferencesForPrompt(
+          trip.planning_preferences,
+          parkIdToName,
+        )
+      : null;
+
   const composedUserMessage = buildPlannerUserMessage({
     mode: input.mode,
     userPrompt: input.userPrompt,
@@ -410,6 +426,7 @@ export async function generateAIPlanAction(input: {
     cruiseInstruction,
     childAges,
     crowdJson,
+    wizardContext,
   });
 
   const model = anthropicModelForTier(tier);

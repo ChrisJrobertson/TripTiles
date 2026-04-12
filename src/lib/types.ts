@@ -3,6 +3,8 @@
  * Regenerate or adjust when the canonical SQL schema is available in-repo.
  */
 
+import type { ThemeKey } from "@/lib/themes";
+
 export type Json =
   | string
   | number
@@ -79,6 +81,20 @@ export type Assignment = Partial<Record<SlotType, string>>;
 
 /** Date keys: `${year}-${month}-${day}` without zero-padding (e.g. "2026-8-17"). */
 export type Assignments = Record<string, Assignment>;
+
+/** Wizard / Smart Plan pacing choice. */
+export type PlanningPace = "relaxed" | "balanced" | "intense";
+
+/** Stored on `trips.planning_preferences` for Smart Plan context and modal pre-fill. */
+export interface TripPlanningPreferences {
+  pace: PlanningPace;
+  mustDoParks: string[];
+  priorities: string[];
+  additionalNotes: string | null;
+  adults: number;
+  children: number;
+  childAges: number[];
+}
 
 export interface Region {
   id: string;
@@ -213,6 +229,10 @@ export interface Trip {
   previous_assignments_snapshot?: Assignments | null;
   previous_preferences_snapshot?: Record<string, unknown> | null;
   previous_assignments_snapshot_at?: string | null;
+  /** Smart Plan wizard answers; null if user chose manual-only creation. */
+  planning_preferences: TripPlanningPreferences | null;
+  /** Planner UI palette (`src/lib/themes.ts`). */
+  colour_theme: ThemeKey;
 }
 
 export type AchievementCategory =

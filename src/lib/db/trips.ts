@@ -1,5 +1,11 @@
+import { normaliseThemeKey } from "@/lib/themes";
 import { createClient } from "@/lib/supabase/server";
-import type { Assignments, Destination, Trip } from "@/lib/types";
+import type {
+  Assignments,
+  Destination,
+  Trip,
+  TripPlanningPreferences,
+} from "@/lib/types";
 
 export function mapTripRow(row: Record<string, unknown>): Trip {
   const raw = row.assignments;
@@ -32,6 +38,9 @@ export function mapTripRow(row: Record<string, unknown>): Trip {
   const prevAss = row.previous_assignments_snapshot;
   const prevPrefs = row.previous_preferences_snapshot;
   const prevAt = row.previous_assignments_snapshot_at;
+
+  const planningRaw = row.planning_preferences;
+  const planning_preferences = parsePlanningPreferences(planningRaw);
 
   return {
     id: String(row.id),
@@ -70,6 +79,60 @@ export function mapTripRow(row: Record<string, unknown>): Trip {
         : null,
     previous_assignments_snapshot_at:
       prevAt != null ? String(prevAt) : null,
+    planning_preferences,
+    colour_theme: normaliseThemeKey(
+      row.colour_theme != null ? String(row.colour_theme) : undefined,
+    ),
+  };
+}
+
+function parsePlanningPreferences(
+  raw: unknown,
+): TripPlanningPreferences | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const pace = o.pace;
+  if (pace !== "relaxed" && pace !== "balanced" && pace !== "intense") {
+    return null;
+  }
+  const mustRaw = o.mustDoParks;
+  const mustDoParks = Array.isArray(mustRaw)
+    ? mustRaw.filter((x): x is string => typeof x === "string")
+    : [];
+  const priRaw = o.priorities;
+  const priorities = Array.isArray(priRaw)
+    ? priRaw.filter((x): x is string => typeof x === "string")
+    : [];
+  const additionalNotes =
+    o.additionalNotes === null
+      ? null
+      : typeof o.additionalNotes === "string"
+        ? o.additionalNotes
+        : null;
+  const adultsRaw = Number(o.adults);
+  const childrenRaw = Number(o.children);
+  const agesRaw = o.childAges;
+  const childAges = Array.isArray(agesRaw)
+    ? agesRaw
+        .map((n) => Number(n))
+        .filter((n) => !Number.isNaN(n) && n >= 0 && n <= 17)
+    : [];
+  const adults =
+    Number.isFinite(adultsRaw) && adultsRaw >= 1 && adultsRaw <= 10
+      ? Math.floor(adultsRaw)
+      : 2;
+  const children =
+    Number.isFinite(childrenRaw) && childrenRaw >= 0 && childrenRaw <= 10
+      ? Math.floor(childrenRaw)
+      : 0;
+  return {
+    pace,
+    mustDoParks,
+    priorities: priorities.slice(0, 12),
+    additionalNotes,
+    adults,
+    children,
+    childAges,
   };
 }
 

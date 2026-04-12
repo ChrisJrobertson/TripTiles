@@ -69,6 +69,7 @@ export default async function PlannerPage({
     firstParam(sp.upgraded) === "pending";
 
   const initialOpenSmartPlan = firstParam(sp.openSmartPlan) === "true";
+  const initialAutoGenerate = firstParam(sp.autoGenerate) === "true";
 
   const tileScrubRaw = firstParam(sp.tile_scrubbed);
   const initialTileScrubNotice =
@@ -117,6 +118,7 @@ export default async function PlannerPage({
       parks={parks}
       regions={regions}
       initialOpenSmartPlan={initialOpenSmartPlan}
+      initialAutoGenerate={initialAutoGenerate}
       initialActiveTripId={activeTrip?.id ?? null}
       userEmail={user.email ?? ""}
       userTier={profileTier}

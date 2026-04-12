@@ -2,13 +2,14 @@
 
 import { generateAIPlanAction } from "@/actions/ai";
 import {
-  createTripAction,
   deleteTripAction,
   touchTripAction,
   undoSmartPlanAction,
   updateAssignmentsAction,
+  updateTripColourThemeAction,
   updateTripFromWizardAction,
   updateTripMetadataAction,
+  updateTripPlanningPreferencesAction,
 } from "@/actions/trips";
 import { AppNavHeader } from "@/components/app/AppNavHeader";
 import { AchievementToast } from "@/components/gamification/AchievementToast";
@@ -36,6 +37,9 @@ import { BookTripAffiliatePanel } from "@/components/planner/BookTripAffiliatePa
 import { hasAnyAffiliatePartner } from "@/lib/affiliates";
 import { PdfExportButton } from "@/components/planner/PdfExportButton";
 import { TripTimeline } from "@/components/planner/TripTimeline";
+import { EmptyCalendarCta } from "@/components/planner/EmptyCalendarCta";
+import { TripCreationWizard } from "@/components/planner/TripCreationWizard";
+import { TripThemePicker } from "@/components/planner/TripThemePicker";
 import { Wizard } from "@/components/planner/Wizard";
 import { TierLimitModal } from "@/components/paywall/TierLimitModal";
 import { formatUndoSnapshotHint } from "@/lib/date-helpers";
@@ -45,6 +49,11 @@ import {
   plannerAiDayCrowdNotes,
   plannerUserDayNotes,
 } from "@/lib/planner-note-maps";
+import {
+  normaliseThemeKey,
+  plannerThemeStyleVars,
+  type ThemeKey,
+} from "@/lib/themes";
 import { getTierConfig } from "@/lib/tiers";
 import {
   notifyStaleServerActionIfNeeded,
@@ -92,6 +101,8 @@ type Props = {
   initialCustomTiles: CustomTile[];
   /** From `?openSmartPlan=true` (e.g. post-onboarding AI path). */
   initialOpenSmartPlan?: boolean;
+  /** From `?autoGenerate=true` — run Smart Plan once using stored wizard preferences. */
+  initialAutoGenerate?: boolean;
   /** From `user_custom_tile_limit` RPC. */
   customTileLimit: number;
 };
@@ -137,6 +148,7 @@ export function PlannerClient({
   initialTileScrubNotice,
   initialCustomTiles,
   initialOpenSmartPlan = false,
+  initialAutoGenerate = false,
   customTileLimit,
 }: Props) {
   const router = useRouter();
@@ -198,8 +210,20 @@ export function PlannerClient({
   const saveHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tileScrubToastShown = useRef(false);
   const smartPlanOpenedFromQueryRef = useRef(false);
+  const autoGenerateConsumedRef = useRef(false);
+  const [fullPageAiBusy, setFullPageAiBusy] = useState(false);
 
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
+
+  const shellThemeStyle = useMemo(
+    () =>
+      plannerThemeStyleVars(
+        normaliseThemeKey(
+          trips.find((t) => t.id === activeTripId)?.colour_theme,
+        ),
+      ),
+    [trips, activeTripId],
+  );
 
   const hasAnyAssignment = useMemo(() => {
     if (!activeTrip) return false;
@@ -254,6 +278,14 @@ export function PlannerClient({
     const catalog = parks.filter((p) => parkMatchesPlannerRegion(p, rid));
     return [...catalog, ...customTilesForPalette.map(customTileToPark)];
   }, [parks, customTilesForPalette, activeTrip]);
+
+  const smartPlanParks = useMemo(() => {
+    const rid = resolvePaletteRegionId(activeTrip);
+    if (!rid) return [];
+    return parks.filter(
+      (p) => !p.is_custom && parkMatchesPlannerRegion(p, rid),
+    );
+  }, [parks, activeTrip]);
 
   const remainingCustomCreates = useMemo(() => {
     if (customTileLimit >= 1000) return 999999;
@@ -484,12 +516,42 @@ export function PlannerClient({
     );
   }, []);
 
+  const handleColourThemeChange = useCallback(
+    async (key: ThemeKey) => {
+      if (!activeTripId) return;
+      applyLocalPatch(activeTripId, { colour_theme: key });
+      const res = await updateTripColourThemeAction({
+        tripId: activeTripId,
+        colourTheme: key,
+      });
+      if (!res.ok) {
+        showToast(res.error);
+        startTransition(() => router.refresh());
+      }
+    },
+    [activeTripId, applyLocalPatch, router],
+  );
+
   const handleSmartPlanGenerate = useCallback(
     async (payload: SmartPlanGeneratePayload) => {
       if (!activeTripId) return;
       setSmartError(null);
       setIsAiGenerating(true);
       try {
+        if (payload.planningPreferences != null) {
+          const prefRes = await updateTripPlanningPreferencesAction({
+            tripId: activeTripId,
+            planningPreferences: payload.planningPreferences,
+          });
+          if (!prefRes.ok) {
+            setSmartError(prefRes.error);
+            showToast(prefRes.error);
+            return;
+          }
+          applyLocalPatch(activeTripId, {
+            planning_preferences: payload.planningPreferences,
+          });
+        }
         const tripBefore = trips.find((x) => x.id === activeTripId);
         const snapAssignments = tripBefore?.assignments
           ? (JSON.parse(
@@ -570,6 +632,93 @@ export function PlannerClient({
     ],
   );
 
+  useEffect(() => {
+    if (!initialAutoGenerate || !activeTripId) return;
+    if (autoGenerateConsumedRef.current) return;
+    autoGenerateConsumedRef.current = true;
+    void (async () => {
+      setFullPageAiBusy(true);
+      try {
+        const tripBefore = trips.find((x) => x.id === activeTripId);
+        const snapAssignments = tripBefore?.assignments
+          ? (JSON.parse(
+              JSON.stringify(tripBefore.assignments),
+            ) as Assignments)
+          : ({} as Assignments);
+        const snapPreferences = tripBefore?.preferences
+          ? ({ ...tripBefore.preferences } as Record<string, unknown>)
+          : ({} as Record<string, unknown>);
+        const res = await generateAIPlanAction({
+          tripId: activeTripId,
+          mode: "smart",
+          userPrompt: "",
+          preserveExistingSlots: true,
+        });
+        if (!res.ok) {
+          if (res.error === "TIER_LIMIT") {
+            setTierLimitVariant("ai");
+            setTierLimitReason(
+              "You've used all 5 AI plans for this trip. Upgrade to Pro for unlimited AI.",
+            );
+            setTierLimitOpen(true);
+          } else {
+            showToast(res.message);
+          }
+          startTransition(() => router.replace("/planner"));
+          return;
+        }
+        const t = tripBefore;
+        const prefPatch: Record<string, unknown> = {
+          ...(t?.preferences ?? {}),
+          ai_crowd_updated_at: new Date().toISOString(),
+        };
+        if (res.crowdSummary != null) {
+          prefPatch.ai_crowd_summary = res.crowdSummary;
+        }
+        if (res.dayCrowdNotes != null) {
+          prefPatch.ai_day_crowd_notes = res.dayCrowdNotes;
+        }
+        applyLocalPatch(activeTripId, {
+          assignments: res.assignments,
+          preferences: prefPatch,
+          previous_assignments_snapshot: snapAssignments,
+          previous_preferences_snapshot: snapPreferences,
+          previous_assignments_snapshot_at: res.undoSnapshotAt,
+        });
+        setAiGenByTrip((prev) => ({
+          ...prev,
+          [activeTripId]: Math.max(
+            res.generationsUsedForTrip,
+            prev[activeTripId] ?? 0,
+          ),
+        }));
+        showToast("✨ Plan generated!");
+        trackEvent("smart_plan_success", { mode: "smart" });
+        enqueueAchievementKeys(res.newAchievements);
+        startTransition(() => router.replace("/planner"));
+        startTransition(() => router.refresh());
+      } catch (e) {
+        if (notifyStaleServerActionIfNeeded(e)) {
+          startTransition(() => router.replace("/planner"));
+          return;
+        }
+        showToast(
+          e instanceof Error ? e.message : "Smart Plan could not run.",
+        );
+        startTransition(() => router.replace("/planner"));
+      } finally {
+        setFullPageAiBusy(false);
+      }
+    })();
+  }, [
+    initialAutoGenerate,
+    activeTripId,
+    trips,
+    applyLocalPatch,
+    enqueueAchievementKeys,
+    router,
+  ]);
+
   const onAssign = useCallback(
     (dateKey: string, slot: SlotType, parkId: string) => {
       if (!activeTripId) return;
@@ -646,7 +795,10 @@ export function PlannerClient({
   const savingVisible = isSaving || isPending;
 
   return (
-    <div className="min-h-screen bg-cream pb-28 pt-2 lg:pb-16">
+    <div
+      className="min-h-screen bg-[var(--tt-bg)] pb-28 pt-2 lg:pb-16"
+      style={shellThemeStyle}
+    >
       <AppNavHeader
         userEmail={userEmail}
         userTier={userTier}
@@ -872,6 +1024,22 @@ export function PlannerClient({
               onExportPdf={() =>
                 document.getElementById("planner-pdf-export-btn")?.click()
               }
+              colourSection={
+                activeTrip ? (
+                  <div className="px-2 pb-2 pt-2">
+                    <p className="px-2 font-sans text-xs font-semibold text-royal/70">
+                      Colour theme
+                    </p>
+                    <div className="mt-2 px-1">
+                      <TripThemePicker
+                        layout="row"
+                        value={activeTrip.colour_theme}
+                        onChange={(key) => void handleColourThemeChange(key)}
+                      />
+                    </div>
+                  </div>
+                ) : null
+              }
             />
           </section>
 
@@ -917,7 +1085,24 @@ export function PlannerClient({
                 onDeleteCustom={handleDeleteCustom}
               />
             </div>
-            <div className="min-w-0 w-full">
+            <div className="relative min-w-0 w-full">
+              {!hasAnyAssignment ? (
+                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-3 sm:p-4">
+                  <div className="pointer-events-auto w-full max-w-md">
+                    <EmptyCalendarCta
+                      onGenerateAi={() => {
+                        setSmartError(null);
+                        setSmartOpen(true);
+                      }}
+                      onAddManually={() =>
+                        showHint(
+                          "Pick a park from the list, then tap a day slot to place it.",
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+              ) : null}
               <div className="hidden md:block">
                 <Calendar
                   trip={activeTrip}
@@ -998,17 +1183,32 @@ export function PlannerClient({
         </main>
       )}
 
-      <Wizard
-        isOpen={wizardOpen}
-        isFirstRun={wizardFirstRun}
-        regions={regions}
-        initialData={wizardInitial()}
-        onClose={() => {
-          setWizardOpen(false);
-          setWizardEditId(null);
-        }}
-        onComplete={async (data) => {
-          if (wizardEditId) {
+      {wizardOpen && !wizardEditId ? (
+        <div className="fixed inset-0 z-[88] overflow-y-auto bg-royal/50 backdrop-blur-[2px]">
+          <TripCreationWizard
+            regions={regions}
+            parks={parks}
+            includeWelcome={false}
+            variant="modal"
+            onCancel={() => {
+              setWizardOpen(false);
+              setWizardFirstRun(false);
+            }}
+          />
+        </div>
+      ) : null}
+
+      {wizardOpen && wizardEditId ? (
+        <Wizard
+          isOpen
+          isFirstRun={wizardFirstRun}
+          regions={regions}
+          initialData={wizardInitial()}
+          onClose={() => {
+            setWizardOpen(false);
+            setWizardEditId(null);
+          }}
+          onComplete={async (data) => {
             await withSaving(async () => {
               const res = await updateTripFromWizardAction({
                 tripId: wizardEditId,
@@ -1025,39 +1225,9 @@ export function PlannerClient({
               if (!res.ok) throw new Error(res.error);
             });
             startTransition(() => router.refresh());
-            return;
-          }
-
-          return await withSaving(async () => {
-            const res = await createTripAction({
-              familyName: data.family_name,
-              adventureName: data.adventure_name,
-              regionId: data.region_id,
-              startDate: data.start_date,
-              endDate: data.end_date,
-              hasCruise: data.has_cruise,
-              cruiseEmbark: data.cruise_embark,
-              cruiseDisembark: data.cruise_disembark,
-            });
-
-            if (!res.ok) {
-              if (res.error === "TIER_LIMIT") {
-                setTierLimitVariant("trips");
-                setTierLimitReason(
-                  "You've used your 1 free trip. Upgrade to Pro for unlimited trips.",
-                );
-                setTierLimitOpen(true);
-                return false;
-              }
-              throw new Error(res.error);
-            }
-            enqueueAchievementKeys(res.newAchievements);
-            trackEvent("trip_created");
-            startTransition(() => router.refresh());
-            return undefined;
-          });
-        }}
-      />
+          }}
+        />
+      ) : null}
 
       {activeTrip ? (
         <MobilePlannerDock
@@ -1120,6 +1290,7 @@ export function PlannerClient({
           setSmartError(null);
         }}
         trip={activeTrip}
+        parks={smartPlanParks}
         regionLabel={regionLabel}
         generationsUsedThisTrip={aiGenByTrip[activeTripId] ?? 0}
         showFreeTierNote={isFreeTierForTripLimit(userTier)}
@@ -1127,6 +1298,27 @@ export function PlannerClient({
         submitError={smartError}
         onGenerate={handleSmartPlanGenerate}
       />
+
+      {fullPageAiBusy ? (
+        <div
+          className="fixed inset-0 z-[96] flex flex-col items-center justify-center gap-4 bg-royal/70 p-6 text-center text-cream backdrop-blur-sm"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <span
+            className="inline-block h-10 w-10 animate-spin rounded-full border-2 border-cream/30 border-t-cream"
+            aria-hidden
+          />
+          <p className="max-w-sm font-serif text-lg font-semibold">
+            Claude is building your itinerary…
+          </p>
+          <p className="max-w-xs font-sans text-sm text-cream/85">
+            This usually takes a few seconds. Your calendar will fill in
+            automatically.
+          </p>
+        </div>
+      ) : null}
 
       {activeTrip ? (
         <CustomTileModal

@@ -1,8 +1,17 @@
 "use client";
 
 import { daysBetween, parseDate } from "@/lib/date-helpers";
-import type { Trip } from "@/lib/types";
-import { useEffect, useState, type FormEvent } from "react";
+import {
+  PACE_OPTIONS,
+  PRIORITY_OPTIONS,
+} from "@/lib/planning-preference-options";
+import type {
+  Park,
+  PlanningPace,
+  Trip,
+  TripPlanningPreferences,
+} from "@/lib/types";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 const MAX_CHARS = 500;
 const DEFAULT_FREE_CAP = 5;
@@ -12,6 +21,8 @@ export type SmartPlanGeneratePayload = {
   userPrompt: string;
   /** When true, AI overwrites existing calendar tiles where it outputs a slot. */
   replaceExistingTiles: boolean;
+  /** Smart mode only — saved to the trip before generation. */
+  planningPreferences?: TripPlanningPreferences | null;
 };
 
 type Props = {
@@ -19,6 +30,8 @@ type Props = {
   onClose: () => void;
   /** Trip used for Smart mode preview (dates, party size). */
   trip: Trip | null;
+  /** Built-in parks for the trip region (for must-do chips). */
+  parks: Park[];
   /** Region label e.g. short_name for copy. */
   regionLabel: string;
   generationsUsedThisTrip: number;
@@ -33,6 +46,7 @@ export function SmartPlanModal({
   isOpen,
   onClose,
   trip,
+  parks,
   regionLabel,
   generationsUsedThisTrip,
   freeTierCap = DEFAULT_FREE_CAP,
@@ -42,41 +56,72 @@ export function SmartPlanModal({
   onGenerate,
 }: Props) {
   const [mode, setMode] = useState<"smart" | "custom">("smart");
-  const [smartNote, setSmartNote] = useState("");
+  const [pace, setPace] = useState<PlanningPace>("balanced");
+  const [mustDoParks, setMustDoParks] = useState<Set<string>>(new Set());
+  const [priorities, setPriorities] = useState<Set<string>>(new Set());
+  const [additionalNotes, setAdditionalNotes] = useState("");
   const [customText, setCustomText] = useState("");
-  const [familyOpen, setFamilyOpen] = useState(false);
   const [replaceExistingTiles, setReplaceExistingTiles] = useState(false);
 
-  useEffect(() => {
-    if (isOpen) {
-      setSmartNote("");
-      setCustomText("");
-      setMode("smart");
-      setFamilyOpen(false);
-      setReplaceExistingTiles(false);
-    }
-  }, [isOpen]);
+  const prefsSerial = useMemo(() => {
+    if (!trip?.planning_preferences) return "";
+    return JSON.stringify(trip.planning_preferences);
+  }, [trip?.planning_preferences]);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (!isOpen || !trip) return;
+    const p = trip.planning_preferences;
+    if (p) {
+      setPace(p.pace);
+      setMustDoParks(new Set(p.mustDoParks ?? []));
+      setPriorities(new Set(p.priorities ?? []));
+      setAdditionalNotes(p.additionalNotes ?? "");
+    } else {
+      setPace("balanced");
+      setMustDoParks(new Set());
+      setPriorities(new Set());
+      setAdditionalNotes("");
+    }
+    setCustomText("");
+    setMode("smart");
+    setReplaceExistingTiles(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `prefsSerial` tracks planning_preferences; omitting `trip` avoids wiping in-progress edits on parent re-renders.
+  }, [isOpen, trip?.id, prefsSerial]);
+
+  if (!isOpen || !trip) return null;
 
   const tripDays =
-    trip?.start_date && trip?.end_date
+    trip.start_date && trip.end_date
       ? daysBetween(parseDate(trip.start_date), parseDate(trip.end_date)) + 1
       : 0;
 
   const smartSummary =
-    trip && tripDays > 0
+    tripDays > 0
       ? `I'll build a ${tripDays}-day plan for ${trip.adults} adult${trip.adults === 1 ? "" : "s"}${trip.children ? ` and ${trip.children} child${trip.children === 1 ? "" : "ren"}` : ""} in ${regionLabel}, optimising park days using historical crowd patterns for your dates.`
       : `I'll build a plan for ${regionLabel} using historical crowd patterns for your trip dates.`;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!trip) return;
     if (isGenerating) return;
     if (mode === "custom" && !customText.trim()) return;
+    const planningPreferences: TripPlanningPreferences | undefined =
+      mode === "smart"
+        ? {
+            pace,
+            mustDoParks: Array.from(mustDoParks),
+            priorities: Array.from(priorities).slice(0, 3),
+            additionalNotes: additionalNotes.trim() || null,
+            adults: trip.adults,
+            children: trip.children,
+            childAges: trip.child_ages ?? [],
+          }
+        : undefined;
     await onGenerate({
       mode,
-      userPrompt: mode === "smart" ? smartNote.trim() : customText.trim(),
+      userPrompt: mode === "smart" ? "" : customText.trim(),
       replaceExistingTiles,
+      planningPreferences,
     });
   }
 
@@ -91,7 +136,7 @@ export function SmartPlanModal({
       aria-modal="true"
       aria-labelledby="smart-plan-title"
     >
-      <div className="max-h-[min(90vh,44rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-gold/40 bg-cream p-6 shadow-xl sm:p-8">
+      <div className="max-h-[min(92vh,48rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-gold/40 bg-cream p-6 shadow-xl sm:max-w-xl sm:p-8">
         <h2
           id="smart-plan-title"
           className="font-serif text-xl font-semibold text-royal"
@@ -100,8 +145,11 @@ export function SmartPlanModal({
         </h2>
         <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
           Tell Claude your priorities and it&apos;ll fill your calendar with
-          parks, dining, and activities that suit your family. Crowd-aware
-          scheduling uses patterns we ship in-app — not live park data.
+          the best parks, dining, and activities for your family.
+        </p>
+        <p className="mt-1 font-sans text-xs leading-relaxed text-royal/60">
+          Crowd-aware scheduling uses patterns we ship in-app — not live park
+          data.
         </p>
 
         <div
@@ -158,33 +206,132 @@ export function SmartPlanModal({
               <div className="rounded-lg border border-gold/40 bg-white/80 px-4 py-3 font-sans text-sm leading-relaxed text-royal">
                 {smartSummary}
               </div>
-              <div className="rounded-lg border border-royal/15 bg-white">
-                <button
-                  type="button"
-                  onClick={() => setFamilyOpen((o) => !o)}
-                  className="flex w-full items-center justify-between px-3 py-2 text-left font-sans text-sm font-medium text-royal"
-                >
-                  Anything to know about your family?
-                  <span className="text-royal/50">{familyOpen ? "▾" : "▸"}</span>
-                </button>
-                {familyOpen ? (
-                  <div className="border-t border-royal/10 px-3 pb-3 pt-1">
-                    <textarea
-                      value={smartNote}
-                      onChange={(e) =>
-                        setSmartNote(e.target.value.slice(0, MAX_CHARS))
-                      }
-                      rows={4}
-                      maxLength={MAX_CHARS}
-                      placeholder="e.g. one child gets overwhelmed in crowds — prefer shorter park days."
-                      className="w-full resize-y rounded-lg border border-royal/25 px-3 py-2 font-sans text-sm text-royal placeholder:text-royal/35"
-                      disabled={isGenerating}
-                    />
-                    <span className="mt-1 block text-right font-sans text-xs text-royal/50">
-                      {smartNote.length} / {MAX_CHARS}
-                    </span>
+
+              <div className="max-h-[min(52vh,22rem)] space-y-4 overflow-y-auto pr-1">
+                <section>
+                  <h3 className="font-sans text-sm font-semibold text-royal">
+                    What&apos;s your pace?
+                  </h3>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                    {PACE_OPTIONS.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setPace(p.id)}
+                        className={`min-h-[44px] rounded-xl border p-3 text-left text-sm transition ${
+                          pace === p.id
+                            ? "border-royal bg-white ring-2 ring-royal/20"
+                            : "border-royal/15 bg-white hover:border-royal/30"
+                        }`}
+                        disabled={isGenerating}
+                      >
+                        <span className="text-lg">{p.emoji}</span>
+                        <div className="mt-1 font-semibold text-royal">
+                          {p.title}
+                        </div>
+                        <div className="mt-1 text-xs text-royal/70">
+                          {p.body}
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                ) : null}
+                </section>
+
+                <section>
+                  <h3 className="font-sans text-sm font-semibold text-royal">
+                    Any must-do parks?
+                  </h3>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMustDoParks(new Set())}
+                      className={`min-h-[40px] rounded-full border px-3 py-2 font-sans text-xs ${
+                        mustDoParks.size === 0
+                          ? "border-royal bg-royal text-cream"
+                          : "border-royal/25 bg-white"
+                      }`}
+                      disabled={isGenerating}
+                    >
+                      No preference — surprise me!
+                    </button>
+                    {parks.map((pk) => (
+                      <button
+                        key={pk.id}
+                        type="button"
+                        onClick={() => {
+                          setMustDoParks((prev) => {
+                            const n = new Set(prev);
+                            if (n.has(pk.id)) n.delete(pk.id);
+                            else n.add(pk.id);
+                            return n;
+                          });
+                        }}
+                        className={`min-h-[40px] rounded-full border px-3 py-2 font-sans text-xs ${
+                          mustDoParks.has(pk.id)
+                            ? "border-royal bg-royal text-cream"
+                            : "border-royal/25 bg-white"
+                        }`}
+                        disabled={isGenerating}
+                      >
+                        {pk.icon ? `${pk.icon} ` : ""}
+                        {pk.name}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="font-sans text-sm font-semibold text-royal">
+                    What matters most? (pick up to 3)
+                  </h3>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {PRIORITY_OPTIONS.map((p) => {
+                      const on = priorities.has(p.id);
+                      const disabled = !on && priorities.size >= 3;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          disabled={disabled || isGenerating}
+                          onClick={() => {
+                            setPriorities((prev) => {
+                              const n = new Set(prev);
+                              if (n.has(p.id)) n.delete(p.id);
+                              else if (n.size < 3) n.add(p.id);
+                              return n;
+                            });
+                          }}
+                          className={`min-h-[40px] rounded-full border px-3 py-2 font-sans text-xs disabled:opacity-40 ${
+                            on
+                              ? "border-royal bg-royal text-cream"
+                              : "border-royal/25 bg-white"
+                          }`}
+                        >
+                          {p.emoji} {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="font-sans text-sm font-semibold text-royal">
+                    Anything else Claude should know? (optional)
+                  </h3>
+                  <textarea
+                    className="mt-2 min-h-[88px] w-full resize-y rounded-lg border border-royal/25 px-3 py-2 font-sans text-sm text-royal placeholder:text-royal/35"
+                    maxLength={MAX_CHARS}
+                    value={additionalNotes}
+                    onChange={(e) =>
+                      setAdditionalNotes(e.target.value.slice(0, MAX_CHARS))
+                    }
+                    placeholder="e.g. My daughter loves Frozen, we need a rest day mid-trip, we are staying at Reunion Resort…"
+                    disabled={isGenerating}
+                  />
+                  <p className="mt-1 text-right font-sans text-xs text-royal/50">
+                    {additionalNotes.length} / {MAX_CHARS}
+                  </p>
+                </section>
               </div>
             </>
           ) : (
@@ -287,7 +434,7 @@ export function SmartPlanModal({
             <button
               type="submit"
               disabled={isGenerating || !canSubmit}
-              className="min-w-[12rem] flex-1 rounded-lg bg-gold px-4 py-3 font-serif text-sm font-semibold text-royal shadow-sm transition hover:brightness-105 disabled:opacity-60"
+              className="min-h-[44px] min-w-[12rem] flex-1 rounded-lg bg-gold px-4 py-3 font-serif text-sm font-semibold text-royal shadow-sm transition hover:brightness-105 disabled:opacity-60"
             >
               {isGenerating ? (
                 <span className="inline-flex items-center justify-center gap-2">
@@ -302,9 +449,9 @@ export function SmartPlanModal({
               )}
             </button>
           </div>
-          <p className="mt-4 text-left font-sans text-xs leading-relaxed text-royal/55">
-            Prefer to plan manually? You can always drag parks onto your
-            calendar instead — Smart Plan is optional.
+          <p className="mt-4 text-left font-sans text-sm leading-relaxed text-gray-400">
+            Prefer to plan manually? Close this and drag parks onto your
+            calendar instead — Smart Plan is always optional.
           </p>
         </form>
       </div>

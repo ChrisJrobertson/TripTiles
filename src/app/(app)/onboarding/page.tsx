@@ -1,4 +1,5 @@
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
+import { getAllParks } from "@/lib/db/parks";
 import { getAllRegions } from "@/lib/db/regions";
 import { getUserTrips } from "@/lib/db/trips";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
@@ -36,8 +37,13 @@ export default async function OnboardingPage() {
   const trips = await getUserTrips(user.id);
   if (trips.length > 0) redirect("/planner");
 
-  const regions = await getAllRegions().catch(() => []);
+  const [regions, parks] = await Promise.all([
+    getAllRegions().catch(() => []),
+    getAllParks().catch(() => []),
+  ]);
   const first = firstNameFromUser(user);
 
-  return <OnboardingWizard firstName={first} regions={regions} />;
+  return (
+    <OnboardingWizard firstName={first} regions={regions} parks={parks} />
+  );
 }

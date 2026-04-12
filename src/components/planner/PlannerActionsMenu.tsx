@@ -1,12 +1,14 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 
 type Props = {
   onResetCruise: () => void;
   onClearAll: () => void;
   onPrint: () => void;
   onExportPdf?: () => void;
+  /** Optional block (e.g. colour theme picker) shown below standard actions. */
+  colourSection?: ReactNode;
 };
 
 /**
@@ -17,6 +19,7 @@ export function PlannerActionsMenu({
   onClearAll,
   onPrint,
   onExportPdf,
+  colourSection,
 }: Props) {
   const detailsRef = useRef<HTMLDetailsElement>(null);
 
@@ -79,6 +82,9 @@ export function PlannerActionsMenu({
           >
             Export to PDF
           </button>
+        ) : null}
+        {colourSection ? (
+          <div className="border-t border-royal/10">{colourSection}</div>
         ) : null}
       </div>
     </details>

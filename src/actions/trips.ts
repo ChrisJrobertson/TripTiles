@@ -12,8 +12,14 @@ import { syncTripLifecycleEmailQueue } from "@/lib/email/schedule-trip-emails";
 import { legacyDestinationFromRegionId } from "@/lib/legacy-destination";
 import { defaultPublicTripSlug, slugifyAdventureName } from "@/lib/slug";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { normaliseThemeKey, type ThemeKey } from "@/lib/themes";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
-import type { Assignments, Assignment, Destination } from "@/lib/types";
+import type {
+  Assignments,
+  Assignment,
+  Destination,
+  TripPlanningPreferences,
+} from "@/lib/types";
 import { revalidatePath } from "next/cache";
 
 function revalidatePlanner() {
@@ -42,6 +48,11 @@ export async function createTripAction(input: {
   hasCruise: boolean;
   cruiseEmbark?: string | null;
   cruiseDisembark?: string | null;
+  adults?: number;
+  children?: number;
+  childAges?: number[];
+  planningPreferences?: TripPlanningPreferences | null;
+  colourTheme?: ThemeKey;
 }): Promise<
   | { ok: true; tripId: string; newAchievements: string[] }
   | { ok: false; error: string }
@@ -58,6 +69,16 @@ export async function createTripAction(input: {
 
     const supabase = await createClient();
     const hasCruise = input.hasCruise;
+    const adults = Math.min(10, Math.max(1, Math.floor(input.adults ?? 2)));
+    const children = Math.min(10, Math.max(0, Math.floor(input.children ?? 0)));
+    const childAgesRaw = input.childAges ?? [];
+    const child_ages =
+      children > 0
+        ? childAgesRaw
+            .slice(0, children)
+            .map((n) => Math.min(17, Math.max(0, Math.floor(Number(n)))))
+            .filter((n) => !Number.isNaN(n))
+        : [];
     const row = {
       owner_id: user.id,
       region_id: input.regionId,
@@ -73,9 +94,11 @@ export async function createTripAction(input: {
       preferences: {} as Record<string, unknown>,
       is_public: false,
       public_slug: null as string | null,
-      adults: 2,
-      children: 0,
-      child_ages: [] as number[],
+      adults,
+      children,
+      child_ages,
+      planning_preferences: input.planningPreferences ?? null,
+      colour_theme: normaliseThemeKey(input.colourTheme),
       notes: null as string | null,
     };
 
@@ -214,6 +237,64 @@ export async function updateTripMetadataAction(input: {
       }
     }
 
+    revalidatePlanner();
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
+  }
+}
+
+export async function updateTripColourThemeAction(input: {
+  tripId: string;
+  colourTheme: ThemeKey;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { ok: false, error: "Not signed in." };
+
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("trips")
+      .update({
+        colour_theme: normaliseThemeKey(input.colourTheme),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.tripId)
+      .eq("owner_id", user.id);
+
+    if (error) return { ok: false, error: error.message };
+    revalidatePlanner();
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
+  }
+}
+
+export async function updateTripPlanningPreferencesAction(input: {
+  tripId: string;
+  planningPreferences: TripPlanningPreferences | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { ok: false, error: "Not signed in." };
+
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("trips")
+      .update({
+        planning_preferences: input.planningPreferences,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.tripId)
+      .eq("owner_id", user.id);
+
+    if (error) return { ok: false, error: error.message };
     revalidatePlanner();
     return { ok: true };
   } catch (e) {
