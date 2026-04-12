@@ -1,6 +1,7 @@
 "use client";
 
-import { themedTileChromeStyle } from "@/lib/themes";
+import { parkChromaTileStyle } from "@/lib/theme-colours";
+import type { ThemeKey } from "@/lib/themes";
 import type { Park, SlotType } from "@/lib/types";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
@@ -13,6 +14,7 @@ type Props = {
   /** When set, picking a park assigns to this slot and closes. */
   pendingSlot: { dateKey: string; slot: SlotType } | null;
   onPickPark: (parkId: string) => void;
+  colourTheme: ThemeKey;
 };
 
 function groupParks(parks: Park[]): ParkGroup[] {
@@ -36,6 +38,7 @@ export function MobileParksDrawer({
   parks,
   pendingSlot,
   onPickPark,
+  colourTheme,
 }: Props) {
   const titleId = useId();
   const [searchQuery, setSearchQuery] = useState("");
@@ -181,7 +184,11 @@ export function MobileParksDrawer({
                       type="button"
                       onClick={() => handlePick(park.id)}
                       className="min-h-[44px] rounded-lg px-4 py-3 text-left font-sans text-sm font-medium transition hover:brightness-[1.05] active:brightness-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--tt-ring)]/50"
-                      style={themedTileChromeStyle(park.bg_colour)}
+                      style={parkChromaTileStyle(
+                        park.bg_colour,
+                        park.fg_colour,
+                        colourTheme,
+                      )}
                     >
                       {park.icon ? `${park.icon} ` : ""}
                       {park.name}

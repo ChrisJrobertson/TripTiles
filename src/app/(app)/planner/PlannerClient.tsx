@@ -1185,6 +1185,7 @@ export function PlannerClient({
                 customTiles={customTilesForPalette}
                 regionId={resolvePaletteRegionId(activeTrip)}
                 showCruiseTiles={activeTrip.has_cruise}
+                colourTheme={normaliseThemeKey(activeTrip.colour_theme)}
                 selectedParkId={selectedParkId}
                 onSelectPark={setSelectedParkId}
                 onAddCustom={handleAddCustom}

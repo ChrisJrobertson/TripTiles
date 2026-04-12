@@ -11,10 +11,8 @@ import {
 } from "@/lib/date-helpers";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
-import {
-  themedEmptySlotSurfaceStyle,
-  themedTileChromeStyle,
-} from "@/lib/themes";
+import { parkChromaTileStyle } from "@/lib/theme-colours";
+import { normaliseThemeKey, themedEmptySlotSurfaceStyle } from "@/lib/themes";
 import type { Assignment, Park, SlotType, Trip } from "@/lib/types";
 import {
   CrowdLevelIndicator,
@@ -139,6 +137,7 @@ export function Calendar({
   readOnly = false,
 }: Props) {
   const parkById = new Map(parks.map((p) => [p.id, p]));
+  const themeKey = normaliseThemeKey(trip.colour_theme);
   const weeks = buildWeeks(trip);
   const crowdToneByDateKey = useMemo(() => {
     const m = new Map<string, "low" | "mid" | "high" | null>();
@@ -331,14 +330,19 @@ export function Calendar({
                       const emptySlotStyle: CSSProperties | undefined = park
                         ? undefined
                         : themedEmptySlotSurfaceStyle();
-                      const filledSlotStyle: CSSProperties | undefined =
-                        park
-                          ? themedTileChromeStyle(park.bg_colour)
-                          : undefined;
+                      const filledSlotStyle: CSSProperties | undefined = park
+                        ? parkChromaTileStyle(
+                            park.bg_colour,
+                            park.fg_colour,
+                            themeKey,
+                          )
+                        : undefined;
                       return (
                         <div
                           key={slot}
-                          className={`group planner-slot relative flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-royal/10 ${area} ${
+                          className={`group planner-slot relative flex min-h-0 flex-1 flex-col overflow-hidden rounded ${area} ${
+                            park ? "" : "border border-royal/10"
+                          } ${
                             park
                               ? "transition hover:brightness-[1.06]"
                               : ""

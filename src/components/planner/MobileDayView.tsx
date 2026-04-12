@@ -9,9 +9,11 @@ import {
 } from "@/lib/date-helpers";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
+import { parkChromaTileStyle } from "@/lib/theme-colours";
 import {
+  normaliseThemeKey,
   themedEmptySlotSurfaceStyle,
-  themedTileChromeStyle,
+  type ThemeKey,
 } from "@/lib/themes";
 import type {
   Assignments,
@@ -212,6 +214,7 @@ function MobileSlotCard({
   readOnly,
   onClear,
   onTapAdd,
+  colourTheme,
 }: {
   slot: SlotType;
   dateKey: string;
@@ -220,27 +223,33 @@ function MobileSlotCard({
   readOnly: boolean;
   onClear: (dateKey: string, slot: SlotType) => void;
   onTapAdd: () => void;
+  colourTheme: ThemeKey;
 }) {
   const meta = SLOTS.find((s) => s.key === slot)!;
   const park = assignmentId ? parkById.get(assignmentId) : undefined;
 
   const shellStyle = park
-    ? themedTileChromeStyle(park.bg_colour)
+    ? parkChromaTileStyle(park.bg_colour, park.fg_colour, colourTheme)
     : themedEmptySlotSurfaceStyle();
 
   return (
     <div
-      className={`flex min-h-[64px] items-center gap-3 rounded-lg border border-royal/10 px-4 py-3 shadow-sm ${
-        park ? "hover:brightness-[1.05]" : ""
+      className={`flex min-h-[64px] items-center gap-3 rounded-lg px-4 py-3 shadow-sm ${
+        park ? "hover:brightness-[1.05]" : "border border-royal/10"
       }`}
       style={shellStyle}
     >
       <div className="min-w-0 flex-1">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-royal/60">
+        <div
+          className={`text-[11px] font-semibold uppercase tracking-wider ${
+            park ? "opacity-75" : "text-royal/60"
+          }`}
+          style={park ? { color: "inherit" } : undefined}
+        >
           {meta.label}
         </div>
         {park ? (
-          <div className="truncate font-sans text-lg font-medium text-[color:var(--tt-tile-text)]">
+          <div className="truncate font-sans text-lg font-medium" style={{ color: "inherit" }}>
             {mealPrefix(slot)}
             {park.icon ? `${park.icon} ` : ""}
             {park.name}
@@ -261,7 +270,8 @@ function MobileSlotCard({
         <button
           type="button"
           onClick={() => onClear(dateKey, slot)}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl text-royal/40 transition active:bg-royal/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl opacity-50 transition hover:opacity-80 active:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+          style={{ color: "inherit" }}
           aria-label={`Clear ${meta.label} slot`}
         >
           ×
@@ -332,6 +342,8 @@ export function MobileDayView({
     () => new Map(parks.map((p) => [p.id, p])),
     [parks],
   );
+
+  const colourTheme = normaliseThemeKey(trip.colour_theme);
 
   const safeIndex = Math.min(
     Math.max(0, activeIndex),
@@ -477,6 +489,7 @@ export function MobileDayView({
                   readOnly={readOnly}
                   onClear={onClear}
                   onTapAdd={() => openParksForSlot(activeDay.dateKey, slot)}
+                  colourTheme={colourTheme}
                 />
               );
             })}
@@ -549,6 +562,7 @@ export function MobileDayView({
         parks={parks}
         pendingSlot={pendingSlot}
         onPickPark={handlePickPark}
+        colourTheme={colourTheme}
       />
 
       {/* Mobile menu sheet */}

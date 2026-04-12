@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  applyThemeToColour,
+  getThemeTransform,
+  THEME_PREVIEW_BASE_HEXES,
+} from "@/lib/theme-colours";
 import { THEMES, THEME_KEYS, type ThemeKey } from "@/lib/themes";
 
 type Props = {
@@ -23,6 +28,7 @@ export function TripThemePicker({
     <div className={wrap} role="listbox" aria-label="Colour theme">
       {THEME_KEYS.map((key) => {
         const t = THEMES[key];
+        const tf = getThemeTransform(key);
         const selected = value === key;
         return (
           <button
@@ -46,13 +52,20 @@ export function TripThemePicker({
             }
           >
             <span
-              className="h-8 w-14 shrink-0 rounded-md border-2 shadow-sm"
-              style={{
-                backgroundColor: t.tile,
-                borderColor: t.accent,
-              }}
+              className="flex shrink-0 gap-1"
               aria-hidden
-            />
+              title="Preview: four sample park colours after this theme"
+            >
+              {THEME_PREVIEW_BASE_HEXES.map((base) => (
+                <span
+                  key={base}
+                  className="h-4 w-4 rounded-full border border-black/10 shadow-sm"
+                  style={{
+                    backgroundColor: applyThemeToColour(base, tf),
+                  }}
+                />
+              ))}
+            </span>
             <span className="font-sans text-xs font-semibold text-royal">
               {t.label}
             </span>

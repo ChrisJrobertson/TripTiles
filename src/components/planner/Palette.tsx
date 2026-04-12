@@ -4,7 +4,8 @@ import { RegionalDiningSection } from "@/components/planner/RegionalDiningSectio
 import { GROUP_META, GROUP_ORDER } from "@/lib/group-meta";
 import { isCruisePaletteTileName } from "@/lib/cruise-tiles";
 import { parkMatchesPlannerRegion } from "@/lib/park-matches-planner-region";
-import { themedTileChromeStyle } from "@/lib/themes";
+import { parkChromaTileStyle } from "@/lib/theme-colours";
+import type { ThemeKey } from "@/lib/themes";
 import type { CustomTile, Park } from "@/lib/types";
 import { useMemo, useState } from "react";
 
@@ -15,6 +16,8 @@ type Props = {
   regionId: string | null;
   /** When false, cruise/ship tiles are hidden from the drawer (client-side). */
   showCruiseTiles: boolean;
+  /** Active trip colour theme — transforms each tile's catalogue colour. */
+  colourTheme: ThemeKey;
   selectedParkId: string | null;
   onSelectPark: (id: string | null) => void;
   onAddCustom: (group: string) => void;
@@ -27,6 +30,7 @@ export function Palette({
   customTiles,
   regionId,
   showCruiseTiles,
+  colourTheme,
   selectedParkId,
   onSelectPark,
   onAddCustom,
@@ -103,7 +107,11 @@ export function Palette({
                           ? "scale-105 ring-2 ring-[color:var(--tt-ring)] ring-offset-1 ring-offset-cream"
                           : ""
                       }`}
-                      style={themedTileChromeStyle(park.bg_colour)}
+                      style={parkChromaTileStyle(
+                        park.bg_colour,
+                        park.fg_colour,
+                        colourTheme,
+                      )}
                     >
                       {park.icon ? (
                         <span className="shrink-0" aria-hidden>
@@ -133,7 +141,11 @@ export function Palette({
                             ? "scale-105 ring-2 ring-[color:var(--tt-ring)] ring-offset-1 ring-offset-cream"
                             : ""
                         }`}
-                        style={themedTileChromeStyle(tile.bg_colour)}
+                        style={parkChromaTileStyle(
+                          tile.bg_colour,
+                          tile.fg_colour,
+                          colourTheme,
+                        )}
                         title="Your custom tile"
                       >
                         <span
