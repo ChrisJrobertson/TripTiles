@@ -83,10 +83,10 @@ export function TwoPathPlanningSection({
           >
             <IconSparkles className="h-10 w-10 shrink-0 text-gold" />
             <h3 className="mt-4 font-serif text-lg font-semibold text-royal">
-              Ask El&apos;s for a first draft ✨
+              Ask Trip for a first draft ✨
             </h3>
             <p className="mt-2 flex-1 font-sans text-sm leading-relaxed text-royal/80">
-              Tell Ellie your priorities and get a full itinerary in seconds.
+              Tell Trip your priorities and get a full itinerary in seconds.
             </p>
           </button>
         </div>
@@ -127,11 +127,11 @@ export function TwoPathPlanningSection({
             </span>
           </div>
           <h3 className="mt-4 font-serif text-xl font-semibold text-royal">
-            Let Ellie plan it
+            Let Trip plan it
           </h3>
           <p className="mt-3 flex-1 font-sans text-sm leading-relaxed text-royal/80">
             Describe your trip — family size, priorities, must-do parks — and
-            Ellie builds a complete day-by-day itinerary in seconds. Then tweak
+            Trip builds a complete day-by-day itinerary in seconds. Then tweak
             anything you like.
           </p>
         </article>

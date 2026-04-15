@@ -14,7 +14,7 @@ const site = getPublicSiteUrl() || "https://www.triptiles.app";
 export const metadata: Metadata = {
   title: "TripTiles — Plan your theme park trips in minutes",
   description:
-    "Ellie-powered itineraries for Disney, Universal, and 300+ parks worldwide. Beautiful PDFs. Family-friendly pricing.",
+    "Trip-powered itineraries for Disney, Universal, and 300+ parks worldwide. Beautiful PDFs. Family-friendly pricing.",
   openGraph: {
     title: "TripTiles — Plan your theme park trips in minutes",
     description:
@@ -36,8 +36,8 @@ export const metadata: Metadata = {
 const FEATURES = [
   {
     icon: "🤖",
-    title: "Ellie-powered planning",
-    body: "Ellie drafts a day-by-day plan using crowd patterns and your group.",
+    title: "Trip-powered planning",
+    body: "Trip drafts a day-by-day plan using crowd patterns and your group.",
   },
   {
     icon: "📅",
@@ -81,7 +81,7 @@ const FAQ = [
   },
   {
     q: "How accurate are Smart Plan drafts?",
-    a: "Ellie uses heuristic crowd data — always verify park hours and tickets before you travel.",
+    a: "Smart Plan uses heuristic crowd data — always verify park hours and tickets before you travel.",
   },
   {
     q: "Can I share with my family?",
@@ -122,7 +122,7 @@ export default async function MarketingHomePage() {
               Plan your theme park trip in minutes, not hours
             </h1>
             <p className="mt-6 max-w-xl font-sans text-lg leading-relaxed text-royal/80">
-              Plan every detail yourself, or let Ellie build your itinerary in
+              Plan every detail yourself, or let Trip build your itinerary in
               seconds — then export a beautiful PDF to take with you. Disney,
               Universal, and 300+ parks worldwide. Family-friendly pricing.
             </p>
@@ -194,7 +194,7 @@ export default async function MarketingHomePage() {
                 Fill your calendar
               </h3>
               <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
-                Drag tiles on yourself, or run Smart Plan and let Ellie draft
+                Drag tiles on yourself, or run Smart Plan and let Trip draft
                 days from crowd patterns, your dates, and group size — then edit
                 freely.
               </p>

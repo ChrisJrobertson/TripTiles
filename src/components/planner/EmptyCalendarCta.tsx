@@ -25,7 +25,7 @@ export function EmptyCalendarCta({
         Your calendar is empty
       </p>
       <p className="mt-2 text-center font-sans text-sm text-royal/70">
-        Let Ellie draft your calendar with Smart Plan, or add parks manually —
+        Let Trip draft your calendar with Smart Plan, or add parks manually —
         your choice.
       </p>
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
@@ -34,7 +34,7 @@ export function EmptyCalendarCta({
           onClick={onGenerateAi}
           className="min-h-[44px] flex-1 rounded-lg bg-[color:var(--tt-ring)] px-4 py-3 font-serif text-sm font-semibold text-white shadow-sm transition hover:brightness-105 sm:min-w-[10rem]"
         >
-          Ask El&apos;s to plan ✨
+          Ask Trip to plan ✨
         </button>
         <button
           type="button"

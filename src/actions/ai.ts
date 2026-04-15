@@ -547,7 +547,7 @@ export async function generateAIPlanAction(input: {
       return {
         ok: false,
         error: "AI_ERROR",
-        message: "Ellie returned something we couldn't read. Try again.",
+        message: "Smart Plan returned something we couldn't read. Try again.",
       };
     }
 

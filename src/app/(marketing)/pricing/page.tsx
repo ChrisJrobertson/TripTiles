@@ -9,7 +9,7 @@ const siteUrl =
 export const metadata: Metadata = {
   title: "Pricing - TripTiles",
   description:
-    "One-time pricing for TripTiles — unlimited trips, Smart Plan with Ellie, and Trip Passport. No subscriptions.",
+    "One-time pricing for TripTiles — unlimited trips, Smart Plan with Trip, and Trip Passport. No subscriptions.",
   openGraph: {
     title: "Pricing - TripTiles",
     description:

@@ -21,7 +21,7 @@ export type ThemeDefinition = {
   /** User-facing label (UK copy). */
   label: string;
   /**
-   * Smart Plan / Ask El's, focus rings, empty-slot tint base.
+   * Smart Plan / Ask Trip, focus rings, empty-slot tint base.
    * Matches the spec accent list per theme.
    */
   ring: string;

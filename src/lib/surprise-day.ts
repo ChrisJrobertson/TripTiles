@@ -66,7 +66,7 @@ export type SurpriseResult = {
 };
 
 /**
- * Picks a random empty day and fills AM/PM/Lunch/Dinner without calling Ellie.
+ * Picks a random empty day and fills AM/PM/Lunch/Dinner without calling the AI.
  */
 export function buildSurpriseDayPlan(input: {
   trip: Trip;

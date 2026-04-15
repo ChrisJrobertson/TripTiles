@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     template: "%s · TripTiles",
   },
   description:
-    "Ellie-powered trip planner for theme park holidays worldwide. Build beautiful, printable itineraries for Disney, Universal, and 300+ parks across 45 destinations.",
+    "Trip-powered trip planner for theme park holidays worldwide. Build beautiful, printable itineraries for Disney, Universal, and 300+ parks across 45 destinations.",
   keywords: [
     "theme park planner",
     "Disney World itinerary",

@@ -170,7 +170,7 @@ async function runSmartPlanWithTimeoutAndRetry(
     res = {
       ok: false,
       error: "AI_ERROR",
-      message: "Ellie is still working — this pass hit the time limit.",
+      message: "Smart Plan is still working — this pass hit the time limit.",
     };
   }
   if (res.ok) return res;
@@ -184,7 +184,7 @@ async function runSmartPlanWithTimeoutAndRetry(
       ok: false,
       error: "AI_ERROR",
       message:
-        "Ellie couldn't generate your plan — try again from the planner, or build it yourself.",
+        "Smart Plan couldn't generate your plan — try again from the planner, or build it yourself.",
     };
   }
 }
@@ -693,7 +693,7 @@ export function PlannerClient({
           }
           const errMsg =
             res.message ||
-            "Ellie couldn't generate your plan — try again, or build the calendar yourself.";
+            "Smart Plan couldn't generate your plan — try again, or build the calendar yourself.";
           setSmartError(errMsg);
           showToast(errMsg);
           return;
@@ -787,7 +787,7 @@ export function PlannerClient({
           } else {
             showToast(
               res.message ||
-                "Ellie couldn't generate your plan — you can try again from the planner, or build it yourself.",
+                "Smart Plan couldn't generate your plan — you can try again from the planner, or build it yourself.",
             );
           }
           startTransition(() => router.replace("/planner"));
@@ -831,7 +831,7 @@ export function PlannerClient({
         showToast(
           e instanceof Error
             ? e.message
-            : "Ellie couldn't generate your plan — you can try again from the planner, or build it yourself.",
+            : "Smart Plan couldn't generate your plan — you can try again from the planner, or build it yourself.",
         );
         startTransition(() => router.replace("/planner"));
       } finally {
@@ -1116,7 +1116,7 @@ export function PlannerClient({
         "en-GB",
         { weekday: "short", day: "numeric", month: "short" },
       );
-      showToast(`Ellie filled ${label} with a surprise plan! 🎲`);
+      showToast(`Trip filled ${label} with a surprise plan! 🎲`);
     },
     [activeTripId, trips, parks, scheduleAssignmentsSave],
   );
@@ -1664,7 +1664,7 @@ export function PlannerClient({
               <span className="text-gold" aria-hidden>
                 ✓
               </span>
-              <span>Smart Plan with Ellie suggests a draft itinerary (optional)</span>
+              <span>Smart Plan with Trip suggests a draft itinerary (optional)</span>
             </li>
             <li className="flex gap-2">
               <span className="text-gold" aria-hidden>
@@ -1821,7 +1821,7 @@ export function PlannerClient({
             aria-hidden
           />
             <p className="max-w-sm font-serif text-lg font-semibold">
-            Ellie is building your itinerary…
+            Smart Plan is building your itinerary…
           </p>
           <p className="max-w-xs font-sans text-sm text-cream/85">
             This usually takes a few seconds. Your calendar will fill in

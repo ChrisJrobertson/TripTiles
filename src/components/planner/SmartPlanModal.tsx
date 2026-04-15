@@ -141,10 +141,10 @@ export function SmartPlanModal({
           id="smart-plan-title"
           className="font-serif text-xl font-semibold text-royal"
         >
-          Let Ellie build your itinerary
+          Let Trip build your itinerary
         </h2>
         <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
-          Tell Ellie your priorities — Ellie will fill your calendar with
+          Tell Trip your priorities — Trip will fill your calendar with
           the best parks, dining, and activities for your family.
         </p>
         <p className="mt-1 font-sans text-xs leading-relaxed text-royal/60">
@@ -316,7 +316,7 @@ export function SmartPlanModal({
 
                 <section>
                   <h3 className="font-sans text-sm font-semibold text-royal">
-                    Anything else Ellie should know? (optional)
+                    Anything else Trip should know? (optional)
                   </h3>
                   <textarea
                     className="mt-2 min-h-[88px] w-full resize-y rounded-lg border border-royal/25 px-3 py-2 font-sans text-sm text-royal placeholder:text-royal/35"

@@ -487,10 +487,10 @@ export function TripCreationWizard({
                   ✨
                 </span>
                 <span className="mt-2 font-serif text-lg font-semibold text-royal">
-                  Let Ellie build my plan
+                  Let Trip build my plan
                 </span>
                 <p className="mt-2 flex-1 font-sans text-sm text-royal/80">
-                  Answer a few questions about your trip and Ellie will create a
+                  Answer a few questions about your trip and Trip will create a
                   complete day-by-day itinerary in seconds. Tweak everything
                   afterwards.
                 </p>
@@ -609,7 +609,7 @@ export function TripCreationWizard({
 
             <section>
               <h2 className="font-sans text-sm font-semibold text-royal">
-                Anything else Ellie should know? (optional)
+                Anything else Trip should know? (optional)
               </h2>
               <textarea
                 className="mt-2 min-h-[100px] w-full rounded-lg border-2 border-royal/20 px-3 py-2 font-sans text-sm"
