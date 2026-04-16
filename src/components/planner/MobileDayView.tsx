@@ -353,15 +353,15 @@ export function MobileDayView({
     [trip, dayNotes, userDayNotes],
   );
 
-  const todayIndex = useMemo(
-    () => days.findIndex((d) => isSameDay(d.date, new Date())),
-    [days],
-  );
+  const [todayIndex, setTodayIndex] = useState(-1);
 
-  const [activeIndex, setActiveIndex] = useState(() => {
-    const idx = days.findIndex((d) => isSameDay(d.date, new Date()));
-    return idx >= 0 ? idx : 0;
-  });
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    if (days.length === 0) return;
+    const ti = days.findIndex((d) => isSameDay(d.date, new Date()));
+    setTodayIndex(ti);
+  }, [days]);
 
   useEffect(() => {
     if (days.length === 0) return;
