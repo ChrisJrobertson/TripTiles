@@ -1,75 +1,27 @@
 "use client";
 
-import { isStaleServerActionError } from "@/lib/toast";
-import { logClientError } from "@/lib/telemetry/log-error";
-import Link from "next/link";
+import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
 
+/**
+ * Root error boundary for the App Router. Reports uncaught render errors to Sentry.
+ */
 export default function GlobalError({
   error,
-  reset,
 }: {
   error: Error & { digest?: string };
-  reset: () => void;
 }) {
-  const staleAction = isStaleServerActionError(error);
-
   useEffect(() => {
-    void logClientError(error, { boundary: "global" });
+    Sentry.captureException(error);
   }, [error]);
 
   return (
-    <html lang="en">
-      <body style={{ margin: 0, background: "#FAF8F3", color: "#0B1E5C" }}>
-        <div style={{ padding: 40, maxWidth: 520, fontFamily: "Georgia, serif" }}>
-          <h1 style={{ fontSize: "1.75rem" }}>Something went wrong</h1>
-          <p style={{ fontFamily: "system-ui, sans-serif", lineHeight: 1.5 }}>
-            {staleAction ? (
-              <>
-                This page is out of date compared to the server (for example
-                after an update). Refresh the page, then try again — your data
-                is still on the server.
-              </>
-            ) : (
-              <>
-                We&apos;ve logged this and will look into it. You can try again
-                or head home.
-              </>
-            )}
-          </p>
-          <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
-            <button
-              type="button"
-              onClick={() => reset()}
-              style={{
-                padding: "10px 18px",
-                borderRadius: 8,
-                border: "none",
-                background: "#C9A961",
-                color: "#0B1E5C",
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              Try again
-            </button>
-            <Link
-              href="/"
-              style={{
-                display: "inline-block",
-                padding: "10px 18px",
-                borderRadius: 8,
-                border: "2px solid #0B1E5C",
-                color: "#0B1E5C",
-                textDecoration: "none",
-                fontFamily: "system-ui, sans-serif",
-                fontWeight: 600,
-              }}
-            >
-              Go home
-            </Link>
-          </div>
-        </div>
+    <html lang="en-GB">
+      <body className="bg-cream px-6 py-16 font-sans text-royal">
+        <h1 className="font-serif text-xl font-semibold">Something went wrong</h1>
+        <p className="mt-3 text-sm text-royal/80">
+          Please refresh the page. If the problem continues, contact support.
+        </p>
       </body>
     </html>
   );
