@@ -1,5 +1,7 @@
 import type { User } from "@supabase/supabase-js";
 
+type IdentityRow = NonNullable<User["identities"]>[number];
+
 /** OAuth / SSO identity providers (not email+password). */
 const OAUTH_PROVIDERS = new Set([
   "apple",
@@ -21,6 +23,31 @@ const OAUTH_PROVIDERS = new Set([
   "workos",
 ]);
 
+const APPLE_RELAY_SUFFIX = "@privaterelay.appleid.com";
+
+function isAppleRelayEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return email.toLowerCase().endsWith(APPLE_RELAY_SUFFIX);
+}
+
+function identityDataEmail(identity: IdentityRow): string | undefined {
+  const data = identity.identity_data;
+  if (!data || typeof data !== "object") return undefined;
+  const email = (data as { email?: unknown }).email;
+  return typeof email === "string" ? email : undefined;
+}
+
+function hasAppleRelayIdentity(user: User): boolean {
+  if (isAppleRelayEmail(user.email ?? undefined)) {
+    return true;
+  }
+  const identities = user.identities ?? [];
+  return identities.some(
+    (i) =>
+      i.provider === "email" && isAppleRelayEmail(identityDataEmail(i)),
+  );
+}
+
 function readAppMetadataProviders(user: User): string[] {
   const am = user.app_metadata as
     | { provider?: string; providers?: string[] }
@@ -37,12 +64,28 @@ function readAppMetadataProviders(user: User): string[] {
 /**
  * Whether the account can change password via Supabase email/password.
  *
- * Do not trust `app_metadata.provider === "email"` alone: Sign in with Apple
- * (and similar) can still surface `email` in metadata when a relay address is
- * used. Always check `app_metadata.providers` and `identities` for OAuth
- * entries before showing the password form.
+ * 1. `app_metadata.provider` (singular) is the canonical sign-up method GoTrue
+ *    sets at account creation. If it is anything other than `email`, this is not
+ *    an email+password-only account (covers Apple SSO even when identities only
+ *    show `provider: "email"` for Hide My Email relay).
+ * 2. Hide My Email can still yield only an `email` identity with a relay address;
+ *    treat that as not password-capable.
+ * 3. Keep `identities` / `providers[]` checks for linked accounts and edge cases.
  */
 export function userHasEmailPasswordAuth(user: User): boolean {
+  const am = user.app_metadata as
+    | { provider?: string; providers?: string[] }
+    | undefined;
+  const primaryProvider = am?.provider;
+
+  if (primaryProvider && primaryProvider !== "email") {
+    return false;
+  }
+
+  if (hasAppleRelayIdentity(user)) {
+    return false;
+  }
+
   const identities = user.identities ?? [];
 
   if (identities.some((i) => OAUTH_PROVIDERS.has(i.provider))) {
@@ -59,21 +102,14 @@ export function userHasEmailPasswordAuth(user: User): boolean {
     return false;
   }
 
-  const metaProvider = (user.app_metadata as { provider?: string } | undefined)
-    ?.provider;
-
-  if (metaProvider && metaProvider !== "email" && OAUTH_PROVIDERS.has(metaProvider)) {
-    return false;
-  }
-
-  // Email identity present, no OAuth in metadata or identities: email+password or
-  // magic link (same Supabase shape). Allow password change when metadata points
-  // at email as the auth method.
-  if (metaProvider === "email") {
+  if (primaryProvider === "email") {
     return true;
   }
 
-  if (providersList.includes("email") && providersList.every((p) => p === "email")) {
+  if (
+    providersList.includes("email") &&
+    providersList.every((p) => p === "email")
+  ) {
     return true;
   }
 
@@ -88,6 +124,16 @@ function labelForProvider(provider: string): string {
 
 /** Human label for primary OAuth provider, or null if none. */
 export function getOauthIdentityLabel(user: User): string | null {
+  const primary = (user.app_metadata as { provider?: string } | undefined)
+    ?.provider;
+  if (primary && OAUTH_PROVIDERS.has(primary)) {
+    return labelForProvider(primary);
+  }
+
+  if (hasAppleRelayIdentity(user)) {
+    return "Apple";
+  }
+
   const identities = user.identities ?? [];
   const fromIdentity = identities.find((i) => OAUTH_PROVIDERS.has(i.provider));
   if (fromIdentity) {
