@@ -44,7 +44,7 @@ export interface Profile {
   updated_at: string;
 }
 
-/** Effective tier from `user_effective_tier` view (shape may mirror Profile + computed tier) */
+/** Optional DB view; not used by the app (tier is read from `profiles.tier`). May diverge from `profiles` if the view definition is stale. */
 export interface UserEffectiveTierRow {
   user_id: string;
   effective_tier: UserTier;

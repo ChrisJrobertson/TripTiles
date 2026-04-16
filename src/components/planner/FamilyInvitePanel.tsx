@@ -13,12 +13,11 @@ import { useCallback, useEffect, useState } from "react";
 
 type Props = {
   tripId: string;
-  userTier: UserTier | null;
+  userTier: UserTier;
 };
 
 export function FamilyInvitePanel({ tripId, userTier }: Props) {
-  const tier = userTier ?? "free";
-  const canShare = getTierConfig(tier).features.family_sharing;
+  const canShare = getTierConfig(userTier).features.family_sharing;
   const [rows, setRows] = useState<
     Array<{
       id: string;

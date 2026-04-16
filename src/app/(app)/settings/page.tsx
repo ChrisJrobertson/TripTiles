@@ -1,12 +1,17 @@
 import { AppNavHeader } from "@/components/app/AppNavHeader";
+import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
 import { SettingsAccountPanel } from "@/components/settings/SettingsAccountPanel";
 import { getTierConfig } from "@/lib/tiers";
 import { getUserTripCount } from "@/lib/db/trips";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
+import {
+  readProfileRow,
+  tierFromProfileRow,
+} from "@/lib/supabase/profile-read";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { TemperatureUnitSettings } from "@/components/settings/TemperatureUnitSettings";
 import { EmailPreferencesSettings } from "@/components/settings/EmailPreferencesSettings";
-import type { TemperatureUnit, UserTier } from "@/lib/types";
+import type { TemperatureUnit } from "@/lib/types";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -52,12 +57,17 @@ export default async function SettingsPage() {
   const identities = user.identities ?? [];
   const hasPasswordAuth = identities.some((i) => i.provider === "email");
 
-  const [profileRes, purchasesRes, tripCount] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("tier, display_name, temperature_unit, email_marketing_opt_out")
-      .eq("id", user.id)
-      .maybeSingle(),
+  const [profileRead, purchasesRes, tripCount] = await Promise.all([
+    readProfileRow<{
+      tier: string;
+      display_name?: string | null;
+      temperature_unit?: string | null;
+      email_marketing_opt_out?: boolean | null;
+    }>(
+      supabase,
+      user.id,
+      "tier, display_name, temperature_unit, email_marketing_opt_out",
+    ),
     supabase
       .from("purchases")
       .select(
@@ -68,31 +78,20 @@ export default async function SettingsPage() {
     getUserTripCount(user.id),
   ]);
 
-  const tier = (profileRes.data?.tier as UserTier) ?? "free";
+  if (!profileRead.ok) {
+    return <ProfileLoadErrorPanel detail={profileRead.message} />;
+  }
+
+  const profileRow = profileRead.data;
+  const tier = tierFromProfileRow(profileRow);
   const cfg = getTierConfig(tier);
-  const displayName =
-    profileRes.data &&
-    typeof profileRes.data === "object" &&
-    "display_name" in profileRes.data
-      ? (profileRes.data.display_name as string | null)
-      : null;
+  const displayName = profileRow.display_name ?? null;
   const profileCreated = user.created_at ?? null;
   const purchases = (purchasesRes.data ?? []) as PurchaseRow[];
   const freeMax = getTierConfig("free").features.max_trips ?? 1;
   const initialTemperatureUnit: TemperatureUnit =
-    profileRes.data &&
-    typeof profileRes.data === "object" &&
-    "temperature_unit" in profileRes.data &&
-    (profileRes.data as { temperature_unit?: string }).temperature_unit ===
-      "f"
-      ? "f"
-      : "c";
-  const emailMarketingOptOut = Boolean(
-    profileRes.data &&
-      typeof profileRes.data === "object" &&
-      (profileRes.data as { email_marketing_opt_out?: boolean })
-        .email_marketing_opt_out === true,
-  );
+    profileRow.temperature_unit === "f" ? "f" : "c";
+  const emailMarketingOptOut = profileRow.email_marketing_opt_out === true;
 
   return (
     <div className="min-h-screen bg-cream pb-16 pt-0">

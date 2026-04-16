@@ -9,11 +9,14 @@ import { Suspense } from "react";
 type NavProps = {
   userEmail: string;
   userTier: UserTier | null;
+  /** When true, the profile tier could not be loaded — do not show Free or Upgrade. */
+  tierLoadError?: boolean;
   tripCount: number;
   freeTripLimit: number;
 };
 
-function tierLabel(tier: UserTier | null): string {
+function tierLabel(tier: UserTier | null, tierLoadError: boolean): string {
+  if (tierLoadError) return "Plan unknown";
   if (tier == null || tier === "free") return "Free";
   if (tier === "pro") return "Pro";
   if (tier === "family") return "Family";
@@ -36,10 +39,12 @@ function plannerHrefPreservingQuery(
 function AppNavHeaderFallback({
   userEmail,
   userTier,
+  tierLoadError = false,
   tripCount,
   freeTripLimit,
 }: NavProps) {
-  const isFree = userTier == null || userTier === "free";
+  const isFree =
+    !tierLoadError && (userTier == null || userTier === "free");
   return (
     <header className="sticky top-0 z-30 border-b border-royal/10 bg-cream/95 px-4 py-3 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -102,7 +107,7 @@ function AppNavHeaderFallback({
             className="hidden rounded-full border border-royal/15 bg-white/80 px-2.5 py-0.5 font-sans text-xs font-medium text-royal/75 sm:inline"
             title="Your plan"
           >
-            {tierLabel(userTier)}
+            {tierLabel(userTier, tierLoadError)}
             {isFree ? (
               <>
                 {" "}
@@ -132,12 +137,14 @@ function AppNavHeaderFallback({
 function AppNavHeaderInner({
   userEmail,
   userTier,
+  tierLoadError = false,
   tripCount,
   freeTripLimit,
 }: NavProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const isFree = userTier == null || userTier === "free";
+  const isFree =
+    !tierLoadError && (userTier == null || userTier === "free");
   const onPlanner = pathname === "/planner";
   const tabRaw = searchParams.get("tab");
   const tab =
@@ -256,7 +263,7 @@ function AppNavHeaderInner({
             className="hidden rounded-full border border-royal/15 bg-white/80 px-2.5 py-0.5 font-sans text-xs font-medium text-royal/75 sm:inline"
             title="Your plan"
           >
-            {tierLabel(userTier)}
+            {tierLabel(userTier, tierLoadError)}
             {isFree ? (
               <>
                 {" "}

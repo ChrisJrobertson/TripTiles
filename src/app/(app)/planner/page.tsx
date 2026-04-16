@@ -8,8 +8,13 @@ import {
 import { getAllParks } from "@/lib/db/parks";
 import { getAllRegions } from "@/lib/db/regions";
 import { getActiveTripForUser, getUserTrips } from "@/lib/db/trips";
+import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
 import { getPublicSiteUrl } from "@/lib/site";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
+import {
+  readProfileRow,
+  tierFromProfileRow,
+} from "@/lib/supabase/profile-read";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type { TemperatureUnit, UserTier } from "@/lib/types";
 import { redirect } from "next/navigation";
@@ -89,11 +94,37 @@ export default async function PlannerPage({
       ? Math.max(0, Math.floor(Number(tileScrubRaw)))
       : null;
 
+  const supabase = await createClient();
+  type PlannerProfileRow = {
+    tier: string;
+    temperature_unit?: string | null;
+    email_marketing_opt_out?: boolean | null;
+  };
+  const profileRead = await readProfileRow<PlannerProfileRow>(
+    supabase,
+    user.id,
+    "tier, temperature_unit, email_marketing_opt_out",
+  );
+  if (!profileRead.ok) {
+    return (
+      <ProfileLoadErrorPanel detail={profileRead.message} />
+    );
+  }
+  const pr = profileRead.data;
+  const profileBundle: {
+    tier: UserTier;
+    temperatureUnit: TemperatureUnit;
+    emailMarketingOptOut: boolean;
+  } = {
+    tier: tierFromProfileRow(pr),
+    temperatureUnit: pr.temperature_unit === "f" ? "f" : "c",
+    emailMarketingOptOut: pr.email_marketing_opt_out === true,
+  };
+
   const [
     parks,
     regions,
     activeTrip,
-    profileBundle,
     achievementDefs,
     customTiles,
     customTileLimit,
@@ -101,30 +132,6 @@ export default async function PlannerPage({
       getAllParks(),
       getAllRegions(),
       getActiveTripForUser(user.id),
-      (async (): Promise<{
-        tier: UserTier | null;
-        temperatureUnit: TemperatureUnit;
-        emailMarketingOptOut: boolean;
-      }> => {
-        const supabase = await createClient();
-        const { data } = await supabase
-          .from("profiles")
-          .select("tier, temperature_unit, email_marketing_opt_out")
-          .eq("id", user.id)
-          .maybeSingle();
-        if (!data || typeof data !== "object" || !("tier" in data)) {
-          return { tier: null, temperatureUnit: "c", emailMarketingOptOut: false };
-        }
-        const tu = (data as { temperature_unit?: string | null })
-          .temperature_unit;
-        const em = (data as { email_marketing_opt_out?: boolean | null })
-          .email_marketing_opt_out;
-        return {
-          tier: data.tier as UserTier,
-          temperatureUnit: tu === "f" ? "f" : "c",
-          emailMarketingOptOut: em === true,
-        };
-      })(),
       getAchievementDefinitions(),
       getUserCustomTiles(user.id),
       getCustomTileLimit(user.id),

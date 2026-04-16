@@ -8,6 +8,10 @@ import {
 import { getUserCustomTiles } from "@/lib/db/custom-tiles";
 import { getUserTripCount, mapTripRow } from "@/lib/db/trips";
 import { currentUserCanCreateTrip } from "@/lib/entitlements";
+import {
+  isTierLoadFailure,
+  tierLoadFailureUserMessage,
+} from "@/lib/supabase/tier-load-error";
 import { syncTripLifecycleEmailQueue } from "@/lib/email/schedule-trip-emails";
 import { legacyDestinationFromRegionId } from "@/lib/legacy-destination";
 import { formatGalleryOwnerLabel } from "@/lib/format-gallery-owner";
@@ -164,6 +168,9 @@ export async function createTripAction(input: {
     revalidatePlanner();
     return { ok: true, tripId: String(inserted.id), newAchievements };
   } catch (e) {
+    if (isTierLoadFailure(e)) {
+      return { ok: false, error: tierLoadFailureUserMessage() };
+    }
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Unknown error",
@@ -858,6 +865,9 @@ export async function cloneTripAction(
       skippedCustomTiles,
     };
   } catch (e) {
+    if (isTierLoadFailure(e)) {
+      return { ok: false, error: tierLoadFailureUserMessage() };
+    }
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Unknown error",

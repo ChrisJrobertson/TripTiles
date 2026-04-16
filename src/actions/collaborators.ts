@@ -2,6 +2,10 @@
 
 import { sendTemplatedEmail } from "@/lib/email/send";
 import { getCurrentTier } from "@/lib/entitlements";
+import {
+  isTierLoadFailure,
+  tierLoadFailureUserMessage,
+} from "@/lib/supabase/tier-load-error";
 import { getPublicSiteUrl } from "@/lib/site";
 import { getTierConfig } from "@/lib/tiers";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
@@ -157,6 +161,12 @@ export async function inviteCollaboratorAction(input: {
     revalidatePath("/planner");
     return { ok: true, collaboratorId: String(inserted.id) };
   } catch (e) {
+    if (isTierLoadFailure(e)) {
+      return {
+        ok: false,
+        error: `${tierLoadFailureUserMessage()} Then try inviting again.`,
+      };
+    }
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Unknown error",

@@ -105,8 +105,8 @@ type Props = {
   regions: Region[];
   initialActiveTripId: string | null;
   userEmail: string;
-  /** From `profiles.tier`; null if missing (treated like free for trip limit UX). */
-  userTier: UserTier | null;
+  /** From `profiles.tier` (server validates row before render). */
+  userTier: UserTier;
   achievementDefs: AchievementDefinition[];
   /** Successful AI generations per trip id (for free-tier UX). */
   aiGenerationCountsByTrip: Record<string, number>;
@@ -136,13 +136,13 @@ const SAVE_FLASH_MS = 500;
 /** Must match server-side enforcement via `getTierConfig("free")`. */
 const FREE_TIER_TRIP_LIMIT = getTierConfig("free").features.max_trips ?? 1;
 
-function isFreeTierForTripLimit(tier: UserTier | null): boolean {
-  return tier === null || tier === "free";
+function isFreeTierForTripLimit(tier: UserTier): boolean {
+  return tier === "free";
 }
 
 function shouldBlockNewTripWizard(
   tripsLength: number,
-  tier: UserTier | null,
+  tier: UserTier,
 ): boolean {
   return (
     isFreeTierForTripLimit(tier) && tripsLength >= FREE_TIER_TRIP_LIMIT

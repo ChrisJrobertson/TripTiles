@@ -1,16 +1,20 @@
 import { getTierConfig, type Tier } from "@/lib/tiers";
+import {
+  readProfileRow,
+  tierFromProfileRow,
+} from "@/lib/supabase/profile-read";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 
+/** Loads `profiles.tier` for the signed-in user. Throws if the row is missing or invalid. */
 export async function getCurrentTier(): Promise<Tier> {
   const user = await getCurrentUser();
   if (!user) return "free";
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("profiles")
-    .select("tier")
-    .eq("id", user.id)
-    .maybeSingle();
-  return (data?.tier as Tier) ?? "free";
+  const r = await readProfileRow<{ tier: string }>(supabase, user.id, "tier");
+  if (!r.ok) {
+    throw new Error(`TIER_LOAD_FAILED: ${r.message}`);
+  }
+  return tierFromProfileRow(r.data) as Tier;
 }
 
 export async function currentUserCanCreateTrip(): Promise<boolean> {

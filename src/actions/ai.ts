@@ -26,6 +26,10 @@ import { customTileToPark } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 import { awardAchievementAction } from "@/actions/achievements";
 import { currentUserCanGenerateAI } from "@/lib/entitlements";
+import {
+  isTierLoadFailure,
+  tierLoadFailureUserMessage,
+} from "@/lib/supabase/tier-load-error";
 import { getSuccessfulAiGenerationCountForTrip } from "@/lib/db/ai-generations";
 import { getCrowdPatternsForParkIds } from "@/lib/data/crowd-patterns";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
@@ -399,7 +403,21 @@ export async function generateAIPlanAction(input: {
 
   const tier = (profile as { tier?: string } | null)?.tier ?? null;
 
-  if (!(await currentUserCanGenerateAI(input.tripId))) {
+  let canGenerateAi: boolean;
+  try {
+    canGenerateAi = await currentUserCanGenerateAI(input.tripId);
+  } catch (e) {
+    if (isTierLoadFailure(e)) {
+      return {
+        ok: false,
+        error: "AI_ERROR",
+        message: tierLoadFailureUserMessage(),
+      };
+    }
+    throw e;
+  }
+
+  if (!canGenerateAi) {
     return {
       ok: false,
       error: "TIER_LIMIT",

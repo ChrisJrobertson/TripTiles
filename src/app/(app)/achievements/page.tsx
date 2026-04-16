@@ -1,5 +1,6 @@
 import { AchievementsClient } from "@/app/(app)/achievements/AchievementsClient";
 import { AppNavHeader } from "@/components/app/AppNavHeader";
+import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
 import {
   getAchievementDefinitions,
   getUserAchievements,
@@ -7,8 +8,11 @@ import {
 import { getUserTripCount } from "@/lib/db/trips";
 import { getTierConfig } from "@/lib/tiers";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
+import {
+  readProfileRow,
+  tierFromProfileRow,
+} from "@/lib/supabase/profile-read";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
-import type { UserTier } from "@/lib/types";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
@@ -41,34 +45,37 @@ export default async function AchievementsPage() {
   if (!user) redirect("/login?next=/achievements");
 
   const supabase = await createClient();
-  const [definitions, earned, profileRes, tripCount] = await Promise.all([
+  const [definitions, earned, profileRead, tripCount] = await Promise.all([
     getAchievementDefinitions(),
     getUserAchievements(user.id),
-    supabase
-      .from("profiles")
-      .select("trips_planned_count, days_planned_count, tier")
-      .eq("id", user.id)
-      .maybeSingle(),
+    readProfileRow<{
+      tier: string;
+      trips_planned_count?: number | null;
+      days_planned_count?: number | null;
+    }>(
+      supabase,
+      user.id,
+      "trips_planned_count, days_planned_count, tier",
+    ),
     getUserTripCount(user.id),
   ]);
 
-  const raw = profileRes.data as
-    | {
-        trips_planned_count?: number;
-        days_planned_count?: number;
-        tier?: UserTier;
-      }
-    | null;
+  if (!profileRead.ok) {
+    return <ProfileLoadErrorPanel detail={profileRead.message} />;
+  }
+
+  const raw = profileRead.data;
+  const navTier = tierFromProfileRow(raw);
   const progress = {
-    trips_planned_count: Number(raw?.trips_planned_count ?? 0),
-    days_planned_count: Number(raw?.days_planned_count ?? 0),
+    trips_planned_count: Number(raw.trips_planned_count ?? 0),
+    days_planned_count: Number(raw.days_planned_count ?? 0),
   };
 
   return (
     <div className="min-h-screen bg-cream pb-16 pt-0">
       <AppNavHeader
         userEmail={user.email ?? ""}
-        userTier={raw?.tier ?? null}
+        userTier={navTier}
         tripCount={tripCount}
         freeTripLimit={getTierConfig("free").features.max_trips ?? 1}
       />

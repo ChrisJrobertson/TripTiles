@@ -6,6 +6,7 @@ import { getRegionById } from "@/lib/db/regions";
 import { getUserCustomTiles } from "@/lib/db/custom-tiles";
 import { mapTripRow } from "@/lib/db/trips";
 import { getCurrentTier } from "@/lib/entitlements";
+import { isTierLoadFailure } from "@/lib/supabase/tier-load-error";
 import { buildAffiliateUrl, hasAnyAffiliatePartner } from "@/lib/affiliates";
 import { getTierConfig } from "@/lib/tiers";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
@@ -65,6 +66,7 @@ export async function getPdfExportContextAction(tripId: string): Promise<
     }
   | { ok: false; error: string }
 > {
+  try {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "NOT_AUTHED" };
 
@@ -178,6 +180,12 @@ export async function getPdfExportContextAction(tripId: string): Promise<
     checklistItems,
     temperatureUnit,
   };
+  } catch (e) {
+    if (isTierLoadFailure(e)) {
+      return { ok: false, error: "PROFILE_TIER_UNAVAILABLE" };
+    }
+    throw e;
+  }
 }
 
 export async function awardFirstPdfExportAction(): Promise<

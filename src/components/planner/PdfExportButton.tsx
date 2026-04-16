@@ -34,7 +34,11 @@ export function PdfExportButton({
       try {
         const result = await getPdfExportContextAction(tripId);
         if (!result.ok) {
-          setError(result.error);
+          setError(
+            result.error === "PROFILE_TIER_UNAVAILABLE"
+              ? "Could not load your plan. Refresh the page or sign in again."
+              : result.error,
+          );
           setIsGenerating(false);
           return;
         }

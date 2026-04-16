@@ -2,6 +2,10 @@
 
 import { awardAchievementAction } from "@/actions/achievements";
 import { currentUserCanCreateCustomTile } from "@/lib/entitlements";
+import {
+  isTierLoadFailure,
+  tierLoadFailureUserMessage,
+} from "@/lib/supabase/tier-load-error";
 import { getUserCustomTiles } from "@/lib/db/custom-tiles";
 import { GROUP_ORDER } from "@/lib/group-meta";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
@@ -142,7 +146,21 @@ export async function createCustomTileAction(
     return { ok: false, error: "VALIDATION", message: v.message };
   }
 
-  if (!(await currentUserCanCreateCustomTile())) {
+  let canCreateCustomTile: boolean;
+  try {
+    canCreateCustomTile = await currentUserCanCreateCustomTile();
+  } catch (e) {
+    if (isTierLoadFailure(e)) {
+      return {
+        ok: false,
+        error: "DB_ERROR",
+        message: tierLoadFailureUserMessage(),
+      };
+    }
+    throw e;
+  }
+
+  if (!canCreateCustomTile) {
     return {
       ok: false,
       error: "TIER_LIMIT",
