@@ -1,55 +1,38 @@
 # Pre-launch priority status
 
-_Last updated: reflects P1 + P2 verified closed; P4 reopened for production._
+_Last updated: P3–P6 fixes applied in repo; P4 closed as measurement artifact._
 
-## Verified closed
+## Verified closed (code)
 
-- **Priority 1** — Profile tier, `handle_new_user`, migration sync, and profiles column parity (including `temperature_unit`, `email_marketing_opt_out`) are deployed and validated.
-- **Priority 2** — Hydration fix validated on staging/production as applicable.
+- **Priority 1** — Profile tier, `handle_new_user`, migrations, `temperature_unit`, `email_marketing_opt_out`.
+- **Priority 2** — Hydration fix.
+- **Priority 3** — Feedback FAB z-index vs planner toolbar: FAB is **`hidden md:flex`** so it only shows from the `md` breakpoint up (desktop/tablet landscape), not on narrow viewports where the bottom toolbar lives.
+- **Priority 5** — App header: **`sm`** and up use the horizontal nav; below **`sm`**, a **Menu** `<details>` drawer lists all routes (planner tabs, passport, settings, pricing, feedback). Tier badge and upgrade stay **`sm:inline`** so mobile uses the drawer for navigation.
+- **Priority 6.7** — Settings: single **`space-y-8`** on `<main>`; removed per-section **`mt-*`** gaps. SSO-only users get **`oauthProviderLabel`** copy instead of the password form or the magic-link blurb; email/password users unchanged.
 
----
+## Priority 4 — Mobile planner dock (“Quick add”)
 
-## Reopened — Priority 4 — QUICK PLACE (MOBILE) on desktop
+**Status: closed — false positive in audit / validation.** The dock uses `hidden md:block lg:hidden` (tablet-only). Reports at “1288px desktop” were consistent with a **CSS viewport ~909px** (e.g. Retina **1.42× browser zoom**), so Tailwind’s **`lg`** (1024 CSS px) had not kicked in — not a missing CSS fix.
 
-**Status: reopened.** Previously closed as “not reproducible” via Tailwind breakpoint analysis (`MobilePlannerDock`: `hidden md:block lg:hidden`). **Production still shows the widget at desktop widths** (observed behaviour ≠ prior diagnosis). Possible causes: wrong component, duplicate label, breakpoint mismatch vs documented 1288px, or CSS order/specificity.
+**Follow-up for humans:** At **100% zoom** (`Cmd+0`), confirm `window.innerWidth` at your target width; record **CSS viewport**, not physical monitor pixels.
 
-**Next session:** Re-investigate in the same batch as P3 / P5 / P6. Do not treat “not reproducible” as final when production still shows the issue.
-
----
-
-## Queued — Priorities 3, 5, 6 (and P4 in same batch)
-
-Use the **Next Cursor session prompt** below. Confirmed regressions still on the list:
-
-- **Settings whitespace gap** → track under **Priority 6** (e.g. 6.7).
-- **Mobile nav not collapsed** → **Priority 5**.
+**UX:** Label updated from “Quick place (mobile)” to **“Quick add”** (tablet + mobile).
 
 ---
 
-## Next Cursor session — paste prompt
+## Backlog (not regressions)
 
-```
-P1 and P2 verified, both closed. Validation report attached. Reopening P4 — the QUICK PLACE (MOBILE) widget is still visible on desktop in production despite the previous closure. Investigate why the Tailwind breakpoint analysis didn't match observed behaviour.
-
-Work through Priority 3, Priority 4 (reopened), Priority 5, and Priority 6 in one coherent pass where possible.
-
-Priority 4: Find the element that renders "QUICK PLACE (MOBILE)" in production, trace responsive classes and parent layout, and fix so it does not appear at desktop widths. Compare breakpoints to MobilePlannerDock and any duplicate mobile-only widgets.
-
-Priority 5: Address mobile nav collapse behaviour per the audit.
-
-Priority 6: Include the Settings whitespace gap (6.7) and other remaining P6 items from the audit.
-
-Confirmed regressions to fix in this batch: Settings whitespace (P6.x), mobile nav (P5).
-
-Stripe / Payhip note (week 11, not a launch blocker now): Purchase history may show "No purchases recorded yet" while tier shows Pro; Payhip receipts are not proven to sync to the purchases table. When wiring Stripe webhooks for subscription receipts, build and E2E-test the receipt history path — do not assume the existing Settings UI works for the new payment system without verification.
-```
+| Item | Notes |
+|------|--------|
+| **RSC 503 / failed prefetch** | Console: “Failed to fetch RSC payload” on `/settings?_rsc`, `/achievements?_rsc` — investigate before launch (CDN, deployment, or middleware). |
+| **Payhip → purchase history** | “No purchases recorded yet” for Pro users if webhooks did not write `purchases`. **Defer** end-to-end receipt UI + tests to **week 11 Stripe** migration. |
 
 ---
 
 ## Diagnostic archive — Priority 1 (orphans)
 
-Run `node scripts/count-orphan-auth-users.mjs` (or equivalent SQL) when touching auth/profiles. See `docs/migration-workflow.md` for migration discipline.
+Run `node scripts/count-orphan-auth-users.mjs` when touching auth/profiles. See `docs/migration-workflow.md`.
 
 ### `user_effective_tier` view
 
-Removed by migration `20260414103000_drop_user_effective_tier.sql`. Ensure applied everywhere the app connects.
+Removed by `20260414103000_drop_user_effective_tier.sql`. Ensure applied on all environments.

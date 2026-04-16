@@ -41,7 +41,7 @@ export function MobilePlannerDock({
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 hidden border-t border-royal/15 bg-cream/98 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur md:block lg:hidden">
       <p className="mb-2 text-center font-sans text-[0.65rem] font-semibold uppercase tracking-wide text-royal/55">
-        Quick place (mobile)
+        Quick add
       </p>
       <div className="flex flex-wrap items-end justify-center gap-2">
         <label className="flex min-w-[8rem] flex-col gap-0.5 font-sans text-[0.7rem] text-royal/70">
