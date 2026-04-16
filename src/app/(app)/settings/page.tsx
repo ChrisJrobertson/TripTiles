@@ -12,7 +12,7 @@ import {
   readProfileRow,
   tierFromProfileRow,
 } from "@/lib/supabase/profile-read";
-import { createClient, getCurrentUser } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { TemperatureUnitSettings } from "@/components/settings/TemperatureUnitSettings";
 import { EmailPreferencesSettings } from "@/components/settings/EmailPreferencesSettings";
 import type { TemperatureUnit } from "@/lib/types";
@@ -54,10 +54,13 @@ export default async function SettingsPage() {
     );
   }
 
-  const user = await getCurrentUser();
-  if (!user) redirect("/login?next=/settings");
-
   const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) redirect("/login?next=/settings");
+
   const hasPasswordAuth = userHasEmailPasswordAuth(user);
   const oauthProviderLabel =
     hasPasswordAuth ? null : getOauthIdentityLabel(user);

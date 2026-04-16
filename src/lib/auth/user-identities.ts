@@ -21,33 +21,80 @@ const OAUTH_PROVIDERS = new Set([
   "workos",
 ]);
 
+function readAppMetadataProviders(user: User): string[] {
+  const am = user.app_metadata as
+    | { provider?: string; providers?: string[] }
+    | undefined;
+  if (Array.isArray(am?.providers) && am.providers.length > 0) {
+    return am.providers;
+  }
+  if (am?.provider) {
+    return [am.provider];
+  }
+  return [];
+}
+
 /**
  * Whether the account can change password via Supabase email/password.
- * Email-only magic-link users have provider `email` but no password; OAuth users
- * may still have a synthetic `email` identity — use metadata + identity mix.
+ *
+ * Do not trust `app_metadata.provider === "email"` alone: Sign in with Apple
+ * (and similar) can still surface `email` in metadata when a relay address is
+ * used. Always check `app_metadata.providers` and `identities` for OAuth
+ * entries before showing the password form.
  */
 export function userHasEmailPasswordAuth(user: User): boolean {
-  const metaProvider = (user.app_metadata as { provider?: string } | undefined)
-    ?.provider;
-  if (metaProvider === "email") {
-    return true;
-  }
-  if (metaProvider && metaProvider !== "email") {
+  const identities = user.identities ?? [];
+
+  if (identities.some((i) => OAUTH_PROVIDERS.has(i.provider))) {
     return false;
   }
 
-  const identities = user.identities ?? [];
+  const providersList = readAppMetadataProviders(user);
+  if (providersList.some((p) => OAUTH_PROVIDERS.has(p))) {
+    return false;
+  }
+
   const hasEmailIdentity = identities.some((i) => i.provider === "email");
-  const hasOauthIdentity = identities.some((i) => OAUTH_PROVIDERS.has(i.provider));
-  return hasEmailIdentity && !hasOauthIdentity;
+  if (!hasEmailIdentity) {
+    return false;
+  }
+
+  const metaProvider = (user.app_metadata as { provider?: string } | undefined)
+    ?.provider;
+
+  if (metaProvider && metaProvider !== "email" && OAUTH_PROVIDERS.has(metaProvider)) {
+    return false;
+  }
+
+  // Email identity present, no OAuth in metadata or identities: email+password or
+  // magic link (same Supabase shape). Allow password change when metadata points
+  // at email as the auth method.
+  if (metaProvider === "email") {
+    return true;
+  }
+
+  if (providersList.includes("email") && providersList.every((p) => p === "email")) {
+    return true;
+  }
+
+  return false;
+}
+
+function labelForProvider(provider: string): string {
+  if (provider === "apple") return "Apple";
+  if (provider === "google") return "Google";
+  return provider.charAt(0).toUpperCase() + provider.slice(1);
 }
 
 /** Human label for primary OAuth provider, or null if none. */
 export function getOauthIdentityLabel(user: User): string | null {
   const identities = user.identities ?? [];
-  const o = identities.find((i) => OAUTH_PROVIDERS.has(i.provider));
-  if (!o) return null;
-  if (o.provider === "apple") return "Apple";
-  if (o.provider === "google") return "Google";
-  return o.provider.charAt(0).toUpperCase() + o.provider.slice(1);
+  const fromIdentity = identities.find((i) => OAUTH_PROVIDERS.has(i.provider));
+  if (fromIdentity) {
+    return labelForProvider(fromIdentity.provider);
+  }
+
+  const providersList = readAppMetadataProviders(user);
+  const fromMeta = providersList.find((p) => OAUTH_PROVIDERS.has(p));
+  return fromMeta ? labelForProvider(fromMeta) : null;
 }

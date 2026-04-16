@@ -246,9 +246,18 @@ export function SettingsAccountPanel({
             Security
           </h2>
           <p className="mt-2 font-sans text-sm text-royal/70">
-            You sign in with {oauthProviderLabel}. TripTiles doesn&apos;t store a
-            password for this account — sign-in is managed in your{" "}
-            {oauthProviderLabel} settings.
+            {oauthProviderLabel === "Apple" ? (
+              <>
+                Your account uses Sign in with Apple. Password management is
+                handled by Apple.
+              </>
+            ) : (
+              <>
+                Your account uses {oauthProviderLabel} to sign in. Password
+                management is handled in your {oauthProviderLabel} account
+                settings.
+              </>
+            )}
           </p>
           <button
             type="button"
@@ -264,8 +273,8 @@ export function SettingsAccountPanel({
             Security
           </h2>
           <p className="mt-2 font-sans text-sm text-royal/70">
-            You sign in with a magic link. To add a password, sign out and use
-            Sign up with a password on the same email, or contact support.
+            You signed in with a magic link. To set a permanent password, use the
+            password reset flow.
           </p>
           <button
             type="button"
