@@ -1,45 +1,55 @@
 # Pre-launch priority status
 
-## Priority 1 — Canonical profile tier read and explicit failures
+_Last updated: reflects P1 + P2 verified closed; P4 reopened for production._
 
-**Acceptance (open until verified):** Priority 1 is **not closed** until you confirm on the **deployed staging environment** with your **Pro** account that the tier resolves correctly: the UI shows **Pro** (not Free, not **Plan unknown**). If you see **Plan unknown**, Priority 1 stays **open** and we diagnose why the `profiles` fetch is failing (session, RLS, missing row, or network).
+## Verified closed
 
-**Staging deploy:** Use the Vercel preview/staging workflow your team uses for this repo; deploy the branch that includes the P1 fix before testing.
-
-## Priority 4 — Mobile planner dock at 1288px
-
-**Status: closed — not reproducible.** `MobilePlannerDock` uses `hidden md:block lg:hidden`, so it only renders between **768px and 1023px**; at **1288px** it is hidden (Tailwind `lg` breakpoint). Breakpoints are correct; **no code change** was made for P4.
-
-## Priority 2 — Hydration error
-
-Start after Priority 1 is accepted (staging Pro account check passes).
+- **Priority 1** — Profile tier, `handle_new_user`, migration sync, and profiles column parity (including `temperature_unit`, `email_marketing_opt_out`) are deployed and validated.
+- **Priority 2** — Hydration fix validated on staging/production as applicable.
 
 ---
 
-## Diagnostic follow-up (Priority 1)
+## Reopened — Priority 4 — QUICK PLACE (MOBILE) on desktop
 
-### Orphan auth users (no `profiles` row)
+**Status: reopened.** Previously closed as “not reproducible” via Tailwind breakpoint analysis (`MobilePlannerDock`: `hidden md:block lg:hidden`). **Production still shows the widget at desktop widths** (observed behaviour ≠ prior diagnosis). Possible causes: wrong component, duplicate label, breakpoint mismatch vs documented 1288px, or CSS order/specificity.
 
-Run in Supabase SQL Editor (or use `node scripts/count-orphan-auth-users.mjs`, which uses the Auth Admin API plus `profiles` lookups):
+**Next session:** Re-investigate in the same batch as P3 / P5 / P6. Do not treat “not reproducible” as final when production still shows the issue.
 
-```sql
-select count(*) from auth.users u
-left join public.profiles p on p.id = u.id
-where p.id is null;
+---
+
+## Queued — Priorities 3, 5, 6 (and P4 in same batch)
+
+Use the **Next Cursor session prompt** below. Confirmed regressions still on the list:
+
+- **Settings whitespace gap** → track under **Priority 6** (e.g. 6.7).
+- **Mobile nav not collapsed** → **Priority 5**.
+
+---
+
+## Next Cursor session — paste prompt
+
+```
+P1 and P2 verified, both closed. Validation report attached. Reopening P4 — the QUICK PLACE (MOBILE) widget is still visible on desktop in production despite the previous closure. Investigate why the Tailwind breakpoint analysis didn't match observed behaviour.
+
+Work through Priority 3, Priority 4 (reopened), Priority 5, and Priority 6 in one coherent pass where possible.
+
+Priority 4: Find the element that renders "QUICK PLACE (MOBILE)" in production, trace responsive classes and parent layout, and fix so it does not appear at desktop widths. Compare breakpoints to MobilePlannerDock and any duplicate mobile-only widgets.
+
+Priority 5: Address mobile nav collapse behaviour per the audit.
+
+Priority 6: Include the Settings whitespace gap (6.7) and other remaining P6 items from the audit.
+
+Confirmed regressions to fix in this batch: Settings whitespace (P6.x), mobile nav (P5).
+
+Stripe / Payhip note (week 11, not a launch blocker now): Purchase history may show "No purchases recorded yet" while tier shows Pro; Payhip receipts are not proven to sync to the purchases table. When wiring Stripe webhooks for subscription receipts, build and E2E-test the receipt history path — do not assume the existing Settings UI works for the new payment system without verification.
 ```
 
-**Current project (live DB, via script):** `auth.users` = 6, **orphans = 1** (user id `638774b4-b4f7-42d5-a420-c7d9a97b294e`, created `2026-04-10`).
+---
 
-**Why there is no trigger in this repo:** There is no `handle_new_user` (or equivalent) migration in version-controlled SQL. Profile rows are usually created by a Supabase **database trigger on `auth.users`**. If that trigger was never applied to this project, was dropped, or a user was created via a path that did not fire it (manual Admin API import, partial migration, etc.), you get orphans.
+## Diagnostic archive — Priority 1 (orphans)
 
-**Backfill plan (run once in SQL Editor after confirming `profiles` columns and defaults in Table Editor):**
-
-1. Inspect `public.profiles` for `NOT NULL` columns and defaults (e.g. `referral_code`, `tier`).
-2. Insert one row per orphan user, typically `tier = 'free'`, `email` from `auth.users.email`, and any required fields your schema enforces.
-3. Optionally add a **persistent** `on_auth_user_created` trigger + function in a new migration (Supabase docs: “User management”) so new sign-ups always get a profile row.
-
-Re-test orphans with `node scripts/count-orphan-auth-users.mjs` until the count is 0.
+Run `node scripts/count-orphan-auth-users.mjs` (or equivalent SQL) when touching auth/profiles. See `docs/migration-workflow.md` for migration discipline.
 
 ### `user_effective_tier` view
 
-Removed by migration `20260414103000_drop_user_effective_tier.sql`. Apply migrations to staging and production so the view is dropped everywhere the app connects.
+Removed by migration `20260414103000_drop_user_effective_tier.sql`. Ensure applied everywhere the app connects.
