@@ -48,7 +48,7 @@ export function FeedbackWidget() {
           setStatus("idle");
           setError(null);
         }}
-        className="fixed bottom-5 right-5 z-[90] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-gold to-[#b8924f] text-2xl shadow-lg shadow-royal/20 transition hover:opacity-95"
+        className="fixed bottom-5 right-5 z-[90] hidden h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-gold to-[#b8924f] text-2xl shadow-lg shadow-royal/20 transition hover:opacity-95 md:flex"
         aria-label="Feedback"
       >
         💬
