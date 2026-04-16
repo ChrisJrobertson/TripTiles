@@ -17,6 +17,8 @@ type Props = {
   tierLabel: string;
   tierBadge: string;
   hasPasswordAuth: boolean;
+  /** When set, user signed in with OAuth only (e.g. Apple) — no password to change here. */
+  oauthProviderLabel?: string | null;
 };
 
 export function SettingsAccountPanel({
@@ -26,6 +28,7 @@ export function SettingsAccountPanel({
   tierLabel,
   tierBadge,
   hasPasswordAuth,
+  oauthProviderLabel = null,
 }: Props) {
   const router = useRouter();
   const [name, setName] = useState(initialName ?? "");
@@ -233,6 +236,24 @@ export function SettingsAccountPanel({
             type="button"
             onClick={() => void signOutEverywhere()}
             className="mt-6 font-sans text-sm font-semibold text-royal underline"
+          >
+            Sign out everywhere
+          </button>
+        </section>
+      ) : oauthProviderLabel ? (
+        <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
+          <h2 className="font-serif text-xl font-semibold text-royal">
+            Security
+          </h2>
+          <p className="mt-2 font-sans text-sm text-royal/70">
+            You sign in with {oauthProviderLabel}. TripTiles doesn&apos;t store a
+            password for this account — sign-in is managed in your{" "}
+            {oauthProviderLabel} settings.
+          </p>
+          <button
+            type="button"
+            onClick={() => void signOutEverywhere()}
+            className="mt-4 font-sans text-sm font-semibold text-royal underline"
           >
             Sign out everywhere
           </button>

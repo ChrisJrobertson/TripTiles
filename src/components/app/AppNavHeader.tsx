@@ -36,6 +36,12 @@ function plannerHrefPreservingQuery(
   return q ? `/planner?${q}` : "/planner";
 }
 
+function mobileNavLinkClass(active: boolean) {
+  return active
+    ? "block rounded-full bg-royal/10 px-3 py-2 font-sans text-sm font-medium text-royal"
+    : "block rounded-full px-3 py-2 font-sans text-sm font-medium text-royal/80 hover:bg-royal/10";
+}
+
 function AppNavHeaderFallback({
   userEmail,
   userTier,
@@ -55,8 +61,61 @@ function AppNavHeaderFallback({
           >
             TripTiles
           </Link>
+          <details className="relative sm:hidden">
+            <summary className="list-none cursor-pointer rounded-full border border-royal/20 bg-white/90 px-3 py-1.5 font-sans text-sm font-semibold text-royal shadow-sm [&::-webkit-details-marker]:hidden">
+              Menu
+            </summary>
+            <nav
+              className="absolute right-0 z-50 mt-2 w-56 rounded-2xl border border-royal/15 bg-cream p-2 shadow-xl"
+              aria-label="Main mobile"
+            >
+              <ul className="flex flex-col gap-0.5">
+                <li>
+                  <Link href="/planner" className={mobileNavLinkClass(false)}>
+                    Planner
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/planner?tab=budget"
+                    className={mobileNavLinkClass(false)}
+                  >
+                    Budget
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/planner?tab=checklist"
+                    className={mobileNavLinkClass(false)}
+                  >
+                    Checklist
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/achievements" className={mobileNavLinkClass(false)}>
+                    Passport
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/settings" className={mobileNavLinkClass(false)}>
+                    Settings
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/pricing" className={mobileNavLinkClass(false)}>
+                    Pricing
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/feedback" className={mobileNavLinkClass(false)}>
+                    Feedback
+                  </Link>
+                </li>
+              </ul>
+            </nav>
+          </details>
           <nav
-            className="flex flex-wrap items-center gap-1"
+            className="hidden flex-wrap items-center gap-1 sm:flex"
             aria-label="Main"
           >
             <Link
@@ -93,13 +152,13 @@ function AppNavHeaderFallback({
           <span className="hidden h-4 w-px bg-royal/15 sm:block" aria-hidden />
           <Link
             href="/pricing"
-            className="font-sans text-sm font-medium text-royal/60 hover:text-royal"
+            className="hidden font-sans text-sm font-medium text-royal/60 hover:text-royal sm:inline"
           >
             Pricing
           </Link>
           <Link
             href="/feedback"
-            className="font-sans text-sm font-medium text-royal/60 hover:text-royal"
+            className="hidden font-sans text-sm font-medium text-royal/60 hover:text-royal sm:inline"
           >
             Feedback
           </Link>
@@ -119,14 +178,19 @@ function AppNavHeaderFallback({
           {isFree ? (
             <Link
               href="/pricing"
-              className="rounded-full bg-gold/90 px-3 py-1 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-gold"
+              className="hidden rounded-full bg-gold/90 px-3 py-1 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-gold sm:inline-flex"
             >
               Upgrade
             </Link>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-          <span className="font-sans text-sm text-royal/70">{userEmail}</span>
+          <span
+            className="max-w-[min(100%,14rem)] truncate font-sans text-sm text-royal/70"
+            title={userEmail}
+          >
+            {userEmail}
+          </span>
           <SignOutButton />
         </div>
       </div>
@@ -163,6 +227,10 @@ function AppNavHeaderInner({
   const plannerHomeActive = onPlanner && tab === "planner";
   const budgetActive = onPlanner && tab === "budget";
   const checklistActive = onPlanner && tab === "checklist";
+  const passportActive =
+    pathname === "/achievements" || pathname?.startsWith("/achievements/");
+  const settingsActive =
+    pathname === "/settings" || pathname?.startsWith("/settings/");
 
   const linkOrCurrent = (
     key: string,
@@ -198,8 +266,75 @@ function AppNavHeaderInner({
           >
             TripTiles
           </Link>
+          <details className="relative sm:hidden">
+            <summary className="list-none cursor-pointer rounded-full border border-royal/20 bg-white/90 px-3 py-1.5 font-sans text-sm font-semibold text-royal shadow-sm [&::-webkit-details-marker]:hidden">
+              Menu
+            </summary>
+            <nav
+              className="absolute right-0 z-50 mt-2 w-56 rounded-2xl border border-royal/15 bg-cream p-2 shadow-xl"
+              aria-label="Main mobile"
+            >
+              <ul className="flex flex-col gap-0.5">
+                <li>
+                  <Link
+                    href={plannerHomeHref}
+                    className={mobileNavLinkClass(plannerHomeActive)}
+                    aria-current={plannerHomeActive ? "page" : undefined}
+                  >
+                    Planner
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href={budgetHref}
+                    className={mobileNavLinkClass(budgetActive)}
+                    aria-current={budgetActive ? "page" : undefined}
+                  >
+                    Budget
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href={checklistHref}
+                    className={mobileNavLinkClass(checklistActive)}
+                    aria-current={checklistActive ? "page" : undefined}
+                  >
+                    Checklist
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/achievements"
+                    className={mobileNavLinkClass(passportActive)}
+                    aria-current={passportActive ? "page" : undefined}
+                  >
+                    Passport
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/settings"
+                    className={mobileNavLinkClass(settingsActive)}
+                    aria-current={settingsActive ? "page" : undefined}
+                  >
+                    Settings
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/pricing" className={mobileNavLinkClass(false)}>
+                    Pricing
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/feedback" className={mobileNavLinkClass(false)}>
+                    Feedback
+                  </Link>
+                </li>
+              </ul>
+            </nav>
+          </details>
           <nav
-            className="flex flex-wrap items-center gap-1"
+            className="hidden flex-wrap items-center gap-1 sm:flex"
             aria-label="Main"
           >
             {linkOrCurrent("planner", plannerHomeHref, "Planner", plannerHomeActive)}
@@ -210,8 +345,7 @@ function AppNavHeaderInner({
               "Checklist",
               checklistActive,
             )}
-            {pathname === "/achievements" ||
-            pathname?.startsWith("/achievements/") ? (
+            {passportActive ? (
               <span
                 key="passport"
                 className="rounded-full bg-royal/10 px-3 py-1 font-sans text-sm font-medium text-royal"
@@ -228,7 +362,7 @@ function AppNavHeaderInner({
                 Passport
               </Link>
             )}
-            {pathname === "/settings" || pathname?.startsWith("/settings/") ? (
+            {settingsActive ? (
               <span
                 key="settings"
                 className="rounded-full bg-royal/10 px-3 py-1 font-sans text-sm font-medium text-royal"
@@ -249,13 +383,13 @@ function AppNavHeaderInner({
           <span className="hidden h-4 w-px bg-royal/15 sm:block" aria-hidden />
           <Link
             href="/pricing"
-            className="font-sans text-sm font-medium text-royal/60 hover:text-royal"
+            className="hidden font-sans text-sm font-medium text-royal/60 hover:text-royal sm:inline"
           >
             Pricing
           </Link>
           <Link
             href="/feedback"
-            className="font-sans text-sm font-medium text-royal/60 hover:text-royal"
+            className="hidden font-sans text-sm font-medium text-royal/60 hover:text-royal sm:inline"
           >
             Feedback
           </Link>
@@ -275,14 +409,19 @@ function AppNavHeaderInner({
           {isFree ? (
             <Link
               href="/pricing"
-              className="rounded-full bg-gold/90 px-3 py-1 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-gold"
+              className="hidden rounded-full bg-gold/90 px-3 py-1 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-gold sm:inline-flex"
             >
               Upgrade
             </Link>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-3 sm:justify-end">
-          <span className="font-sans text-sm text-royal/70">{userEmail}</span>
+          <span
+            className="max-w-[min(100%,14rem)] truncate font-sans text-sm text-royal/70"
+            title={userEmail}
+          >
+            {userEmail}
+          </span>
           <SignOutButton />
         </div>
       </div>
