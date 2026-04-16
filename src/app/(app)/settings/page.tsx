@@ -3,6 +3,10 @@ import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
 import { SettingsAccountPanel } from "@/components/settings/SettingsAccountPanel";
 import { getTierConfig } from "@/lib/tiers";
 import { getUserTripCount } from "@/lib/db/trips";
+import {
+  getOauthIdentityLabel,
+  userHasEmailPasswordAuth,
+} from "@/lib/auth/user-identities";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import {
   readProfileRow,
@@ -54,8 +58,9 @@ export default async function SettingsPage() {
   if (!user) redirect("/login?next=/settings");
 
   const supabase = await createClient();
-  const identities = user.identities ?? [];
-  const hasPasswordAuth = identities.some((i) => i.provider === "email");
+  const hasPasswordAuth = userHasEmailPasswordAuth(user);
+  const oauthProviderLabel =
+    hasPasswordAuth ? null : getOauthIdentityLabel(user);
 
   const [profileRead, purchasesRes, tripCount] = await Promise.all([
     readProfileRow<{
@@ -101,37 +106,36 @@ export default async function SettingsPage() {
         tripCount={tripCount}
         freeTripLimit={freeMax}
       />
-      <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
+      <main className="mx-auto max-w-2xl space-y-8 px-4 py-8 sm:px-6">
         <h1 className="font-serif text-3xl font-semibold text-royal">
           Settings
         </h1>
 
-        <section className="mt-10 rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
           <h2 className="font-serif text-xl font-semibold text-royal">
             Planner display
           </h2>
           <TemperatureUnitSettings initial={initialTemperatureUnit} />
         </section>
 
-        <section className="mt-10 rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
           <h2 className="font-serif text-xl font-semibold text-royal">
             Email preferences
           </h2>
           <EmailPreferencesSettings initialOptOut={emailMarketingOptOut} />
         </section>
 
-        <div className="mt-10">
-          <SettingsAccountPanel
-            email={user.email ?? ""}
-            displayName={displayName}
-            createdAt={profileCreated}
-            tierLabel={cfg.name}
-            tierBadge={cfg.badge_emoji}
-            hasPasswordAuth={hasPasswordAuth}
-          />
-        </div>
+        <SettingsAccountPanel
+          email={user.email ?? ""}
+          displayName={displayName}
+          createdAt={profileCreated}
+          tierLabel={cfg.name}
+          tierBadge={cfg.badge_emoji}
+          hasPasswordAuth={hasPasswordAuth}
+          oauthProviderLabel={oauthProviderLabel}
+        />
 
-        <section className="mt-10 rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
           <h2 className="font-serif text-xl font-semibold text-royal">Billing</h2>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <span className="text-2xl" aria-hidden>
@@ -166,7 +170,7 @@ export default async function SettingsPage() {
           ) : null}
         </section>
 
-        <section className="mt-8 rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
           <h3 className="font-serif text-lg font-semibold text-royal">
             Purchase history
           </h3>
