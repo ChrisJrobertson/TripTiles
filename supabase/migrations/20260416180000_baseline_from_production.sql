@@ -1,0 +1,28 @@
+-- -----------------------------------------------------------------------------
+-- Baseline: local migration history aligned with production (2026-04-16).
+--
+-- Context: production had many migration versions recorded in
+-- supabase_migrations.schema_migrations that were missing from this repository.
+-- Those files were brought in with:
+--   supabase migration fetch --linked
+--
+-- Migrations that existed only in the repo (already applied to the live DB outside
+-- the tracked history) were reconciled with:
+--   supabase migration repair --status applied --linked <versions…>
+--
+-- `supabase db pull <name>` (schema diff via a shadow database) and
+-- `supabase db dump --linked` require Docker for the local Supabase toolchain.
+-- With Docker unavailable in this environment, alignment uses fetch + repair instead
+-- of a single squashed pg_dump. The cumulative SQL in supabase/migrations/ now
+-- matches the linked project’s migration table.
+--
+-- Public base tables present at alignment (information_schema):
+--   achievement_definitions, achievements, affiliate_clicks, affiliate_conversions,
+--   agencies, ai_generations, concierge_requests, custom_tiles, email_queue,
+--   feedback, park_checkins, parks, payhip_products, payhip_webhook_events,
+--   profiles, purchases, regions, trip_collaborators, trips
+--
+-- No DDL here: this file marks the baseline checkpoint only.
+-- -----------------------------------------------------------------------------
+
+select 1;
