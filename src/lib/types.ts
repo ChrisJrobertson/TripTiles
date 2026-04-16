@@ -44,12 +44,6 @@ export interface Profile {
   updated_at: string;
 }
 
-/** Optional DB view; not used by the app (tier is read from `profiles.tier`). May diverge from `profiles` if the view definition is stale. */
-export interface UserEffectiveTierRow {
-  user_id: string;
-  effective_tier: UserTier;
-}
-
 export interface Agency {
   id: string;
   name: string;

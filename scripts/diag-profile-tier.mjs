@@ -1,6 +1,6 @@
 /**
- * One-off diagnostic: checks whether `user_effective_tier` exists and prints
- * `profiles.id` + `profiles.tier` for each auth user (service role, bypasses RLS).
+ * One-off diagnostic: prints `profiles.id` + `profiles.tier` for each auth user
+ * (service role, bypasses RLS).
  *
  * Usage from repo root:
  *   node scripts/diag-profile-tier.mjs
@@ -50,15 +50,6 @@ const supabase = createClient(url, serviceKey, {
 });
 
 async function main() {
-  const viewProbe = await supabase.from("user_effective_tier").select("*").limit(0);
-  if (viewProbe.error) {
-    console.log("user_effective_tier view: NOT AVAILABLE");
-    console.log("  code:", viewProbe.error.code ?? "(none)");
-    console.log("  message:", viewProbe.error.message);
-  } else {
-    console.log("user_effective_tier view: EXISTS (empty probe ok)");
-  }
-
   const { data: listData, error: listErr } =
     await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
   if (listErr) {
@@ -90,21 +81,9 @@ async function main() {
       .eq("id", targetId)
       .maybeSingle();
     console.log("profiles:", pErr?.message ?? prof);
-
-    if (!viewProbe.error) {
-      const { data: eff, error: eErr } = await supabase
-        .from("user_effective_tier")
-        .select("*")
-        .eq("user_id", targetId)
-        .maybeSingle();
-      console.log(
-        "user_effective_tier:",
-        eErr?.message ?? eff ?? "(no row for this id)",
-      );
-    }
   } else {
     console.log(
-      "\nSet DIAG_USER_ID=<your uuid> to print profiles + user_effective_tier for one user.",
+      "\nSet DIAG_USER_ID=<your uuid> to print profiles detail for one user.",
     );
   }
 }
