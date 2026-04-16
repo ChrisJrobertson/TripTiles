@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "smoke": "node --env-file=.env.local --import tsx scripts/smoke-test-supabase.ts",
+    "verify:profiles-schema": "node scripts/verify-profiles-columns.mjs",
     "deploy:vercel": "vercel --prod --yes"
   },
   "dependencies": {

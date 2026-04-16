@@ -29,6 +29,7 @@
 - `npx supabase migration list --linked` — local and remote columns should match row-for-row.
 - `npx supabase db push --linked` — should report nothing pending once everything is applied.
 - Smoke: `node scripts/count-orphan-auth-users.mjs` and `node scripts/test-handle-new-user-trigger.mjs` when touching auth/profiles.
+- **Profiles / app reads:** before shipping UI that selects new `profiles` columns, add a migration and run `npm run verify:profiles-schema` (or `node scripts/verify-profiles-columns.mjs`) against staging and production. That script uses the same column list as planner/settings reads; if PostgREST reports “column does not exist”, deploy migrations first. When you add a required column for new users, update `public.handle_new_user()` in a migration so signups do not rely on defaults alone.
 
 ## Baseline checkpoint
 

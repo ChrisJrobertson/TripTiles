@@ -68,7 +68,9 @@ async function main() {
 
   const { data: profile, error: profErr } = await supabase
     .from("profiles")
-    .select("id, email, tier, referral_code, created_at, updated_at")
+    .select(
+      "id, email, tier, referral_code, temperature_unit, email_marketing_opt_out, created_at, updated_at",
+    )
     .eq("id", uid)
     .maybeSingle();
 
@@ -80,6 +82,25 @@ async function main() {
 
   if (!profile) {
     console.error("FAIL: no profiles row for new auth user", uid);
+    await supabase.auth.admin.deleteUser(uid);
+    process.exit(1);
+  }
+
+  const tu = profile.temperature_unit;
+  if (tu !== "c" && tu !== "f") {
+    console.error(
+      "FAIL: profiles.temperature_unit must be c or f, got:",
+      tu,
+    );
+    await supabase.auth.admin.deleteUser(uid);
+    process.exit(1);
+  }
+
+  if (profile.email_marketing_opt_out !== false) {
+    console.error(
+      "FAIL: new user should have email_marketing_opt_out false, got:",
+      profile.email_marketing_opt_out,
+    );
     await supabase.auth.admin.deleteUser(uid);
     process.exit(1);
   }
