@@ -75,6 +75,7 @@ import {
   notifyStaleServerActionIfNeeded,
   showToast,
 } from "@/lib/toast";
+import { sortPrioritiesForDay } from "@/lib/ride-plan-display";
 import type {
   AchievementDefinition,
   Assignment,
@@ -87,6 +88,7 @@ import type {
   Trip,
   UserTier,
 } from "@/lib/types";
+import type { TripRidePriority } from "@/types/attractions";
 import { customTileToPark } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import {
@@ -129,6 +131,8 @@ type Props = {
   temperatureUnit?: TemperatureUnit;
   /** When true, milestone reminder emails are suppressed for every trip. */
   emailMarketingOptOut?: boolean;
+  /** Ride priorities keyed by trip id (server-loaded). */
+  initialRidePrioritiesByTripId: Record<string, TripRidePriority[]>;
 };
 
 const ASSIGN_DEBOUNCE_MS = 450;
@@ -210,6 +214,7 @@ export function PlannerClient({
   plannerTab = "planner",
   temperatureUnit = "c",
   emailMarketingOptOut = false,
+  initialRidePrioritiesByTripId,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -273,6 +278,9 @@ export function PlannerClient({
   const autoGenerateConsumedRef = useRef(false);
   const [fullPageAiBusy, setFullPageAiBusy] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
+  const [ridePrioritiesByTripId, setRidePrioritiesByTripId] = useState<
+    Record<string, TripRidePriority[]>
+  >(() => initialRidePrioritiesByTripId);
   const [surpriseUndo, setSurpriseUndo] = useState<{
     tripId: string;
     dateKey: string;
@@ -281,6 +289,43 @@ export function PlannerClient({
   } | null>(null);
 
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
+
+  useEffect(() => {
+    setRidePrioritiesByTripId(initialRidePrioritiesByTripId);
+  }, [initialRidePrioritiesByTripId]);
+
+  const ridePrioritiesForActiveTrip = useMemo(
+    () => ridePrioritiesByTripId[activeTripId] ?? [],
+    [ridePrioritiesByTripId, activeTripId],
+  );
+
+  const ridePrioritiesByDayForActiveTrip = useMemo(() => {
+    const m: Record<string, TripRidePriority[]> = {};
+    for (const p of ridePrioritiesForActiveTrip) {
+      const list = m[p.day_date] ?? [];
+      list.push(p);
+      m[p.day_date] = list;
+    }
+    for (const k of Object.keys(m)) {
+      m[k] = sortPrioritiesForDay(m[k]!);
+    }
+    return m;
+  }, [ridePrioritiesForActiveTrip]);
+
+  const handleRideDayPrioritiesUpdated = useCallback(
+    (dayDate: string, items: TripRidePriority[]) => {
+      if (!activeTripId) return;
+      setRidePrioritiesByTripId((prev) => {
+        const list = prev[activeTripId] ?? [];
+        const merged = [
+          ...list.filter((x) => x.day_date !== dayDate),
+          ...items,
+        ];
+        return { ...prev, [activeTripId]: merged };
+      });
+    },
+    [activeTripId],
+  );
 
   const timelineUnlocked =
     userTier === "pro" ||
@@ -1609,6 +1654,10 @@ export function PlannerClient({
                         onSaveDayNote={onSaveDayNote}
                         timelineUnlocked={timelineUnlocked}
                         onSlotTimeChange={onSlotTimeChange}
+                        ridePrioritiesByDay={ridePrioritiesByDayForActiveTrip}
+                        onRideDayPrioritiesUpdated={
+                          handleRideDayPrioritiesUpdated
+                        }
                       />
                     </div>
                     <MobileDayView
@@ -1621,6 +1670,10 @@ export function PlannerClient({
                       onClear={onClear}
                       crowdSummary={mobileCrowdSummaryText}
                       readOnly={false}
+                      ridePrioritiesByDay={ridePrioritiesByDayForActiveTrip}
+                      onRideDayPrioritiesUpdated={
+                        handleRideDayPrioritiesUpdated
+                      }
                       onSelectPark={setSelectedParkId}
                       onMenuExportPdf={() =>
                         document.getElementById("planner-pdf-export-btn")?.click()

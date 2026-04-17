@@ -633,6 +633,13 @@ export async function publishTripAction(
 
       if (error) return { ok: false, error: error.message };
       if (!wasPublic) {
+        const { error: scrubNotesErr } = await supabase
+          .from("trip_ride_priorities")
+          .update({ notes: null })
+          .eq("trip_id", tripId);
+        if (scrubNotesErr) {
+          return { ok: false, error: scrubNotesErr.message };
+        }
         const sh = await awardAchievementAction("first_share");
         if (sh.ok && sh.justEarned) newAchievements.push("first_share");
       }
@@ -665,6 +672,15 @@ export async function publishTripAction(
         .eq("owner_id", user.id);
 
       if (!error) {
+        if (!wasPublic) {
+          const { error: scrubNotesErr } = await supabase
+            .from("trip_ride_priorities")
+            .update({ notes: null })
+            .eq("trip_id", tripId);
+          if (scrubNotesErr) {
+            return { ok: false, error: scrubNotesErr.message };
+          }
+        }
         const sh = await awardAchievementAction("first_share");
         if (sh.ok && sh.justEarned) newAchievements.push("first_share");
         revalidatePlanner();
@@ -808,6 +824,34 @@ export async function cloneTripAction(
 
     const newTripId = String(inserted.id);
     const newAchievements: string[] = [];
+
+    const { data: sourceRides } = await supabase
+      .from("trip_ride_priorities")
+      .select("attraction_id, day_date, priority, sort_order")
+      .eq("trip_id", sourceTripId);
+
+    if (sourceRides?.length) {
+      const clonedRows = sourceRides.map(
+        (r: {
+          attraction_id: string;
+          day_date: string;
+          priority: string;
+          sort_order: number;
+        }) => ({
+          trip_id: newTripId,
+          attraction_id: r.attraction_id,
+          day_date: r.day_date,
+          priority: r.priority,
+          sort_order: r.sort_order,
+        }),
+      );
+      const { error: ridePriErr } = await supabase
+        .from("trip_ride_priorities")
+        .insert(clonedRows);
+      if (ridePriErr) {
+        console.warn("Clone ride priorities skipped:", ridePriErr.message);
+      }
+    }
 
     const seedClone = await seedTripChecklistIfEmptyAction({
       tripId: newTripId,
