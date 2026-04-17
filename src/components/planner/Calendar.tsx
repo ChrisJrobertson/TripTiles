@@ -11,18 +11,21 @@ import {
 } from "@/lib/date-helpers";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { DayTimelinePanel } from "@/components/planner/DayTimelinePanel";
+import { ExpandedDayPanel } from "@/components/planner/ExpandedDayPanel";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
 import { parkChromaTileStyle } from "@/lib/theme-colours";
 import { normaliseThemeKey, themedEmptySlotSurfaceStyle } from "@/lib/themes";
 import { dayConditionRow } from "@/lib/planner-day-conditions";
 import type { Assignment, Park, SlotType, TemperatureUnit, Trip } from "@/lib/types";
+import type { TripRidePriority } from "@/types/attractions";
 import {
   CrowdLevelIndicator,
   crowdLevelFromHeuristicTone,
 } from "@/components/planner/CrowdLevelIndicator";
 import type { CSSProperties } from "react";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useId,
@@ -60,6 +63,12 @@ type Props = {
     slot: SlotType,
     timeHHmm: string,
   ) => void;
+  /** Ride priorities grouped by ISO date key (desktop expanded day panel). */
+  ridePrioritiesByDay?: Record<string, TripRidePriority[]>;
+  onRideDayPrioritiesUpdated?: (
+    dayDate: string,
+    items: TripRidePriority[],
+  ) => void;
 };
 
 const SLOTS: { key: SlotType; label: string; area: string }[] = [
@@ -68,6 +77,15 @@ const SLOTS: { key: SlotType; label: string; area: string }[] = [
   { key: "lunch", label: "LUN", area: "planner-slot-lunch" },
   { key: "dinner", label: "DIN", area: "planner-slot-dinner" },
 ];
+
+function parkIdsAmPmForDay(trip: Trip, dateKey: string): string[] {
+  const ass = trip.assignments[dateKey] ?? {};
+  const ids = [
+    getParkIdFromSlotValue(ass.am),
+    getParkIdFromSlotValue(ass.pm),
+  ].filter(Boolean) as string[];
+  return [...new Set(ids)];
+}
 
 function stripTime(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
@@ -161,6 +179,8 @@ export function Calendar({
   onSaveDayNote,
   timelineUnlocked = false,
   onSlotTimeChange,
+  ridePrioritiesByDay = {},
+  onRideDayPrioritiesUpdated,
 }: Props) {
   const parkById = new Map(parks.map((p) => [p.id, p]));
   const themeKey = normaliseThemeKey(trip.colour_theme);
@@ -183,6 +203,7 @@ export function Calendar({
   const [notePopover, setNotePopover] = useState<NotePopoverState | null>(
     null,
   );
+  const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [dayPopoverTab, setDayPopoverTab] = useState<"details" | "timeline">(
     "details",
   );
@@ -284,8 +305,8 @@ export function Calendar({
         </div>
 
         {weeks.map((week, wi) => (
+          <Fragment key={wi}>
           <div
-            key={wi}
             className="mt-1 grid gap-1"
             style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}
           >
@@ -311,6 +332,7 @@ export function Calendar({
               const tone = crowdToneByDateKey.get(key) ?? null;
               const crowdLevel = tone ? crowdLevelFromHeuristicTone(tone) : null;
               const headingDate = formatDayHeading(day);
+              const rideCount = (ridePrioritiesByDay[key] ?? []).length;
 
               const openNote = (anchor: DOMRect) => {
                 const next: NotePopoverState = {
@@ -347,7 +369,16 @@ export function Calendar({
                   className="flex min-h-[8rem] flex-col rounded-md border border-royal/15 bg-white sm:min-h-[9rem] md:min-h-[5.75rem]"
                 >
                   <div className="flex items-center justify-between gap-0.5 border-b border-royal/10 px-1 py-0.5 md:py-1">
-                    <div className="min-w-0 flex flex-1 flex-wrap items-center justify-center gap-1 text-center">
+                    {!readOnly && onRideDayPrioritiesUpdated ? (
+                      <button
+                        type="button"
+                        className="min-w-0 flex flex-1 flex-wrap items-center justify-center gap-1 text-center transition hover:bg-cream/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+                        aria-expanded={expandedDay === key}
+                        aria-label={`${expandedDay === key ? "Collapse" : "Expand"} ride plan for ${headingDate}`}
+                        onClick={() =>
+                          setExpandedDay((cur) => (cur === key ? null : key))
+                        }
+                      >
                       {dc ? (
                         <span
                           className="inline-flex shrink-0 items-center gap-0.5"
@@ -376,7 +407,55 @@ export function Calendar({
                       <span className="font-sans text-[0.6rem] font-medium uppercase text-royal/60 sm:text-[0.65rem]">
                         {mon}
                       </span>
-                    </div>
+                      <span
+                        className="font-sans text-[0.55rem] text-royal/45"
+                        aria-hidden
+                      >
+                        {expandedDay === key ? "▲" : "▼"}
+                      </span>
+                      {rideCount > 0 ? (
+                        <span className="font-sans text-[0.55rem] font-medium text-royal/55">
+                          🎢 {rideCount}
+                        </span>
+                      ) : null}
+                      </button>
+                    ) : (
+                      <div className="min-w-0 flex flex-1 flex-wrap items-center justify-center gap-1 text-center">
+                        {dc ? (
+                          <span
+                            className="inline-flex shrink-0 items-center gap-0.5"
+                            title={dc.tooltip}
+                          >
+                            <span
+                              className="h-2 w-2 shrink-0 rounded-full"
+                              style={{
+                                backgroundColor: CROWD_DOT[dc.crowd],
+                              }}
+                              aria-hidden
+                            />
+                            <span className="whitespace-nowrap font-sans text-[10px] leading-none text-royal/75">
+                              {dc.conditions.weatherEmoji}
+                              {dc.tempLabel}
+                            </span>
+                          </span>
+                        ) : crowdLevel ? (
+                          <span className="hidden shrink-0 md:inline-flex">
+                            <CrowdLevelIndicator level={crowdLevel} size="sm" />
+                          </span>
+                        ) : null}
+                        <span className="font-serif text-lg font-bold leading-none text-royal sm:text-xl">
+                          {dayNum}
+                        </span>
+                        <span className="font-sans text-[0.6rem] font-medium uppercase text-royal/60 sm:text-[0.65rem]">
+                          {mon}
+                        </span>
+                        {rideCount > 0 ? (
+                          <span className="font-sans text-[0.55rem] font-medium text-royal/55">
+                            🎢 {rideCount}
+                          </span>
+                        ) : null}
+                      </div>
+                    )}
                     {hasInsight ? (
                       <button
                         type="button"
@@ -592,6 +671,24 @@ export function Calendar({
               );
             })}
           </div>
+          {expandedDay &&
+          week.some((d) => formatDateKey(d) === expandedDay) &&
+          !readOnly &&
+          onRideDayPrioritiesUpdated ? (
+            <ExpandedDayPanel
+              tripId={trip.id}
+              dayDate={expandedDay}
+              parkIds={parkIdsAmPmForDay(trip, expandedDay)}
+              childAges={trip.child_ages ?? []}
+              ridePriorities={ridePrioritiesByDay[expandedDay] ?? []}
+              parks={parks}
+              onClose={() => setExpandedDay(null)}
+              onPrioritiesUpdated={(items) =>
+                onRideDayPrioritiesUpdated(expandedDay, items)
+              }
+            />
+          ) : null}
+          </Fragment>
         ))}
       </div>
 

@@ -809,6 +809,36 @@ export async function cloneTripAction(
     const newTripId = String(inserted.id);
     const newAchievements: string[] = [];
 
+    const { data: sourceRides } = await supabase
+      .from("trip_ride_priorities")
+      .select("attraction_id, day_date, priority, sort_order, notes")
+      .eq("trip_id", sourceTripId);
+
+    if (sourceRides?.length) {
+      const clonedRows = sourceRides.map(
+        (r: {
+          attraction_id: string;
+          day_date: string;
+          priority: string;
+          sort_order: number;
+          notes: string | null;
+        }) => ({
+          trip_id: newTripId,
+          attraction_id: r.attraction_id,
+          day_date: r.day_date,
+          priority: r.priority,
+          sort_order: r.sort_order,
+          notes: r.notes,
+        }),
+      );
+      const { error: ridePriErr } = await supabase
+        .from("trip_ride_priorities")
+        .insert(clonedRows);
+      if (ridePriErr) {
+        console.warn("Clone ride priorities skipped:", ridePriErr.message);
+      }
+    }
+
     const seedClone = await seedTripChecklistIfEmptyAction({
       tripId: newTripId,
       regionId: source.region_id ?? "orlando",

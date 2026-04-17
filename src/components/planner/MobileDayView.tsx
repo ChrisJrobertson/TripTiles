@@ -8,6 +8,7 @@ import {
   parseDate,
 } from "@/lib/date-helpers";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
+import { MobileRidesSheet } from "@/components/planner/MobileRidesSheet";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
 import { parkChromaTileStyle } from "@/lib/theme-colours";
@@ -24,6 +25,7 @@ import type {
   TemperatureUnit,
   Trip,
 } from "@/lib/types";
+import type { TripRidePriority } from "@/types/attractions";
 import Link from "next/link";
 import {
   useCallback,
@@ -72,6 +74,15 @@ function crowdLabel(tone: "low" | "mid" | "high"): string {
 
 function mealPrefix(slot: SlotType): string {
   return slot === "lunch" || slot === "dinner" ? "🍽️ " : "";
+}
+
+function parkIdsAmPmForDay(assignments: Assignments, dateKey: string): string[] {
+  const ass = assignments[dateKey] ?? {};
+  const ids = [
+    getParkIdFromSlotValue(ass.am),
+    getParkIdFromSlotValue(ass.pm),
+  ].filter(Boolean) as string[];
+  return [...new Set(ids)];
 }
 
 function dayOfWeekShort(d: Date): string {
@@ -137,6 +148,12 @@ export type MobileDayViewProps = {
     dateKey: string,
     slot: SlotType,
     timeHHmm: string,
+  ) => void;
+  /** Ride priorities keyed by ISO date (mobile sheet uses the active day). */
+  ridePrioritiesByDay?: Record<string, TripRidePriority[]>;
+  onRideDayPrioritiesUpdated?: (
+    dayDate: string,
+    items: TripRidePriority[],
   ) => void;
 };
 
@@ -341,6 +358,8 @@ export function MobileDayView({
   onSaveUserDayNote,
   timelineUnlocked = false,
   onSlotTimeChange,
+  ridePrioritiesByDay = {},
+  onRideDayPrioritiesUpdated,
 }: MobileDayViewProps) {
   void _crowdSummary;
   const notesPanelId = useId();
@@ -379,6 +398,7 @@ export function MobileDayView({
   const [parksDrawerOpen, setParksDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dayNotesOpen, setDayNotesOpen] = useState(false);
+  const [ridesSheetOpen, setRidesSheetOpen] = useState(false);
   const [mobileDayLayout, setMobileDayLayout] = useState<"grid" | "timeline">(
     "grid",
   );
@@ -402,6 +422,8 @@ export function MobileDayView({
     Math.max(0, days.length - 1),
   );
   const activeDay = days[safeIndex]!;
+  const ridePrioritiesForActiveDay =
+    ridePrioritiesByDay[activeDay.dateKey] ?? [];
 
   useEffect(() => {
     setMobileNoteDraft(activeDay.userNote);
@@ -460,7 +482,8 @@ export function MobileDayView({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (dayNotesOpen) setDayNotesOpen(false);
+        if (ridesSheetOpen) setRidesSheetOpen(false);
+        else if (dayNotesOpen) setDayNotesOpen(false);
         else if (menuOpen) setMenuOpen(false);
         else if (parksDrawerOpen) {
           setParksDrawerOpen(false);
@@ -470,7 +493,7 @@ export function MobileDayView({
       }
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
         return;
-      if (parksDrawerOpen || menuOpen || dayNotesOpen) return;
+      if (parksDrawerOpen || menuOpen || dayNotesOpen || ridesSheetOpen) return;
       if (e.key === "ArrowRight") {
         e.preventDefault();
         setActiveIndex((i) => Math.min(days.length - 1, i + 1));
@@ -482,7 +505,7 @@ export function MobileDayView({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [days.length, parksDrawerOpen, menuOpen, dayNotesOpen]);
+  }, [days.length, parksDrawerOpen, menuOpen, dayNotesOpen, ridesSheetOpen]);
 
   const openParksForSlot = useCallback((dateKey: string, slot: SlotType) => {
     if (readOnly) return;
@@ -652,6 +675,22 @@ export function MobileDayView({
                 onSlotTimeChange(activeDay.dateKey, slot, time)
               }
             />
+          ) : null}
+
+          {!readOnly && onRideDayPrioritiesUpdated ? (
+            <button
+              type="button"
+              onClick={() => setRidesSheetOpen(true)}
+              className="mt-4 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg border border-royal/15 bg-white py-3 font-sans text-sm font-medium text-royal shadow-sm transition active:bg-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+            >
+              <span aria-hidden>🎢</span>
+              Rides
+              {ridePrioritiesForActiveDay.length > 0 ? (
+                <span className="rounded-full bg-gold/30 px-2 py-0.5 text-xs font-semibold text-royal">
+                  {ridePrioritiesForActiveDay.length}
+                </span>
+              ) : null}
+            </button>
           ) : null}
 
           {!readOnly && onSaveUserDayNote ? (
@@ -857,6 +896,22 @@ export function MobileDayView({
           </div>
         </div>
       </div>
+
+      {!readOnly && onRideDayPrioritiesUpdated ? (
+        <MobileRidesSheet
+          open={ridesSheetOpen}
+          onClose={() => setRidesSheetOpen(false)}
+          tripId={trip.id}
+          dayDate={activeDay.dateKey}
+          parkIds={parkIdsAmPmForDay(assignments, activeDay.dateKey)}
+          childAges={trip.child_ages ?? []}
+          ridePriorities={ridePrioritiesForActiveDay}
+          parks={parks}
+          onPrioritiesUpdated={(items) => {
+            onRideDayPrioritiesUpdated(activeDay.dateKey, items);
+          }}
+        />
+      ) : null}
 
       {/* Day notes bottom sheet */}
       <div

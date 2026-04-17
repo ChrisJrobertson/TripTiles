@@ -1,4 +1,5 @@
 import { PlannerClient } from "@/app/(app)/planner/PlannerClient";
+import { getRidePrioritiesForTripIds } from "@/actions/ride-priorities";
 import { getAchievementDefinitions } from "@/lib/db/achievements";
 import { getSuccessfulAiGenerationCountsForTrips } from "@/lib/db/ai-generations";
 import {
@@ -17,6 +18,7 @@ import {
 } from "@/lib/supabase/profile-read";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type { TemperatureUnit, UserTier } from "@/lib/types";
+import type { TripRidePriority } from "@/types/attractions";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -141,6 +143,15 @@ export default async function PlannerPage({
   const aiGenerationCountsByTrip =
     await getSuccessfulAiGenerationCountsForTrips(tripIds, user.id);
 
+  const ridePrioritiesFlat = await getRidePrioritiesForTripIds(tripIds);
+  const initialRidePrioritiesByTripId = ridePrioritiesFlat.reduce<
+    Record<string, TripRidePriority[]>
+  >((acc, row) => {
+    if (!acc[row.trip_id]) acc[row.trip_id] = [];
+    acc[row.trip_id]!.push(row);
+    return acc;
+  }, {});
+
   const siteUrl = getPublicSiteUrl() || "http://localhost:3001";
   const profileTier = profileBundle.tier;
   const initialTemperatureUnit = profileBundle.temperatureUnit;
@@ -166,6 +177,7 @@ export default async function PlannerPage({
       plannerTab={plannerTab}
       temperatureUnit={initialTemperatureUnit}
       emailMarketingOptOut={emailMarketingOptOut}
+      initialRidePrioritiesByTripId={initialRidePrioritiesByTripId}
     />
   );
 }
