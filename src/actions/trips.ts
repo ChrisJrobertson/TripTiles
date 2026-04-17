@@ -633,6 +633,13 @@ export async function publishTripAction(
 
       if (error) return { ok: false, error: error.message };
       if (!wasPublic) {
+        const { error: scrubNotesErr } = await supabase
+          .from("trip_ride_priorities")
+          .update({ notes: null })
+          .eq("trip_id", tripId);
+        if (scrubNotesErr) {
+          return { ok: false, error: scrubNotesErr.message };
+        }
         const sh = await awardAchievementAction("first_share");
         if (sh.ok && sh.justEarned) newAchievements.push("first_share");
       }
@@ -665,6 +672,15 @@ export async function publishTripAction(
         .eq("owner_id", user.id);
 
       if (!error) {
+        if (!wasPublic) {
+          const { error: scrubNotesErr } = await supabase
+            .from("trip_ride_priorities")
+            .update({ notes: null })
+            .eq("trip_id", tripId);
+          if (scrubNotesErr) {
+            return { ok: false, error: scrubNotesErr.message };
+          }
+        }
         const sh = await awardAchievementAction("first_share");
         if (sh.ok && sh.justEarned) newAchievements.push("first_share");
         revalidatePlanner();
@@ -811,7 +827,7 @@ export async function cloneTripAction(
 
     const { data: sourceRides } = await supabase
       .from("trip_ride_priorities")
-      .select("attraction_id, day_date, priority, sort_order, notes")
+      .select("attraction_id, day_date, priority, sort_order")
       .eq("trip_id", sourceTripId);
 
     if (sourceRides?.length) {
@@ -821,14 +837,12 @@ export async function cloneTripAction(
           day_date: string;
           priority: string;
           sort_order: number;
-          notes: string | null;
         }) => ({
           trip_id: newTripId,
           attraction_id: r.attraction_id,
           day_date: r.day_date,
           priority: r.priority,
           sort_order: r.sort_order,
-          notes: r.notes,
         }),
       );
       const { error: ridePriErr } = await supabase
