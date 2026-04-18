@@ -93,7 +93,7 @@ begin
     select coalesce(assignments -> v_day_key, '{}'::jsonb) into v_cur
     from trips where id = p_trip_id;
 
-    foreach v_slot in array['am', 'pm', 'lunch', 'dinner'] loop
+    foreach v_slot in ARRAY ARRAY['am', 'pm', 'lunch', 'dinner'] loop
       if v_assign ? v_slot then
         if not v_cur ? v_slot then
           v_cur := jsonb_set(v_cur, array[v_slot], v_assign -> v_slot, true);

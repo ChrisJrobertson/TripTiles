@@ -108,7 +108,7 @@ begin
       from trips where id = p_trip_id;
 
       if v_source_slot is not null then
-        foreach v_slot in array['am', 'pm', 'lunch', 'dinner'] loop
+        foreach v_slot in ARRAY ARRAY['am', 'pm', 'lunch', 'dinner'] loop
           if v_source_slot ? v_slot then
             if not v_cur ? v_slot then
               v_cur := jsonb_set(v_cur, array[v_slot], v_source_slot -> v_slot, true);
