@@ -1,5 +1,12 @@
 import type { UserTier } from "@/lib/types";
 
+/**
+ * @deprecated Use `getUserTier` from `src/lib/tier.ts` instead.
+ * This module is kept for backwards compatibility with pre-Stripe
+ * code paths and will be removed once all call sites are migrated.
+ * Do not add new imports.
+ */
+
 /** Aligned with `profiles.tier` / product spec. */
 export type Tier = UserTier;
 

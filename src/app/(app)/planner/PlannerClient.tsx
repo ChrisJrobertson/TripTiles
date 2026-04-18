@@ -19,6 +19,10 @@ import {
 import { AppNavHeader } from "@/components/app/AppNavHeader";
 import { AchievementToast } from "@/components/gamification/AchievementToast";
 import { deleteCustomTileAction } from "@/actions/custom-tiles";
+import {
+  getRidePrioritiesForDay,
+  getRidePrioritiesForTrip,
+} from "@/actions/ride-priorities";
 import { Calendar } from "@/components/planner/Calendar";
 import { CompareDaysPanel } from "@/components/planner/CompareDaysPanel";
 import { CrowdStrategyBanner } from "@/components/planner/CrowdStrategyBanner";
@@ -33,6 +37,7 @@ import { DayNotesPanel } from "@/components/planner/DayNotesPanel";
 import { EditableTitle } from "@/components/planner/EditableTitle";
 import { MobilePlannerDock } from "@/components/planner/MobilePlannerDock";
 import { Palette } from "@/components/planner/Palette";
+import { PlannerMoreMenu } from "@/components/planner/PlannerMoreMenu";
 import { PlannerActionsMenu } from "@/components/planner/PlannerActionsMenu";
 import { PlannerTopNotices } from "@/components/planner/PlannerTopNotices";
 import { SavingIndicator } from "@/components/planner/SavingIndicator";
@@ -68,7 +73,12 @@ import {
   plannerAiDayCrowdNotes,
   plannerUserDayNotes,
 } from "@/lib/planner-note-maps";
-import { eachDateKeyInRange, formatDateKey } from "@/lib/date-helpers";
+import {
+  eachDateKeyInRange,
+  formatDateISO,
+  formatDateKey,
+  parseDate,
+} from "@/lib/date-helpers";
 import {
   normaliseThemeKey,
   plannerThemeStyleVars,
@@ -99,6 +109,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -124,8 +135,6 @@ type Props = {
   aiGenerationCountsByTrip: Record<string, number>;
   /** Absolute site URL for share links (no trailing slash). */
   siteUrl: string;
-  /** Show post-checkout help (URL param from marketing). */
-  purchaseHighlight: boolean;
   /** After cloning a public plan: custom tiles removed from source (from `?tile_scrubbed=`). */
   initialTileScrubNotice: number | null;
   initialCustomTiles: CustomTile[];
@@ -143,6 +152,11 @@ type Props = {
   emailMarketingOptOut?: boolean;
   /** Ride priorities keyed by trip id (server-loaded). */
   initialRidePrioritiesByTripId: Record<string, TripRidePriority[]>;
+  /** Per-day counts for trips without a full priority payload loaded. */
+  ridePriorityCountByTripAndDay: Record<
+    string,
+    Record<string, { total: number; mustDo: number }>
+  >;
   /** Scheduled payments keyed by trip id (server-loaded). */
   initialPaymentsByTripId: Record<string, TripPayment[]>;
   /** Base path `/trip/{id}` for day detail routes; omit on legacy shells only. */
@@ -226,7 +240,6 @@ export function PlannerClient({
   achievementDefs,
   aiGenerationCountsByTrip: initialAiCounts,
   siteUrl,
-  purchaseHighlight,
   initialTileScrubNotice,
   initialCustomTiles,
   initialOpenSmartPlan = false,
@@ -236,6 +249,7 @@ export function PlannerClient({
   temperatureUnit = "c",
   emailMarketingOptOut = false,
   initialRidePrioritiesByTripId,
+  ridePriorityCountByTripAndDay,
   initialPaymentsByTripId,
   tripRouteBase,
 }: Props) {
@@ -307,6 +321,9 @@ export function PlannerClient({
   const [adminPanel, setAdminPanel] = useState<
     null | "share" | "family" | "notes"
   >(null);
+  const [goToTodayRingDateKey, setGoToTodayRingDateKey] = useState<
+    string | null
+  >(null);
   /** Loaded eagerly for all trips; Day Detail is the future boundary for lazy per-day fetch. */
   const [ridePrioritiesByTripId, setRidePrioritiesByTripId] = useState<
     Record<string, TripRidePriority[]>
@@ -331,6 +348,11 @@ export function PlannerClient({
     Boolean(activeTrip) &&
     pathTripIdFromUrl === activeTrip?.id;
 
+  const dayCanonicalForDetail = useMemo(() => {
+    if (!dayDateFromUrl) return null;
+    return formatDateKey(parseDate(dayDateFromUrl));
+  }, [dayDateFromUrl]);
+
   useEffect(() => {
     if (!pathTripIdFromUrl) return;
     if (trips.some((t) => t.id === pathTripIdFromUrl)) {
@@ -338,18 +360,66 @@ export function PlannerClient({
     }
   }, [pathTripIdFromUrl, trips]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (dayDetailOpen) return;
-    const key = `tt-plan-scroll-${activeTripId}`;
+    const key = `trip-${activeTripId}-scroll`;
     const raw = sessionStorage.getItem(key);
     if (raw == null || !mainScrollRef.current) return;
     const y = Number(raw);
     if (!Number.isNaN(y)) mainScrollRef.current.scrollTop = y;
+    sessionStorage.removeItem(key);
   }, [dayDetailOpen, activeTripId]);
 
   useEffect(() => {
     setRidePrioritiesByTripId(initialRidePrioritiesByTripId);
   }, [initialRidePrioritiesByTripId]);
+
+  useEffect(() => {
+    if (!activeTripId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rows = await getRidePrioritiesForTrip(activeTripId);
+        if (cancelled) return;
+        setRidePrioritiesByTripId((prev) => {
+          if ((prev[activeTripId]?.length ?? 0) > 0) return prev;
+          return { ...prev, [activeTripId]: rows };
+        });
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTripId]);
+
+  useEffect(() => {
+    if (!dayDetailOpen || !dayCanonicalForDetail || !activeTripId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const rows = await getRidePrioritiesForDay(
+          activeTripId,
+          dayCanonicalForDetail,
+        );
+        if (cancelled) return;
+        setRidePrioritiesByTripId((prev) => {
+          const list = prev[activeTripId] ?? [];
+          const merged = [
+            ...list.filter((x) => x.day_date !== dayCanonicalForDetail),
+            ...rows,
+          ];
+          return { ...prev, [activeTripId]: merged };
+        });
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dayDetailOpen, dayCanonicalForDetail, activeTripId]);
 
   useEffect(() => {
     setPaymentsByTripId(initialPaymentsByTripId);
@@ -1254,12 +1324,13 @@ export function PlannerClient({
       const el = mainScrollRef.current;
       if (el) {
         sessionStorage.setItem(
-          `tt-plan-scroll-${activeTripId}`,
+          `trip-${activeTripId}-scroll`,
           String(el.scrollTop),
         );
       }
+      const daySeg = formatDateISO(parseDate(dateKey));
       router.push(
-        `${tripRouteBase}/day/${dateKey}${options?.focusNotes ? "#day-notes" : ""}`,
+        `${tripRouteBase}/day/${daySeg}${options?.focusNotes ? "#day-notes" : ""}`,
       );
     },
     [tripRouteBase, activeTripId, router],
@@ -1270,11 +1341,19 @@ export function PlannerClient({
   }, [router, overviewHref]);
 
   const showGoToTodayPill = useMemo(() => {
-    if (!activeTrip || !tripRouteBase || dayDetailOpen) return false;
+    if (!activeTrip || dayDetailOpen) return false;
     const keys = eachDateKeyInRange(activeTrip.start_date, activeTrip.end_date);
     const today = formatDateKey(new Date());
     return keys.includes(today);
-  }, [activeTrip, tripRouteBase, dayDetailOpen]);
+  }, [activeTrip, dayDetailOpen]);
+
+  const rideCountsByDayForActiveTrip = useMemo(
+    () =>
+      activeTripId && ridePriorityCountByTripAndDay[activeTripId]
+        ? ridePriorityCountByTripAndDay[activeTripId]!
+        : {},
+    [activeTripId, ridePriorityCountByTripAndDay],
+  );
 
   const onSaveDayNote = useCallback(
     async (dateKey: string, text: string) => {
@@ -1352,7 +1431,6 @@ export function PlannerClient({
 
       <div className="mx-auto max-w-7xl px-4 pt-2">
         <PlannerTopNotices
-          purchaseHighlight={purchaseHighlight}
           hasTrip={trips.length > 0}
           hasAnyAssignment={hasAnyAssignment}
         />
@@ -1365,8 +1443,8 @@ export function PlannerClient({
         >
           <header className="border-b border-royal/10 pb-5">
             <div className="flex flex-col gap-1">
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <h1 className="text-balance font-serif text-2xl font-semibold tracking-tight text-royal sm:text-3xl">
+              <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+                <h1 className="min-w-0 flex-1 text-balance font-serif text-2xl font-semibold tracking-tight text-royal sm:text-3xl">
                   <EditableTitle
                     key={`${activeTrip.id}-fam`}
                     value={activeTrip.family_name}
@@ -1405,10 +1483,37 @@ export function PlannerClient({
                     className="inline-block min-w-[6ch]"
                   />
                 </h1>
-                <SavingIndicator
-                  isSaving={savingVisible}
-                  lastSavedAt={lastSavedAt}
-                />
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                  {showGoToTodayPill ? (
+                    <button
+                      type="button"
+                      className="min-h-11 rounded-full border border-gold/40 bg-gold/90 px-3 font-serif text-xs font-semibold text-[#0B1E5C] shadow-sm transition hover:bg-gold"
+                      onClick={() => {
+                        const todayKey = formatDateKey(new Date());
+                        const el = document.getElementById(
+                          `planner-day-${todayKey}`,
+                        );
+                        el?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "center",
+                        });
+                        setGoToTodayRingDateKey(todayKey);
+                        window.setTimeout(() => setGoToTodayRingDateKey(null), 1000);
+                      }}
+                    >
+                      Go to today →
+                    </button>
+                  ) : null}
+                  <PlannerMoreMenu
+                    onOpenPanel={(panel) => {
+                      setAdminPanel(panel);
+                    }}
+                  />
+                  <SavingIndicator
+                    isSaving={savingVisible}
+                    lastSavedAt={lastSavedAt}
+                  />
+                </div>
               </div>
               <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
                 <Countdown
@@ -1541,47 +1646,6 @@ export function PlannerClient({
               </button>
             ) : null}
             <PlannerActionsMenu
-              adminSection={
-                activeTrip
-                  ? (close) => (
-                      <>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="block w-full px-4 py-2.5 text-left font-sans text-sm text-royal transition hover:bg-cream"
-                          onClick={() => {
-                            setAdminPanel("share");
-                            close();
-                          }}
-                        >
-                          Community sharing…
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="block w-full px-4 py-2.5 text-left font-sans text-sm text-royal transition hover:bg-cream"
-                          onClick={() => {
-                            setAdminPanel("family");
-                            close();
-                          }}
-                        >
-                          Family members…
-                        </button>
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="block w-full px-4 py-2.5 text-left font-sans text-sm text-royal transition hover:bg-cream"
-                          onClick={() => {
-                            setAdminPanel("notes");
-                            close();
-                          }}
-                        >
-                          Day notes (all days)…
-                        </button>
-                      </>
-                    )
-                  : undefined
-              }
               onResetCruise={() => {
                 if (!activeTripId) return;
                 applyLocalPatch(activeTripId, {
@@ -1799,17 +1863,6 @@ export function PlannerClient({
                       </div>
                     ) : null}
                     <div className="relative min-w-0">
-                      {showGoToTodayPill ? (
-                        <button
-                          type="button"
-                          className="absolute right-1 top-1 z-20 min-h-11 rounded-full border border-gold/40 bg-gold/90 px-4 font-sans text-xs font-semibold text-royal shadow-md transition hover:bg-gold md:right-2 md:top-2"
-                          onClick={() =>
-                            openDayDetail(formatDateKey(new Date()))
-                          }
-                        >
-                          Go to today
-                        </button>
-                      ) : null}
                       <div className="hidden md:block">
                         <Calendar
                           trip={activeTrip}
@@ -1829,6 +1882,8 @@ export function PlannerClient({
                           ridePrioritiesByDay={
                             ridePrioritiesByDayForActiveTrip
                           }
+                          rideCountsByDay={rideCountsByDayForActiveTrip}
+                          highlightDateKey={goToTodayRingDateKey}
                           onRideDayPrioritiesUpdated={
                             handleRideDayPrioritiesUpdated
                           }
@@ -1848,6 +1903,7 @@ export function PlannerClient({
                       crowdSummary={mobileCrowdSummaryText}
                       readOnly={false}
                       ridePrioritiesByDay={ridePrioritiesByDayForActiveTrip}
+                      rideCountsByDay={rideCountsByDayForActiveTrip}
                       onRideDayPrioritiesUpdated={
                         handleRideDayPrioritiesUpdated
                       }
@@ -2165,21 +2221,24 @@ export function PlannerClient({
         </div>
       ) : null}
 
-      {dayDetailOpen && activeTrip && dayDateFromUrl && tripRouteBase ? (
+      {dayDetailOpen &&
+      activeTrip &&
+      dayCanonicalForDetail &&
+      tripRouteBase ? (
         <DayDetailLayer
           trip={activeTrip}
-          dayDate={dayDateFromUrl}
+          dayDate={dayCanonicalForDetail}
           tripBasePath={tripRouteBase}
           parks={calendarParks}
           ridePriorities={
-            ridePrioritiesByDayForActiveTrip[dayDateFromUrl] ?? []
+            ridePrioritiesByDayForActiveTrip[dayCanonicalForDetail] ?? []
           }
           productTier={productTier}
           plannerRegionId={resolvePaletteRegionId(activeTrip)}
           temperatureUnit={temperatureUnit}
           onClose={closeDayDetail}
           onPrioritiesUpdated={(items) =>
-            handleRideDayPrioritiesUpdated(dayDateFromUrl, items)
+            handleRideDayPrioritiesUpdated(dayCanonicalForDetail, items)
           }
           onSaveDayNote={onSaveDayNote}
           onOpenSmartPlan={() => setSmartOpen(true)}

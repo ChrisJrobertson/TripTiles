@@ -5,6 +5,7 @@ import { SkipLineLegend } from "@/components/planner/SkipLineLegend";
 import { CrowdLevelIndicator } from "@/components/planner/CrowdLevelIndicator";
 import {
   eachDateKeyInRange,
+  formatDateISO,
   formatDateKey,
   parseDate,
 } from "@/lib/date-helpers";
@@ -129,7 +130,8 @@ export function DayDetailLayer({
   const navigateTo = useCallback(
     (dk: string | null) => {
       if (!dk) return;
-      router.replace(`${tripBasePath}/day/${dk}`, { scroll: false });
+      const seg = formatDateISO(parseDate(dk));
+      router.replace(`${tripBasePath}/day/${seg}`, { scroll: false });
     },
     [router, tripBasePath],
   );

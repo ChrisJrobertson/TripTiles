@@ -3,8 +3,6 @@
 import { FirstRunChecklist } from "@/components/planner/FirstRunChecklist";
 
 type Props = {
-  /** @deprecated Kept for API compatibility; purchase banner removed (Stripe success flow on /pricing). */
-  purchaseHighlight?: boolean;
   hasTrip: boolean;
   hasAnyAssignment: boolean;
 };

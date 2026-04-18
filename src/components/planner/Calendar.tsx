@@ -65,6 +65,10 @@ type Props = {
   ) => void;
   /** Ride priorities grouped by ISO date key (desktop expanded day panel). */
   ridePrioritiesByDay?: Record<string, TripRidePriority[]>;
+  /** When set, overrides ride count badge when priorities are not loaded yet. */
+  rideCountsByDay?: Record<string, { total: number; mustDo: number }>;
+  /** Brief outline highlight for “Go to today”. */
+  highlightDateKey?: string | null;
   onRideDayPrioritiesUpdated?: (
     dayDate: string,
     items: TripRidePriority[],
@@ -185,6 +189,8 @@ export function Calendar({
   timelineUnlocked = false,
   onSlotTimeChange,
   ridePrioritiesByDay = {},
+  rideCountsByDay,
+  highlightDateKey = null,
   onRideDayPrioritiesUpdated,
   onOpenDayDetail,
 }: Props) {
@@ -339,7 +345,9 @@ export function Calendar({
               const tone = crowdToneByDateKey.get(key) ?? null;
               const crowdLevel = tone ? crowdLevelFromHeuristicTone(tone) : null;
               const headingDate = formatDayHeading(day);
-              const rideCount = (ridePrioritiesByDay[key] ?? []).length;
+              const rideCount =
+                rideCountsByDay?.[key]?.total ??
+                (ridePrioritiesByDay[key] ?? []).length;
 
               const openNote = (anchor: DOMRect) => {
                 const next: NotePopoverState = {
@@ -373,7 +381,12 @@ export function Calendar({
               return (
                 <div
                   key={key}
+                  id={`planner-day-${key}`}
                   className={`flex min-h-[8rem] flex-col rounded-md border border-royal/15 bg-white sm:min-h-[9rem] md:min-h-[5.75rem]${
+                    highlightDateKey === key
+                      ? " ring-2 ring-[#0B1E5C] ring-offset-2 ring-offset-cream"
+                      : ""
+                  }${
                     useDayDetailShell && onOpenDayDetail && !readOnly
                       ? " cursor-pointer"
                       : ""

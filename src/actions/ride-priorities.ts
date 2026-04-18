@@ -12,6 +12,7 @@ import type {
   TripRidePriority,
 } from "@/types/attractions";
 import { createClient as createSupabaseJs } from "@supabase/supabase-js";
+import { formatDateKey, parseDate } from "@/lib/date-helpers";
 import { revalidatePath } from "next/cache";
 import { unstable_cache } from "next/cache";
 
@@ -125,6 +126,40 @@ export async function getRidePrioritiesForTrip(
     const attraction = rawAttr ? mapAttractionRow(rawAttr) : undefined;
     return mapPriorityRow(rec, attraction);
   });
+}
+
+/**
+ * Lightweight counts per trip/day for planner overview (no attraction join).
+ */
+export async function getRidePriorityCountsForTripIds(
+  tripIds: string[],
+): Promise<
+  Record<string, Record<string, { total: number; mustDo: number }>>
+> {
+  const out: Record<
+    string,
+    Record<string, { total: number; mustDo: number }>
+  > = {};
+  if (tripIds.length === 0) return out;
+  for (const id of tripIds) out[id] = {};
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("trip_ride_priorities")
+    .select("trip_id, day_date, priority")
+    .in("trip_id", tripIds);
+  if (error) throw new Error(error.message);
+  for (const row of data ?? []) {
+    const tid = String((row as { trip_id: string }).trip_id);
+    const rawDay = String((row as { day_date: string }).day_date);
+    const dk = formatDateKey(parseDate(rawDay.slice(0, 10)));
+    const pr = (row as { priority: string }).priority;
+    if (!out[tid]) out[tid] = {};
+    const cur = out[tid][dk] ?? { total: 0, mustDo: 0 };
+    cur.total += 1;
+    if (pr === "must_do") cur.mustDo += 1;
+    out[tid][dk] = cur;
+  }
+  return out;
 }
 
 export async function getRidePrioritiesForTripIds(

@@ -151,6 +151,7 @@ export type MobileDayViewProps = {
   ) => void;
   /** Ride priorities keyed by ISO date (mobile sheet uses the active day). */
   ridePrioritiesByDay?: Record<string, TripRidePriority[]>;
+  rideCountsByDay?: Record<string, { total: number; mustDo: number }>;
   onRideDayPrioritiesUpdated?: (
     dayDate: string,
     items: TripRidePriority[],
@@ -367,6 +368,7 @@ export function MobileDayView({
   timelineUnlocked = false,
   onSlotTimeChange,
   ridePrioritiesByDay = {},
+  rideCountsByDay,
   onRideDayPrioritiesUpdated,
   onOpenDayDetail,
 }: MobileDayViewProps) {
@@ -433,6 +435,9 @@ export function MobileDayView({
   const activeDay = days[safeIndex]!;
   const ridePrioritiesForActiveDay =
     ridePrioritiesByDay[activeDay.dateKey] ?? [];
+  const rideDisplayCount =
+    rideCountsByDay?.[activeDay.dateKey]?.total ??
+    ridePrioritiesForActiveDay.length;
 
   useEffect(() => {
     setMobileNoteDraft(activeDay.userNote);
@@ -706,9 +711,9 @@ export function MobileDayView({
             >
               <span aria-hidden>🎢</span>
               Rides
-              {ridePrioritiesForActiveDay.length > 0 ? (
+              {rideDisplayCount > 0 ? (
                 <span className="rounded-full bg-gold/30 px-2 py-0.5 text-xs font-semibold text-royal">
-                  {ridePrioritiesForActiveDay.length}
+                  {rideDisplayCount}
                 </span>
               ) : null}
             </button>

@@ -10,11 +10,7 @@ export type TierFeature = "trips" | "ai";
 /** Alias for spec / readability. */
 export type Feature = TierFeature;
 
-export function formatProductTierName(tier: Tier): string {
-  if (tier === "day_tripper") return "Day Tripper";
-  if (tier === "navigator") return "Navigator";
-  return "Captain";
-}
+export { formatProductTierName } from "./product-tier-labels";
 
 export const TIER_LIMITS: Record<
   Tier,

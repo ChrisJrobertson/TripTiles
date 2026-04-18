@@ -1,6 +1,7 @@
 import { AppNavHeader } from "@/components/app/AppNavHeader";
 import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
 import { SettingsAccountPanel } from "@/components/settings/SettingsAccountPanel";
+import { getUserTier } from "@/lib/tier";
 import { getTierConfig } from "@/lib/tiers";
 import { getUserTripCount } from "@/lib/db/trips";
 import {
@@ -86,6 +87,8 @@ export default async function SettingsPage() {
     getUserTripCount(user.id),
   ]);
 
+  const productTier = await getUserTier(user.id);
+
   if (!profileRead.ok) {
     return <ProfileLoadErrorPanel detail={profileRead.message} />;
   }
@@ -110,6 +113,17 @@ export default async function SettingsPage() {
         freeTripLimit={freeMax}
       />
       <main className="mx-auto max-w-2xl space-y-8 px-4 py-8 sm:px-6">
+        {productTier !== "day_tripper" ? (
+          <p className="font-sans text-sm text-royal/80">
+            <Link
+              href="/settings/templates"
+              className="font-semibold text-royal underline underline-offset-2"
+            >
+              Day templates
+            </Link>{" "}
+            — save and reuse planner days.
+          </p>
+        ) : null}
         <h1 className="font-serif text-3xl font-semibold text-royal">
           Settings
         </h1>

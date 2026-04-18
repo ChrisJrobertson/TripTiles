@@ -1,5 +1,8 @@
 import { getPaymentsForTripIds } from "@/actions/payments";
-import { getRidePrioritiesForTripIds } from "@/actions/ride-priorities";
+import {
+  getRidePrioritiesForTrip,
+  getRidePriorityCountsForTripIds,
+} from "@/actions/ride-priorities";
 import { getAchievementDefinitions } from "@/lib/db/achievements";
 import { getSuccessfulAiGenerationCountsForTrips } from "@/lib/db/ai-generations";
 import {
@@ -54,7 +57,6 @@ export type PlannerClientServerProps = {
   achievementDefs: Awaited<ReturnType<typeof getAchievementDefinitions>>;
   aiGenerationCountsByTrip: Record<string, number>;
   siteUrl: string;
-  purchaseHighlight: boolean;
   initialTileScrubNotice: number | null;
   initialCustomTiles: Awaited<ReturnType<typeof getUserCustomTiles>>;
   customTileLimit: number;
@@ -62,6 +64,11 @@ export type PlannerClientServerProps = {
   initialTemperatureUnit: TemperatureUnit;
   emailMarketingOptOut: boolean;
   initialRidePrioritiesByTripId: Record<string, TripRidePriority[]>;
+  /** Per-day ride counts without loading full `trip_ride_priorities` rows (overview). */
+  ridePriorityCountByTripAndDay: Record<
+    string,
+    Record<string, { total: number; mustDo: number }>
+  >;
   initialPaymentsByTripId: Record<string, TripPayment[]>;
   initialOpenSmartPlan: boolean;
   initialAutoGenerate: boolean;
@@ -111,7 +118,6 @@ export async function loadPlannerClientServerData(input: {
         achievementDefs: await getAchievementDefinitions(),
         aiGenerationCountsByTrip: {},
         siteUrl,
-        purchaseHighlight: false,
         initialTileScrubNotice: null,
         initialCustomTiles: [],
         customTileLimit: 0,
@@ -119,6 +125,7 @@ export async function loadPlannerClientServerData(input: {
         initialTemperatureUnit: "c",
         emailMarketingOptOut: false,
         initialRidePrioritiesByTripId: {},
+        ridePriorityCountByTripAndDay: {},
         initialPaymentsByTripId: {},
         initialOpenSmartPlan: false,
         initialAutoGenerate: false,
@@ -133,11 +140,6 @@ export async function loadPlannerClientServerData(input: {
       message: "Trip not found.",
     };
   }
-
-  const purchaseHighlight =
-    firstParam(sp.purchase) === "pending" ||
-    firstParam(sp.checkout) === "success" ||
-    firstParam(sp.upgraded) === "pending";
 
   const initialOpenSmartPlan = firstParam(sp.openSmartPlan) === "true";
   const initialAutoGenerate = firstParam(sp.autoGenerate) === "true";
@@ -193,14 +195,25 @@ export async function loadPlannerClientServerData(input: {
   const aiGenerationCountsByTrip =
     await getSuccessfulAiGenerationCountsForTrips(tripIds, userId);
 
-  const ridePrioritiesFlat = await getRidePrioritiesForTripIds(tripIds);
-  const initialRidePrioritiesByTripId = ridePrioritiesFlat.reduce<
-    Record<string, TripRidePriority[]>
-  >((acc, row) => {
-    if (!acc[row.trip_id]) acc[row.trip_id] = [];
-    acc[row.trip_id]!.push(row);
-    return acc;
-  }, {});
+  const ridePriorityCountByTripAndDay =
+    await getRidePriorityCountsForTripIds(tripIds);
+
+  const preferredActiveForRides =
+    forcedTripId ?? activeTrip?.id ?? trips[0]?.id ?? null;
+
+  const activeFull =
+    preferredActiveForRides != null
+      ? await getRidePrioritiesForTrip(preferredActiveForRides)
+      : [];
+
+  const initialRidePrioritiesByTripId: Record<string, TripRidePriority[]> =
+    tripIds.reduce(
+      (acc, id) => {
+        acc[id] = id === preferredActiveForRides ? activeFull : [];
+        return acc;
+      },
+      {} as Record<string, TripRidePriority[]>,
+    );
 
   const paymentsFlat = await getPaymentsForTripIds(tripIds);
   const initialPaymentsByTripId = paymentsFlat.reduce<
@@ -242,11 +255,7 @@ export async function loadPlannerClientServerData(input: {
     throw e;
   }
 
-  const preferredActive =
-    forcedTripId ??
-    activeTrip?.id ??
-    trips[0]?.id ??
-    null;
+  const preferredActive = preferredActiveForRides;
 
   return {
     ok: true,
@@ -264,7 +273,6 @@ export async function loadPlannerClientServerData(input: {
       achievementDefs,
       aiGenerationCountsByTrip,
       siteUrl,
-      purchaseHighlight,
       initialTileScrubNotice,
       initialCustomTiles: customTiles,
       customTileLimit,
@@ -272,6 +280,7 @@ export async function loadPlannerClientServerData(input: {
       initialTemperatureUnit: profileBundle.temperatureUnit,
       emailMarketingOptOut: profileBundle.emailMarketingOptOut,
       initialRidePrioritiesByTripId,
+      ridePriorityCountByTripAndDay,
       initialPaymentsByTripId,
       initialOpenSmartPlan,
       initialAutoGenerate,

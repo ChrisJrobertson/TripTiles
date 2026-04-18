@@ -1,6 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import {
+  formatProductTierName,
+  type ProductTier,
+} from "@/lib/product-tier-labels";
 
 type Variant = "trips" | "ai" | "custom";
 
@@ -9,27 +13,37 @@ type Props = {
   onClose: () => void;
   reason: string;
   variant?: Variant;
+  /** Paid plan to promote in the CTA (Navigator is the usual upgrade path). */
+  upgradeTargetTier?: Exclude<ProductTier, "day_tripper">;
 };
 
-function headingFor(v: Variant): string {
+function headingFor(
+  v: Variant,
+  upgradeTargetTier: Exclude<ProductTier, "day_tripper">,
+): string {
+  const name = formatProductTierName(upgradeTargetTier);
   switch (v) {
     case "ai":
-      return "Unlock Tripp with Smart Plan";
+      return `Unlock Tripp with ${name}`;
     case "custom":
-      return "Unlock more custom tiles";
+      return `${name} unlocks more custom tiles`;
     default:
-      return "Need more active trips?";
+      return `${name} unlocks more active trips`;
   }
 }
 
-function subFor(v: Variant): string {
+function subFor(
+  v: Variant,
+  upgradeTargetTier: Exclude<ProductTier, "day_tripper">,
+): string {
+  const name = formatProductTierName(upgradeTargetTier);
   switch (v) {
     case "ai":
-      return "Navigator and Captain include Tripp for Smart Plan on every trip.";
+      return `${name} includes Tripp for Smart Plan on your trips.`;
     case "custom":
-      return "Paid plans unlock higher custom tile limits for your calendar.";
+      return `${name} raises your custom tile limit so you can build richer calendars.`;
     default:
-      return "Day Tripper keeps one trip at a time. Navigator or Captain raise your active trip cap.";
+      return `Day Tripper keeps one active trip at a time. ${name} raises your cap — pick the plan that fits on Pricing.`;
   }
 }
 
@@ -38,8 +52,11 @@ export function TierLimitModal({
   onClose,
   reason,
   variant = "trips",
+  upgradeTargetTier = "navigator",
 }: Props) {
   if (!isOpen) return null;
+
+  const ctaLabel = `Upgrade to ${formatProductTierName(upgradeTargetTier)}`;
 
   return (
     <div
@@ -48,25 +65,23 @@ export function TierLimitModal({
       aria-modal="true"
       aria-labelledby="tier-limit-title"
     >
-      <div className="w-full max-w-md rounded-2xl border border-gold/40 bg-cream p-6 shadow-2xl sm:p-8">
+      <div className="w-full max-w-md rounded-2xl border border-gold/40 bg-[#FAF8F3] p-6 shadow-2xl sm:p-8">
         <h2
           id="tier-limit-title"
-          className="font-serif text-xl font-semibold text-royal"
+          className="font-serif text-xl font-semibold text-[#0B1E5C]"
         >
-          {headingFor(variant)}
+          {headingFor(variant, upgradeTargetTier)}
         </h2>
         <p className="mt-3 font-sans text-sm text-royal/80">{reason}</p>
-        <p className="mt-2 font-sans text-sm text-royal/70">{subFor(variant)}</p>
-        <p className="mt-3 rounded-lg border border-royal/10 bg-white/80 px-3 py-2 font-sans text-xs leading-relaxed text-royal/75">
-          Paying on Payhip? Use the <strong>same email</strong> as your
-          TripTiles login so your legacy upgrade still lines up.
+        <p className="mt-2 font-sans text-sm text-royal/70">
+          {subFor(variant, upgradeTargetTier)}
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
             href="/pricing"
-            className="inline-flex flex-1 items-center justify-center rounded-lg bg-gold px-4 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition hover:bg-gold/90 sm:flex-none"
+            className="inline-flex flex-1 items-center justify-center rounded-lg bg-[#C9A961] px-4 py-2.5 font-sans text-sm font-semibold text-[#0B1E5C] shadow-sm transition hover:bg-gold/90 sm:flex-none"
           >
-            See pricing →
+            {ctaLabel}
           </Link>
           <button
             type="button"

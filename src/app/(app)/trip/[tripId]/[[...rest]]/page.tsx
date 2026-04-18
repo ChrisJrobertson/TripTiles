@@ -97,7 +97,6 @@ export default async function TripPlannerPage({
       achievementDefs={p.achievementDefs}
       aiGenerationCountsByTrip={p.aiGenerationCountsByTrip}
       siteUrl={p.siteUrl}
-      purchaseHighlight={p.purchaseHighlight}
       initialTileScrubNotice={p.initialTileScrubNotice}
       initialCustomTiles={p.initialCustomTiles}
       customTileLimit={p.customTileLimit}
@@ -105,6 +104,7 @@ export default async function TripPlannerPage({
       temperatureUnit={p.initialTemperatureUnit}
       emailMarketingOptOut={p.emailMarketingOptOut}
       initialRidePrioritiesByTripId={p.initialRidePrioritiesByTripId}
+      ridePriorityCountByTripAndDay={p.ridePriorityCountByTripAndDay}
       initialPaymentsByTripId={p.initialPaymentsByTripId}
       tripRouteBase={`/trip/${tripId}`}
     />
