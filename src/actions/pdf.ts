@@ -20,6 +20,7 @@ import type {
   TripBudgetItem,
   TripChecklistItem,
 } from "@/lib/types";
+import type { PaymentCurrency, TripPayment } from "@/types/payments";
 
 function mapBudgetRow(r: Record<string, unknown>): TripBudgetItem {
   return {
@@ -31,6 +32,21 @@ function mapBudgetRow(r: Record<string, unknown>): TripBudgetItem {
     currency: String(r.currency ?? "GBP"),
     is_paid: Boolean(r.is_paid),
     notes: r.notes != null ? String(r.notes) : null,
+    sort_order: Number(r.sort_order ?? 0),
+    created_at: String(r.created_at ?? ""),
+    updated_at: String(r.updated_at ?? ""),
+  };
+}
+
+function mapPaymentRow(r: Record<string, unknown>): TripPayment {
+  return {
+    id: String(r.id),
+    trip_id: String(r.trip_id),
+    label: String(r.label ?? ""),
+    amount_pence: Number(r.amount_pence ?? 0),
+    currency: (r.currency === "USD" ? "USD" : "GBP") as PaymentCurrency,
+    booking_date: r.booking_date != null ? String(r.booking_date) : null,
+    due_date: r.due_date != null ? String(r.due_date) : null,
     sort_order: Number(r.sort_order ?? 0),
     created_at: String(r.created_at ?? ""),
     updated_at: String(r.updated_at ?? ""),
@@ -62,6 +78,7 @@ export async function getPdfExportContextAction(tripId: string): Promise<
       bookingLinks: Array<{ label: string; url: string }>;
       budgetItems: TripBudgetItem[];
       checklistItems: TripChecklistItem[];
+      tripPayments: TripPayment[];
       temperatureUnit: TemperatureUnit;
     }
   | { ok: false; error: string }
@@ -91,6 +108,7 @@ export async function getPdfExportContextAction(tripId: string): Promise<
     tier,
     budgetRes,
     checklistRes,
+    paymentsRes,
     profileRes,
   ] = await Promise.all([
     getParksForRegion(regionId),
@@ -108,6 +126,12 @@ export async function getPdfExportContextAction(tripId: string): Promise<
       .eq("trip_id", tripId)
       .order("sort_order", { ascending: true }),
     supabase
+      .from("trip_payments")
+      .select("*")
+      .eq("trip_id", tripId)
+      .order("due_date", { ascending: true, nullsFirst: false })
+      .order("sort_order", { ascending: true }),
+    supabase
       .from("profiles")
       .select("temperature_unit")
       .eq("id", user.id)
@@ -119,6 +143,9 @@ export async function getPdfExportContextAction(tripId: string): Promise<
   );
   const checklistItems = (checklistRes.data ?? []).map((x) =>
     mapChecklistRow(x as Record<string, unknown>),
+  );
+  const tripPayments = (paymentsRes.data ?? []).map((x) =>
+    mapPaymentRow(x as Record<string, unknown>),
   );
 
   const temperatureUnit: TemperatureUnit =
@@ -178,6 +205,7 @@ export async function getPdfExportContextAction(tripId: string): Promise<
     bookingLinks,
     budgetItems,
     checklistItems,
+    tripPayments,
     temperatureUnit,
   };
   } catch (e) {
