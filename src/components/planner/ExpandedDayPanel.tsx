@@ -31,6 +31,8 @@ export type ExpandedDayPanelProps = {
   parks: Park[];
   onClose: () => void;
   onPrioritiesUpdated: (items: TripRidePriority[]) => void;
+  /** Hides title, close, and legend — used inside Day Detail shell. */
+  embedded?: boolean;
 };
 
 function formatUkLongDate(dateKey: string): string {
@@ -152,6 +154,7 @@ export function ExpandedDayPanel({
   parks,
   onClose,
   onPrioritiesUpdated,
+  embedded = false,
 }: ExpandedDayPanelProps) {
   const [catalog, setCatalog] = useState<Attraction[]>([]);
   const [pending, setPending] = useState(false);
@@ -314,56 +317,74 @@ export function ExpandedDayPanel({
 
   if (parkIds.length === 0) {
     return (
-      <div className="w-full border-y border-[#E5E1D8] bg-[#FAF8F3] px-3 py-4 sm:px-4">
+      <div
+        className={
+          embedded
+            ? "w-full px-1 py-2"
+            : "w-full border-y border-[#E5E1D8] bg-[#FAF8F3] px-3 py-4 sm:px-4"
+        }
+      >
         <div className="flex items-start justify-between gap-2">
           <p className="font-sans text-sm text-royal/75">
             Assign a park in <span className="font-semibold">AM</span> or{" "}
             <span className="font-semibold">PM</span> to plan rides for this
             day.
           </p>
-          <button
-            type="button"
-            className="shrink-0 rounded px-2 text-royal/60 hover:bg-white/80"
-            aria-label="Close"
-            onClick={onClose}
-          >
-            ×
-          </button>
+          {!embedded ? (
+            <button
+              type="button"
+              className="shrink-0 rounded px-2 text-royal/60 hover:bg-white/80"
+              aria-label="Close"
+              onClick={onClose}
+            >
+              ×
+            </button>
+          ) : null}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full border-y border-[#E5E1D8] bg-[#FAF8F3] px-3 py-3 sm:px-4 sm:py-4">
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="font-serif text-base font-bold leading-snug text-royal sm:text-lg">
-            📅 {formatUkLongDate(dayDate)}
-            {parkLabels ? (
-              <>
-                {" "}
-                — {parkLabels}{" "}
-                <span className="font-sans font-normal text-royal/70">
-                  (AM & PM)
-                </span>
-              </>
-            ) : null}
-          </h3>
-        </div>
-        <button
-          type="button"
-          className="shrink-0 rounded px-2 text-lg leading-none text-royal/55 hover:bg-white/80"
-          aria-label="Close"
-          onClick={onClose}
-        >
-          ×
-        </button>
-      </div>
+    <div
+      className={
+        embedded
+          ? "w-full bg-transparent px-1 py-1 sm:px-2"
+          : "w-full border-y border-[#E5E1D8] bg-[#FAF8F3] px-3 py-3 sm:px-4 sm:py-4"
+      }
+    >
+      {!embedded ? (
+        <>
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="font-serif text-base font-bold leading-snug text-royal sm:text-lg">
+                📅 {formatUkLongDate(dayDate)}
+                {parkLabels ? (
+                  <>
+                    {" "}
+                    — {parkLabels}{" "}
+                    <span className="font-sans font-normal text-royal/70">
+                      (AM & PM)
+                    </span>
+                  </>
+                ) : null}
+              </h3>
+            </div>
+            <button
+              type="button"
+              className="shrink-0 rounded px-2 text-lg leading-none text-royal/55 hover:bg-white/80"
+              aria-label="Close"
+              onClick={onClose}
+            >
+              ×
+            </button>
+          </div>
 
-      <div className="mb-3">
-        <SkipLineLegend />
-      </div>
+          <div className="mb-3">
+            <SkipLineLegend />
+          </div>
+        </>
+      ) : null}
 
       <div className="mb-3 rounded-lg border border-gold/25 bg-white/70 px-3 py-2">
         <p className="font-sans text-[11px] font-semibold uppercase tracking-wide text-royal">

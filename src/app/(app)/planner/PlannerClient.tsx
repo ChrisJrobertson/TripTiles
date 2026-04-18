@@ -28,6 +28,7 @@ import { TripBudgetView } from "@/components/planner/TripBudgetView";
 import { TripChecklistView } from "@/components/planner/TripChecklistView";
 import { Countdown } from "@/components/planner/Countdown";
 import { CustomTileModal } from "@/components/planner/CustomTileModal";
+import { DayDetailLayer } from "@/components/planner/DayDetailLayer";
 import { DayNotesPanel } from "@/components/planner/DayNotesPanel";
 import { EditableTitle } from "@/components/planner/EditableTitle";
 import { MobilePlannerDock } from "@/components/planner/MobilePlannerDock";
@@ -37,6 +38,7 @@ import { PlannerTopNotices } from "@/components/planner/PlannerTopNotices";
 import { SavingIndicator } from "@/components/planner/SavingIndicator";
 import { FamilyInvitePanel } from "@/components/planner/FamilyInvitePanel";
 import { ShareTripPanel } from "@/components/planner/ShareTripPanel";
+import { SkipLineLegend } from "@/components/planner/SkipLineLegend";
 import {
   SmartPlanModal,
   type SmartPlanGeneratePayload,
@@ -66,6 +68,7 @@ import {
   plannerAiDayCrowdNotes,
   plannerUserDayNotes,
 } from "@/lib/planner-note-maps";
+import { eachDateKeyInRange, formatDateKey } from "@/lib/date-helpers";
 import {
   normaliseThemeKey,
   plannerThemeStyleVars,
@@ -92,7 +95,7 @@ import type {
 import type { TripRidePriority } from "@/types/attractions";
 import type { TripPayment } from "@/types/payments";
 import { customTileToPark } from "@/lib/types";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -142,6 +145,8 @@ type Props = {
   initialRidePrioritiesByTripId: Record<string, TripRidePriority[]>;
   /** Scheduled payments keyed by trip id (server-loaded). */
   initialPaymentsByTripId: Record<string, TripPayment[]>;
+  /** Base path `/trip/{id}` for day detail routes; omit on legacy shells only. */
+  tripRouteBase?: string;
 };
 
 const ASSIGN_DEBOUNCE_MS = 450;
@@ -232,8 +237,12 @@ export function PlannerClient({
   emailMarketingOptOut = false,
   initialRidePrioritiesByTripId,
   initialPaymentsByTripId,
+  tripRouteBase,
 }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
+  const overviewHref = tripRouteBase ?? "/planner";
+  const mainScrollRef = useRef<HTMLElement>(null);
   const [isPending, startTransition] = useTransition();
 
   const achievementDefByKey = useMemo(
@@ -295,6 +304,10 @@ export function PlannerClient({
   const autoGenerateConsumedRef = useRef(false);
   const [fullPageAiBusy, setFullPageAiBusy] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
+  const [adminPanel, setAdminPanel] = useState<
+    null | "share" | "family" | "notes"
+  >(null);
+  /** Loaded eagerly for all trips; Day Detail is the future boundary for lazy per-day fetch. */
   const [ridePrioritiesByTripId, setRidePrioritiesByTripId] = useState<
     Record<string, TripRidePriority[]>
   >(() => initialRidePrioritiesByTripId);
@@ -309,6 +322,30 @@ export function PlannerClient({
   } | null>(null);
 
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
+
+  const pathTripIdFromUrl = pathname.match(/^\/trip\/([^/]+)/)?.[1] ?? null;
+  const dayDateFromUrl =
+    pathname.match(/\/trip\/[^/]+\/day\/(\d{4}-\d{2}-\d{2})/)?.[1] ?? null;
+  const dayDetailOpen =
+    Boolean(dayDateFromUrl) &&
+    Boolean(activeTrip) &&
+    pathTripIdFromUrl === activeTrip?.id;
+
+  useEffect(() => {
+    if (!pathTripIdFromUrl) return;
+    if (trips.some((t) => t.id === pathTripIdFromUrl)) {
+      setActiveTripId(pathTripIdFromUrl);
+    }
+  }, [pathTripIdFromUrl, trips]);
+
+  useEffect(() => {
+    if (dayDetailOpen) return;
+    const key = `tt-plan-scroll-${activeTripId}`;
+    const raw = sessionStorage.getItem(key);
+    if (raw == null || !mainScrollRef.current) return;
+    const y = Number(raw);
+    if (!Number.isNaN(y)) mainScrollRef.current.scrollTop = y;
+  }, [dayDetailOpen, activeTripId]);
 
   useEffect(() => {
     setRidePrioritiesByTripId(initialRidePrioritiesByTripId);
@@ -473,9 +510,9 @@ export function PlannerClient({
     showToast(
       `${n} custom tile${n === 1 ? "" : "s"} were removed because they belonged to the original planner. You can add your own!`,
     );
-    router.replace("/planner");
+    router.replace(overviewHref);
     router.refresh();
-  }, [initialTileScrubNotice, router]);
+  }, [initialTileScrubNotice, router, overviewHref]);
 
   useEffect(() => {
     if (!initialOpenSmartPlan) return;
@@ -484,9 +521,9 @@ export function PlannerClient({
     smartPlanOpenedFromQueryRef.current = true;
     setSmartOpen(true);
     startTransition(() => {
-      router.replace("/planner", { scroll: false });
+      router.replace(overviewHref, { scroll: false });
     });
-  }, [initialOpenSmartPlan, activeTripId, router]);
+  }, [initialOpenSmartPlan, activeTripId, router, overviewHref]);
 
   /** Merge server counts with local state so refresh never drops below optimistic totals. */
   useEffect(() => {
@@ -879,7 +916,7 @@ export function PlannerClient({
                 "Smart Plan couldn't generate your plan — you can try again from the planner, or build it yourself.",
             );
           }
-          startTransition(() => router.replace("/planner"));
+          startTransition(() => router.replace(overviewHref));
           return;
         }
         const t = tripBefore;
@@ -910,11 +947,11 @@ export function PlannerClient({
         showToast("✨ Plan generated!");
         trackEvent("smart_plan_success", { mode: "smart" });
         enqueueAchievementKeys(res.newAchievements);
-        startTransition(() => router.replace("/planner"));
+        startTransition(() => router.replace(overviewHref));
         startTransition(() => router.refresh());
       } catch (e) {
         if (notifyStaleServerActionIfNeeded(e)) {
-          startTransition(() => router.replace("/planner"));
+          startTransition(() => router.replace(overviewHref));
           return;
         }
         showToast(
@@ -922,7 +959,7 @@ export function PlannerClient({
             ? e.message
             : "Smart Plan couldn't generate your plan — you can try again from the planner, or build it yourself.",
         );
-        startTransition(() => router.replace("/planner"));
+        startTransition(() => router.replace(overviewHref));
       } finally {
         setFullPageAiBusy(false);
       }
@@ -933,6 +970,7 @@ export function PlannerClient({
     applyLocalPatch,
     enqueueAchievementKeys,
     router,
+    overviewHref,
     initialTrips,
     trips,
   ]);
@@ -1210,6 +1248,34 @@ export function PlannerClient({
     [activeTripId, trips, parks, scheduleAssignmentsSave],
   );
 
+  const openDayDetail = useCallback(
+    (dateKey: string, options?: { focusNotes?: boolean }) => {
+      if (!tripRouteBase || !activeTripId) return;
+      const el = mainScrollRef.current;
+      if (el) {
+        sessionStorage.setItem(
+          `tt-plan-scroll-${activeTripId}`,
+          String(el.scrollTop),
+        );
+      }
+      router.push(
+        `${tripRouteBase}/day/${dateKey}${options?.focusNotes ? "#day-notes" : ""}`,
+      );
+    },
+    [tripRouteBase, activeTripId, router],
+  );
+
+  const closeDayDetail = useCallback(() => {
+    startTransition(() => router.replace(overviewHref, { scroll: false }));
+  }, [router, overviewHref]);
+
+  const showGoToTodayPill = useMemo(() => {
+    if (!activeTrip || !tripRouteBase || dayDetailOpen) return false;
+    const keys = eachDateKeyInRange(activeTrip.start_date, activeTrip.end_date);
+    const today = formatDateKey(new Date());
+    return keys.includes(today);
+  }, [activeTrip, tripRouteBase, dayDetailOpen]);
+
   const onSaveDayNote = useCallback(
     async (dateKey: string, text: string) => {
       if (!activeTripId) return;
@@ -1293,7 +1359,10 @@ export function PlannerClient({
       </div>
 
       {activeTrip ? (
-        <main className="mx-auto max-w-7xl px-4 py-4 sm:py-6">
+        <main
+          ref={mainScrollRef}
+          className="mx-auto max-w-7xl px-4 py-4 sm:py-6"
+        >
           <header className="border-b border-royal/10 pb-5">
             <div className="flex flex-col gap-1">
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -1359,6 +1428,11 @@ export function PlannerClient({
               onSwitch={(id) => {
                 setActiveTripId(id);
                 void touchTripAction(id);
+                const tabQ =
+                  plannerTab !== "planner" ? `?tab=${plannerTab}` : "";
+                if (tripRouteBase) {
+                  router.push(`/trip/${id}${tabQ}`);
+                }
               }}
               onNew={() => {
                 if (shouldBlockNewTripWizard(trips.length, maxActiveTripCap)) {
@@ -1467,6 +1541,47 @@ export function PlannerClient({
               </button>
             ) : null}
             <PlannerActionsMenu
+              adminSection={
+                activeTrip
+                  ? (close) => (
+                      <>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-4 py-2.5 text-left font-sans text-sm text-royal transition hover:bg-cream"
+                          onClick={() => {
+                            setAdminPanel("share");
+                            close();
+                          }}
+                        >
+                          Community sharing…
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-4 py-2.5 text-left font-sans text-sm text-royal transition hover:bg-cream"
+                          onClick={() => {
+                            setAdminPanel("family");
+                            close();
+                          }}
+                        >
+                          Family members…
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-4 py-2.5 text-left font-sans text-sm text-royal transition hover:bg-cream"
+                          onClick={() => {
+                            setAdminPanel("notes");
+                            close();
+                          }}
+                        >
+                          Day notes (all days)…
+                        </button>
+                      </>
+                    )
+                  : undefined
+              }
               onResetCruise={() => {
                 if (!activeTripId) return;
                 applyLocalPatch(activeTripId, {
@@ -1592,17 +1707,8 @@ export function PlannerClient({
           ) : null}
 
           {showPlannerShell ? (
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <ShareTripPanel
-                tripId={activeTrip.id}
-                isPublic={activeTrip.is_public}
-                publicSlug={activeTrip.public_slug}
-                siteUrl={siteUrl}
-                cloneCount={activeTrip.clone_count ?? 0}
-                viewCount={activeTrip.view_count ?? 0}
-              />
-              <FamilyInvitePanel tripId={activeTrip.id} userTier={userTier} />
-              <DayNotesPanel trip={activeTrip} tripId={activeTrip.id} />
+            <div className="mt-3">
+              <SkipLineLegend />
             </div>
           ) : null}
 
@@ -1692,32 +1798,45 @@ export function PlannerClient({
                         </div>
                       </div>
                     ) : null}
-                    <TripStatsCard
-                      trip={activeTrip}
-                      parks={calendarParks}
-                      destinationLabel={activeRegionLabel}
-                      onToast={showToast}
-                    />
-                    <div className="hidden md:block">
-                      <Calendar
-                        trip={activeTrip}
-                        parks={calendarParks}
-                        selectedParkId={selectedParkId}
-                        onAssign={onAssign}
-                        onClear={onClear}
-                        onNeedParkFirst={() => showHint("Pick a park first")}
-                        onAfterSlotClear={() => showToast("Slot cleared")}
-                        plannerRegionId={resolvePaletteRegionId(activeTrip)}
-                        temperatureUnit={temperatureUnit}
-                        onSaveDayNote={onSaveDayNote}
-                        timelineUnlocked={timelineUnlocked}
-                        onSlotTimeChange={onSlotTimeChange}
-                        ridePrioritiesByDay={ridePrioritiesByDayForActiveTrip}
-                        onRideDayPrioritiesUpdated={
-                          handleRideDayPrioritiesUpdated
-                        }
-                      />
-                    </div>
+                    <div className="relative min-w-0">
+                      {showGoToTodayPill ? (
+                        <button
+                          type="button"
+                          className="absolute right-1 top-1 z-20 min-h-11 rounded-full border border-gold/40 bg-gold/90 px-4 font-sans text-xs font-semibold text-royal shadow-md transition hover:bg-gold md:right-2 md:top-2"
+                          onClick={() =>
+                            openDayDetail(formatDateKey(new Date()))
+                          }
+                        >
+                          Go to today
+                        </button>
+                      ) : null}
+                      <div className="hidden md:block">
+                        <Calendar
+                          trip={activeTrip}
+                          parks={calendarParks}
+                          selectedParkId={selectedParkId}
+                          onAssign={onAssign}
+                          onClear={onClear}
+                          onNeedParkFirst={() =>
+                            showHint("Pick a park first")
+                          }
+                          onAfterSlotClear={() => showToast("Slot cleared")}
+                          plannerRegionId={resolvePaletteRegionId(activeTrip)}
+                          temperatureUnit={temperatureUnit}
+                          onSaveDayNote={onSaveDayNote}
+                          timelineUnlocked={timelineUnlocked}
+                          onSlotTimeChange={onSlotTimeChange}
+                          ridePrioritiesByDay={
+                            ridePrioritiesByDayForActiveTrip
+                          }
+                          onRideDayPrioritiesUpdated={
+                            handleRideDayPrioritiesUpdated
+                          }
+                          onOpenDayDetail={
+                            tripRouteBase ? openDayDetail : undefined
+                          }
+                        />
+                      </div>
                     <MobileDayView
                       trip={activeTrip}
                       parks={calendarParks}
@@ -1731,6 +1850,9 @@ export function PlannerClient({
                       ridePrioritiesByDay={ridePrioritiesByDayForActiveTrip}
                       onRideDayPrioritiesUpdated={
                         handleRideDayPrioritiesUpdated
+                      }
+                      onOpenDayDetail={
+                        tripRouteBase ? openDayDetail : undefined
                       }
                       onSelectPark={setSelectedParkId}
                       onMenuExportPdf={() =>
@@ -1747,6 +1869,13 @@ export function PlannerClient({
                       onSaveUserDayNote={onSaveDayNote}
                       timelineUnlocked={timelineUnlocked}
                       onSlotTimeChange={onSlotTimeChange}
+                    />
+                    </div>
+                    <TripStatsCard
+                      trip={activeTrip}
+                      parks={calendarParks}
+                      destinationLabel={activeRegionLabel}
+                      onToast={showToast}
                     />
                   </>
                 )}
@@ -1980,6 +2109,82 @@ export function PlannerClient({
         variant={tierLimitVariant}
         reason={tierLimitReason}
       />
+
+      {adminPanel && activeTrip ? (
+        <div
+          className="fixed inset-0 z-[103] flex items-center justify-center bg-royal/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="planner-admin-panel-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 cursor-default border-0 bg-transparent"
+            aria-label="Close"
+            onClick={() => setAdminPanel(null)}
+          />
+          <div className="relative z-10 max-h-[min(90vh,800px)] w-full max-w-lg overflow-y-auto rounded-2xl border border-gold/30 bg-cream p-5 shadow-xl">
+            <div className="mb-4 flex items-start justify-between gap-2">
+              <h2
+                id="planner-admin-panel-title"
+                className="font-display text-lg font-semibold text-royal"
+              >
+                {adminPanel === "share"
+                  ? "Community sharing"
+                  : adminPanel === "family"
+                    ? "Family members"
+                    : "Day notes (all days)"}
+              </h2>
+              <button
+                type="button"
+                className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-royal/15 bg-white text-lg text-royal transition hover:bg-cream"
+                aria-label="Close"
+                onClick={() => setAdminPanel(null)}
+              >
+                ✕
+              </button>
+            </div>
+            {adminPanel === "share" ? (
+              <ShareTripPanel
+                tripId={activeTrip.id}
+                isPublic={activeTrip.is_public}
+                publicSlug={activeTrip.public_slug}
+                siteUrl={siteUrl}
+                cloneCount={activeTrip.clone_count ?? 0}
+                viewCount={activeTrip.view_count ?? 0}
+              />
+            ) : adminPanel === "family" ? (
+              <FamilyInvitePanel
+                tripId={activeTrip.id}
+                userTier={userTier}
+              />
+            ) : (
+              <DayNotesPanel trip={activeTrip} tripId={activeTrip.id} />
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {dayDetailOpen && activeTrip && dayDateFromUrl && tripRouteBase ? (
+        <DayDetailLayer
+          trip={activeTrip}
+          dayDate={dayDateFromUrl}
+          tripBasePath={tripRouteBase}
+          parks={calendarParks}
+          ridePriorities={
+            ridePrioritiesByDayForActiveTrip[dayDateFromUrl] ?? []
+          }
+          productTier={productTier}
+          plannerRegionId={resolvePaletteRegionId(activeTrip)}
+          temperatureUnit={temperatureUnit}
+          onClose={closeDayDetail}
+          onPrioritiesUpdated={(items) =>
+            handleRideDayPrioritiesUpdated(dayDateFromUrl, items)
+          }
+          onSaveDayNote={onSaveDayNote}
+          onOpenSmartPlan={() => setSmartOpen(true)}
+        />
+      ) : null}
 
       {surpriseUndo ? (
         <div className="fixed bottom-24 left-1/2 z-[92] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-2xl border border-royal/15 bg-white px-4 py-3 shadow-xl safe-area-inset-bottom">

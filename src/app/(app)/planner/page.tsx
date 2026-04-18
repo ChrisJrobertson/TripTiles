@@ -1,54 +1,15 @@
-import { PlannerClient } from "@/app/(app)/planner/PlannerClient";
-import { getPaymentsForTripIds } from "@/actions/payments";
-import { getRidePrioritiesForTripIds } from "@/actions/ride-priorities";
-import { getAchievementDefinitions } from "@/lib/db/achievements";
-import { getSuccessfulAiGenerationCountsForTrips } from "@/lib/db/ai-generations";
-import {
-  getCustomTileLimit,
-  getUserCustomTiles,
-} from "@/lib/db/custom-tiles";
-import { getAllParks } from "@/lib/db/parks";
-import { getAllRegions } from "@/lib/db/regions";
 import { getActiveTripForUser, getUserTrips } from "@/lib/db/trips";
-import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
-import { getPublicSiteUrl } from "@/lib/site";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
-import {
-  isTierLoadFailure,
-  tierLoadFailureUserMessage,
-} from "@/lib/supabase/tier-load-error";
-import {
-  readProfileRow,
-  tierFromProfileRow,
-} from "@/lib/supabase/profile-read";
-import { createClient, getCurrentUser } from "@/lib/supabase/server";
-import {
-  formatProductTierName,
-  getUserTier,
-  maxActiveTripsForUser,
-  type Tier,
-} from "@/lib/tier";
-import type { TemperatureUnit, UserTier } from "@/lib/types";
-import type { TripRidePriority } from "@/types/attractions";
-import type { TripPayment } from "@/types/payments";
+import { getCurrentUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
-/** Smart Plan server action can run up to Vercel Pro limit while generating. */
-export const maxDuration = 60;
 
 function firstParam(
   v: string | string[] | undefined,
 ): string | undefined {
   if (Array.isArray(v)) return v[0];
   return v;
-}
-
-function normalisePlannerTab(
-  raw: string | undefined,
-): "planner" | "budget" | "payments" | "checklist" {
-  if (raw === "budget" || raw === "payments" || raw === "checklist") return raw;
-  return "planner";
 }
 
 export default async function PlannerPage({
@@ -64,17 +25,8 @@ export default async function PlannerPage({
             Configuration needed
           </h1>
           <p className="mt-3 font-sans text-sm text-royal/70">
-            Add{" "}
-            <code className="rounded bg-cream px-1">NEXT_PUBLIC_SUPABASE_URL</code>{" "}
-            and either{" "}
-            <code className="rounded bg-cream px-1">
-              NEXT_PUBLIC_SUPABASE_ANON_KEY
-            </code>{" "}
-            or{" "}
-            <code className="rounded bg-cream px-1">
-              NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-            </code>{" "}
-            to <code className="rounded bg-cream px-1">.env.local</code>, then
+            Add Supabase environment variables to{" "}
+            <code className="rounded bg-cream px-1">.env.local</code>, then
             restart the dev server.
           </p>
         </div>
@@ -90,151 +42,15 @@ export default async function PlannerPage({
     redirect("/onboarding");
   }
 
+  const active = await getActiveTripForUser(user.id);
+  const tripId = active?.id ?? trips[0]!.id;
+
   const sp = await searchParams;
-  const purchaseHighlight =
-    firstParam(sp.purchase) === "pending" ||
-    firstParam(sp.checkout) === "success" ||
-    firstParam(sp.upgraded) === "pending";
-
-  const initialOpenSmartPlan = firstParam(sp.openSmartPlan) === "true";
-  const initialAutoGenerate = firstParam(sp.autoGenerate) === "true";
-  const plannerTab = normalisePlannerTab(firstParam(sp.tab));
-
-  const tileScrubRaw = firstParam(sp.tile_scrubbed);
-  const initialTileScrubNotice =
-    tileScrubRaw !== undefined &&
-    tileScrubRaw !== "" &&
-    !Number.isNaN(Number(tileScrubRaw))
-      ? Math.max(0, Math.floor(Number(tileScrubRaw)))
-      : null;
-
-  const supabase = await createClient();
-  type PlannerProfileRow = {
-    tier: string;
-    temperature_unit?: string | null;
-    email_marketing_opt_out?: boolean | null;
-    stripe_customer_id?: string | null;
-  };
-  const profileRead = await readProfileRow<PlannerProfileRow>(
-    supabase,
-    user.id,
-    "tier, temperature_unit, email_marketing_opt_out, stripe_customer_id",
-  );
-  if (!profileRead.ok) {
-    return (
-      <ProfileLoadErrorPanel detail={profileRead.message} />
-    );
+  const qs = new URLSearchParams();
+  for (const [k, raw] of Object.entries(sp)) {
+    const v = firstParam(raw);
+    if (v != null && v !== "") qs.set(k, v);
   }
-  const pr = profileRead.data;
-  const profileBundle: {
-    tier: UserTier;
-    temperatureUnit: TemperatureUnit;
-    emailMarketingOptOut: boolean;
-  } = {
-    tier: tierFromProfileRow(pr),
-    temperatureUnit: pr.temperature_unit === "f" ? "f" : "c",
-    emailMarketingOptOut: pr.email_marketing_opt_out === true,
-  };
-
-  const [
-    parks,
-    regions,
-    activeTrip,
-    achievementDefs,
-    customTiles,
-    customTileLimit,
-  ] = await Promise.all([
-      getAllParks(),
-      getAllRegions(),
-      getActiveTripForUser(user.id),
-      getAchievementDefinitions(),
-      getUserCustomTiles(user.id),
-      getCustomTileLimit(user.id),
-    ]);
-
-  const tripIds = trips.map((t) => t.id);
-  const aiGenerationCountsByTrip =
-    await getSuccessfulAiGenerationCountsForTrips(tripIds, user.id);
-
-  const ridePrioritiesFlat = await getRidePrioritiesForTripIds(tripIds);
-  const initialRidePrioritiesByTripId = ridePrioritiesFlat.reduce<
-    Record<string, TripRidePriority[]>
-  >((acc, row) => {
-    if (!acc[row.trip_id]) acc[row.trip_id] = [];
-    acc[row.trip_id]!.push(row);
-    return acc;
-  }, {});
-
-  const paymentsFlat = await getPaymentsForTripIds(tripIds);
-  const initialPaymentsByTripId = paymentsFlat.reduce<
-    Record<string, TripPayment[]>
-  >((acc, row) => {
-    if (!acc[row.trip_id]) acc[row.trip_id] = [];
-    acc[row.trip_id]!.push(row);
-    return acc;
-  }, {});
-  for (const id of tripIds) {
-    if (!initialPaymentsByTripId[id]) initialPaymentsByTripId[id] = [];
-  }
-  for (const id of tripIds) {
-    initialPaymentsByTripId[id]!.sort((a, b) => {
-      const da = a.due_date;
-      const db = b.due_date;
-      if (da == null && db == null) return a.sort_order - b.sort_order;
-      if (da == null) return 1;
-      if (db == null) return -1;
-      if (da < db) return -1;
-      if (da > db) return 1;
-      return a.sort_order - b.sort_order;
-    });
-  }
-
-  const siteUrl = getPublicSiteUrl() || "http://localhost:3001";
-  const profileTier = profileBundle.tier;
-  const initialTemperatureUnit = profileBundle.temperatureUnit;
-  const emailMarketingOptOut = profileBundle.emailMarketingOptOut;
-  const stripeCustomerId = pr.stripe_customer_id?.trim() || null;
-
-  let productTier: Tier = "day_tripper";
-  let maxActiveTripCap: number | "unlimited" = 1;
-  try {
-    productTier = await getUserTier(user.id);
-    maxActiveTripCap = await maxActiveTripsForUser(user.id);
-  } catch (e) {
-    if (isTierLoadFailure(e)) {
-      return (
-        <ProfileLoadErrorPanel detail={tierLoadFailureUserMessage()} />
-      );
-    }
-    throw e;
-  }
-
-  return (
-    <PlannerClient
-      initialTrips={trips}
-      parks={parks}
-      regions={regions}
-      initialOpenSmartPlan={initialOpenSmartPlan}
-      initialAutoGenerate={initialAutoGenerate}
-      initialActiveTripId={activeTrip?.id ?? null}
-      userEmail={user.email ?? ""}
-      userTier={profileTier}
-      productTier={productTier}
-      productPlanLabel={formatProductTierName(productTier)}
-      maxActiveTripCap={maxActiveTripCap}
-      stripeCustomerId={stripeCustomerId}
-      achievementDefs={achievementDefs}
-      aiGenerationCountsByTrip={aiGenerationCountsByTrip}
-      siteUrl={siteUrl}
-      purchaseHighlight={purchaseHighlight}
-      initialTileScrubNotice={initialTileScrubNotice}
-      initialCustomTiles={customTiles}
-      customTileLimit={customTileLimit}
-      plannerTab={plannerTab}
-      temperatureUnit={initialTemperatureUnit}
-      emailMarketingOptOut={emailMarketingOptOut}
-      initialRidePrioritiesByTripId={initialRidePrioritiesByTripId}
-      initialPaymentsByTripId={initialPaymentsByTripId}
-    />
-  );
+  const q = qs.toString();
+  redirect(q ? `/trip/${tripId}?${q}` : `/trip/${tripId}`);
 }

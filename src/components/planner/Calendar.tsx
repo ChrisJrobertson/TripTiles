@@ -69,6 +69,11 @@ type Props = {
     dayDate: string,
     items: TripRidePriority[],
   ) => void;
+  /**
+   * When set (logged-in trip planner), opens `/trip/.../day/...` instead of an
+   * inline expander. Replaces the grid day-note editor with the day detail view.
+   */
+  onOpenDayDetail?: (dateKey: string, options?: { focusNotes?: boolean }) => void;
 };
 
 const SLOTS: { key: SlotType; label: string; area: string }[] = [
@@ -181,6 +186,7 @@ export function Calendar({
   onSlotTimeChange,
   ridePrioritiesByDay = {},
   onRideDayPrioritiesUpdated,
+  onOpenDayDetail,
 }: Props) {
   const parkById = new Map(parks.map((p) => [p.id, p]));
   const themeKey = normaliseThemeKey(trip.colour_theme);
@@ -204,6 +210,7 @@ export function Calendar({
     null,
   );
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  const useDayDetailShell = Boolean(onOpenDayDetail) && !readOnly;
   const [dayPopoverTab, setDayPopoverTab] = useState<"details" | "timeline">(
     "details",
   );
@@ -366,18 +373,44 @@ export function Calendar({
               return (
                 <div
                   key={key}
-                  className="flex min-h-[8rem] flex-col rounded-md border border-royal/15 bg-white sm:min-h-[9rem] md:min-h-[5.75rem]"
+                  className={`flex min-h-[8rem] flex-col rounded-md border border-royal/15 bg-white sm:min-h-[9rem] md:min-h-[5.75rem]${
+                    useDayDetailShell && onOpenDayDetail && !readOnly
+                      ? " cursor-pointer"
+                      : ""
+                  }`}
+                  onClick={
+                    useDayDetailShell && onOpenDayDetail && !readOnly
+                      ? (e) => {
+                          if (
+                            (e.target as HTMLElement).closest(
+                              "[data-day-interactive]",
+                            )
+                          )
+                            return;
+                          onOpenDayDetail(key);
+                        }
+                      : undefined
+                  }
                 >
                   <div className="flex items-center justify-between gap-0.5 border-b border-royal/10 px-1 py-0.5 md:py-1">
-                    {!readOnly && onRideDayPrioritiesUpdated ? (
+                    {!readOnly && (onRideDayPrioritiesUpdated || onOpenDayDetail) ? (
                       <button
                         type="button"
-                        className="min-w-0 flex flex-1 flex-wrap items-center justify-center gap-1 text-center transition hover:bg-cream/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
-                        aria-expanded={expandedDay === key}
-                        aria-label={`${expandedDay === key ? "Collapse" : "Expand"} ride plan for ${headingDate}`}
-                        onClick={() =>
-                          setExpandedDay((cur) => (cur === key ? null : key))
+                        data-day-interactive
+                        className="min-h-11 min-w-0 flex flex-1 flex-wrap items-center justify-center gap-1 text-center transition hover:bg-cream/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+                        aria-expanded={
+                          useDayDetailShell ? false : expandedDay === key
                         }
+                        aria-label={`Open day detail for ${headingDate}`}
+                        onClick={() => {
+                          if (useDayDetailShell && onOpenDayDetail) {
+                            onOpenDayDetail(key);
+                            return;
+                          }
+                          if (onRideDayPrioritiesUpdated) {
+                            setExpandedDay((cur) => (cur === key ? null : key));
+                          }
+                        }}
                       >
                       {dc ? (
                         <span
@@ -407,12 +440,21 @@ export function Calendar({
                       <span className="font-sans text-[0.6rem] font-medium uppercase text-royal/60 sm:text-[0.65rem]">
                         {mon}
                       </span>
-                      <span
-                        className="font-sans text-[0.55rem] text-royal/45"
-                        aria-hidden
-                      >
-                        {expandedDay === key ? "▲" : "▼"}
-                      </span>
+                      {!useDayDetailShell ? (
+                        <span
+                          className="font-sans text-[0.55rem] text-royal/45"
+                          aria-hidden
+                        >
+                          {expandedDay === key ? "▲" : "▼"}
+                        </span>
+                      ) : (
+                        <span
+                          className="font-sans text-[0.55rem] text-royal/45"
+                          aria-hidden
+                        >
+                          →
+                        </span>
+                      )}
                       {rideCount > 0 ? (
                         <span className="font-sans text-[0.55rem] font-medium text-royal/55">
                           🎢 {rideCount}
@@ -459,6 +501,7 @@ export function Calendar({
                     {hasInsight ? (
                       <button
                         type="button"
+                        data-day-interactive
                         data-day-note-toggle
                         className="shrink-0 rounded p-0.5 text-base leading-none text-royal/70 transition hover:bg-cream hover:text-royal focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
                         aria-label={`Day notes for ${headingDate}`}
@@ -482,7 +525,10 @@ export function Calendar({
                       <span className="w-6 shrink-0" aria-hidden />
                     )}
                   </div>
-                  <div className="planner-slot-grid flex-1 p-0.5">
+                  <div
+                    className="planner-slot-grid flex-1 p-0.5"
+                    data-day-interactive
+                  >
                     {SLOTS.map(({ key: slot, label, area }) => {
                       const pid = getParkIdFromSlotValue(ass[slot]);
                       const park = pid ? parkById.get(pid) : undefined;
@@ -602,8 +648,30 @@ export function Calendar({
                       );
                     })}
                   </div>
-                  {!readOnly && onSaveDayNote ? (
-                    <div className="border-t border-royal/10 px-1 py-1">
+                  {!readOnly && onSaveDayNote && useDayDetailShell && onOpenDayDetail ? (
+                    <div className="border-t border-royal/10 px-1 py-1" data-day-interactive>
+                      <button
+                        type="button"
+                        className="min-h-11 w-full rounded px-1 py-1 text-left font-sans text-xs italic text-royal/55 transition hover:bg-cream/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+                        onClick={() => onOpenDayDetail(key, { focusNotes: true })}
+                      >
+                        {dayUserNote(trip, key) ? (
+                          <>
+                            <span aria-hidden>📝 </span>
+                            <span className="line-clamp-1">
+                              {dayUserNote(trip, key).slice(0, 60)}
+                              {dayUserNote(trip, key).length > 60 ? "…" : ""}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="not-italic text-royal/45">
+                            Add note…
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                  ) : !readOnly && onSaveDayNote ? (
+                    <div className="border-t border-royal/10 px-1 py-1" data-day-interactive>
                       {editingNoteKey === key ? (
                         <div className="space-y-0.5">
                           <textarea
@@ -671,7 +739,8 @@ export function Calendar({
               );
             })}
           </div>
-          {expandedDay &&
+          {!useDayDetailShell &&
+          expandedDay &&
           week.some((d) => formatDateKey(d) === expandedDay) &&
           !readOnly &&
           onRideDayPrioritiesUpdated ? (

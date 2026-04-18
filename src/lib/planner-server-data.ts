@@ -1,0 +1,280 @@
+import { getPaymentsForTripIds } from "@/actions/payments";
+import { getRidePrioritiesForTripIds } from "@/actions/ride-priorities";
+import { getAchievementDefinitions } from "@/lib/db/achievements";
+import { getSuccessfulAiGenerationCountsForTrips } from "@/lib/db/ai-generations";
+import {
+  getCustomTileLimit,
+  getUserCustomTiles,
+} from "@/lib/db/custom-tiles";
+import { getAllParks } from "@/lib/db/parks";
+import { getAllRegions } from "@/lib/db/regions";
+import { getActiveTripForUser, getUserTrips } from "@/lib/db/trips";
+import {
+  readProfileRow,
+  tierFromProfileRow,
+} from "@/lib/supabase/profile-read";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  formatProductTierName,
+  getUserTier,
+  maxActiveTripsForUser,
+  type Tier,
+} from "@/lib/tier";
+import type { TemperatureUnit, UserTier } from "@/lib/types";
+import type { TripRidePriority } from "@/types/attractions";
+import type { TripPayment } from "@/types/payments";
+import { isTierLoadFailure, tierLoadFailureUserMessage } from "@/lib/supabase/tier-load-error";
+
+export type PlannerProfileBundle = {
+  tier: UserTier;
+  temperatureUnit: TemperatureUnit;
+  emailMarketingOptOut: boolean;
+  stripeCustomerId: string | null;
+};
+
+export type PlannerServerData =
+  | { ok: true; props: PlannerClientServerProps }
+  | {
+      ok: false;
+      error: "profile" | "tier" | "trip_not_found";
+      message: string;
+    };
+
+export type PlannerClientServerProps = {
+  initialTrips: Awaited<ReturnType<typeof getUserTrips>>;
+  parks: Awaited<ReturnType<typeof getAllParks>>;
+  regions: Awaited<ReturnType<typeof getAllRegions>>;
+  initialActiveTripId: string | null;
+  userEmail: string;
+  profileTier: UserTier;
+  productTier: Tier;
+  productPlanLabel: string;
+  maxActiveTripCap: number | "unlimited";
+  stripeCustomerId: string | null;
+  achievementDefs: Awaited<ReturnType<typeof getAchievementDefinitions>>;
+  aiGenerationCountsByTrip: Record<string, number>;
+  siteUrl: string;
+  purchaseHighlight: boolean;
+  initialTileScrubNotice: number | null;
+  initialCustomTiles: Awaited<ReturnType<typeof getUserCustomTiles>>;
+  customTileLimit: number;
+  plannerTab: "planner" | "budget" | "payments" | "checklist";
+  initialTemperatureUnit: TemperatureUnit;
+  emailMarketingOptOut: boolean;
+  initialRidePrioritiesByTripId: Record<string, TripRidePriority[]>;
+  initialPaymentsByTripId: Record<string, TripPayment[]>;
+  initialOpenSmartPlan: boolean;
+  initialAutoGenerate: boolean;
+};
+
+function firstParam(
+  v: string | string[] | undefined,
+): string | undefined {
+  if (Array.isArray(v)) return v[0];
+  return v;
+}
+
+function normalisePlannerTab(
+  raw: string | undefined,
+): "planner" | "budget" | "payments" | "checklist" {
+  if (raw === "budget" || raw === "payments" || raw === "checklist") return raw;
+  return "planner";
+}
+
+export async function loadPlannerClientServerData(input: {
+  supabase: SupabaseClient;
+  userId: string;
+  userEmail: string;
+  siteUrl: string;
+  searchParams: Record<string, string | string[] | undefined>;
+  /** When set, this trip must appear in the user's trip list (otherwise invalid). */
+  forcedTripId: string | null;
+}): Promise<PlannerServerData> {
+  const { supabase, userId, userEmail, siteUrl, searchParams: sp, forcedTripId } =
+    input;
+
+  const trips = await getUserTrips(userId);
+  if (trips.length === 0) {
+    return {
+      ok: true,
+      props: {
+        initialTrips: [],
+        parks: await getAllParks(),
+        regions: await getAllRegions(),
+        initialActiveTripId: null,
+        userEmail,
+        profileTier: "free",
+        productTier: "day_tripper",
+        productPlanLabel: formatProductTierName("day_tripper"),
+        maxActiveTripCap: 1,
+        stripeCustomerId: null,
+        achievementDefs: await getAchievementDefinitions(),
+        aiGenerationCountsByTrip: {},
+        siteUrl,
+        purchaseHighlight: false,
+        initialTileScrubNotice: null,
+        initialCustomTiles: [],
+        customTileLimit: 0,
+        plannerTab: "planner",
+        initialTemperatureUnit: "c",
+        emailMarketingOptOut: false,
+        initialRidePrioritiesByTripId: {},
+        initialPaymentsByTripId: {},
+        initialOpenSmartPlan: false,
+        initialAutoGenerate: false,
+      },
+    };
+  }
+
+  if (forcedTripId && !trips.some((t) => t.id === forcedTripId)) {
+    return {
+      ok: false,
+      error: "trip_not_found",
+      message: "Trip not found.",
+    };
+  }
+
+  const purchaseHighlight =
+    firstParam(sp.purchase) === "pending" ||
+    firstParam(sp.checkout) === "success" ||
+    firstParam(sp.upgraded) === "pending";
+
+  const initialOpenSmartPlan = firstParam(sp.openSmartPlan) === "true";
+  const initialAutoGenerate = firstParam(sp.autoGenerate) === "true";
+  const plannerTab = normalisePlannerTab(firstParam(sp.tab));
+
+  const tileScrubRaw = firstParam(sp.tile_scrubbed);
+  const initialTileScrubNotice =
+    tileScrubRaw !== undefined &&
+    tileScrubRaw !== "" &&
+    !Number.isNaN(Number(tileScrubRaw))
+      ? Math.max(0, Math.floor(Number(tileScrubRaw)))
+      : null;
+
+  type PlannerProfileRow = {
+    tier: string;
+    temperature_unit?: string | null;
+    email_marketing_opt_out?: boolean | null;
+    stripe_customer_id?: string | null;
+  };
+  const profileRead = await readProfileRow<PlannerProfileRow>(
+    supabase,
+    userId,
+    "tier, temperature_unit, email_marketing_opt_out, stripe_customer_id",
+  );
+  if (!profileRead.ok) {
+    return { ok: false, error: "profile", message: profileRead.message };
+  }
+  const pr = profileRead.data;
+  const profileBundle: PlannerProfileBundle = {
+    tier: tierFromProfileRow(pr),
+    temperatureUnit: pr.temperature_unit === "f" ? "f" : "c",
+    emailMarketingOptOut: pr.email_marketing_opt_out === true,
+    stripeCustomerId: pr.stripe_customer_id?.trim() || null,
+  };
+
+  const [
+    parks,
+    regions,
+    activeTrip,
+    achievementDefs,
+    customTiles,
+    customTileLimit,
+  ] = await Promise.all([
+    getAllParks(),
+    getAllRegions(),
+    getActiveTripForUser(userId),
+    getAchievementDefinitions(),
+    getUserCustomTiles(userId),
+    getCustomTileLimit(userId),
+  ]);
+
+  const tripIds = trips.map((t) => t.id);
+  const aiGenerationCountsByTrip =
+    await getSuccessfulAiGenerationCountsForTrips(tripIds, userId);
+
+  const ridePrioritiesFlat = await getRidePrioritiesForTripIds(tripIds);
+  const initialRidePrioritiesByTripId = ridePrioritiesFlat.reduce<
+    Record<string, TripRidePriority[]>
+  >((acc, row) => {
+    if (!acc[row.trip_id]) acc[row.trip_id] = [];
+    acc[row.trip_id]!.push(row);
+    return acc;
+  }, {});
+
+  const paymentsFlat = await getPaymentsForTripIds(tripIds);
+  const initialPaymentsByTripId = paymentsFlat.reduce<
+    Record<string, TripPayment[]>
+  >((acc, row) => {
+    if (!acc[row.trip_id]) acc[row.trip_id] = [];
+    acc[row.trip_id]!.push(row);
+    return acc;
+  }, {});
+  for (const id of tripIds) {
+    if (!initialPaymentsByTripId[id]) initialPaymentsByTripId[id] = [];
+  }
+  for (const id of tripIds) {
+    initialPaymentsByTripId[id]!.sort((a, b) => {
+      const da = a.due_date;
+      const db = b.due_date;
+      if (da == null && db == null) return a.sort_order - b.sort_order;
+      if (da == null) return 1;
+      if (db == null) return -1;
+      if (da < db) return -1;
+      if (da > db) return 1;
+      return a.sort_order - b.sort_order;
+    });
+  }
+
+  let productTier: Tier = "day_tripper";
+  let maxActiveTripCap: number | "unlimited" = 1;
+  try {
+    productTier = await getUserTier(userId);
+    maxActiveTripCap = await maxActiveTripsForUser(userId);
+  } catch (e) {
+    if (isTierLoadFailure(e)) {
+      return {
+        ok: false,
+        error: "tier",
+        message: tierLoadFailureUserMessage(),
+      };
+    }
+    throw e;
+  }
+
+  const preferredActive =
+    forcedTripId ??
+    activeTrip?.id ??
+    trips[0]?.id ??
+    null;
+
+  return {
+    ok: true,
+    props: {
+      initialTrips: trips,
+      parks,
+      regions,
+      initialActiveTripId: preferredActive,
+      userEmail,
+      profileTier: profileBundle.tier,
+      productTier,
+      productPlanLabel: formatProductTierName(productTier),
+      maxActiveTripCap,
+      stripeCustomerId: profileBundle.stripeCustomerId,
+      achievementDefs,
+      aiGenerationCountsByTrip,
+      siteUrl,
+      purchaseHighlight,
+      initialTileScrubNotice,
+      initialCustomTiles: customTiles,
+      customTileLimit,
+      plannerTab,
+      initialTemperatureUnit: profileBundle.temperatureUnit,
+      emailMarketingOptOut: profileBundle.emailMarketingOptOut,
+      initialRidePrioritiesByTripId,
+      initialPaymentsByTripId,
+      initialOpenSmartPlan,
+      initialAutoGenerate,
+    },
+  };
+}

@@ -155,6 +155,14 @@ export type MobileDayViewProps = {
     dayDate: string,
     items: TripRidePriority[],
   ) => void;
+  /**
+   * When set (trip planner on `/trip/...`), Rides opens day detail instead of the
+   * bottom sheet; inline day notes open the day detail notes section.
+   */
+  onOpenDayDetail?: (
+    dateKey: string,
+    options?: { focusNotes?: boolean },
+  ) => void;
 };
 
 function buildTripDays(
@@ -360,6 +368,7 @@ export function MobileDayView({
   onSlotTimeChange,
   ridePrioritiesByDay = {},
   onRideDayPrioritiesUpdated,
+  onOpenDayDetail,
 }: MobileDayViewProps) {
   void _crowdSummary;
   const notesPanelId = useId();
@@ -493,7 +502,13 @@ export function MobileDayView({
       }
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
         return;
-      if (parksDrawerOpen || menuOpen || dayNotesOpen || ridesSheetOpen) return;
+      if (
+        parksDrawerOpen ||
+        menuOpen ||
+        dayNotesOpen ||
+        ridesSheetOpen
+      )
+        return;
       if (e.key === "ArrowRight") {
         e.preventDefault();
         setActiveIndex((i) => Math.min(days.length - 1, i + 1));
@@ -680,7 +695,13 @@ export function MobileDayView({
           {!readOnly && onRideDayPrioritiesUpdated ? (
             <button
               type="button"
-              onClick={() => setRidesSheetOpen(true)}
+              onClick={() => {
+                if (onOpenDayDetail) {
+                  onOpenDayDetail(activeDay.dateKey);
+                } else {
+                  setRidesSheetOpen(true);
+                }
+              }}
               className="mt-4 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg border border-royal/15 bg-white py-3 font-sans text-sm font-medium text-royal shadow-sm transition active:bg-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
             >
               <span aria-hidden>🎢</span>
@@ -693,7 +714,28 @@ export function MobileDayView({
             </button>
           ) : null}
 
-          {!readOnly && onSaveUserDayNote ? (
+          {!readOnly && onSaveUserDayNote && onOpenDayDetail ? (
+            <div className="mt-4 rounded-xl border border-royal/10 bg-white/90 p-3">
+              <div className="flex min-h-11 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span className="font-sans text-xs font-semibold text-royal/70">
+                  Day note
+                </span>
+                <button
+                  type="button"
+                  className="min-h-11 w-full rounded-lg border border-royal/15 bg-cream px-3 py-2 text-left font-sans text-sm font-medium text-royal transition hover:bg-white sm:w-auto"
+                  onClick={() =>
+                    onOpenDayDetail(activeDay.dateKey, { focusNotes: true })
+                  }
+                >
+                  {activeDay.userNote ? (
+                    <span className="line-clamp-2">{activeDay.userNote}</span>
+                  ) : (
+                    <span className="italic text-royal/55">Add note…</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          ) : !readOnly && onSaveUserDayNote ? (
             <div className="mt-4 rounded-xl border border-royal/10 bg-white/90 p-3">
               <div className="flex min-h-11 items-center justify-between gap-2">
                 <span className="font-sans text-xs font-semibold text-royal/70">
@@ -783,7 +825,9 @@ export function MobileDayView({
         </div>
       </div>
 
-      {isTodayInRange && safeIndex !== todayIndex ? (
+      {isTodayInRange &&
+      safeIndex !== todayIndex &&
+      !onOpenDayDetail ? (
         <button
           type="button"
           onClick={() => setActiveIndex(todayIndex)}
@@ -897,7 +941,9 @@ export function MobileDayView({
         </div>
       </div>
 
-      {!readOnly && onRideDayPrioritiesUpdated ? (
+      {!readOnly &&
+      onRideDayPrioritiesUpdated &&
+      !onOpenDayDetail ? (
         <MobileRidesSheet
           open={ridesSheetOpen}
           onClose={() => setRidesSheetOpen(false)}
