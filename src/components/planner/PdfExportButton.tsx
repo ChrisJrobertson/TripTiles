@@ -57,6 +57,7 @@ export function PdfExportButton({
             includeNotes={withNotes}
             budgetItems={result.budgetItems}
             checklistItems={result.checklistItems}
+            tripPayments={result.tripPayments}
             temperatureUnit={result.temperatureUnit}
           />,
         ).toBlob();

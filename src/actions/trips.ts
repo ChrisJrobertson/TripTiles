@@ -853,6 +853,37 @@ export async function cloneTripAction(
       }
     }
 
+    const { data: sourcePayments } = await supabase
+      .from("trip_payments")
+      .select("label, amount_pence, currency, booking_date, due_date, sort_order")
+      .eq("trip_id", sourceTripId);
+    if (sourcePayments?.length) {
+      const clonedPay = sourcePayments.map(
+        (r: {
+          label: string;
+          amount_pence: number;
+          currency: string;
+          booking_date: string | null;
+          due_date: string | null;
+          sort_order: number;
+        }) => ({
+          trip_id: newTripId,
+          label: r.label,
+          amount_pence: r.amount_pence,
+          currency: r.currency,
+          booking_date: r.booking_date,
+          due_date: r.due_date,
+          sort_order: r.sort_order,
+        }),
+      );
+      const { error: payErr } = await supabase
+        .from("trip_payments")
+        .insert(clonedPay);
+      if (payErr) {
+        console.warn("Clone trip payments skipped:", payErr.message);
+      }
+    }
+
     const seedClone = await seedTripChecklistIfEmptyAction({
       tripId: newTripId,
       regionId: source.region_id ?? "orlando",

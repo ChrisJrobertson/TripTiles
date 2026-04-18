@@ -30,6 +30,7 @@ import type {
   TripBudgetItem,
   TripChecklistItem,
 } from "@/lib/types";
+import type { TripPayment } from "@/types/payments";
 import {
   Document,
   Link,
@@ -292,6 +293,25 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     paddingLeft: 6,
   },
+  paymentsPdfBlock: {
+    marginBottom: 14,
+    padding: 12,
+    backgroundColor: COLOURS.cream,
+    borderLeftWidth: 3,
+    borderLeftColor: COLOURS.gold,
+  },
+  paymentPdfLine: {
+    fontSize: 9,
+    color: COLOURS.royal,
+    marginBottom: 3,
+    paddingLeft: 4,
+  },
+  paymentPdfTotal: {
+    fontSize: 10,
+    fontWeight: "bold",
+    color: COLOURS.royal,
+    marginTop: 8,
+  },
   packingItemLine: {
     fontSize: 10,
     color: COLOURS.royal,
@@ -411,6 +431,8 @@ export interface TripPDFProps {
   includeNotes?: boolean;
   budgetItems?: TripBudgetItem[];
   checklistItems?: TripChecklistItem[];
+  /** Shown on the itinerary page when `includeNotes` is true (not in clean printable). */
+  tripPayments?: TripPayment[];
   temperatureUnit?: TemperatureUnit;
 }
 
@@ -425,6 +447,7 @@ export function TripPDF({
   includeNotes = true,
   budgetItems = [],
   checklistItems = [],
+  tripPayments = [],
   temperatureUnit = "c",
 }: TripPDFProps) {
   const itemsById = new Map<string, { name: string; icon?: string | null }>();
@@ -482,6 +505,32 @@ export function TripPDF({
     arr.push(it);
     budgetByCat.set(cat, arr);
   }
+
+  const sortedTripPayments = [...tripPayments].sort((a, b) => {
+    const da = a.due_date;
+    const db = b.due_date;
+    if (da == null && db == null) return a.sort_order - b.sort_order;
+    if (da == null) return 1;
+    if (db == null) return -1;
+    if (da < db) return -1;
+    if (da > db) return 1;
+    return a.sort_order - b.sort_order;
+  });
+
+  const paymentTotalsGbp = sortedTripPayments
+    .filter((p) => p.currency === "GBP")
+    .reduce((s, p) => s + p.amount_pence, 0);
+  const paymentTotalsUsd = sortedTripPayments
+    .filter((p) => p.currency === "USD")
+    .reduce((s, p) => s + p.amount_pence, 0);
+
+  const paymentPdfTotalsText =
+    [
+      paymentTotalsGbp > 0 ? formatPdfMoney(paymentTotalsGbp / 100, "GBP") : "",
+      paymentTotalsUsd > 0 ? formatPdfMoney(paymentTotalsUsd / 100, "USD") : "",
+    ]
+      .filter(Boolean)
+      .join(" + ") || formatPdfMoney(0, "GBP");
 
   const hasAppendixContent =
     days.some((dayKey) => {
@@ -590,6 +639,21 @@ export function TripPDF({
                 <Text style={styles.legendText}>💡 Has tips (day notes)</Text>
               </View>
             </View>
+          </View>
+        ) : null}
+        {includeNotes && sortedTripPayments.length > 0 ? (
+          <View style={styles.paymentsPdfBlock} wrap>
+            <Text style={styles.sectionTitle}>Payments</Text>
+            {sortedTripPayments.map((p) => (
+              <Text key={p.id} style={styles.paymentPdfLine}>
+                {p.label} —{" "}
+                {formatPdfMoney(p.amount_pence / 100, p.currency)}
+                {p.due_date ? ` · due ${p.due_date}` : ""}
+              </Text>
+            ))}
+            <Text style={styles.paymentPdfTotal}>
+              Totals: {paymentPdfTotalsText}
+            </Text>
           </View>
         ) : null}
         <Text style={styles.sectionTitle}>Itinerary calendar</Text>

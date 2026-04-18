@@ -1,4 +1,5 @@
 import { PlannerClient } from "@/app/(app)/planner/PlannerClient";
+import { getPaymentsForTripIds } from "@/actions/payments";
 import { getRidePrioritiesForTripIds } from "@/actions/ride-priorities";
 import { getAchievementDefinitions } from "@/lib/db/achievements";
 import { getSuccessfulAiGenerationCountsForTrips } from "@/lib/db/ai-generations";
@@ -19,6 +20,7 @@ import {
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type { TemperatureUnit, UserTier } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
+import type { TripPayment } from "@/types/payments";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -34,8 +36,8 @@ function firstParam(
 
 function normalisePlannerTab(
   raw: string | undefined,
-): "planner" | "budget" | "checklist" {
-  if (raw === "budget" || raw === "checklist") return raw;
+): "planner" | "budget" | "payments" | "checklist" {
+  if (raw === "budget" || raw === "payments" || raw === "checklist") return raw;
   return "planner";
 }
 
@@ -152,6 +154,30 @@ export default async function PlannerPage({
     return acc;
   }, {});
 
+  const paymentsFlat = await getPaymentsForTripIds(tripIds);
+  const initialPaymentsByTripId = paymentsFlat.reduce<
+    Record<string, TripPayment[]>
+  >((acc, row) => {
+    if (!acc[row.trip_id]) acc[row.trip_id] = [];
+    acc[row.trip_id]!.push(row);
+    return acc;
+  }, {});
+  for (const id of tripIds) {
+    if (!initialPaymentsByTripId[id]) initialPaymentsByTripId[id] = [];
+  }
+  for (const id of tripIds) {
+    initialPaymentsByTripId[id]!.sort((a, b) => {
+      const da = a.due_date;
+      const db = b.due_date;
+      if (da == null && db == null) return a.sort_order - b.sort_order;
+      if (da == null) return 1;
+      if (db == null) return -1;
+      if (da < db) return -1;
+      if (da > db) return 1;
+      return a.sort_order - b.sort_order;
+    });
+  }
+
   const siteUrl = getPublicSiteUrl() || "http://localhost:3001";
   const profileTier = profileBundle.tier;
   const initialTemperatureUnit = profileBundle.temperatureUnit;
@@ -178,6 +204,7 @@ export default async function PlannerPage({
       temperatureUnit={initialTemperatureUnit}
       emailMarketingOptOut={emailMarketingOptOut}
       initialRidePrioritiesByTripId={initialRidePrioritiesByTripId}
+      initialPaymentsByTripId={initialPaymentsByTripId}
     />
   );
 }

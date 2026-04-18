@@ -23,6 +23,7 @@ import { Calendar } from "@/components/planner/Calendar";
 import { CompareDaysPanel } from "@/components/planner/CompareDaysPanel";
 import { CrowdStrategyBanner } from "@/components/planner/CrowdStrategyBanner";
 import { MobileDayView } from "@/components/planner/MobileDayView";
+import { PaymentsTab } from "@/components/planner/PaymentsTab";
 import { TripBudgetView } from "@/components/planner/TripBudgetView";
 import { TripChecklistView } from "@/components/planner/TripChecklistView";
 import { Countdown } from "@/components/planner/Countdown";
@@ -89,6 +90,7 @@ import type {
   UserTier,
 } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
+import type { TripPayment } from "@/types/payments";
 import { customTileToPark } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import {
@@ -126,13 +128,15 @@ type Props = {
   /** From `user_custom_tile_limit` RPC. */
   customTileLimit: number;
   /** From `?tab=` on the planner URL. */
-  plannerTab?: "planner" | "budget" | "checklist";
+  plannerTab?: "planner" | "budget" | "payments" | "checklist";
   /** From `profiles.temperature_unit` for calendar weather labels. */
   temperatureUnit?: TemperatureUnit;
   /** When true, milestone reminder emails are suppressed for every trip. */
   emailMarketingOptOut?: boolean;
   /** Ride priorities keyed by trip id (server-loaded). */
   initialRidePrioritiesByTripId: Record<string, TripRidePriority[]>;
+  /** Scheduled payments keyed by trip id (server-loaded). */
+  initialPaymentsByTripId: Record<string, TripPayment[]>;
 };
 
 const ASSIGN_DEBOUNCE_MS = 450;
@@ -215,6 +219,7 @@ export function PlannerClient({
   temperatureUnit = "c",
   emailMarketingOptOut = false,
   initialRidePrioritiesByTripId,
+  initialPaymentsByTripId,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -281,6 +286,9 @@ export function PlannerClient({
   const [ridePrioritiesByTripId, setRidePrioritiesByTripId] = useState<
     Record<string, TripRidePriority[]>
   >(() => initialRidePrioritiesByTripId);
+  const [paymentsByTripId, setPaymentsByTripId] = useState<
+    Record<string, TripPayment[]>
+  >(() => initialPaymentsByTripId);
   const [surpriseUndo, setSurpriseUndo] = useState<{
     tripId: string;
     dateKey: string;
@@ -293,6 +301,10 @@ export function PlannerClient({
   useEffect(() => {
     setRidePrioritiesByTripId(initialRidePrioritiesByTripId);
   }, [initialRidePrioritiesByTripId]);
+
+  useEffect(() => {
+    setPaymentsByTripId(initialPaymentsByTripId);
+  }, [initialPaymentsByTripId]);
 
   const ridePrioritiesForActiveTrip = useMemo(
     () => ridePrioritiesByTripId[activeTripId] ?? [],
@@ -325,6 +337,13 @@ export function PlannerClient({
       });
     },
     [activeTripId],
+  );
+
+  const handlePaymentsChange = useCallback(
+    (tripId: string, next: TripPayment[]) => {
+      setPaymentsByTripId((prev) => ({ ...prev, [tripId]: next }));
+    },
+    [],
   );
 
   const timelineUnlocked =
@@ -1561,6 +1580,14 @@ export function PlannerClient({
               <TripBudgetView
                 trip={activeTrip}
                 onTripPatch={(patch) => applyLocalPatch(activeTrip.id, patch)}
+              />
+            </div>
+          ) : plannerTab === "payments" ? (
+            <div className="mt-8 w-full max-w-4xl">
+              <PaymentsTab
+                trip={activeTrip}
+                payments={paymentsByTripId[activeTrip.id] ?? []}
+                onPaymentsChange={handlePaymentsChange}
               />
             </div>
           ) : plannerTab === "checklist" ? (

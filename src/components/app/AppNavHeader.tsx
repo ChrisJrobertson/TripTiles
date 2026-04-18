@@ -27,7 +27,7 @@ function tierLabel(tier: UserTier | null, tierLoadError: boolean): string {
 
 function plannerHrefPreservingQuery(
   searchParams: URLSearchParams,
-  tab: "planner" | "budget" | "checklist",
+  tab: "planner" | "budget" | "payments" | "checklist",
 ): string {
   const next = new URLSearchParams(searchParams.toString());
   if (tab === "planner") next.delete("tab");
@@ -85,6 +85,14 @@ function AppNavHeaderFallback({
                 </li>
                 <li>
                   <Link
+                    href="/planner?tab=payments"
+                    className={mobileNavLinkClass(false)}
+                  >
+                    Payments
+                  </Link>
+                </li>
+                <li>
+                  <Link
                     href="/planner?tab=checklist"
                     className={mobileNavLinkClass(false)}
                   >
@@ -129,6 +137,12 @@ function AppNavHeaderFallback({
               className="rounded-full px-3 py-1 font-sans text-sm font-medium text-royal/70 transition hover:bg-royal/5 hover:text-royal"
             >
               Budget
+            </Link>
+            <Link
+              href="/planner?tab=payments"
+              className="rounded-full px-3 py-1 font-sans text-sm font-medium text-royal/70 transition hover:bg-royal/5 hover:text-royal"
+            >
+              Payments
             </Link>
             <Link
               href="/planner?tab=checklist"
@@ -212,7 +226,9 @@ function AppNavHeaderInner({
   const onPlanner = pathname === "/planner";
   const tabRaw = searchParams.get("tab");
   const tab =
-    tabRaw === "budget" || tabRaw === "checklist" ? tabRaw : "planner";
+    tabRaw === "budget" || tabRaw === "payments" || tabRaw === "checklist"
+      ? tabRaw
+      : "planner";
 
   const plannerHomeHref = onPlanner
     ? plannerHrefPreservingQuery(searchParams, "planner")
@@ -220,12 +236,16 @@ function AppNavHeaderInner({
   const budgetHref = onPlanner
     ? plannerHrefPreservingQuery(searchParams, "budget")
     : "/planner?tab=budget";
+  const paymentsHref = onPlanner
+    ? plannerHrefPreservingQuery(searchParams, "payments")
+    : "/planner?tab=payments";
   const checklistHref = onPlanner
     ? plannerHrefPreservingQuery(searchParams, "checklist")
     : "/planner?tab=checklist";
 
   const plannerHomeActive = onPlanner && tab === "planner";
   const budgetActive = onPlanner && tab === "budget";
+  const paymentsActive = onPlanner && tab === "payments";
   const checklistActive = onPlanner && tab === "checklist";
   const passportActive =
     pathname === "/achievements" || pathname?.startsWith("/achievements/");
@@ -295,6 +315,15 @@ function AppNavHeaderInner({
                 </li>
                 <li>
                   <Link
+                    href={paymentsHref}
+                    className={mobileNavLinkClass(paymentsActive)}
+                    aria-current={paymentsActive ? "page" : undefined}
+                  >
+                    Payments
+                  </Link>
+                </li>
+                <li>
+                  <Link
                     href={checklistHref}
                     className={mobileNavLinkClass(checklistActive)}
                     aria-current={checklistActive ? "page" : undefined}
@@ -339,6 +368,7 @@ function AppNavHeaderInner({
           >
             {linkOrCurrent("planner", plannerHomeHref, "Planner", plannerHomeActive)}
             {linkOrCurrent("budget", budgetHref, "Budget", budgetActive)}
+            {linkOrCurrent("payments", paymentsHref, "Payments", paymentsActive)}
             {linkOrCurrent(
               "checklist",
               checklistHref,

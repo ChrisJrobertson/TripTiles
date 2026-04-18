@@ -25,8 +25,6 @@ _Last updated: P3–P6 fixes applied in repo; P4 closed as measurement artifact.
 | Item | Notes |
 |------|--------|
 | **RSC 503 / failed prefetch** | Console: “Failed to fetch RSC payload” on `/settings?_rsc`, `/achievements?_rsc` — investigate before launch (CDN, deployment, or middleware). |
-| **RSC prefetch + Turbopack** | “Module factory is not available” during prefetch after HMR or deploy can invalidate in-flight chunks; often dev noise or stale tab after deploy. |
-| **React #418 (hydration)** | Seen again on `/settings` and elsewhere after recent UI work; possible P2 regression — reproduce and trace. |
 | **Payhip → purchase history** | “No purchases recorded yet” for Pro users if webhooks did not write `purchases`. **Defer** end-to-end receipt UI + tests to **week 11 Stripe** migration. |
 
 ---
