@@ -99,6 +99,9 @@ export function mapTripRow(row: Record<string, unknown>): Trip {
       row.budget_currency != null && String(row.budget_currency).trim()
         ? String(row.budget_currency)
         : "GBP",
+    is_archived: Boolean(row.is_archived),
+    archived_reason:
+      row.archived_reason != null ? String(row.archived_reason) : null,
   };
 }
 
@@ -158,6 +161,7 @@ export async function getUserTrips(userId: string): Promise<Trip[]> {
     .from("trips")
     .select("*")
     .eq("owner_id", userId)
+    .eq("is_archived", false)
     .order("last_opened_at", { ascending: false });
 
   if (error) throw error;
@@ -185,6 +189,7 @@ export async function getActiveTripForUser(
     .from("trips")
     .select("*")
     .eq("owner_id", userId)
+    .eq("is_archived", false)
     .order("last_opened_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -198,7 +203,8 @@ export async function getUserTripCount(userId: string): Promise<number> {
   const { count, error } = await supabase
     .from("trips")
     .select("*", { count: "exact", head: true })
-    .eq("owner_id", userId);
+    .eq("owner_id", userId)
+    .eq("is_archived", false);
 
   if (error) throw error;
   return count ?? 0;

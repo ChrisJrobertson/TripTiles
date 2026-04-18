@@ -4,7 +4,8 @@ import { SignOutButton } from "@/components/auth/SignOutButton";
 import type { UserTier } from "@/lib/types";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { Suspense, useCallback, useState } from "react";
+import { showToast } from "@/lib/toast";
 
 type NavProps = {
   userEmail: string;
@@ -12,7 +13,14 @@ type NavProps = {
   /** When true, the profile tier could not be loaded — do not show Free or Upgrade. */
   tierLoadError?: boolean;
   tripCount: number;
+  /** Fallback trip cap when `activeTripCap` is omitted (e.g. settings). */
   freeTripLimit: number;
+  /** Stripe-aware label from the planner; falls back to legacy `userTier` label. */
+  planBadgeLabel?: string;
+  activeTripCap?: number | "unlimited";
+  /** When set, overrides whether the gold Upgrade CTA shows (Stripe product tier). */
+  showUpgradeNavCta?: boolean;
+  stripeCustomerId?: string | null;
 };
 
 function tierLabel(tier: UserTier | null, tierLoadError: boolean): string {
@@ -23,6 +31,42 @@ function tierLabel(tier: UserTier | null, tierLoadError: boolean): string {
   if (tier === "premium") return "Premium";
   if (tier === "concierge") return "Concierge";
   return "Pro+";
+}
+
+function ManageSubscriptionControl({
+  className = "hidden min-h-11 items-center justify-center rounded-full border border-royal/20 bg-white/90 px-3 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-royal/5 disabled:opacity-60 sm:inline-flex",
+}: {
+  className?: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const openPortal = useCallback(async () => {
+    setBusy(true);
+    try {
+      const r = await fetch("/api/stripe/create-portal-session", {
+        method: "POST",
+        credentials: "include",
+      });
+      const j = (await r.json()) as { url?: string; error?: string };
+      if (!r.ok || !j.url) {
+        showToast(j.error ?? "Could not open the billing portal.");
+        return;
+      }
+      window.location.href = j.url;
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={() => void openPortal()}
+      className={className}
+    >
+      {busy ? "Opening…" : "Manage subscription"}
+    </button>
+  );
 }
 
 function plannerHrefPreservingQuery(
@@ -48,9 +92,22 @@ function AppNavHeaderFallback({
   tierLoadError = false,
   tripCount,
   freeTripLimit,
+  planBadgeLabel,
+  activeTripCap,
+  showUpgradeNavCta,
+  stripeCustomerId,
 }: NavProps) {
-  const isFree =
+  const isLegacyFreeNav =
     !tierLoadError && (userTier == null || userTier === "free");
+  const badge = planBadgeLabel?.trim() || tierLabel(userTier, tierLoadError);
+  const cap =
+    activeTripCap !== undefined
+      ? activeTripCap
+      : isLegacyFreeNav
+        ? freeTripLimit
+        : null;
+  const showTripRatio = typeof cap === "number";
+  const upgradeNav = showUpgradeNavCta ?? isLegacyFreeNav;
   return (
     <header className="sticky top-0 z-30 border-b border-royal/10 bg-cream/95 px-4 py-3 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -119,6 +176,11 @@ function AppNavHeaderFallback({
                     Feedback
                   </Link>
                 </li>
+                {stripeCustomerId ? (
+                  <li className="px-3 py-2">
+                    <ManageSubscriptionControl className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-royal/20 bg-white/90 px-3 font-sans text-sm font-semibold text-royal shadow-sm transition hover:bg-royal/5 disabled:opacity-60 sm:hidden" />
+                  </li>
+                ) : null}
               </ul>
             </nav>
           </details>
@@ -180,19 +242,20 @@ function AppNavHeaderFallback({
             className="hidden rounded-full border border-royal/15 bg-white/80 px-2.5 py-0.5 font-sans text-xs font-medium text-royal/75 sm:inline"
             title="Your plan"
           >
-            {tierLabel(userTier, tierLoadError)}
-            {isFree ? (
+            {badge}
+            {showTripRatio ? (
               <>
                 {" "}
-                · {tripCount}/{freeTripLimit} trip
-                {freeTripLimit === 1 ? "" : "s"}
+                · {tripCount}/{cap} trip
+                {cap === 1 ? "" : "s"}
               </>
             ) : null}
           </span>
-          {isFree ? (
+          {stripeCustomerId ? <ManageSubscriptionControl /> : null}
+          {upgradeNav ? (
             <Link
               href="/pricing"
-              className="hidden rounded-full bg-gold/90 px-3 py-1 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-gold sm:inline-flex"
+              className="hidden min-h-11 min-w-11 items-center justify-center rounded-full bg-gold/90 px-3 py-1 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-gold sm:inline-flex"
             >
               Upgrade
             </Link>
@@ -218,11 +281,24 @@ function AppNavHeaderInner({
   tierLoadError = false,
   tripCount,
   freeTripLimit,
+  planBadgeLabel,
+  activeTripCap,
+  showUpgradeNavCta,
+  stripeCustomerId,
 }: NavProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const isFree =
+  const isLegacyFreeNav =
     !tierLoadError && (userTier == null || userTier === "free");
+  const badge = planBadgeLabel?.trim() || tierLabel(userTier, tierLoadError);
+  const cap =
+    activeTripCap !== undefined
+      ? activeTripCap
+      : isLegacyFreeNav
+        ? freeTripLimit
+        : null;
+  const showTripRatio = typeof cap === "number";
+  const upgradeNav = showUpgradeNavCta ?? isLegacyFreeNav;
   const onPlanner = pathname === "/planner";
   const tabRaw = searchParams.get("tab");
   const tab =
@@ -359,6 +435,11 @@ function AppNavHeaderInner({
                     Feedback
                   </Link>
                 </li>
+                {stripeCustomerId ? (
+                  <li className="px-3 py-2">
+                    <ManageSubscriptionControl className="inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-royal/20 bg-white/90 px-3 font-sans text-sm font-semibold text-royal shadow-sm transition hover:bg-royal/5 disabled:opacity-60 sm:hidden" />
+                  </li>
+                ) : null}
               </ul>
             </nav>
           </details>
@@ -427,19 +508,20 @@ function AppNavHeaderInner({
             className="hidden rounded-full border border-royal/15 bg-white/80 px-2.5 py-0.5 font-sans text-xs font-medium text-royal/75 sm:inline"
             title="Your plan"
           >
-            {tierLabel(userTier, tierLoadError)}
-            {isFree ? (
+            {badge}
+            {showTripRatio ? (
               <>
                 {" "}
-                · {tripCount}/{freeTripLimit} trip
-                {freeTripLimit === 1 ? "" : "s"}
+                · {tripCount}/{cap} trip
+                {cap === 1 ? "" : "s"}
               </>
             ) : null}
           </span>
-          {isFree ? (
+          {stripeCustomerId ? <ManageSubscriptionControl /> : null}
+          {upgradeNav ? (
             <Link
               href="/pricing"
-              className="hidden rounded-full bg-gold/90 px-3 py-1 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-gold sm:inline-flex"
+              className="hidden min-h-11 min-w-11 items-center justify-center rounded-full bg-gold/90 px-3 py-1 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-gold sm:inline-flex"
             >
               Upgrade
             </Link>

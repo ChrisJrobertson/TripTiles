@@ -14,22 +14,22 @@ type Props = {
 function headingFor(v: Variant): string {
   switch (v) {
     case "ai":
-      return "Unlock unlimited Smart Plan";
+      return "Unlock Tripp with Smart Plan";
     case "custom":
-      return "Unlock unlimited custom tiles";
+      return "Unlock more custom tiles";
     default:
-      return "Upgrade for unlimited trips";
+      return "Need more active trips?";
   }
 }
 
 function subFor(v: Variant): string {
   switch (v) {
     case "ai":
-      return "Pro and above include unlimited Smart Plan for every trip.";
+      return "Navigator and Captain include Tripp for Smart Plan on every trip.";
     case "custom":
-      return "Pro and above include unlimited custom tiles for your calendar.";
+      return "Paid plans unlock higher custom tile limits for your calendar.";
     default:
-      return "The free plan includes one trip. Upgrade when you are ready for more.";
+      return "Day Tripper keeps one trip at a time. Navigator or Captain raise your active trip cap.";
   }
 }
 
@@ -59,7 +59,7 @@ export function TierLimitModal({
         <p className="mt-2 font-sans text-sm text-royal/70">{subFor(variant)}</p>
         <p className="mt-3 rounded-lg border border-royal/10 bg-white/80 px-3 py-2 font-sans text-xs leading-relaxed text-royal/75">
           Paying on Payhip? Use the <strong>same email</strong> as your
-          TripTiles login so your upgrade applies automatically.
+          TripTiles login so your legacy upgrade still lines up.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Link

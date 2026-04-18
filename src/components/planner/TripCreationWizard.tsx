@@ -27,6 +27,8 @@ export type TripCreationWizardProps = {
   onCancel: () => void;
   /** Called after the trip is created successfully (closes planner overlay). */
   onTripCreated?: () => void;
+  /** Server hit active-trip cap (Navigator/Day Tripper). */
+  onTripTierLimit?: () => void;
   /** Full-page onboarding vs modal overlay from planner. */
   variant?: "page" | "modal";
 };
@@ -50,6 +52,7 @@ export function TripCreationWizard({
   firstName,
   onCancel,
   onTripCreated,
+  onTripTierLimit,
   variant = "page",
 }: TripCreationWizardProps) {
   const router = useRouter();
@@ -181,10 +184,12 @@ export function TripCreationWizard({
         colourTheme: normaliseThemeKey(colourTheme),
       });
       if (!res.ok) {
-        if (res.error === "TIER_LIMIT") {
-          setErr(
-            "You have reached the free trip limit. Upgrade to Pro for unlimited trips.",
-          );
+        if (res.code === "TIER_LIMIT_TRIPS") {
+          onTripTierLimit?.();
+          setErr(null);
+        } else if (res.error === "TIER_LIMIT") {
+          onTripTierLimit?.();
+          setErr(null);
         } else {
           setErr(res.error);
         }
@@ -221,6 +226,7 @@ export function TripCreationWizard({
     colourTheme,
     router,
     onTripCreated,
+    onTripTierLimit,
     includesCruise,
   ]);
 

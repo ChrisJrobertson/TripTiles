@@ -14,10 +14,20 @@ import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
 import { getPublicSiteUrl } from "@/lib/site";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import {
+  isTierLoadFailure,
+  tierLoadFailureUserMessage,
+} from "@/lib/supabase/tier-load-error";
+import {
   readProfileRow,
   tierFromProfileRow,
 } from "@/lib/supabase/profile-read";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
+import {
+  formatProductTierName,
+  getUserTier,
+  maxActiveTripsForUser,
+  type Tier,
+} from "@/lib/tier";
 import type { TemperatureUnit, UserTier } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
 import type { TripPayment } from "@/types/payments";
@@ -103,11 +113,12 @@ export default async function PlannerPage({
     tier: string;
     temperature_unit?: string | null;
     email_marketing_opt_out?: boolean | null;
+    stripe_customer_id?: string | null;
   };
   const profileRead = await readProfileRow<PlannerProfileRow>(
     supabase,
     user.id,
-    "tier, temperature_unit, email_marketing_opt_out",
+    "tier, temperature_unit, email_marketing_opt_out, stripe_customer_id",
   );
   if (!profileRead.ok) {
     return (
@@ -182,6 +193,21 @@ export default async function PlannerPage({
   const profileTier = profileBundle.tier;
   const initialTemperatureUnit = profileBundle.temperatureUnit;
   const emailMarketingOptOut = profileBundle.emailMarketingOptOut;
+  const stripeCustomerId = pr.stripe_customer_id?.trim() || null;
+
+  let productTier: Tier = "day_tripper";
+  let maxActiveTripCap: number | "unlimited" = 1;
+  try {
+    productTier = await getUserTier(user.id);
+    maxActiveTripCap = await maxActiveTripsForUser(user.id);
+  } catch (e) {
+    if (isTierLoadFailure(e)) {
+      return (
+        <ProfileLoadErrorPanel detail={tierLoadFailureUserMessage()} />
+      );
+    }
+    throw e;
+  }
 
   return (
     <PlannerClient
@@ -193,6 +219,10 @@ export default async function PlannerPage({
       initialActiveTripId={activeTrip?.id ?? null}
       userEmail={user.email ?? ""}
       userTier={profileTier}
+      productTier={productTier}
+      productPlanLabel={formatProductTierName(productTier)}
+      maxActiveTripCap={maxActiveTripCap}
+      stripeCustomerId={stripeCustomerId}
       achievementDefs={achievementDefs}
       aiGenerationCountsByTrip={aiGenerationCountsByTrip}
       siteUrl={siteUrl}

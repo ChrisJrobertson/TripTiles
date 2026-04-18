@@ -291,6 +291,9 @@ export interface Trip {
   email_reminders: boolean;
   /** First name + last initial for public gallery cards; set when publishing. */
   gallery_owner_label: string | null;
+  /** Hidden from planner lists when archived after a tier downgrade. */
+  is_archived?: boolean;
+  archived_reason?: string | null;
 }
 
 export type AchievementCategory =

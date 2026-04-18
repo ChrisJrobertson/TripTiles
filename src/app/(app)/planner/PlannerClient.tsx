@@ -71,7 +71,7 @@ import {
   plannerThemeStyleVars,
   type ThemeKey,
 } from "@/lib/themes";
-import { getTierConfig } from "@/lib/tiers";
+import type { Tier } from "@/lib/tier";
 import {
   notifyStaleServerActionIfNeeded,
   showToast,
@@ -111,6 +111,11 @@ type Props = {
   userEmail: string;
   /** From `profiles.tier` (server validates row before render). */
   userTier: UserTier;
+  /** Effective Stripe + legacy product tier for caps and nav. */
+  productTier: Tier;
+  productPlanLabel: string;
+  maxActiveTripCap: number | "unlimited";
+  stripeCustomerId: string | null;
   achievementDefs: AchievementDefinition[];
   /** Successful AI generations per trip id (for free-tier UX). */
   aiGenerationCountsByTrip: Record<string, number>;
@@ -141,20 +146,17 @@ type Props = {
 
 const ASSIGN_DEBOUNCE_MS = 450;
 const SAVE_FLASH_MS = 500;
-/** Must match server-side enforcement via `getTierConfig("free")`. */
-const FREE_TIER_TRIP_LIMIT = getTierConfig("free").features.max_trips ?? 1;
 
-function isFreeTierForTripLimit(tier: UserTier): boolean {
-  return tier === "free";
+function isFreeTierForTripLimit(tier: Tier): boolean {
+  return tier === "day_tripper";
 }
 
 function shouldBlockNewTripWizard(
   tripsLength: number,
-  tier: UserTier,
+  maxCap: number | "unlimited",
 ): boolean {
-  return (
-    isFreeTierForTripLimit(tier) && tripsLength >= FREE_TIER_TRIP_LIMIT
-  );
+  if (maxCap === "unlimited") return false;
+  return tripsLength >= maxCap;
 }
 
 function resolvePaletteRegionId(trip: Trip | null): string | null {
@@ -182,7 +184,13 @@ async function runSmartPlanWithTimeoutAndRetry(
     };
   }
   if (res.ok) return res;
-  if (res.error === "TIER_LIMIT" || res.error === "NOT_AUTHED") return res;
+  if (
+    res.error === "TIER_LIMIT" ||
+    res.error === "TIER_AI_DISABLED" ||
+    res.error === "NOT_AUTHED"
+  ) {
+    return res;
+  }
   notify("Still working on your plan — hold tight…");
   await sleep(2000);
   try {
@@ -206,6 +214,10 @@ export function PlannerClient({
   initialActiveTripId,
   userEmail,
   userTier,
+  productTier,
+  productPlanLabel,
+  maxActiveTripCap,
+  stripeCustomerId,
   achievementDefs,
   aiGenerationCountsByTrip: initialAiCounts,
   siteUrl,
@@ -346,10 +358,7 @@ export function PlannerClient({
     [],
   );
 
-  const timelineUnlocked =
-    userTier === "pro" ||
-    userTier === "family" ||
-    userTier === "premium";
+  const timelineUnlocked = productTier !== "day_tripper";
 
   const shellThemeStyle = useMemo(
     () =>
@@ -747,10 +756,19 @@ export function PlannerClient({
           showToast,
         );
         if (!res.ok) {
+          if (res.error === "TIER_AI_DISABLED") {
+            setTierLimitVariant("ai");
+            setTierLimitReason(
+              res.message ||
+                "Tripp is not included on Day Tripper. Upgrade to Navigator or Captain on Pricing.",
+            );
+            setTierLimitOpen(true);
+            return;
+          }
           if (res.error === "TIER_LIMIT") {
             setTierLimitVariant("ai");
             setTierLimitReason(
-              "You've used all 5 Smart Plan runs on the free tier for this trip. Upgrade to Pro for unlimited Smart Plan.",
+              "Smart Plan is not available on your current plan. Check Pricing for Navigator or Captain.",
             );
             setTierLimitOpen(true);
             return;
@@ -842,10 +860,17 @@ export function PlannerClient({
           showToast,
         );
         if (!res.ok) {
-          if (res.error === "TIER_LIMIT") {
+          if (res.error === "TIER_AI_DISABLED") {
             setTierLimitVariant("ai");
             setTierLimitReason(
-              "You've used all 5 Smart Plan runs on the free tier for this trip. Upgrade to Pro for unlimited Smart Plan.",
+              res.message ||
+                "Tripp is not included on Day Tripper. Upgrade to Navigator or Captain on Pricing.",
+            );
+            setTierLimitOpen(true);
+          } else if (res.error === "TIER_LIMIT") {
+            setTierLimitVariant("ai");
+            setTierLimitReason(
+              "Smart Plan is not available on your current plan. Check Pricing for Navigator or Captain.",
             );
             setTierLimitOpen(true);
           } else {
@@ -1252,7 +1277,11 @@ export function PlannerClient({
         userEmail={userEmail}
         userTier={userTier}
         tripCount={trips.length}
-        freeTripLimit={FREE_TIER_TRIP_LIMIT}
+        freeTripLimit={1}
+        planBadgeLabel={productPlanLabel}
+        activeTripCap={maxActiveTripCap}
+        showUpgradeNavCta={productTier === "day_tripper"}
+        stripeCustomerId={stripeCustomerId}
       />
 
       <div className="mx-auto max-w-7xl px-4 pt-2">
@@ -1332,10 +1361,12 @@ export function PlannerClient({
                 void touchTripAction(id);
               }}
               onNew={() => {
-                if (shouldBlockNewTripWizard(trips.length, userTier)) {
+                if (shouldBlockNewTripWizard(trips.length, maxActiveTripCap)) {
                   setTierLimitVariant("trips");
                   setTierLimitReason(
-                    "You've used your 1 free trip. Upgrade to Pro for unlimited trips.",
+                    maxActiveTripCap === 1
+                      ? "Day Tripper includes one active trip. Move to Navigator or Captain on Pricing for more."
+                      : `Your plan allows ${maxActiveTripCap} active trips. Archive one or upgrade on Pricing.`,
                   );
                   setTierLimitOpen(true);
                   return;
@@ -1775,6 +1806,15 @@ export function PlannerClient({
             parks={parks}
             includeWelcome={false}
             variant="modal"
+            onTripTierLimit={() => {
+              setTierLimitVariant("trips");
+              setTierLimitReason(
+                maxActiveTripCap === 1
+                  ? "Day Tripper includes one active trip. Move to Navigator or Captain on Pricing for more."
+                  : `Your plan allows ${maxActiveTripCap} active trips. Archive one or upgrade on Pricing.`,
+              );
+              setTierLimitOpen(true);
+            }}
             onTripCreated={() => {
               setWizardOpen(false);
               setWizardFirstRun(false);
@@ -1883,7 +1923,7 @@ export function PlannerClient({
         parks={smartPlanParks}
         regionLabel={regionLabel}
         generationsUsedThisTrip={aiGenByTrip[activeTripId] ?? 0}
-        showFreeTierNote={isFreeTierForTripLimit(userTier)}
+        showFreeTierNote={isFreeTierForTripLimit(productTier)}
         isGenerating={isAiGenerating}
         submitError={smartError}
         onGenerate={handleSmartPlanGenerate}
@@ -1921,7 +1961,7 @@ export function PlannerClient({
           initialCategory={customTileModalGroup}
           editingTile={editingCustomTile}
           remainingCreates={remainingCustomCreates}
-          showFreeTierTileCounter={isFreeTierForTripLimit(userTier)}
+          showFreeTierTileCounter={isFreeTierForTripLimit(productTier)}
           tilesUsedCount={customTiles.length}
           onSuccess={handleCustomTileSuccess}
           onTierLimitReached={() => {

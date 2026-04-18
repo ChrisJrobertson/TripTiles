@@ -40,14 +40,14 @@ function envPayhipUrl(key: "pro" | "family" | "premium"): string | null {
 export const TIERS: Record<Tier, TierConfig> = {
   free: {
     id: "free",
-    name: "Free",
+    name: "Day Tripper",
     price_gbp: 0,
     price_pence: 0,
     description: "Plan your first adventure",
     payhip_url: null,
     features: {
       max_trips: 1,
-      max_ai_per_trip: 5,
+      max_ai_per_trip: 0,
       max_custom_tiles: 5,
       pdf_watermark: true,
       pdf_design: "standard",

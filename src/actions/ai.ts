@@ -36,14 +36,19 @@ import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { formatRegionalDiningForPrompt } from "@/data/regional-dining";
 import { formatPlanningPreferencesForPrompt } from "@/lib/planning-preferences-prompt";
 import { isNamedRestaurantPark } from "@/lib/named-restaurant-tiles";
-import { getTierConfig } from "@/lib/tiers";
-import type { UserTier } from "@/lib/types";
-
+import {
+  assertTierAllows,
+  getUserTier,
+  tierErrorToClientPayload,
+} from "@/lib/tier";
+import { logTrippUsage } from "@/lib/tripp-usage-log";
+import { resolveTrippModel } from "@/lib/tripp-model";
+import { TierError } from "@/lib/tier-errors";
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY ?? "",
 });
 
-const SYSTEM_PROMPT = `You are a theme park planner. Output ONLY valid JSON — no markdown, no preamble, no text outside the JSON object.
+const SYSTEM_PROMPT = `You are Tripp, TripTiles' warm and practical theme park planner. Output ONLY valid JSON — no markdown, no preamble, no text outside the JSON object.
 
 Shape:
 { "assignments": { "2026-7-9": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-7-14": "…" }, "planner_day_notes": { "2026-7-9": "…" } }
@@ -71,11 +76,6 @@ Rules:
 Return ONLY the JSON.`;
 
 const SLOT_SET = new Set<SlotType>(["am", "pm", "lunch", "dinner"]);
-
-function anthropicModelForTier(tier: string | null): string {
-  const t = (tier ?? "free") as UserTier;
-  return getTierConfig(t).features.ai_model;
-}
 
 /** Incoming overwrites the same day/slot keys (full overlay). */
 function mergeAssignmentsOverlay(
@@ -350,13 +350,33 @@ export async function generateAIPlanAction(input: {
     }
   | {
       ok: false;
-      error: "NOT_AUTHED" | "TRIP_NOT_FOUND" | "TIER_LIMIT" | "AI_ERROR";
+      error:
+        | "NOT_AUTHED"
+        | "TRIP_NOT_FOUND"
+        | "TIER_LIMIT"
+        | "TIER_AI_DISABLED"
+        | "AI_ERROR";
       message: string;
     }
 > {
   const user = await getCurrentUser();
   if (!user) {
     return { ok: false, error: "NOT_AUTHED", message: "Not signed in." };
+  }
+
+  try {
+    await assertTierAllows(user.id, "ai");
+  } catch (e) {
+    const mapped = tierErrorToClientPayload(e);
+    if (mapped?.code === "TIER_AI_DISABLED") {
+      return {
+        ok: false,
+        error: "TIER_AI_DISABLED",
+        message:
+          "Tripp is not included on the Day Tripper plan. Upgrade to Navigator or Captain on Pricing.",
+      };
+    }
+    throw e;
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -397,15 +417,13 @@ export async function generateAIPlanAction(input: {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("tier, ai_generations_lifetime")
+    .select("ai_generations_lifetime")
     .eq("id", user.id)
     .maybeSingle();
 
-  const tier = (profile as { tier?: string } | null)?.tier ?? null;
-
   let canGenerateAi: boolean;
   try {
-    canGenerateAi = await currentUserCanGenerateAI(input.tripId);
+    canGenerateAi = await currentUserCanGenerateAI();
   } catch (e) {
     if (isTierLoadFailure(e)) {
       return {
@@ -421,7 +439,7 @@ export async function generateAIPlanAction(input: {
     return {
       ok: false,
       error: "TIER_LIMIT",
-      message: "Free plan Smart Plan limit reached for this trip.",
+      message: "Smart Plan is not available on your current plan.",
     };
   }
 
@@ -505,12 +523,25 @@ export async function generateAIPlanAction(input: {
     namedRestaurantHint,
   });
 
-  const model = anthropicModelForTier(tier);
+  let model = "claude-haiku-4-5";
+  try {
+    model = await resolveTrippModel(user.id);
+  } catch (e) {
+    if (e instanceof TierError && e.code === "TIER_AI_DISABLED") {
+      return {
+        ok: false,
+        error: "TIER_AI_DISABLED",
+        message: e.message,
+      };
+    }
+    throw e;
+  }
 
   let inputTokens = 0;
   let outputTokens = 0;
 
   try {
+    const t0 = Date.now();
     const response = await anthropic.messages.create({
       model,
       max_tokens: 3000,
@@ -532,6 +563,15 @@ export async function generateAIPlanAction(input: {
     const usage = response.usage as AnthropicMessageUsage | undefined;
     inputTokens = inputTokensFromUsage(usage);
     outputTokens = usage?.output_tokens ?? 0;
+    const latencyMs = Date.now() - t0;
+    void logTrippUsage({
+      userId: user.id,
+      tier: await getUserTier(user.id),
+      model,
+      inputTokens,
+      outputTokens,
+      latencyMs,
+    });
 
     if (process.env.NODE_ENV === "development") {
       console.info("[ai] anthropic usage", {
@@ -742,7 +782,7 @@ export async function generateAIPlanAction(input: {
       user_id: user.id,
       trip_id: input.tripId,
       prompt: composedUserMessage,
-      model: anthropicModelForTier(tier),
+      model,
       input_tokens: inputTokens,
       output_tokens: outputTokens,
       cost_gbp_pence: null,

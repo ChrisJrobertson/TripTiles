@@ -1,26 +1,20 @@
 "use client";
 
 import { FirstRunChecklist } from "@/components/planner/FirstRunChecklist";
-import { PurchaseHelpBanner } from "@/components/planner/PurchaseHelpBanner";
 
 type Props = {
-  purchaseHighlight: boolean;
+  /** @deprecated Kept for API compatibility; purchase banner removed (Stripe success flow on /pricing). */
+  purchaseHighlight?: boolean;
   hasTrip: boolean;
   hasAnyAssignment: boolean;
 };
 
 /**
- * Single visual block for purchase help + onboarding so the planner doesn’t
- * stack two heavy banners.
+ * Onboarding checklist for the planner shell.
  */
-export function PlannerTopNotices({
-  purchaseHighlight,
-  hasTrip,
-  hasAnyAssignment,
-}: Props) {
+export function PlannerTopNotices({ hasTrip, hasAnyAssignment }: Props) {
   return (
     <div className="mb-3 flex flex-col gap-2">
-      <PurchaseHelpBanner highlight={purchaseHighlight} embedded />
       <FirstRunChecklist
         hasTrip={hasTrip}
         hasAnyAssignment={hasAnyAssignment}

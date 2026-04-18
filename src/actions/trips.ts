@@ -30,6 +30,8 @@ import type {
 import { revalidatePath } from "next/cache";
 import { seedTripChecklistIfEmptyAction } from "@/actions/checklist";
 import { syncTripReminderRows } from "@/lib/trip-reminder-seed";
+import { assertTierAllows, tierErrorToClientPayload } from "@/lib/tier";
+import { TierError } from "@/lib/tier-errors";
 
 function revalidatePlanner() {
   revalidatePath("/planner");
@@ -64,14 +66,36 @@ export async function createTripAction(input: {
   colourTheme?: ThemeKey;
 }): Promise<
   | { ok: true; tripId: string; newAchievements: string[] }
-  | { ok: false; error: string }
+  | { ok: false; error: string; code?: "TIER_LIMIT_TRIPS" }
 > {
   try {
     const user = await getCurrentUser();
     if (!user) return { ok: false, error: "Not signed in." };
 
+    try {
+      await assertTierAllows(user.id, "trips");
+    } catch (e) {
+      const mapped = tierErrorToClientPayload(e);
+      if (mapped?.code === "TIER_LIMIT_TRIPS") {
+        return {
+          ok: false,
+          error:
+            "You've reached your trip limit for this plan. Upgrade on Pricing to add more trips.",
+          code: "TIER_LIMIT_TRIPS",
+        };
+      }
+      if (e instanceof TierError) {
+        return { ok: false, error: e.message };
+      }
+      throw e;
+    }
+
     if (!(await currentUserCanCreateTrip())) {
-      return { ok: false, error: "TIER_LIMIT" };
+      return {
+        ok: false,
+        error: "You've reached your trip limit for this plan.",
+        code: "TIER_LIMIT_TRIPS",
+      };
     }
 
     const legacyDestination = legacyDestinationFromRegionId(input.regionId);
@@ -113,6 +137,7 @@ export async function createTripAction(input: {
       budget_currency: "GBP",
       email_reminders: true,
       gallery_owner_label: null as string | null,
+      is_archived: false,
     };
 
     const { data: inserted, error } = await supabase
