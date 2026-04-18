@@ -31,10 +31,15 @@ export async function GET() {
       payload: s.payload,
       is_seed: true,
     }));
-    const { error: insErr } = await supabase.from("trip_day_templates").insert(rows);
-    if (insErr) {
-      console.error("[day-templates] seed insert", insErr);
-      return NextResponse.json({ error: "Could not seed templates." }, { status: 500 });
+    for (const row of rows) {
+      const { error: insErr } = await supabase.from("trip_day_templates").insert(row);
+      if (insErr && insErr.code !== "23505") {
+        console.error("[day-templates] seed insert", insErr);
+        return NextResponse.json(
+          { error: "Could not seed templates." },
+          { status: 500 },
+        );
+      }
     }
   }
 

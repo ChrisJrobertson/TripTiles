@@ -1,4 +1,5 @@
 import { AppNavHeader } from "@/components/app/AppNavHeader";
+import { TemplatesListClient } from "./TemplatesListClient";
 import { getUserTripCount } from "@/lib/db/trips";
 import { getTierConfig } from "@/lib/tiers";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
@@ -69,37 +70,7 @@ export default async function DayTemplatesSettingsPage() {
           templates are included to get you started.
         </p>
         <ul className="mt-8 divide-y divide-royal/10 rounded-xl border border-royal/10 bg-white">
-          {(rows ?? []).length === 0 ? (
-            <li className="px-4 py-6 font-sans text-sm text-royal/65">
-              No templates yet — open a day in the planner and use Save as
-              template.
-            </li>
-          ) : (
-            (rows ?? []).map((r) => (
-              <li
-                key={r.id}
-                className="flex flex-col gap-1 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <p className="font-sans text-sm font-semibold text-royal">
-                    {r.name}
-                  </p>
-                  <p className="font-sans text-xs text-royal/55">
-                    {new Date(r.created_at).toLocaleDateString("en-GB", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                    {r.is_seed ? (
-                      <span className="ml-2 rounded bg-gold/25 px-2 py-0.5 text-[0.65rem] font-semibold uppercase text-royal">
-                        Seed
-                      </span>
-                    ) : null}
-                  </p>
-                </div>
-              </li>
-            ))
-          )}
+          <TemplatesListClient rows={rows ?? []} />
         </ul>
       </main>
     </div>

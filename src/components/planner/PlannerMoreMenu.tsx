@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 type Panel = "share" | "family" | "notes" | null;
@@ -17,11 +18,20 @@ export function PlannerMoreMenu({ onOpenPanel, disabled }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
+  const pathname = usePathname();
+  const prevPathRef = useRef(pathname);
 
   const close = useCallback(() => {
     setOpen(false);
     btnRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    if (prevPathRef.current !== pathname) {
+      setOpen(false);
+      prevPathRef.current = pathname;
+    }
+  }, [pathname]);
 
   useEffect(() => {
     if (!open) return;

@@ -80,6 +80,10 @@ import {
   parseDate,
 } from "@/lib/date-helpers";
 import {
+  computePlannerDayConflicts,
+  conflictDotForDay,
+} from "@/lib/planner-day-conflicts";
+import {
   normaliseThemeKey,
   plannerThemeStyleVars,
   type ThemeKey,
@@ -350,7 +354,7 @@ export function PlannerClient({
 
   const dayCanonicalForDetail = useMemo(() => {
     if (!dayDateFromUrl) return null;
-    return formatDateKey(parseDate(dayDateFromUrl));
+    return formatDateISO(parseDate(dayDateFromUrl));
   }, [dayDateFromUrl]);
 
   useEffect(() => {
@@ -1355,6 +1359,35 @@ export function PlannerClient({
     [activeTripId, ridePriorityCountByTripAndDay],
   );
 
+  const dayConflictDotsForActiveTrip = useMemo(() => {
+    const m: Record<string, "amber" | "grey"> = {};
+    if (!activeTrip) return m;
+    const parkById = new Map(calendarParks.map((p) => [p.id, p]));
+    for (const key of eachDateKeyInRange(
+      activeTrip.start_date,
+      activeTrip.end_date,
+    )) {
+      const pris = ridePrioritiesByDayForActiveTrip[key] ?? [];
+      const counts = rideCountsByDayForActiveTrip[key];
+      const dot = conflictDotForDay(
+        computePlannerDayConflicts(
+          activeTrip,
+          key,
+          pris,
+          counts,
+          parkById,
+        ),
+      );
+      if (dot) m[key] = dot;
+    }
+    return m;
+  }, [
+    activeTrip,
+    calendarParks,
+    ridePrioritiesByDayForActiveTrip,
+    rideCountsByDayForActiveTrip,
+  ]);
+
   const onSaveDayNote = useCallback(
     async (dateKey: string, text: string) => {
       if (!activeTripId) return;
@@ -1883,6 +1916,7 @@ export function PlannerClient({
                             ridePrioritiesByDayForActiveTrip
                           }
                           rideCountsByDay={rideCountsByDayForActiveTrip}
+                          dayConflictDots={dayConflictDotsForActiveTrip}
                           highlightDateKey={goToTodayRingDateKey}
                           onRideDayPrioritiesUpdated={
                             handleRideDayPrioritiesUpdated
@@ -2242,6 +2276,11 @@ export function PlannerClient({
           }
           onSaveDayNote={onSaveDayNote}
           onOpenSmartPlan={() => setSmartOpen(true)}
+          rideCountsForDay={
+            dayCanonicalForDetail
+              ? (rideCountsByDayForActiveTrip[dayCanonicalForDetail] ?? null)
+              : null
+          }
         />
       ) : null}
 

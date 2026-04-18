@@ -7,6 +7,23 @@ import {
   reorderRidePriorities,
   toggleRidePriority,
 } from "@/actions/ride-priorities";
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { SkipLineLegend } from "@/components/planner/SkipLineLegend";
 import { parseDate } from "@/lib/date-helpers";
 import type { Park } from "@/lib/types";
@@ -20,7 +37,8 @@ import {
   waitMinutesColourClass,
 } from "@/lib/ride-plan-display";
 import type { Attraction, TripRidePriority } from "@/types/attractions";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { showToast } from "@/lib/toast";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export type ExpandedDayPanelProps = {
   tripId: string;
@@ -118,6 +136,94 @@ function RideRow({
           ↓
         </button>
       </span>
+      {badge ? (
+        <span
+          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase"
+          style={badgeStyle}
+          title={a.skip_line_notes ?? undefined}
+        >
+          ⚡{badge}
+        </span>
+      ) : null}
+      {peak != null ? (
+        <span
+          className={`shrink-0 font-semibold ${waitMinutesColourClass(peak)}`}
+        >
+          {peak} min
+        </span>
+      ) : null}
+      <span className="shrink-0 text-base" aria-hidden>
+        {thrillEmoji(a.thrill_level)}
+      </span>
+      <span className="shrink-0 capitalize text-royal/70">{a.thrill_level}</span>
+      {a.height_requirement_cm != null ? (
+        <span className="shrink-0 text-royal/65">{a.height_requirement_cm} cm</span>
+      ) : null}
+    </div>
+  );
+}
+
+function SortableRideRow({
+  row,
+  onToggleIcon,
+  pending,
+}: {
+  row: TripRidePriority;
+  onToggleIcon: () => void;
+  pending: boolean;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: row.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  const a = row.attraction;
+  if (!a) return null;
+  const badge = skipLineBadgeLabel(a.skip_line_tier);
+  const badgeStyle = skipLineBadgeStyle(a.skip_line_tier);
+  const peak = a.avg_wait_peak_minutes;
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex flex-wrap items-center gap-2 border-b border-[#E5E1D8]/80 py-2 font-sans text-xs text-royal last:border-b-0 sm:text-[13px] ${
+        isDragging ? "z-10 rounded-md bg-white shadow-md ring-2 ring-[#0B1E5C] ring-offset-1" : ""
+      }`}
+    >
+      <button
+        type="button"
+        className="touch-none flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded border border-royal/15 bg-white text-royal hover:bg-cream"
+        aria-label="Drag to reorder"
+        {...attributes}
+        {...listeners}
+      >
+        <span className="grid grid-cols-2 gap-0.5" aria-hidden>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <span key={i} className="h-1 w-1 rounded-full bg-royal/45" />
+          ))}
+        </span>
+      </button>
+      <button
+        type="button"
+        disabled={pending}
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-royal/15 bg-white text-base leading-none text-royal hover:bg-cream disabled:opacity-50"
+        aria-label={
+          row.priority === "must_do"
+            ? "Move to if time"
+            : "Remove from plan"
+        }
+        onClick={onToggleIcon}
+      >
+        {row.priority === "must_do" ? "★" : "○"}
+      </button>
+      <span className="min-w-0 flex-1 font-medium leading-snug">{a.name}</span>
       {badge ? (
         <span
           className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase"
@@ -315,6 +421,80 @@ export function ExpandedDayPanel({
     runMutation(() => reorderRidePriorities(tripId, dayDate, full));
   };
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { delay: 300, tolerance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  const beforeReorderRef = useRef<TripRidePriority[] | null>(null);
+
+  const onSortDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      if (!embedded) return;
+      const { active, over } = event;
+      if (!over) return;
+      const aid = String(active.id);
+      const oid = String(over.id);
+      if (aid === oid) return;
+      const mustSet = new Set(mustRows.map((r) => r.id));
+      const ifSet = new Set(ifRows.map((r) => r.id));
+      const inMust = mustSet.has(aid);
+      if (inMust !== mustSet.has(oid)) return;
+      const inIf = ifSet.has(aid);
+      if (inIf !== ifSet.has(oid)) return;
+      const rows = inMust ? mustRows : ifRows;
+      const other = inMust ? ifRows : mustRows;
+      const oldIndex = rows.findIndex((r) => r.id === aid);
+      const newIndex = rows.findIndex((r) => r.id === oid);
+      if (oldIndex < 0 || newIndex < 0) return;
+      const moved = rows[oldIndex]!;
+      const reordered = arrayMove(rows, oldIndex, newIndex).map((r, i) => ({
+        ...r,
+        sort_order: i,
+      }));
+      const optimistic = sortPrioritiesForDay([...reordered, ...other]);
+      beforeReorderRef.current = ridePriorities;
+      onPrioritiesUpdated(optimistic);
+      try {
+        const res = await fetch(`/api/activity/${moved.id}/position`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ newSortOrder: newIndex }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        const data = (await res.json()) as {
+          priorities?: TripRidePriority[];
+        };
+        if (!data.priorities) throw new Error("empty");
+        const updatedMust =
+          moved.priority === "must_do"
+            ? data.priorities
+            : optimistic.filter((p) => p.priority === "must_do");
+        const updatedIf =
+          moved.priority === "if_time"
+            ? data.priorities
+            : optimistic.filter((p) => p.priority === "if_time");
+        onPrioritiesUpdated(sortPrioritiesForDay([...updatedMust, ...updatedIf]));
+      } catch {
+        if (beforeReorderRef.current) {
+          onPrioritiesUpdated(beforeReorderRef.current);
+        }
+        showToast("Couldn't reorder — try again");
+      }
+    },
+    [
+      embedded,
+      mustRows,
+      ifRows,
+      ridePriorities,
+      onPrioritiesUpdated,
+    ],
+  );
+
   if (parkIds.length === 0) {
     return (
       <div
@@ -395,53 +575,113 @@ export function ExpandedDayPanel({
         </p>
       </div>
 
-      <div className="mb-2">
-        <p className="mb-1 border-b border-royal/15 pb-1 font-sans text-[11px] font-semibold uppercase tracking-wide text-royal">
-          Must-do
-        </p>
-        {mustRows.length === 0 ? (
-          <p className="py-2 font-sans text-xs italic text-royal/50">
-            No must-dos yet — add from Available below.
-          </p>
-        ) : (
-          mustRows.map((row, i) => (
-            <RideRow
-              key={row.id}
-              row={row}
-              canUp={i > 0}
-              canDown={i < mustRows.length - 1}
-              onMoveUp={() => moveWithinSection("must_do", i, -1)}
-              onMoveDown={() => moveWithinSection("must_do", i, 1)}
-              onToggleIcon={() => handleTogglePriorityIcon(row)}
-              pending={pending}
-            />
-          ))
-        )}
-      </div>
+      {embedded ? (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={onSortDragEnd}
+        >
+          <div className="mb-2">
+            <p className="mb-1 border-b border-royal/15 pb-1 font-sans text-[11px] font-semibold uppercase tracking-wide text-royal">
+              Must-do
+            </p>
+            {mustRows.length === 0 ? (
+              <p className="py-2 font-sans text-xs italic text-royal/50">
+                No must-dos yet — add from Available below.
+              </p>
+            ) : (
+              <SortableContext
+                items={mustRows.map((r) => r.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {mustRows.map((row) => (
+                  <SortableRideRow
+                    key={row.id}
+                    row={row}
+                    onToggleIcon={() => handleTogglePriorityIcon(row)}
+                    pending={pending}
+                  />
+                ))}
+              </SortableContext>
+            )}
+          </div>
 
-      <div className="mb-3">
-        <p className="mb-1 border-b border-royal/15 pb-1 font-sans text-[11px] font-semibold uppercase tracking-wide text-royal">
-          If time
-        </p>
-        {ifRows.length === 0 ? (
-          <p className="py-2 font-sans text-xs italic text-royal/50">
-            Nothing in the if-time list.
-          </p>
-        ) : (
-          ifRows.map((row, i) => (
-            <RideRow
-              key={row.id}
-              row={row}
-              canUp={i > 0}
-              canDown={i < ifRows.length - 1}
-              onMoveUp={() => moveWithinSection("if_time", i, -1)}
-              onMoveDown={() => moveWithinSection("if_time", i, 1)}
-              onToggleIcon={() => handleTogglePriorityIcon(row)}
-              pending={pending}
-            />
-          ))
-        )}
-      </div>
+          <div className="mb-3">
+            <p className="mb-1 border-b border-royal/15 pb-1 font-sans text-[11px] font-semibold uppercase tracking-wide text-royal">
+              If time
+            </p>
+            {ifRows.length === 0 ? (
+              <p className="py-2 font-sans text-xs italic text-royal/50">
+                Nothing in the if-time list.
+              </p>
+            ) : (
+              <SortableContext
+                items={ifRows.map((r) => r.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {ifRows.map((row) => (
+                  <SortableRideRow
+                    key={row.id}
+                    row={row}
+                    onToggleIcon={() => handleTogglePriorityIcon(row)}
+                    pending={pending}
+                  />
+                ))}
+              </SortableContext>
+            )}
+          </div>
+        </DndContext>
+      ) : (
+        <>
+          <div className="mb-2">
+            <p className="mb-1 border-b border-royal/15 pb-1 font-sans text-[11px] font-semibold uppercase tracking-wide text-royal">
+              Must-do
+            </p>
+            {mustRows.length === 0 ? (
+              <p className="py-2 font-sans text-xs italic text-royal/50">
+                No must-dos yet — add from Available below.
+              </p>
+            ) : (
+              mustRows.map((row, i) => (
+                <RideRow
+                  key={row.id}
+                  row={row}
+                  canUp={i > 0}
+                  canDown={i < mustRows.length - 1}
+                  onMoveUp={() => moveWithinSection("must_do", i, -1)}
+                  onMoveDown={() => moveWithinSection("must_do", i, 1)}
+                  onToggleIcon={() => handleTogglePriorityIcon(row)}
+                  pending={pending}
+                />
+              ))
+            )}
+          </div>
+
+          <div className="mb-3">
+            <p className="mb-1 border-b border-royal/15 pb-1 font-sans text-[11px] font-semibold uppercase tracking-wide text-royal">
+              If time
+            </p>
+            {ifRows.length === 0 ? (
+              <p className="py-2 font-sans text-xs italic text-royal/50">
+                Nothing in the if-time list.
+              </p>
+            ) : (
+              ifRows.map((row, i) => (
+                <RideRow
+                  key={row.id}
+                  row={row}
+                  canUp={i > 0}
+                  canDown={i < ifRows.length - 1}
+                  onMoveUp={() => moveWithinSection("if_time", i, -1)}
+                  onMoveDown={() => moveWithinSection("if_time", i, 1)}
+                  onToggleIcon={() => handleTogglePriorityIcon(row)}
+                  pending={pending}
+                />
+              ))
+            )}
+          </div>
+        </>
+      )}
 
       <div className="mb-2">
         <p className="mb-1 font-sans text-[11px] font-semibold uppercase tracking-wide text-royal">

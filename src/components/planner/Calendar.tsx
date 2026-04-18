@@ -67,6 +67,8 @@ type Props = {
   ridePrioritiesByDay?: Record<string, TripRidePriority[]>;
   /** When set, overrides ride count badge when priorities are not loaded yet. */
   rideCountsByDay?: Record<string, { total: number; mustDo: number }>;
+  /** Planner conflict hint per date key (matches server-side conflict rules). */
+  dayConflictDots?: Record<string, "amber" | "grey">;
   /** Brief outline highlight for “Go to today”. */
   highlightDateKey?: string | null;
   onRideDayPrioritiesUpdated?: (
@@ -190,6 +192,7 @@ export function Calendar({
   onSlotTimeChange,
   ridePrioritiesByDay = {},
   rideCountsByDay,
+  dayConflictDots = {},
   highlightDateKey = null,
   onRideDayPrioritiesUpdated,
   onOpenDayDetail,
@@ -378,11 +381,13 @@ export function Calendar({
                 temperatureUnit,
               );
 
+              const conflictDot = dayConflictDots[key];
+
               return (
                 <div
                   key={key}
                   id={`planner-day-${key}`}
-                  className={`flex min-h-[8rem] flex-col rounded-md border border-royal/15 bg-white sm:min-h-[9rem] md:min-h-[5.75rem]${
+                  className={`relative flex min-h-[8rem] flex-col rounded-md border border-royal/15 bg-white sm:min-h-[9rem] md:min-h-[5.75rem]${
                     highlightDateKey === key
                       ? " ring-2 ring-[#0B1E5C] ring-offset-2 ring-offset-cream"
                       : ""
@@ -405,6 +410,17 @@ export function Calendar({
                       : undefined
                   }
                 >
+                  {conflictDot ? (
+                    <span
+                      className={`pointer-events-none absolute right-1 top-1 z-[1] h-2 w-2 rounded-full ${
+                        conflictDot === "amber"
+                          ? "bg-amber-500"
+                          : "bg-royal/35"
+                      }`}
+                      title="Planner notice for this day"
+                      aria-hidden
+                    />
+                  ) : null}
                   <div className="flex items-center justify-between gap-0.5 border-b border-royal/10 px-1 py-0.5 md:py-1">
                     {!readOnly && (onRideDayPrioritiesUpdated || onOpenDayDetail) ? (
                       <button

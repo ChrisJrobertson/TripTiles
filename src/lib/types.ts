@@ -80,7 +80,7 @@ export type SlotAssignmentValue =
 
 export type Assignment = Partial<Record<SlotType, SlotAssignmentValue>>;
 
-/** Date keys: `${year}-${month}-${day}` without zero-padding (e.g. "2026-8-17"). */
+/** Date keys: zero-padded `YYYY-MM-DD` (matches `formatDateISO`). */
 export type Assignments = Record<string, Assignment>;
 
 /** Wizard / Smart Plan pacing choice. */

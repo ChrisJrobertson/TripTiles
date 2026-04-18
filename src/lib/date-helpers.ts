@@ -3,14 +3,15 @@ export function parseDate(iso: string): Date {
   return new Date(y, m - 1, d);
 }
 
-export function formatDateKey(d: Date): string {
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-}
-
 export function formatDateISO(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/** @deprecated Use {@link formatDateISO} for planner keys and SQL dates (zero-padded `YYYY-MM-DD`). */
+export function formatDateKey(d: Date): string {
+  return formatDateISO(d);
 }
 
 export function daysBetween(a: Date, b: Date): number {
@@ -78,7 +79,7 @@ export function eachDateKeyInRange(startIso: string, endIso: string): string[] {
   const b = parseDate(endIso);
   const out: string[] = [];
   for (let d = new Date(a); d <= b; d = addDays(d, 1)) {
-    out.push(formatDateKey(d));
+    out.push(formatDateISO(d));
   }
   return out;
 }

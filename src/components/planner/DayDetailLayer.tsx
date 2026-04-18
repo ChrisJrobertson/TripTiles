@@ -3,12 +3,20 @@
 import { ExpandedDayPanel } from "@/components/planner/ExpandedDayPanel";
 import { SkipLineLegend } from "@/components/planner/SkipLineLegend";
 import { CrowdLevelIndicator } from "@/components/planner/CrowdLevelIndicator";
+import { DayConflictBanners } from "@/components/planner/DayConflictBanners";
+import {
+  ApplyTemplateDialog,
+  SaveTemplateDialog,
+} from "@/components/planner/DayTemplateDialogs";
+import { DuplicateDayModal } from "@/components/planner/DuplicateDayModal";
+import { TierLimitModal } from "@/components/paywall/TierLimitModal";
 import {
   eachDateKeyInRange,
   formatDateISO,
-  formatDateKey,
   parseDate,
 } from "@/lib/date-helpers";
+import { computePlannerDayConflicts } from "@/lib/planner-day-conflicts";
+import { showToast } from "@/lib/toast";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { dayConditionRow } from "@/lib/planner-day-conditions";
 import {
@@ -22,6 +30,7 @@ import type { Park, TemperatureUnit, Trip } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
 import { useRouter } from "next/navigation";
 import {
+  startTransition,
   useCallback,
   useEffect,
   useId,
@@ -53,7 +62,7 @@ function parkIdsAmPmForDay(trip: Trip, dateKey: string): string[] {
 }
 
 function todayKey(): string {
-  return formatDateKey(new Date());
+  return formatDateISO(new Date());
 }
 
 function isTodayInTrip(trip: Trip): boolean {
@@ -84,6 +93,8 @@ export type DayDetailLayerProps = {
   onPrioritiesUpdated: (items: TripRidePriority[]) => void;
   onSaveDayNote: (dateKey: string, text: string) => void;
   onOpenSmartPlan: () => void;
+  /** Ride counts for this day when full priorities are not loaded (overview fetch). */
+  rideCountsForDay?: { total: number; mustDo: number } | null;
 };
 
 export function DayDetailLayer({
@@ -99,11 +110,25 @@ export function DayDetailLayer({
   onPrioritiesUpdated,
   onSaveDayNote,
   onOpenSmartPlan,
+  rideCountsForDay = null,
 }: DayDetailLayerProps) {
   const router = useRouter();
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const swipeRef = useRef<{
+    x: number;
+    y: number;
+    t: number;
+    pointerId: number;
+  } | null>(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [saveTplOpen, setSaveTplOpen] = useState(false);
+  const [applyTplOpen, setApplyTplOpen] = useState(false);
+  const [dupOpen, setDupOpen] = useState(false);
+  const [tierLimitOpen, setTierLimitOpen] = useState(false);
+  const moreWrapRef = useRef<HTMLDivElement>(null);
+  const [deskKb, setDeskKb] = useState(false);
   const [noteDraft, setNoteDraft] = useState(() => {
     const m = plannerUserDayNotes(trip);
     return m[dayDate] ?? "";
@@ -137,6 +162,18 @@ export function DayDetailLayer({
   );
 
   const parkById = useMemo(() => new Map(parks.map((p) => [p.id, p])), [parks]);
+
+  const dayConflicts = useMemo(
+    () =>
+      computePlannerDayConflicts(
+        trip,
+        dayDate,
+        ridePriorities,
+        rideCountsForDay ?? undefined,
+        parkById,
+      ),
+    [trip, dayDate, ridePriorities, rideCountsForDay, parkById],
+  );
 
   const ass = trip.assignments[dayDate] ?? {};
   const meals = (["lunch", "dinner"] as const).map((slot) => {
@@ -177,6 +214,29 @@ export function DayDetailLayer({
     isTodayInTrip(trip) && dayDate !== todayK && eachDateKeyInRange(trip.start_date, trip.end_date).includes(todayK);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(min-width: 768px)");
+    const sync = () => setDeskKb(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDoc = (ev: MouseEvent) => {
+      if (
+        moreWrapRef.current &&
+        !moreWrapRef.current.contains(ev.target as Node)
+      ) {
+        setMoreOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [moreOpen]);
+
+  useEffect(() => {
     const el = dialogRef.current;
     if (!el) return;
     const focusables = el.querySelectorAll<HTMLElement>(
@@ -187,10 +247,23 @@ export function DayDetailLayer({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
+        setMoreOpen(false);
         onClose();
-      }
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
         return;
+      }
+      if (!deskKb) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.isContentEditable
+      ) {
+        return;
+      }
       if (e.key === "ArrowLeft" && prev) {
         e.preventDefault();
         navigateTo(prev);
@@ -202,25 +275,40 @@ export function DayDetailLayer({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, prev, next, navigateTo]);
+  }, [deskKb, onClose, prev, next, navigateTo]);
 
-  const onTouchStart = (e: React.TouchEvent) => {
-    const t = e.targetTouches[0];
-    if (!t) return;
-    touchStart.current = { x: t.clientX, y: t.clientY };
+  const onSwipePointerDown = (e: React.PointerEvent) => {
+    if (typeof window !== "undefined" && window.innerWidth >= 768) return;
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+    if (
+      target.closest(
+        'input,textarea,button,[contenteditable="true"],[contenteditable]',
+      )
+    ) {
+      return;
+    }
+    swipeRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      t: Date.now(),
+      pointerId: e.pointerId,
+    };
   };
 
-  const onTouchEnd = (e: React.TouchEvent) => {
-    const start = touchStart.current;
-    touchStart.current = null;
-    if (!start) return;
-    const t = e.changedTouches[0];
-    if (!t) return;
-    const dx = t.clientX - start.x;
-    const dy = t.clientY - start.y;
-    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
-    if (dx > 50 && prev) navigateTo(prev);
-    else if (dx < -50 && next) navigateTo(next);
+  const onSwipePointerUp = (e: React.PointerEvent) => {
+    const start = swipeRef.current;
+    swipeRef.current = null;
+    if (!start || start.pointerId !== e.pointerId) return;
+    if (typeof window !== "undefined" && window.innerWidth >= 768) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    const dt = Date.now() - start.t;
+    if (dt > 500) return;
+    if (Math.abs(dx) <= 60) return;
+    if (Math.abs(dy) >= 40) return;
+    if (dx > 60 && prev) navigateTo(prev);
+    else if (dx < -60 && next) navigateTo(next);
   };
 
   const parkLabels = useMemo(() => {
@@ -242,11 +330,19 @@ export function DayDetailLayer({
     onOpenSmartPlan();
   };
 
+  const openNavigatorUpsell = () => {
+    setTierLimitOpen(true);
+  };
+
+  const refreshTrip = () => {
+    startTransition(() => router.refresh());
+  };
+
   return (
     <>
       <button
         type="button"
-        className="fixed inset-0 z-[95] bg-royal/45 md:bg-royal/40"
+        className="fixed inset-0 z-[95] hidden bg-royal/40 md:block"
         aria-label="Close day detail"
         onClick={onClose}
       />
@@ -256,8 +352,6 @@ export function DayDetailLayer({
         aria-modal="true"
         aria-labelledby={titleId}
         className="fixed inset-0 z-[100] flex flex-col bg-cream shadow-2xl transition-transform duration-200 ease-out md:inset-y-0 md:left-auto md:right-0 md:w-[480px] md:max-w-[100vw] md:border-l md:border-royal/15"
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
       >
         <header className="flex shrink-0 flex-col gap-2 border-b border-royal/10 bg-cream px-3 py-3 safe-area-inset-top">
           <div className="flex items-start justify-between gap-2">
@@ -305,6 +399,73 @@ export function DayDetailLayer({
               ) : null}
               <button
                 type="button"
+                className="min-h-11 shrink-0 rounded-lg border border-royal/15 bg-white px-2 font-sans text-[11px] font-semibold text-royal"
+                onClick={() => setDupOpen(true)}
+              >
+                Duplicate
+              </button>
+              <div className="relative shrink-0" ref={moreWrapRef}>
+                <button
+                  type="button"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-royal/15 bg-white text-lg leading-none text-royal"
+                  aria-haspopup="menu"
+                  aria-expanded={moreOpen}
+                  aria-label="More day actions"
+                  onClick={() => setMoreOpen((o) => !o)}
+                >
+                  ⋮
+                </button>
+                {moreOpen ? (
+                  <div
+                    role="menu"
+                    aria-label="Day actions"
+                    className="absolute right-0 z-50 mt-1 min-w-[13.5rem] rounded-xl border border-royal/15 bg-white py-1 shadow-lg"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full min-h-11 flex-col items-start gap-0.5 px-3 py-2 text-left font-sans text-sm text-royal hover:bg-cream"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        if (productTier === "day_tripper") {
+                          openNavigatorUpsell();
+                          return;
+                        }
+                        setSaveTplOpen(true);
+                      }}
+                    >
+                      <span>Save as template…</span>
+                      {productTier === "day_tripper" ? (
+                        <span className="font-sans text-[0.65rem] text-royal/55">
+                          🔒 Navigator feature
+                        </span>
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full min-h-11 flex-col items-start gap-0.5 px-3 py-2 text-left font-sans text-sm text-royal hover:bg-cream"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        if (productTier === "day_tripper") {
+                          openNavigatorUpsell();
+                          return;
+                        }
+                        setApplyTplOpen(true);
+                      }}
+                    >
+                      <span>Apply template…</span>
+                      {productTier === "day_tripper" ? (
+                        <span className="font-sans text-[0.65rem] text-royal/55">
+                          🔒 Navigator feature
+                        </span>
+                      ) : null}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              <button
+                type="button"
                 className="hidden min-h-11 min-w-11 items-center justify-center rounded-lg border border-royal/15 bg-white text-sm text-royal md:flex"
                 aria-label="Close"
                 onClick={onClose}
@@ -338,7 +499,19 @@ export function DayDetailLayer({
           </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-4 pb-28 md:pb-20">
+        <div
+          ref={scrollRef}
+          className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-3 py-4 pb-28 md:pb-20"
+          onPointerDown={onSwipePointerDown}
+          onPointerUp={onSwipePointerUp}
+          onPointerCancel={onSwipePointerUp}
+        >
+          <DayConflictBanners
+            tripId={trip.id}
+            dayDate={dayDate}
+            conflicts={dayConflicts}
+            onAskTripp={onOpenSmartPlan}
+          />
           <section className="mb-4 rounded-lg border border-royal/10 bg-white/90 p-3">
             <p className="font-sans text-[11px] font-semibold uppercase tracking-wide text-royal/60">
               Tripp&apos;s take
@@ -441,6 +614,63 @@ export function DayDetailLayer({
           </div>
         </div>
       </div>
+
+      <TierLimitModal
+        isOpen={tierLimitOpen}
+        onClose={() => setTierLimitOpen(false)}
+        reason="That option is part of Navigator and Captain — upgrade to unlock day templates and recurring duplicates."
+        variant="custom"
+      />
+
+      <SaveTemplateDialog
+        open={saveTplOpen}
+        onClose={() => setSaveTplOpen(false)}
+        trip={trip}
+        dayDate={dayDate}
+        ridePriorities={ridePriorities}
+        productTier={productTier}
+        onLocked={() => {
+          setSaveTplOpen(false);
+          openNavigatorUpsell();
+        }}
+        onSaved={() => {
+          showToast("Template saved");
+          refreshTrip();
+        }}
+      />
+
+      <ApplyTemplateDialog
+        open={applyTplOpen}
+        onClose={() => setApplyTplOpen(false)}
+        tripId={trip.id}
+        dayDate={dayDate}
+        productTier={productTier}
+        onLocked={() => {
+          setApplyTplOpen(false);
+          openNavigatorUpsell();
+        }}
+        onApplied={() => {
+          showToast("Template applied");
+          refreshTrip();
+        }}
+      />
+
+      <DuplicateDayModal
+        open={dupOpen}
+        onClose={() => setDupOpen(false)}
+        trip={trip}
+        tripId={trip.id}
+        sourceDate={dayDate}
+        productTier={productTier}
+        onLockedNavigator={() => {
+          setDupOpen(false);
+          openNavigatorUpsell();
+        }}
+        onSuccess={() => {
+          showToast("Day duplicated");
+          refreshTrip();
+        }}
+      />
     </>
   );
 }
