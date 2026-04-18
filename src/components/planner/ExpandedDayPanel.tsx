@@ -12,6 +12,7 @@ import {
   DndContext,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -423,6 +424,9 @@ export function ExpandedDayPanel({
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(TouchSensor, {
       activationConstraint: { delay: 300, tolerance: 8 },
     }),
     useSensor(KeyboardSensor, {
@@ -576,11 +580,12 @@ export function ExpandedDayPanel({
       </div>
 
       {embedded ? (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={onSortDragEnd}
-        >
+        <div data-no-swipe>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={onSortDragEnd}
+          >
           <div className="mb-2">
             <p className="mb-1 border-b border-royal/15 pb-1 font-sans text-[11px] font-semibold uppercase tracking-wide text-royal">
               Must-do
@@ -630,7 +635,8 @@ export function ExpandedDayPanel({
               </SortableContext>
             )}
           </div>
-        </DndContext>
+          </DndContext>
+        </div>
       ) : (
         <>
           <div className="mb-2">

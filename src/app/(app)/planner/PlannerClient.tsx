@@ -20,8 +20,10 @@ import { AppNavHeader } from "@/components/app/AppNavHeader";
 import { AchievementToast } from "@/components/gamification/AchievementToast";
 import { deleteCustomTileAction } from "@/actions/custom-tiles";
 import {
+  getConflictDotSummaryForTrip,
   getRidePrioritiesForDay,
   getRidePrioritiesForTrip,
+  type DayConflictDotSummary,
 } from "@/actions/ride-priorities";
 import { Calendar } from "@/components/planner/Calendar";
 import { CompareDaysPanel } from "@/components/planner/CompareDaysPanel";
@@ -341,6 +343,11 @@ export function PlannerClient({
     prevDay: Assignment | undefined;
     prevUserNote: string;
   } | null>(null);
+  const [calendarConflictDotsSource, setCalendarConflictDotsSource] = useState<
+    "server" | "client"
+  >("client");
+  const [calendarConflictDotSummary, setCalendarConflictDotSummary] =
+    useState<DayConflictDotSummary>({});
 
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
 
@@ -1341,7 +1348,7 @@ export function PlannerClient({
   );
 
   const closeDayDetail = useCallback(() => {
-    startTransition(() => router.replace(overviewHref, { scroll: false }));
+    startTransition(() => router.push(overviewHref, { scroll: false }));
   }, [router, overviewHref]);
 
   const showGoToTodayPill = useMemo(() => {
@@ -1386,6 +1393,52 @@ export function PlannerClient({
     calendarParks,
     ridePrioritiesByDayForActiveTrip,
     rideCountsByDayForActiveTrip,
+  ]);
+
+  useEffect(() => {
+    if (!activeTripId || !activeTrip) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const s = await getConflictDotSummaryForTrip(activeTripId);
+        if (cancelled) return;
+        setCalendarConflictDotSummary(s);
+        setCalendarConflictDotsSource("server");
+      } catch {
+        if (!cancelled) setCalendarConflictDotsSource("client");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeTrip,
+    activeTripId,
+    activeTrip?.assignments,
+    activeTrip?.start_date,
+    activeTrip?.end_date,
+    ridePrioritiesForActiveTrip,
+  ]);
+
+  const calendarConflictDotsForCalendar = useMemo(() => {
+    if (calendarConflictDotsSource === "server" && activeTrip) {
+      const m: Record<string, "amber" | "grey"> = {};
+      for (const key of eachDateKeyInRange(
+        activeTrip.start_date,
+        activeTrip.end_date,
+      )) {
+        const s = calendarConflictDotSummary[key];
+        if (!s) continue;
+        m[key] = s.hasAmber ? "amber" : "grey";
+      }
+      return m;
+    }
+    return dayConflictDotsForActiveTrip;
+  }, [
+    calendarConflictDotsSource,
+    calendarConflictDotSummary,
+    activeTrip,
+    dayConflictDotsForActiveTrip,
   ]);
 
   const onSaveDayNote = useCallback(
@@ -1916,7 +1969,7 @@ export function PlannerClient({
                             ridePrioritiesByDayForActiveTrip
                           }
                           rideCountsByDay={rideCountsByDayForActiveTrip}
-                          dayConflictDots={dayConflictDotsForActiveTrip}
+                          dayConflictDots={calendarConflictDotsForCalendar}
                           highlightDateKey={goToTodayRingDateKey}
                           onRideDayPrioritiesUpdated={
                             handleRideDayPrioritiesUpdated

@@ -50,11 +50,13 @@ function legacyProfileTierToProductTier(tier: UserTier): Tier {
 function stripeSubToProductTier(row: UserSubRow): Tier | null {
   const s = row.status;
   if (s === "active" || s === "trialing") {
+    if (row.tier === "day_tripper") return "day_tripper";
     return row.tier === "captain" ? "captain" : "navigator";
   }
   if (s === "past_due") {
     const grace = row.grace_until;
     if (grace && new Date(grace).getTime() > Date.now()) {
+      if (row.tier === "day_tripper") return "day_tripper";
       return row.tier === "captain" ? "captain" : "navigator";
     }
     return "day_tripper";
@@ -116,6 +118,7 @@ export async function maxActiveTripsForUser(userId: string): Promise<number | "u
   const sub = subRows?.[0] as UserSubRow | undefined;
   if (sub) {
     const mapped = stripeSubToProductTier(sub);
+    if (mapped === "day_tripper") return 1;
     if (mapped === "navigator") return 5;
     if (mapped === "captain") return "unlimited";
   }

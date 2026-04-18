@@ -156,7 +156,7 @@ export function DayDetailLayer({
     (dk: string | null) => {
       if (!dk) return;
       const seg = formatDateISO(parseDate(dk));
-      router.replace(`${tripBasePath}/day/${seg}`, { scroll: false });
+      router.push(`${tripBasePath}/day/${seg}`, { scroll: false });
     },
     [router, tripBasePath],
   );
@@ -252,16 +252,15 @@ export function DayDetailLayer({
         return;
       }
       if (!deskKb) return;
+      const ae = document.activeElement;
       if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
+        ae instanceof HTMLInputElement ||
+        ae instanceof HTMLTextAreaElement ||
+        ae instanceof HTMLSelectElement
       ) {
         return;
       }
-      if (
-        e.target instanceof HTMLElement &&
-        e.target.isContentEditable
-      ) {
+      if (ae instanceof HTMLElement && ae.isContentEditable) {
         return;
       }
       if (e.key === "ArrowLeft" && prev) {
@@ -283,7 +282,7 @@ export function DayDetailLayer({
     if (!target) return;
     if (
       target.closest(
-        'input,textarea,button,[contenteditable="true"],[contenteditable]',
+        'input,textarea,button,[contenteditable="true"],[contenteditable],[data-no-swipe]',
       )
     ) {
       return;
@@ -342,7 +341,7 @@ export function DayDetailLayer({
     <>
       <button
         type="button"
-        className="fixed inset-0 z-[95] hidden bg-royal/40 md:block"
+        className="fixed inset-0 z-[95] hidden bg-black/40 md:block"
         aria-label="Close day detail"
         onClick={onClose}
       />

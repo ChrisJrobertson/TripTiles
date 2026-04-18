@@ -14,6 +14,7 @@ import {
   tierFromProfileRow,
 } from "@/lib/supabase/profile-read";
 import { createClient } from "@/lib/supabase/server";
+import { DevTierWidget } from "@/components/settings/DevTierWidget";
 import { TemperatureUnitSettings } from "@/components/settings/TemperatureUnitSettings";
 import { EmailPreferencesSettings } from "@/components/settings/EmailPreferencesSettings";
 import type { TemperatureUnit } from "@/lib/types";
@@ -103,6 +104,9 @@ export default async function SettingsPage() {
   const initialTemperatureUnit: TemperatureUnit =
     profileRow.temperature_unit === "f" ? "f" : "c";
   const emailMarketingOptOut = profileRow.email_marketing_opt_out === true;
+  const showDevTierWidget =
+    process.env.NODE_ENV !== "production" ||
+    process.env.ALLOW_DEV_TIER_OVERRIDE === "true";
 
   return (
     <div className="min-h-screen bg-cream pb-16 pt-0">
@@ -151,6 +155,12 @@ export default async function SettingsPage() {
           hasPasswordAuth={hasPasswordAuth}
           oauthProviderLabel={oauthProviderLabel}
         />
+
+        {showDevTierWidget ? (
+          <div className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
+            <DevTierWidget />
+          </div>
+        ) : null}
 
         <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
           <h2 className="font-serif text-xl font-semibold text-royal">Billing</h2>

@@ -1,14 +1,32 @@
 "use client";
 
-import type { PlannerDayConflict } from "@/lib/planner-day-conflicts";
+import {
+  dayConflictDismissKey,
+  type DayConflict,
+} from "@/lib/planner-day-conflicts";
 import { useCallback, useEffect, useId, useState } from "react";
 
 type Props = {
   tripId: string;
   dayDate: string;
-  conflicts: PlannerDayConflict[];
+  conflicts: DayConflict[];
   onAskTripp: () => void;
 };
+
+function bannerMessage(c: DayConflict): string {
+  switch (c.type) {
+    case "time_overlap":
+      return `Time overlap — ${c.slotA} and ${c.slotB} both planned around ${c.time}.`;
+    case "day_overrun": {
+      const hours = Math.round((c.estimatedMinutes / 60) * 10) / 10;
+      return `This day looks packed — around ${hours} h of planned activity (over 14 h).`;
+    }
+    case "empty_must_do":
+      return `No must-dos set for ${c.parkName}.`;
+    default:
+      return "";
+  }
+}
 
 export function DayConflictBanners({
   tripId,
@@ -20,26 +38,42 @@ export function DayConflictBanners({
   const [expanded, setExpanded] = useState(false);
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(() => new Set());
 
+  const sessionKey = useCallback(
+    (c: DayConflict) => {
+      switch (c.type) {
+        case "time_overlap":
+          return `${tripId}:${dayDate}:time_overlap:${c.slotA}:${c.slotB}:${c.time}`;
+        case "day_overrun":
+          return `${tripId}:${dayDate}:day_overrun`;
+        case "empty_must_do":
+          return `${tripId}:${dayDate}:empty_must_do:${c.parkId}`;
+        default:
+          return `${tripId}:${dayDate}:${dayConflictDismissKey(c)}`;
+      }
+    },
+    [tripId, dayDate],
+  );
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const next = new Set<string>();
     for (const c of conflicts) {
-      const k = `${tripId}:${dayDate}:${c.dismissKey}`;
-      if (sessionStorage.getItem(k) === "1") next.add(c.dismissKey);
+      if (sessionStorage.getItem(sessionKey(c)) === "1") {
+        next.add(dayConflictDismissKey(c));
+      }
     }
     setHiddenKeys(next);
-  }, [tripId, dayDate, conflicts]);
+  }, [tripId, dayDate, conflicts, sessionKey]);
 
-  const visible = conflicts.filter((c) => !hiddenKeys.has(c.dismissKey));
+  const visible = conflicts.filter((c) => !hiddenKeys.has(dayConflictDismissKey(c)));
 
   const dismiss = useCallback(
-    (c: PlannerDayConflict) => {
-      const k = `${tripId}:${dayDate}:${c.dismissKey}`;
-      sessionStorage.setItem(k, "1");
+    (c: DayConflict) => {
+      sessionStorage.setItem(sessionKey(c), "1");
       setExpanded(false);
-      setHiddenKeys((prev) => new Set(prev).add(c.dismissKey));
+      setHiddenKeys((prev) => new Set(prev).add(dayConflictDismissKey(c)));
     },
-    [tripId, dayDate],
+    [sessionKey],
   );
 
   if (visible.length === 0) return null;
@@ -57,15 +91,15 @@ export function DayConflictBanners({
     >
       {shown.map((c) => (
         <div
-          key={c.dismissKey}
+          key={dayConflictDismissKey(c)}
           className={`relative rounded-lg border px-3 py-2.5 pr-10 font-sans text-sm leading-snug ${
-            c.kind === "empty_must_do"
+            c.type === "empty_must_do"
               ? "border-royal/15 bg-royal/[0.04] text-royal/85"
               : "border-amber-300/80 bg-amber-50/90 text-amber-950"
           }`}
         >
-          <p>{c.message}</p>
-          {c.kind === "empty_must_do" ? (
+          <p className="break-words">{bannerMessage(c)}</p>
+          {c.type === "empty_must_do" ? (
             <button
               type="button"
               className="mt-2 min-h-11 rounded-lg border border-royal/20 bg-white px-3 font-sans text-xs font-semibold text-royal"

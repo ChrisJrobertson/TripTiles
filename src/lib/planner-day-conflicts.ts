@@ -8,17 +8,45 @@ import type { TripRidePriority } from "@/types/attractions";
 
 const SLOT_ORDER: SlotType[] = ["am", "pm", "lunch", "dinner"];
 
-export type PlannerConflictKind =
-  | "time_overlap"
-  | "day_overrun"
-  | "empty_must_do";
-
-export type PlannerDayConflict = {
-  kind: PlannerConflictKind;
-  /** Stable key for session dismiss. */
-  dismissKey: string;
-  message: string;
+export type DayConflictTimeOverlap = {
+  type: "time_overlap";
+  slotA: string;
+  slotB: string;
+  time: string;
+  level: "amber";
 };
+
+export type DayConflictDayOverrun = {
+  type: "day_overrun";
+  estimatedMinutes: number;
+  level: "amber";
+};
+
+export type DayConflictEmptyMustDo = {
+  type: "empty_must_do";
+  parkName: string;
+  parkId: string;
+  level: "grey";
+};
+
+export type DayConflict =
+  | DayConflictTimeOverlap
+  | DayConflictDayOverrun
+  | DayConflictEmptyMustDo;
+
+/** Stable key for session dismiss + React keys. */
+export function dayConflictDismissKey(c: DayConflict): string {
+  switch (c.type) {
+    case "time_overlap":
+      return `time_overlap:${c.slotA}:${c.slotB}`;
+    case "day_overrun":
+      return "day_overrun";
+    case "empty_must_do":
+      return `empty_must_do:${c.parkId}`;
+    default:
+      return "unknown";
+  }
+}
 
 function slotLabel(slot: SlotType): string {
   switch (slot) {
@@ -48,23 +76,32 @@ function formatTimeForCopy(slot: SlotType, v: Assignment[SlotType]): string {
 
 /**
  * Planner warnings for a single day (slots, ride list, durations).
- * UK copy; Tripp is the advisor name in UI strings that reference them.
+ * Pure function — safe on server and client. UK copy.
  */
-export function computePlannerDayConflicts(
+export function computeDayConflicts(
   trip: Trip,
   dateKey: string,
   priorities: TripRidePriority[],
   rideCountsFallback: { total: number; mustDo: number } | undefined,
   parkById: Map<string, Park>,
-): PlannerDayConflict[] {
-  const out: PlannerDayConflict[] = [];
+): DayConflict[] {
+  const out: DayConflict[] = [];
   const ass: Assignment = trip.assignments[dateKey] ?? {};
 
-  const timedSlots: { slot: SlotType; mins: number; label: string; timeLabel: string }[] =
-    [];
+  const timedSlots: {
+    slot: SlotType;
+    mins: number;
+    label: string;
+    timeLabel: string;
+  }[] = [];
   for (const slot of SLOT_ORDER) {
     const v = ass[slot];
-    if (v != null && typeof v === "object" && typeof v.time === "string" && v.time.trim()) {
+    if (
+      v != null &&
+      typeof v === "object" &&
+      typeof v.time === "string" &&
+      v.time.trim()
+    ) {
       const mins = timeToMinutes(getSlotTimeFromValue(slot, v));
       timedSlots.push({
         slot,
@@ -80,10 +117,15 @@ export function computePlannerDayConflicts(
       const a = timedSlots[i]!;
       const b = timedSlots[j]!;
       if (Math.abs(a.mins - b.mins) <= 60) {
+        const slotA = a.label;
+        const slotB = b.label;
+        const time = a.timeLabel;
         out.push({
-          kind: "time_overlap",
-          dismissKey: `time_overlap:${a.slot}:${b.slot}`,
-          message: `Time overlap — ${a.label} and ${b.label} both planned around ${a.timeLabel}.`,
+          type: "time_overlap",
+          slotA,
+          slotB,
+          time,
+          level: "amber",
         });
       }
     }
@@ -103,11 +145,10 @@ export function computePlannerDayConflicts(
   const bufferMinutes = 45 * parkSlotCount;
   const totalPlanned = rideMinutes + bufferMinutes;
   if (totalPlanned > 840) {
-    const hours = Math.round((totalPlanned / 60) * 10) / 10;
     out.push({
-      kind: "day_overrun",
-      dismissKey: "day_overrun",
-      message: `This day looks packed — around ${hours} h of planned activity (over 14 h).`,
+      type: "day_overrun",
+      estimatedMinutes: totalPlanned,
+      level: "amber",
     });
   }
 
@@ -120,28 +161,36 @@ export function computePlannerDayConflicts(
     const id = getParkIdFromSlotValue(ass[slot]);
     if (id) parkIdsInSlots.add(id);
   }
+
   if (parkIdsInSlots.size > 0 && effectiveMust === 0) {
-    const names = [...parkIdsInSlots]
-      .map((id) => parkById.get(id)?.name)
-      .filter(Boolean) as string[];
-    const parkName = names.length === 0 ? "this park" : names.join(" · ");
-    out.push({
-      kind: "empty_must_do",
-      dismissKey: "empty_must_do",
-      message: `No must-dos set for ${parkName}. Tripp can suggest some.`,
-    });
+    for (const parkId of parkIdsInSlots) {
+      const name = parkById.get(parkId)?.name?.trim() || "this park";
+      out.push({
+        type: "empty_must_do",
+        parkName: name,
+        parkId,
+        level: "grey",
+      });
+    }
   }
 
   return out;
 }
 
-export function conflictDotForDay(
-  conflicts: PlannerDayConflict[],
+/** @deprecated Use {@link computeDayConflicts} */
+export const computePlannerDayConflicts = computeDayConflicts;
+
+export function conflictDotForDayConflicts(
+  conflicts: DayConflict[],
 ): "amber" | "grey" | null {
   if (conflicts.length === 0) return null;
-  const amber = conflicts.some(
-    (c) => c.kind === "time_overlap" || c.kind === "day_overrun",
-  );
+  const amber = conflicts.some((c) => c.level === "amber");
   if (amber) return "amber";
   return "grey";
+}
+
+export function conflictDotForDay(
+  conflicts: DayConflict[],
+): "amber" | "grey" | null {
+  return conflictDotForDayConflicts(conflicts);
 }

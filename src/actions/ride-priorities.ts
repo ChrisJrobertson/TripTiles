@@ -1,10 +1,20 @@
 "use server";
 
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
+import { getParksForRegion } from "@/lib/db/parks";
+import { mapTripRow } from "@/lib/db/trips";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type { Attraction, RidePriority, TripRidePriority } from "@/types/attractions";
 import { createClient as createSupabaseJs } from "@supabase/supabase-js";
-import { formatDateISO, parseDate } from "@/lib/date-helpers";
+import {
+  eachDateKeyInRange,
+  formatDateISO,
+  parseDate,
+} from "@/lib/date-helpers";
+import {
+  computeDayConflicts,
+  type DayConflict,
+} from "@/lib/planner-day-conflicts";
 import { mapAttractionRow, mapPriorityRow } from "@/lib/ride-priority-rows";
 import { revalidatePath } from "next/cache";
 import { unstable_cache } from "next/cache";
@@ -127,6 +137,84 @@ export async function getRidePrioritiesForDay(
 ): Promise<TripRidePriority[]> {
   const all = await getRidePrioritiesForTrip(tripId);
   return all.filter((p) => p.day_date === dayDate);
+}
+
+export type DayConflictDotSummary = Record<
+  string,
+  { hasAmber: boolean; hasGrey: boolean }
+>;
+
+/** Per-day ride rows + server-computed conflicts (lazy Day Detail fetch). */
+export async function getRidePrioritiesAndConflictsForDay(
+  tripId: string,
+  dayDate: string,
+  rideCountsOverride?: { total: number; mustDo: number } | null,
+): Promise<{ priorities: TripRidePriority[]; conflicts: DayConflict[] }> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Not signed in.");
+  const supabase = await createClient();
+  const { data: tripRow, error: tErr } = await supabase
+    .from("trips")
+    .select("*")
+    .eq("id", tripId)
+    .maybeSingle();
+  if (tErr || !tripRow) throw new Error("Trip not found.");
+  const trip = mapTripRow(tripRow as Record<string, unknown>);
+  const parks = trip.region_id
+    ? await getParksForRegion(trip.region_id)
+    : [];
+  const parkById = new Map(parks.map((p) => [p.id, p]));
+  const dk = formatDateISO(parseDate(dayDate.slice(0, 10)));
+  const priorities = await getRidePrioritiesForDay(tripId, dk);
+  const conflicts = computeDayConflicts(
+    trip,
+    dk,
+    priorities,
+    rideCountsOverride ?? undefined,
+    parkById,
+  );
+  return { priorities, conflicts };
+}
+
+/** One round-trip for planner overview conflict dots (same rules as Day Detail). */
+export async function getConflictDotSummaryForTrip(
+  tripId: string,
+): Promise<DayConflictDotSummary> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Not signed in.");
+  const supabase = await createClient();
+  const { data: tripRow, error: tErr } = await supabase
+    .from("trips")
+    .select("*")
+    .eq("id", tripId)
+    .maybeSingle();
+  if (tErr || !tripRow) throw new Error("Trip not found.");
+  const trip = mapTripRow(tripRow as Record<string, unknown>);
+  const parks = trip.region_id
+    ? await getParksForRegion(trip.region_id)
+    : [];
+  const parkById = new Map(parks.map((p) => [p.id, p]));
+  const allPri = await getRidePrioritiesForTrip(tripId);
+  const countMap = await getRidePriorityCountsForTripIds([tripId]);
+  const dayCounts = countMap[tripId] ?? {};
+  const out: DayConflictDotSummary = {};
+  for (const dateKey of eachDateKeyInRange(trip.start_date, trip.end_date)) {
+    const dayPri = allPri.filter((p) => p.day_date === dateKey);
+    const counts = dayCounts[dateKey];
+    const conflicts = computeDayConflicts(
+      trip,
+      dateKey,
+      dayPri,
+      counts,
+      parkById,
+    );
+    const hasAmber = conflicts.some((c) => c.level === "amber");
+    const hasGrey = conflicts.some((c) => c.level === "grey");
+    if (hasAmber || hasGrey) {
+      out[dateKey] = { hasAmber, hasGrey };
+    }
+  }
+  return out;
 }
 
 export async function toggleRidePriority(
