@@ -36,14 +36,8 @@ import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { formatRegionalDiningForPrompt } from "@/data/regional-dining";
 import { formatPlanningPreferencesForPrompt } from "@/lib/planning-preferences-prompt";
 import { isNamedRestaurantPark } from "@/lib/named-restaurant-tiles";
-import {
-  assertTierAllows,
-  getUserTier,
-  tierErrorToClientPayload,
-} from "@/lib/tier";
 import { logTrippUsage } from "@/lib/tripp-usage-log";
-import { resolveTrippModel } from "@/lib/tripp-model";
-import { TierError } from "@/lib/tier-errors";
+import { getCurrentTier } from "@/lib/entitlements";
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY ?? "",
 });
@@ -364,21 +358,6 @@ export async function generateAIPlanAction(input: {
     return { ok: false, error: "NOT_AUTHED", message: "Not signed in." };
   }
 
-  try {
-    await assertTierAllows(user.id, "ai");
-  } catch (e) {
-    const mapped = tierErrorToClientPayload(e);
-    if (mapped?.code === "TIER_AI_DISABLED") {
-      return {
-        ok: false,
-        error: "TIER_AI_DISABLED",
-        message:
-          "Tripp is not included on the Day Tripper plan. Upgrade to Navigator or Captain on Pricing.",
-      };
-    }
-    throw e;
-  }
-
   if (!process.env.ANTHROPIC_API_KEY) {
     return {
       ok: false,
@@ -423,7 +402,7 @@ export async function generateAIPlanAction(input: {
 
   let canGenerateAi: boolean;
   try {
-    canGenerateAi = await currentUserCanGenerateAI();
+    canGenerateAi = await currentUserCanGenerateAI(input.tripId);
   } catch (e) {
     if (isTierLoadFailure(e)) {
       return {
@@ -523,19 +502,7 @@ export async function generateAIPlanAction(input: {
     namedRestaurantHint,
   });
 
-  let model = "claude-haiku-4-5";
-  try {
-    model = await resolveTrippModel(user.id);
-  } catch (e) {
-    if (e instanceof TierError && e.code === "TIER_AI_DISABLED") {
-      return {
-        ok: false,
-        error: "TIER_AI_DISABLED",
-        message: e.message,
-      };
-    }
-    throw e;
-  }
+  const model = "claude-haiku-4-5-20251001";
 
   let inputTokens = 0;
   let outputTokens = 0;
@@ -566,7 +533,7 @@ export async function generateAIPlanAction(input: {
     const latencyMs = Date.now() - t0;
     void logTrippUsage({
       userId: user.id,
-      tier: await getUserTier(user.id),
+      tier: await getCurrentTier(),
       model,
       inputTokens,
       outputTokens,

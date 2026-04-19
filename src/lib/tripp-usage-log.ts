@@ -1,9 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
-import type { Tier } from "@/lib/tier";
+import type { PublicTier } from "@/lib/tiers";
 
 export async function logTrippUsage(input: {
   userId: string;
-  tier: Tier;
+  tier: PublicTier;
   model: string;
   inputTokens: number;
   outputTokens: number;

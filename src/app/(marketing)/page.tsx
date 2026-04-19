@@ -52,7 +52,7 @@ const FEATURES = [
   {
     icon: "👨‍👩‍👧‍👦",
     title: "Family sharing",
-    body: "Invite editors on Family and Premium — plan together in one place.",
+    body: "Invite editors on Family — plan together in one place.",
   },
   {
     icon: "🌍",
@@ -61,15 +61,15 @@ const FEATURES = [
   },
   {
     icon: "💳",
-    title: "One-time pricing",
-    body: "No subscriptions — pay once, keep access for that tier forever.",
+    title: "Subscription pricing",
+    body: "Monthly or annual plans through Stripe. Cancel anytime.",
   },
 ];
 
 const FAQ = [
   {
     q: "Is this a subscription?",
-    a: "No. TripTiles is a one-time purchase per tier. Your access does not expire.",
+    a: "Yes. Pro and Family are recurring subscriptions billed monthly or annually.",
   },
   {
     q: "Which theme parks are included?",
@@ -85,7 +85,7 @@ const FAQ = [
   },
   {
     q: "Can I share with my family?",
-    a: "Yes. Family and Premium tiers include collaborator invites so you can plan together.",
+    a: "Yes. Family includes collaborator invites so you can plan together.",
   },
 ];
 
@@ -100,7 +100,6 @@ export default async function MarketingHomePage() {
   const tierFree = TIERS.free;
   const tierPro = TIERS.pro;
   const tierFamily = TIERS.family;
-  const tierPremium = TIERS.premium;
 
   return (
     <main className="flex flex-1 flex-col">
@@ -329,7 +328,7 @@ export default async function MarketingHomePage() {
           <h2 className="text-center font-serif text-2xl font-semibold text-royal md:text-3xl">
             Simple pricing
           </h2>
-          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-2xl border border-royal/10 bg-cream p-6 text-center">
               <p className="font-serif text-lg font-semibold text-royal">Free</p>
               <p className="mt-2 font-serif text-3xl text-gold">£0</p>
@@ -361,17 +360,6 @@ export default async function MarketingHomePage() {
               </p>
               <p className="mt-3 font-sans text-xs text-royal/70">
                 Share planning with family members
-              </p>
-            </div>
-            <div className="rounded-2xl border border-royal/10 bg-cream p-6 text-center">
-              <p className="font-serif text-lg font-semibold text-royal">
-                Premium
-              </p>
-              <p className="mt-2 font-serif text-3xl text-gold">
-                £{tierPremium.price_gbp.toFixed(2)}
-              </p>
-              <p className="mt-3 font-sans text-xs text-royal/70">
-                Enhanced Smart Plan (Sonnet model)
               </p>
             </div>
           </div>

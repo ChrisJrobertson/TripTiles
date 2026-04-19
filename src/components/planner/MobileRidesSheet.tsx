@@ -7,6 +7,7 @@ import {
   reorderRidePriorities,
   toggleRidePriority,
 } from "@/actions/ride-priorities";
+import { TierLimitModal } from "@/components/paywall/TierLimitModal";
 import { SkipLineLegend } from "@/components/planner/SkipLineLegend";
 import {
   buildLightningLaneStrategyBlurb,
@@ -59,6 +60,7 @@ export function MobileRidesSheet({
   parks,
   onPrioritiesUpdated,
 }: Props) {
+  const [showLimitModal, setShowLimitModal] = useState(false);
   const titleId = useId();
   const [search, setSearch] = useState("");
   const [catalog, setCatalog] = useState<Attraction[]>([]);
@@ -156,13 +158,32 @@ export function MobileRidesSheet({
   );
 
   const runMutation = useCallback(
-    (fn: () => Promise<void>) => {
+    (fn: () => Promise<unknown>) => {
       void (async () => {
         setPending(true);
         try {
-          await fn();
+          const result = await fn();
+          if (
+            result &&
+            typeof result === "object" &&
+            "ok" in result &&
+            result.ok === false &&
+            "error" in result &&
+            typeof result.error === "string"
+          ) {
+            if (result.error.includes("Free tier limit reached")) {
+              setShowLimitModal(true);
+            }
+            throw new Error(result.error);
+          }
           const next = await refreshDayPriorities(tripId, dayDate);
           onPrioritiesUpdated(next);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Could not update rides.";
+          if (!msg.includes("Free tier limit reached")) {
+            // Keep toast noise low when we show the tier modal.
+            console.warn(msg);
+          }
         } finally {
           setPending(false);
         }
@@ -468,6 +489,12 @@ export function MobileRidesSheet({
           </div>
         </div>
       </div>
+      <TierLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        reason="Free includes up to 5 ride priorities per trip. Upgrade for unlimited ride priorities."
+        variant="custom"
+      />
     </div>
   );
 }

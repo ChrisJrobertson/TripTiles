@@ -5,6 +5,7 @@ import {
   deletePayment,
   updatePayment,
 } from "@/actions/payments";
+import { TierLimitModal } from "@/components/paywall/TierLimitModal";
 import { showToast } from "@/lib/toast";
 import type { Trip } from "@/lib/types";
 import type { PaymentCurrency, TripPayment } from "@/types/payments";
@@ -83,6 +84,7 @@ export function PaymentsTab({ trip, payments, onPaymentsChange }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
   const [formLabel, setFormLabel] = useState("");
   const [formAmount, setFormAmount] = useState("");
   const [formCurrency, setFormCurrency] = useState<PaymentCurrency>("GBP");
@@ -165,6 +167,9 @@ export function PaymentsTab({ trip, payments, onPaymentsChange }: Props) {
     });
     setBusy(false);
     if (!r.ok) {
+      if (r.error.includes("Free tier limit reached")) {
+        setShowLimitModal(true);
+      }
       showToast(r.error);
       return;
     }
@@ -409,6 +414,12 @@ export function PaymentsTab({ trip, payments, onPaymentsChange }: Props) {
           Total outstanding: {totalsLine}
         </div>
       ) : null}
+      <TierLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        reason="Free includes up to 3 payment items per trip. Upgrade for unlimited payment tracking."
+        variant="custom"
+      />
     </div>
   );
 }

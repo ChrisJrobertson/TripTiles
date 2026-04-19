@@ -617,7 +617,7 @@ export function DayDetailLayer({
       <TierLimitModal
         isOpen={tierLimitOpen}
         onClose={() => setTierLimitOpen(false)}
-        reason="That option is part of Navigator and Captain — upgrade to unlock day templates and recurring duplicates."
+        reason="That option is part of Pro and Family — upgrade to unlock day templates and recurring duplicates."
         variant="custom"
       />
 

@@ -18,6 +18,7 @@ import {
 import { mapAttractionRow, mapPriorityRow } from "@/lib/ride-priority-rows";
 import { revalidatePath } from "next/cache";
 import { unstable_cache } from "next/cache";
+import { currentUserCanCreateRidePriority } from "@/lib/entitlements";
 
 function revalidatePlanner() {
   revalidatePath("/planner");
@@ -222,9 +223,9 @@ export async function toggleRidePriority(
   attractionId: string,
   dayDate: string,
   priority: RidePriority,
-): Promise<void> {
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const user = await getCurrentUser();
-  if (!user) throw new Error("Not signed in.");
+  if (!user) return { ok: false, error: "Not signed in." };
   const supabase = await createClient();
 
   const { data: existing } = await supabase
@@ -240,8 +241,16 @@ export async function toggleRidePriority(
       .from("trip_ride_priorities")
       .update({ priority })
       .eq("id", existing.id);
-    if (error) throw new Error(error.message);
+    if (error) return { ok: false, error: error.message };
   } else {
+    const allowed = await currentUserCanCreateRidePriority(tripId);
+    if (!allowed) {
+      return {
+        ok: false,
+        error:
+          "Free tier limit reached. Upgrade to track unlimited ride priorities.",
+      };
+    }
     const { data: maxRow } = await supabase
       .from("trip_ride_priorities")
       .select("sort_order")
@@ -258,9 +267,10 @@ export async function toggleRidePriority(
       priority,
       sort_order: nextOrder,
     });
-    if (error) throw new Error(error.message);
+    if (error) return { ok: false, error: error.message };
   }
   revalidatePlanner();
+  return { ok: true };
 }
 
 export async function removeRidePriority(

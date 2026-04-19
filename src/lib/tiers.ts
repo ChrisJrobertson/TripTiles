@@ -1,226 +1,139 @@
-import type { UserTier } from "@/lib/types";
+export type PublicTier = "free" | "pro" | "family";
 
-/**
- * @deprecated Use `getUserTier` from `src/lib/tier.ts` instead.
- * This module is kept for backwards compatibility with pre-Stripe
- * code paths and will be removed once all call sites are migrated.
- * Do not add new imports.
- */
-
-/** Aligned with `profiles.tier` / product spec. */
-export type Tier = UserTier;
-
-export interface TierConfig {
-  id: Tier;
+export type TierConfig = {
+  key: PublicTier;
   name: string;
+  displayName: string;
   price_gbp: number;
-  price_pence: number;
-  description: string;
-  payhip_url: string | null;
+  monthlyPriceGbp: number | null;
+  annualPriceGbp: number | null;
   features: {
     max_trips: number | null;
     max_ai_per_trip: number | null;
-    max_custom_tiles: number | null;
+    family_sharing: boolean;
     pdf_watermark: boolean;
     pdf_design: "standard" | "premium";
-    /** Anthropic API model id */
-    ai_model: "claude-haiku-4-5" | "claude-sonnet-4-6";
-    family_sharing: boolean;
-    priority_support: boolean;
   };
-  badge_emoji: string;
-  achievement_key: string | null;
-}
+  limits: {
+    trips: number;
+    ai_smart_plan_lifetime: number;
+    ai_day_planner_enabled: boolean;
+    ride_priorities_per_trip: number;
+    trip_payments: number;
+    custom_tiles: number;
+    pdf_watermarked: boolean;
+    public_sharing: boolean;
+    family_sharing_members: number;
+  };
+};
 
-function envPayhipUrl(key: "pro" | "family" | "premium"): string | null {
-  const env = process.env;
-  const u =
-    key === "pro"
-      ? env.NEXT_PUBLIC_PAYHIP_PRO_URL
-      : key === "family"
-        ? env.NEXT_PUBLIC_PAYHIP_FAMILY_URL
-        : env.NEXT_PUBLIC_PAYHIP_PREMIUM_URL;
-  const t = u?.trim();
-  return t || null;
-}
-
-export const TIERS: Record<Tier, TierConfig> = {
+export const TIERS: Record<PublicTier, TierConfig> = {
   free: {
-    id: "free",
-    name: "Day Tripper",
+    key: "free",
+    name: "Free",
+    displayName: "Free",
     price_gbp: 0,
-    price_pence: 0,
-    description: "Plan your first adventure",
-    payhip_url: null,
+    monthlyPriceGbp: null,
+    annualPriceGbp: null,
     features: {
       max_trips: 1,
-      max_ai_per_trip: 0,
-      max_custom_tiles: 5,
+      max_ai_per_trip: 3,
+      family_sharing: false,
       pdf_watermark: true,
       pdf_design: "standard",
-      ai_model: "claude-haiku-4-5",
-      family_sharing: false,
-      priority_support: false,
     },
-    badge_emoji: "✈️",
-    achievement_key: null,
+    limits: {
+      trips: 1,
+      ai_smart_plan_lifetime: 3,
+      ai_day_planner_enabled: false,
+      ride_priorities_per_trip: 5,
+      trip_payments: 3,
+      custom_tiles: 5,
+      pdf_watermarked: true,
+      public_sharing: false,
+      family_sharing_members: 0,
+    },
   },
   pro: {
-    id: "pro",
+    key: "pro",
     name: "Pro",
-    price_gbp: 24.99,
-    price_pence: 2499,
-    description: "Plan unlimited holidays, forever",
-    payhip_url: envPayhipUrl("pro"),
+    displayName: "Pro",
+    price_gbp: 6.99,
+    monthlyPriceGbp: 6.99,
+    annualPriceGbp: 39.99,
     features: {
       max_trips: null,
       max_ai_per_trip: null,
-      max_custom_tiles: null,
-      pdf_watermark: false,
-      pdf_design: "standard",
-      ai_model: "claude-haiku-4-5",
       family_sharing: false,
-      priority_support: false,
+      pdf_watermark: false,
+      pdf_design: "premium",
     },
-    badge_emoji: "⭐",
-    achievement_key: "upgraded_pro",
+    limits: {
+      trips: -1,
+      ai_smart_plan_lifetime: -1,
+      ai_day_planner_enabled: true,
+      ride_priorities_per_trip: -1,
+      trip_payments: -1,
+      custom_tiles: -1,
+      pdf_watermarked: false,
+      public_sharing: true,
+      family_sharing_members: 0,
+    },
   },
   family: {
-    id: "family",
+    key: "family",
     name: "Family",
-    price_gbp: 39.99,
-    price_pence: 3999,
-    description: "Plan together with the whole family",
-    payhip_url: envPayhipUrl("family"),
+    displayName: "Family",
+    price_gbp: 11.99,
+    monthlyPriceGbp: 11.99,
+    annualPriceGbp: 69.99,
     features: {
       max_trips: null,
       max_ai_per_trip: null,
-      max_custom_tiles: null,
-      pdf_watermark: false,
-      pdf_design: "standard",
-      ai_model: "claude-haiku-4-5",
       family_sharing: true,
-      priority_support: false,
-    },
-    badge_emoji: "👨‍👩‍👧‍👦",
-    achievement_key: "upgraded_family",
-  },
-  premium: {
-    id: "premium",
-    name: "Premium",
-    price_gbp: 59.99,
-    price_pence: 5999,
-    description: "The richest Smart Plan experience and premium extras",
-    payhip_url: envPayhipUrl("premium"),
-    features: {
-      max_trips: null,
-      max_ai_per_trip: null,
-      max_custom_tiles: null,
       pdf_watermark: false,
       pdf_design: "premium",
-      ai_model: "claude-sonnet-4-6",
-      family_sharing: true,
-      priority_support: true,
     },
-    badge_emoji: "💎",
-    achievement_key: "upgraded_premium",
-  },
-  concierge: {
-    id: "concierge",
-    name: "Concierge",
-    price_gbp: 0,
-    price_pence: 0,
-    description: "White-glove service",
-    payhip_url: null,
-    features: {
-      max_trips: null,
-      max_ai_per_trip: null,
-      max_custom_tiles: null,
-      pdf_watermark: false,
-      pdf_design: "premium",
-      ai_model: "claude-sonnet-4-6",
-      family_sharing: true,
-      priority_support: true,
+    limits: {
+      trips: -1,
+      ai_smart_plan_lifetime: -1,
+      ai_day_planner_enabled: true,
+      ride_priorities_per_trip: -1,
+      trip_payments: -1,
+      custom_tiles: -1,
+      pdf_watermarked: false,
+      public_sharing: true,
+      family_sharing_members: 4,
     },
-    badge_emoji: "🎩",
-    achievement_key: null,
-  },
-  agent_staff: {
-    id: "agent_staff",
-    name: "Agency Staff",
-    price_gbp: 0,
-    price_pence: 0,
-    description: "Travel agent staff account",
-    payhip_url: null,
-    features: {
-      max_trips: null,
-      max_ai_per_trip: null,
-      max_custom_tiles: null,
-      pdf_watermark: false,
-      pdf_design: "premium",
-      ai_model: "claude-haiku-4-5",
-      family_sharing: true,
-      priority_support: false,
-    },
-    badge_emoji: "🏢",
-    achievement_key: null,
-  },
-  agent_admin: {
-    id: "agent_admin",
-    name: "Agency Admin",
-    price_gbp: 0,
-    price_pence: 0,
-    description: "Travel agent admin account",
-    payhip_url: null,
-    features: {
-      max_trips: null,
-      max_ai_per_trip: null,
-      max_custom_tiles: null,
-      pdf_watermark: false,
-      pdf_design: "premium",
-      ai_model: "claude-sonnet-4-6",
-      family_sharing: true,
-      priority_support: true,
-    },
-    badge_emoji: "🏢",
-    achievement_key: null,
   },
 };
 
-export function getTierConfig(tier: Tier): TierConfig {
-  return TIERS[tier] ?? TIERS.free;
+export function normaliseTier(tier: string | null | undefined): PublicTier {
+  const t = (tier ?? "free").toLowerCase();
+  if (t === "pro") return "pro";
+  if (t === "family") return "family";
+  if (t === "premium") return "family";
+  if (t === "concierge" || t === "agent_staff" || t === "agent_admin") {
+    return "family";
+  }
+  return "free";
 }
 
-export function isPaidTier(tier: Tier): boolean {
-  return tier !== "free";
+export function getTierConfig(tier: string | null | undefined): TierConfig {
+  return TIERS[normaliseTier(tier)];
 }
 
-export const PUBLIC_TIERS: Tier[] = ["free", "pro", "family", "premium"];
-
-/** Paid tier ordering for upgrades (excludes internal roles). */
-const PAID_TIER_RANK: Record<string, number> = {
-  free: 0,
-  pro: 1,
-  family: 2,
-  premium: 3,
-};
-
-/** Internal / agency tiers treated as already above retail paid tiers for comparisons. */
-const INTERNAL_TIER_RANK: Record<string, number> = {
-  concierge: 100,
-  agent_staff: 100,
-  agent_admin: 100,
-};
-
-export function tierUpgradeRank(tier: string | null | undefined): number {
-  const t = tier ?? "free";
-  if (t in INTERNAL_TIER_RANK) return INTERNAL_TIER_RANK[t];
-  return PAID_TIER_RANK[t] ?? 0;
+export function getEffectiveTier(profile: {
+  tier: string;
+  tier_expires_at: string | null;
+}): PublicTier {
+  if (profile.tier_expires_at) {
+    const expiry = Date.parse(profile.tier_expires_at);
+    if (Number.isFinite(expiry) && expiry <= Date.now()) {
+      return "free";
+    }
+  }
+  return normaliseTier(profile.tier);
 }
 
-export function shouldUpgradeTier(
-  currentTier: string | null | undefined,
-  purchasedTier: Tier,
-): boolean {
-  return tierUpgradeRank(purchasedTier) > tierUpgradeRank(currentTier);
-}
+export const PUBLIC_TIERS: PublicTier[] = ["free", "pro", "family"];
