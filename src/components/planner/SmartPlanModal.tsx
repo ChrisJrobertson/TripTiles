@@ -371,7 +371,7 @@ export function SmartPlanModal({
             </p>
           ) : (
             <p className="font-sans text-xs text-royal/60">
-              Your plan includes premium Smart Plan models and higher limits.
+              Your plan includes higher Smart Plan limits.
             </p>
           )}
 

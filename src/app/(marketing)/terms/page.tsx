@@ -68,12 +68,12 @@ export default function TermsPage() {
       <section id="payments">
         <h2>4. Subscriptions and payments</h2>
         <p>
-          Plans include Free, Pro (£24.99), Family (£39.99), and Premium
-          (£59.99). Payments are <strong>one-time</strong>, not subscriptions.
-          Checkout is processed by Payhip — their terms also apply. Access for a
-          purchased tier is intended to be ongoing; prices may change for new
-          buyers without affecting past purchases. VAT is included for UK
-          buyers where applicable.
+          Plans include Free, Pro, and Family tiers. Pro and Family are{" "}
+          <strong>recurring subscriptions</strong> billed monthly or annually.
+          Checkout and billing are processed by Stripe — their terms also apply.
+          You can cancel from Settings; paid access remains active until the end
+          of your current billing period. VAT is included for UK buyers where
+          applicable.
         </p>
       </section>
 
@@ -81,10 +81,10 @@ export default function TermsPage() {
         <h2>5. Refunds</h2>
         <p>
           We offer a <strong>30-day money-back guarantee</strong>. Request via{" "}
-          <a href="mailto:hello@triptiles.com">hello@triptiles.com</a> or through
-          Payhip. After 30 days, refunds are considered case-by-case. Refunded
-          accounts revert to the Free tier but your trip data generally remains
-          available on Free limits.
+          <a href="mailto:hello@triptiles.com">hello@triptiles.com</a>. After 30
+          days, refunds are considered case-by-case. Refunded accounts revert to
+          the Free tier but your trip data generally remains available on Free
+          limits.
         </p>
       </section>
 
