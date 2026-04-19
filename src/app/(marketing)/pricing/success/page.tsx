@@ -1,4 +1,4 @@
-import { TIERS, type Tier } from "@/lib/tiers";
+import { TIERS, type PublicTier } from "@/lib/tiers";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -8,10 +8,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-function tierFromQuery(raw: string | string[] | undefined): Tier {
+function tierFromQuery(raw: string | string[] | undefined): PublicTier {
   const v = Array.isArray(raw) ? raw[0] : raw;
   const s = (v ?? "pro").toLowerCase();
-  if (s === "family" || s === "premium" || s === "pro") return s;
+  if (s === "family") return "family";
+  if (s === "pro") return "pro";
   return "pro";
 }
 
@@ -37,11 +38,11 @@ export default async function PricingSuccessPage({
           Your account has been upgraded. All features are unlocked.
         </p>
         <p className="mt-3 font-sans text-sm text-royal/70">
-          Check your email for your receipt and license details from Payhip.
+          Check your email for your Stripe receipt.
         </p>
         <p className="mt-2 font-sans text-xs text-royal/55">
           If your tier doesn&apos;t update immediately, wait a few seconds —
-          Payhip confirms purchases via webhook.
+          Stripe confirms subscriptions via webhook.
         </p>
         <Link
           href="/planner"

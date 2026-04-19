@@ -7,6 +7,7 @@ import {
   reorderRidePriorities,
   toggleRidePriority,
 } from "@/actions/ride-priorities";
+import { TierLimitModal } from "@/components/paywall/TierLimitModal";
 import {
   closestCenter,
   DndContext,
@@ -265,6 +266,7 @@ export function ExpandedDayPanel({
 }: ExpandedDayPanelProps) {
   const [catalog, setCatalog] = useState<Attraction[]>([]);
   const [pending, setPending] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
 
   const parkById = useMemo(() => new Map(parks.map((p) => [p.id, p])), [parks]);
 
@@ -368,13 +370,31 @@ export function ExpandedDayPanel({
   );
 
   const runMutation = useCallback(
-    (fn: () => Promise<void>) => {
+    (fn: () => Promise<unknown>) => {
       void (async () => {
         setPending(true);
         try {
-          await fn();
+          const result = await fn();
+          if (
+            result &&
+            typeof result === "object" &&
+            "ok" in result &&
+            result.ok === false &&
+            "error" in result &&
+            typeof result.error === "string"
+          ) {
+            if (result.error.includes("Free tier limit reached")) {
+              setShowLimitModal(true);
+            }
+            throw new Error(result.error);
+          }
           const next = await refreshDayPriorities(tripId, dayDate);
           onPrioritiesUpdated(next);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Could not update rides.";
+          if (!msg.includes("Free tier limit reached")) {
+            showToast(msg);
+          }
         } finally {
           setPending(false);
         }
@@ -718,6 +738,12 @@ export function ExpandedDayPanel({
           </ul>
         </div>
       ) : null}
+      <TierLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        reason="Free includes up to 5 ride priorities per trip. Upgrade for unlimited ride priority tracking."
+        variant="custom"
+      />
     </div>
   );
 }

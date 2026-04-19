@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
+import { currentUserCanCreatePayment } from "@/lib/entitlements";
 import type { PaymentCurrency, TripPayment } from "@/types/payments";
 import { revalidatePath } from "next/cache";
 
@@ -89,6 +90,13 @@ export async function createPayment(input: {
 > {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "Not signed in." };
+  const allowed = await currentUserCanCreatePayment(input.tripId);
+  if (!allowed) {
+    return {
+      ok: false,
+      error: "Free tier limit reached. Upgrade to track unlimited payments.",
+    };
+  }
 
   const labelErr = validateLabel(input.label);
   if (labelErr) return { ok: false, error: labelErr };

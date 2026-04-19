@@ -28,8 +28,7 @@ function tierLabel(tier: UserTier | null, tierLoadError: boolean): string {
   if (tier == null || tier === "free") return "Free";
   if (tier === "pro") return "Pro";
   if (tier === "family") return "Family";
-  if (tier === "premium") return "Premium";
-  if (tier === "concierge") return "Concierge";
+  if (tier === "premium" || tier === "concierge") return "Family";
   return "Pro+";
 }
 
@@ -42,7 +41,7 @@ function ManageSubscriptionControl({
   const openPortal = useCallback(async () => {
     setBusy(true);
     try {
-      const r = await fetch("/api/stripe/create-portal-session", {
+      const r = await fetch("/api/customer-portal", {
         method: "POST",
         credentials: "include",
       });
