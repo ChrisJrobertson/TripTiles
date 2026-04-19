@@ -1,5 +1,14 @@
+/**
+ * Parses a calendar date. Accepts `YYYY-MM-DD` or any string that starts with
+ * that prefix (e.g. `YYYY-MM-DDTHH:mm:ss`) so noon-safe comparisons work.
+ */
 export function parseDate(iso: string): Date {
-  const [y, m, d] = iso.split("-").map(Number);
+  const trimmed = iso.trim();
+  const datePart =
+    trimmed.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(trimmed)
+      ? trimmed.slice(0, 10)
+      : trimmed;
+  const [y, m, d] = datePart.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
 
