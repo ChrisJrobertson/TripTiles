@@ -20,12 +20,14 @@ export async function POST(req: Request) {
   const tripId = (body as { tripId?: unknown }).tripId;
   const mode = (body as { mode?: unknown }).mode;
   const userPrompt = (body as { userPrompt?: unknown }).userPrompt;
+  const dateKey = (body as { dateKey?: unknown }).dateKey;
   const preserveExistingSlots = (body as { preserveExistingSlots?: unknown }).preserveExistingSlots;
 
   if (
     typeof tripId !== "string" ||
     (mode !== "smart" && mode !== "custom") ||
-    typeof userPrompt !== "string"
+    typeof userPrompt !== "string" ||
+    (dateKey !== undefined && typeof dateKey !== "string")
   ) {
     return NextResponse.json({ ok: false, error: "INVALID_BODY" }, { status: 400 });
   }
@@ -35,6 +37,7 @@ export async function POST(req: Request) {
     tripId,
     mode,
     userPrompt,
+    dateKey: typeof dateKey === "string" ? dateKey : undefined,
     preserveExistingSlots: preserveExistingSlots !== false,
   };
 

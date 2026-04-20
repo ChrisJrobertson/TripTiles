@@ -21,6 +21,8 @@ export type SmartPlanGeneratePayload = {
   userPrompt: string;
   /** When true, Smart Plan overwrites existing calendar tiles where it outputs a slot. */
   replaceExistingTiles: boolean;
+  /** Optional day scope for day-detail "Plan my day". */
+  dateKey?: string;
   /** Smart mode only — saved to the trip before generation. */
   planningPreferences?: TripPlanningPreferences | null;
 };
@@ -39,8 +41,8 @@ type Props = {
   showFreeTierNote?: boolean;
   isGenerating: boolean;
   submitError: string | null;
-  streamingText?: string;
-  showStreamingSpinner?: boolean;
+  scope?: "trip" | "day";
+  dayDateKey?: string | null;
   canRetryPartial?: boolean;
   onRetryPartial?: () => void;
   onGenerate: (payload: SmartPlanGeneratePayload) => Promise<void>;
@@ -57,8 +59,8 @@ export function SmartPlanModal({
   showFreeTierNote = true,
   isGenerating,
   submitError,
-  streamingText = "",
-  showStreamingSpinner = false,
+  scope = "trip",
+  dayDateKey = null,
   canRetryPartial = false,
   onRetryPartial,
   onGenerate,
@@ -97,14 +99,23 @@ export function SmartPlanModal({
   }, [isOpen, trip?.id, prefsSerial]);
 
   if (!isOpen || !trip) return null;
+  const isDayScope = scope === "day" && Boolean(dayDateKey);
+  const dayLabel = isDayScope
+    ? parseDate(`${dayDateKey}T12:00:00`).toLocaleDateString("en-GB", {
+        weekday: "long",
+        day: "numeric",
+        month: "short",
+      })
+    : null;
 
   const tripDays =
     trip.start_date && trip.end_date
       ? daysBetween(parseDate(trip.start_date), parseDate(trip.end_date)) + 1
       : 0;
 
-  const smartSummary =
-    tripDays > 0
+  const smartSummary = isDayScope
+    ? `Trip will plan AM, PM, lunch, and dinner for ${dayLabel ?? "this day"}, using your preferences and historical crowd patterns.`
+    : tripDays > 0
       ? `I'll build a ${tripDays}-day plan for ${trip.adults} adult${trip.adults === 1 ? "" : "s"}${trip.children ? ` and ${trip.children} child${trip.children === 1 ? "" : "ren"}` : ""} in ${regionLabel}, optimising park days using historical crowd patterns for your dates.`
       : `I'll build a plan for ${regionLabel} using historical crowd patterns for your trip dates.`;
 
@@ -129,6 +140,7 @@ export function SmartPlanModal({
       mode,
       userPrompt: mode === "smart" ? "" : customText.trim(),
       replaceExistingTiles,
+      dateKey: isDayScope ? (dayDateKey ?? undefined) : undefined,
       planningPreferences,
     });
   }
@@ -149,7 +161,9 @@ export function SmartPlanModal({
           id="smart-plan-title"
           className="font-serif text-xl font-semibold text-royal"
         >
-          Let Trip build your itinerary
+          {isDayScope
+            ? `Let Trip plan ${dayLabel ?? "this day"}`
+            : "Let Trip build your itinerary"}
         </h2>
         <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
           Tell Trip your priorities — Trip will fill your calendar with
@@ -430,36 +444,25 @@ export function SmartPlanModal({
             </p>
           ) : null}
 
-          {isGenerating || streamingText.trim() ? (
+          {isGenerating ? (
             <div className="rounded-lg border border-royal/20 bg-white/85 px-3 py-2">
-              <p className="font-sans text-xs font-semibold uppercase tracking-wide text-royal/60">
-                Live response
-              </p>
-              <div className="mt-1 min-h-[3.5rem] whitespace-pre-wrap rounded bg-cream/60 px-2 py-1.5 font-mono text-xs leading-relaxed text-royal">
-                {streamingText.trim() ? (
-                  streamingText
-                ) : showStreamingSpinner ? (
-                  <span className="inline-flex items-center gap-2 font-sans text-sm">
-                    <span
-                      className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-royal/25 border-t-royal"
-                      aria-hidden
-                    />
-                    Generating…
-                  </span>
-                ) : (
-                  "Waiting for first tokens…"
-                )}
-              </div>
-              {canRetryPartial ? (
-                <button
-                  type="button"
-                  onClick={onRetryPartial}
-                  className="mt-2 rounded-md border border-royal/30 bg-white px-2.5 py-1.5 font-sans text-xs font-semibold text-royal hover:bg-cream"
-                >
-                  Stopped early — retry?
-                </button>
-              ) : null}
+              <span className="inline-flex items-center gap-2 font-sans text-sm text-royal/85">
+                <span
+                  className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-royal/25 border-t-royal"
+                  aria-hidden
+                />
+                Smart Plan is thinking — this usually takes 5-10 seconds.
+              </span>
             </div>
+          ) : null}
+          {canRetryPartial ? (
+            <button
+              type="button"
+              onClick={onRetryPartial}
+              className="rounded-md border border-royal/30 bg-white px-2.5 py-1.5 font-sans text-xs font-semibold text-royal hover:bg-cream"
+            >
+              Stopped early — retry?
+            </button>
           ) : null}
 
           <div className="flex flex-wrap gap-2 pt-2">

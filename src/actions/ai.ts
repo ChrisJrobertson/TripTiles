@@ -267,6 +267,8 @@ export type GenerateAIPlanInput = {
   tripId: string;
   mode: "smart" | "custom";
   userPrompt: string;
+  /** Optional day-scoped generation key (YYYY-MM-DD). */
+  dateKey?: string;
   /**
    * When false, AI output overwrites existing tiles where both specify a slot.
    * Default true: only empty slots are filled (manual picks kept).
@@ -336,6 +338,7 @@ function buildParksListSystemText(
 function buildPlannerUserMessage(params: {
   mode: "smart" | "custom";
   userPrompt: string;
+  dateKey?: string;
   regionName: string;
   trip: Trip;
   cruiseInstruction: string;
@@ -351,6 +354,7 @@ function buildPlannerUserMessage(params: {
   const {
     mode,
     userPrompt,
+    dateKey,
     regionName,
     trip,
     cruiseInstruction,
@@ -379,6 +383,10 @@ function buildPlannerUserMessage(params: {
   const dineBlock = dine ? `\n${dine}\n` : "";
   const namedRest = namedRestaurantHint?.trim();
   const namedRestBlock = namedRest ? `\n${namedRest}\n` : "";
+  const dayScopeBlock =
+    dateKey && dateKey.trim().length > 0
+      ? `\nDAY-SCOPED MODE: Plan ONLY for date ${dateKey}. Return assignments for exactly this one date key. Do not include other dates in the assignments object.\n`
+      : "";
   const cruiseTilePolicy = trip.has_cruise
     ? "CRUISE TILES: This trip includes a cruise segment. Include cruise embark/disembark and ship activities where appropriate when they fit the dates."
     : "CRUISE TILES: This trip does not include a cruise. Do not suggest or assign cruise-only, ship-only, or port-excursion tiles (for example at sea, ship pool, shore excursion) unless the traveller has explicitly asked for them in their notes.";
@@ -388,11 +396,11 @@ function buildPlannerUserMessage(params: {
     return `${coreTrip}
 
 ${crowdSection}
-${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}
+${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}
 
 SMART PLAN MODE — build a full itinerary using crowd patterns to place busier parks on historically lighter days within this window. The user did not write a long custom brief.
 ${extra ? `Optional family notes from the user:\n${extra}\n` : ""}
-For each trip day, add planner_day_notes with 1–2 practical tips tied to that date and the parks you assign (rope drop times, virtual queues, rest-day ideas, dining). Keep each value concise. Skip generic advice that applies to every day.
+${dateKey ? `For this date only (${dateKey}), add planner_day_notes with 1–2 practical tips tied to that date and assigned parks.` : "For each trip day, add planner_day_notes with 1–2 practical tips tied to that date and the parks you assign (rope drop times, virtual queues, rest-day ideas, dining). Keep each value concise. Skip generic advice that applies to every day."}
 
 Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and planner_day_notes when possible).`;
   }
@@ -400,14 +408,14 @@ Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and p
   return `${coreTrip}
 
 ${crowdSection}
-${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}
+${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}
 
 CUSTOM PROMPT MODE — apply the traveller's preferences first, then use crowd patterns to improve date choices.
 
 Traveller's own words:
 ${userPrompt.trim() || "(empty — rely on trip defaults only.)"}
 
-For each trip day, add planner_day_notes with 1–2 practical tips tied to that date and the parks you assign. Keep each value concise.
+${dateKey ? `For this date only (${dateKey}), add planner_day_notes with 1–2 practical tips tied to that date and assigned parks.` : "For each trip day, add planner_day_notes with 1–2 practical tips tied to that date and the parks you assign. Keep each value concise."}
 
 Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and planner_day_notes when possible).`;
 }
@@ -416,10 +424,14 @@ export async function runGenerateAIPlan(
   input: GenerateAIPlanInput,
   options: GenerateAIPlanOptions = {},
 ): Promise<GenerateAIPlanResult> {
+  const normalizedDateKey =
+    input.dateKey && input.dateKey.trim().length > 0
+      ? formatDateKey(parseDate(`${input.dateKey}T12:00:00`))
+      : null;
   logAiGen({
     step: "action_enter",
     tripId: input.tripId,
-    dateKey: null,
+    dateKey: normalizedDateKey,
     mode: input.mode,
     hasPrompt: Boolean(input.userPrompt.trim()),
     preserveExistingSlots: input.preserveExistingSlots !== false,
@@ -628,7 +640,17 @@ export async function runGenerateAIPlan(
   }
 
   const allowedParkIds = new Set(parksForPrompt.map((p) => p.id));
-  const dateAllow = allowedDateKeys(trip.start_date, trip.end_date);
+  const fullDateAllow = allowedDateKeys(trip.start_date, trip.end_date);
+  const dateAllow = normalizedDateKey
+    ? new Set(fullDateAllow.has(normalizedDateKey) ? [normalizedDateKey] : [])
+    : fullDateAllow;
+  if (normalizedDateKey && !dateAllow.has(normalizedDateKey)) {
+    return {
+      ok: false,
+      error: "AI_ERROR",
+      message: "Selected day is outside your trip dates.",
+    };
+  }
   const sortedDateKeys = sortDateKeysFromSet(dateAllow);
   const parksById = new Map(parksForPrompt.map((p) => [p.id, p]));
 
@@ -675,6 +697,7 @@ export async function runGenerateAIPlan(
   const composedUserMessage = buildPlannerUserMessage({
     mode: input.mode,
     userPrompt: input.userPrompt,
+    dateKey: normalizedDateKey ?? undefined,
     regionName: `${region.name} (${region.country})`,
     trip,
     cruiseInstruction,
@@ -782,10 +805,13 @@ export async function runGenerateAIPlan(
         },
       });
       await reportAiGenAutoError({
-        message:
+        message: `${
+          normalizedDateKey ? "[day-smart-plan] " : ""
+        }${
           streamError instanceof Error
             ? streamError.message
-            : "Unknown error while streaming Anthropic response",
+            : "Unknown error while streaming Anthropic response"
+        }`,
         stack: streamError instanceof Error ? streamError.stack : undefined,
         context: {
           tripId: input.tripId,
@@ -1074,7 +1100,7 @@ export async function runGenerateAIPlan(
     const msg = e instanceof Error ? e.message : "Unknown error";
     const stack = e instanceof Error ? e.stack : undefined;
     await reportAiGenAutoError({
-      message: msg,
+      message: `${normalizedDateKey ? "[day-smart-plan] " : ""}${msg}`,
       stack,
       context: {
         tripId: input.tripId,

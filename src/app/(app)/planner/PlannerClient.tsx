@@ -388,9 +388,6 @@ export function PlannerClient({
   const [smartError, setSmartError] = useState<string | null>(null);
   const [smartPlanUndoOpen, setSmartPlanUndoOpen] = useState(false);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
-  const [smartStreamingText, setSmartStreamingText] = useState("");
-  const [smartShowStreamingSpinner, setSmartShowStreamingSpinner] =
-    useState(false);
   const [smartCanRetryPartial, setSmartCanRetryPartial] = useState(false);
   const [smartRetryPayload, setSmartRetryPayload] =
     useState<SmartPlanGeneratePayload | null>(null);
@@ -1018,15 +1015,10 @@ export function PlannerClient({
     async (payload: SmartPlanGeneratePayload) => {
       if (!activeTripId) return;
       setSmartError(null);
-      setSmartStreamingText("");
       setSmartCanRetryPartial(false);
       setSmartRetryPayload(payload);
-      setSmartShowStreamingSpinner(true);
       setIsAiGenerating(true);
       let sawFirstToken = false;
-      const spinnerTimer = setTimeout(() => {
-        setSmartShowStreamingSpinner(false);
-      }, 500);
       try {
         if (payload.planningPreferences != null) {
           const prefRes = await updateTripPlanningPreferencesAction({
@@ -1057,23 +1049,19 @@ export function PlannerClient({
             tripId: activeTripId,
             mode: payload.mode,
             userPrompt: payload.userPrompt,
+            dateKey: payload.dateKey,
             preserveExistingSlots: !payload.replaceExistingTiles,
           },
           {
-            onDelta(deltaText) {
+            onDelta() {
               if (!sawFirstToken) {
                 sawFirstToken = true;
-                setSmartShowStreamingSpinner(false);
               }
-              setSmartStreamingText((prev) => prev + deltaText);
             },
           },
         );
         if (!res.ok) {
           if (res.stoppedEarly) {
-            if (res.partialResponse) {
-              setSmartStreamingText(res.partialResponse);
-            }
             setSmartCanRetryPartial(true);
             setSmartError(res.message || "Stopped early - retry?");
             return;
@@ -1146,8 +1134,6 @@ export function PlannerClient({
         setSmartError(msg);
         showToast(msg);
       } finally {
-        clearTimeout(spinnerTimer);
-        setSmartShowStreamingSpinner(false);
         setIsAiGenerating(false);
       }
     },
@@ -2396,8 +2382,6 @@ export function PlannerClient({
         onClose={() => {
           setSmartOpen(false);
           setSmartError(null);
-          setSmartStreamingText("");
-          setSmartShowStreamingSpinner(false);
           setSmartCanRetryPartial(false);
           setSmartRetryPayload(null);
         }}
@@ -2408,8 +2392,8 @@ export function PlannerClient({
         showFreeTierNote={isFreeTierForTripLimit(productTier)}
         isGenerating={isAiGenerating}
         submitError={smartError}
-        streamingText={smartStreamingText}
-        showStreamingSpinner={smartShowStreamingSpinner}
+        scope={dayDetailOpen && dayCanonicalForDetail ? "day" : "trip"}
+        dayDateKey={dayDetailOpen ? dayCanonicalForDetail : null}
         canRetryPartial={smartCanRetryPartial}
         onRetryPartial={() => {
           if (!smartRetryPayload || isAiGenerating) return;
