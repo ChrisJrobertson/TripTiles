@@ -11,6 +11,7 @@ import {
 import { DuplicateDayModal } from "@/components/planner/DuplicateDayModal";
 import { UnsavedChangesModal } from "@/components/app/UnsavedChangesModal";
 import { TierLimitModal } from "@/components/paywall/TierLimitModal";
+import { updateTripPlanningPreferencesAction } from "@/actions/trips";
 import {
   eachDateKeyInRange,
   formatDateISO,
@@ -28,7 +29,7 @@ import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { plannerUserDayNotes } from "@/lib/planner-note-maps";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import type { Tier } from "@/lib/tier";
-import type { Park, TemperatureUnit, Trip } from "@/lib/types";
+import type { Park, TemperatureUnit, Trip, TripPlanningPreferences } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
 import { useRouter } from "next/navigation";
 import {
@@ -97,6 +98,8 @@ export type DayDetailLayerProps = {
   onOpenSmartPlan: () => void;
   /** Ride counts for this day when full priorities are not loaded (overview fetch). */
   rideCountsForDay?: { total: number; mustDo: number } | null;
+  /** Update trip in parent after planning_preferences change (e.g. skip-line toggles). */
+  onTripPatch?: (patch: Partial<Trip>) => void;
 };
 
 export function DayDetailLayer({
@@ -113,6 +116,7 @@ export function DayDetailLayer({
   onSaveDayNote,
   onOpenSmartPlan,
   rideCountsForDay = null,
+  onTripPatch,
 }: DayDetailLayerProps) {
   const router = useRouter();
   const titleId = useId();
@@ -380,6 +384,49 @@ export function DayDetailLayer({
     onOpenSmartPlan();
   };
 
+  const [prefsSaving, setPrefsSaving] = useState(false);
+
+  const persistSkipLinePrefs = useCallback(
+    async (nextDisney: boolean, nextUniversal: boolean) => {
+      setPrefsSaving(true);
+      try {
+        const base = trip.planning_preferences;
+        const next: TripPlanningPreferences = base
+          ? {
+              ...base,
+              includeDisneySkipTips: nextDisney,
+              includeUniversalSkipTips: nextUniversal,
+            }
+          : {
+              pace: "balanced",
+              mustDoParks: [],
+              priorities: [],
+              additionalNotes: null,
+              adults: trip.adults,
+              children: trip.children,
+              childAges: trip.child_ages ?? [],
+              includeDisneySkipTips: nextDisney,
+              includeUniversalSkipTips: nextUniversal,
+            };
+        const res = await updateTripPlanningPreferencesAction({
+          tripId: trip.id,
+          planningPreferences: next,
+        });
+        if (!res.ok) {
+          showToast(res.error);
+          return;
+        }
+        onTripPatch?.({ planning_preferences: next });
+        if (!onTripPatch) {
+          startTransition(() => router.refresh());
+        }
+      } finally {
+        setPrefsSaving(false);
+      }
+    },
+    [trip, onTripPatch, router],
+  );
+
   const openProUpsell = () => {
     setTierLimitOpen(true);
   };
@@ -575,6 +622,58 @@ export function DayDetailLayer({
                 No crowd tip for this day yet — run Smart Plan for the trip.
               </p>
             )}
+            <div className="mt-3 rounded-lg border border-gold/30 bg-white px-3 py-2.5">
+              <p className="font-sans text-[11px] font-semibold uppercase tracking-wide text-royal/60">
+                Skip-the-line passes
+              </p>
+              <p className="mt-1 font-sans text-xs leading-relaxed text-royal/65">
+                Choose before you generate — Smart Plan uses these for this trip.
+              </p>
+              <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-md border border-royal/10 bg-cream/40 px-2 py-2">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+                  checked={
+                    trip.planning_preferences?.includeDisneySkipTips !== false
+                  }
+                  disabled={prefsSaving}
+                  onChange={(e) =>
+                    void persistSkipLinePrefs(
+                      e.target.checked,
+                      trip.planning_preferences?.includeUniversalSkipTips !==
+                        false,
+                    )
+                  }
+                />
+                <span className="min-w-0 font-sans text-xs leading-snug text-royal/85">
+                  <span className="font-semibold text-royal">
+                    Disney Lightning Lane / Genie+ tips
+                  </span>
+                </span>
+              </label>
+              <label className="mt-1.5 flex cursor-pointer items-start gap-2.5 rounded-md border border-royal/10 bg-cream/40 px-2 py-2">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+                  checked={
+                    trip.planning_preferences?.includeUniversalSkipTips !==
+                    false
+                  }
+                  disabled={prefsSaving}
+                  onChange={(e) =>
+                    void persistSkipLinePrefs(
+                      trip.planning_preferences?.includeDisneySkipTips !== false,
+                      e.target.checked,
+                    )
+                  }
+                />
+                <span className="min-w-0 font-sans text-xs leading-snug text-royal/85">
+                  <span className="font-semibold text-royal">
+                    Universal Express-style tips
+                  </span>
+                </span>
+              </label>
+            </div>
             <button
               type="button"
               className="mt-3 min-h-11 w-full rounded-lg bg-royal px-4 py-2.5 font-sans text-sm font-semibold text-cream shadow-sm transition hover:bg-royal/90"

@@ -2535,6 +2535,7 @@ export function PlannerClient({
               ? (rideCountsByDayForActiveTrip[dayCanonicalForDetail] ?? null)
               : null
           }
+          onTripPatch={(patch) => applyLocalPatch(activeTrip.id, patch)}
         />
       ) : null}
 
