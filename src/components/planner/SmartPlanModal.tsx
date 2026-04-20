@@ -1,5 +1,6 @@
 "use client";
 
+import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { daysBetween, parseDate } from "@/lib/date-helpers";
 import {
   PACE_OPTIONS,
@@ -72,6 +73,9 @@ export function SmartPlanModal({
   const [additionalNotes, setAdditionalNotes] = useState("");
   const [customText, setCustomText] = useState("");
   const [replaceExistingTiles, setReplaceExistingTiles] = useState(false);
+  const [includeDisneySkipTips, setIncludeDisneySkipTips] = useState(true);
+  const [includeUniversalSkipTips, setIncludeUniversalSkipTips] =
+    useState(true);
 
   const prefsSerial = useMemo(() => {
     if (!trip?.planning_preferences) return "";
@@ -86,11 +90,15 @@ export function SmartPlanModal({
       setMustDoParks(new Set(p.mustDoParks ?? []));
       setPriorities(new Set(p.priorities ?? []));
       setAdditionalNotes(p.additionalNotes ?? "");
+      setIncludeDisneySkipTips(p.includeDisneySkipTips !== false);
+      setIncludeUniversalSkipTips(p.includeUniversalSkipTips !== false);
     } else {
       setPace("balanced");
       setMustDoParks(new Set());
       setPriorities(new Set());
       setAdditionalNotes("");
+      setIncludeDisneySkipTips(true);
+      setIncludeUniversalSkipTips(true);
     }
     setCustomText("");
     setMode("smart");
@@ -98,8 +106,22 @@ export function SmartPlanModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `prefsSerial` tracks planning_preferences; omitting `trip` avoids wiping in-progress edits on parent re-renders.
   }, [isOpen, trip?.id, prefsSerial]);
 
-  if (!isOpen || !trip) return null;
   const isDayScope = scope === "day" && Boolean(dayDateKey);
+
+  const dayHasCalendarTiles = useMemo(() => {
+    if (!trip || !isDayScope || !dayDateKey) return false;
+    const d = trip.assignments[dayDateKey];
+    if (!d) return false;
+    return Boolean(
+      getParkIdFromSlotValue(d.am) ||
+        getParkIdFromSlotValue(d.pm) ||
+        getParkIdFromSlotValue(d.lunch) ||
+        getParkIdFromSlotValue(d.dinner),
+    );
+  }, [trip, isDayScope, dayDateKey]);
+
+  if (!isOpen || !trip) return null;
+
   const dayLabel = isDayScope
     ? parseDate(`${dayDateKey}T12:00:00`).toLocaleDateString("en-GB", {
         weekday: "long",
@@ -114,7 +136,11 @@ export function SmartPlanModal({
       : 0;
 
   const smartSummary = isDayScope
-    ? `Trip will plan AM, PM, lunch, and dinner for ${dayLabel ?? "this day"}, using your preferences and historical crowd patterns.`
+    ? `Trip will plan AM, PM, lunch, and dinner for ${dayLabel ?? "this day"}, using your preferences and historical crowd patterns.${
+        dayHasCalendarTiles
+          ? " Your calendar already has parks or meals for this day — Trip will treat them as your plan, fill only empty slots by default, and keep written tips consistent with those picks."
+          : ""
+      }`
     : tripDays > 0
       ? `I'll build a ${tripDays}-day plan for ${trip.adults} adult${trip.adults === 1 ? "" : "s"}${trip.children ? ` and ${trip.children} child${trip.children === 1 ? "" : "ren"}` : ""} in ${regionLabel}, optimising park days using historical crowd patterns for your dates.`
       : `I'll build a plan for ${regionLabel} using historical crowd patterns for your trip dates.`;
@@ -124,7 +150,8 @@ export function SmartPlanModal({
     if (!trip) return;
     if (isGenerating) return;
     if (mode === "custom" && !customText.trim()) return;
-    const planningPreferences: TripPlanningPreferences | undefined =
+    const base = trip.planning_preferences;
+    const planningPreferences: TripPlanningPreferences =
       mode === "smart"
         ? {
             pace,
@@ -134,8 +161,26 @@ export function SmartPlanModal({
             adults: trip.adults,
             children: trip.children,
             childAges: trip.child_ages ?? [],
+            includeDisneySkipTips,
+            includeUniversalSkipTips,
           }
-        : undefined;
+        : base
+          ? {
+              ...base,
+              includeDisneySkipTips,
+              includeUniversalSkipTips,
+            }
+          : {
+              pace: "balanced",
+              mustDoParks: [],
+              priorities: [],
+              additionalNotes: null,
+              adults: trip.adults,
+              children: trip.children,
+              childAges: trip.child_ages ?? [],
+              includeDisneySkipTips,
+              includeUniversalSkipTips,
+            };
     await onGenerate({
       mode,
       userPrompt: mode === "smart" ? "" : customText.trim(),
@@ -144,6 +189,48 @@ export function SmartPlanModal({
       planningPreferences,
     });
   }
+
+  const skipTheLineSection = (
+    <section className="rounded-lg border border-royal/15 bg-white/80 px-4 py-3">
+      <h3 className="font-sans text-sm font-semibold text-royal">
+        Skip-the-line passes
+      </h3>
+      <p className="mt-1 font-sans text-xs leading-relaxed text-royal/65">
+        Turn off what you don&apos;t use so Smart Plan doesn&apos;t assume paid
+        queue-skipping products.
+      </p>
+      <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-lg border border-royal/10 bg-white/90 p-3">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+          checked={includeDisneySkipTips}
+          onChange={(e) => setIncludeDisneySkipTips(e.target.checked)}
+          disabled={isGenerating}
+        />
+        <span className="min-w-0 font-sans text-xs leading-relaxed text-royal/85">
+          <span className="font-semibold text-royal">
+            Disney Lightning Lane / Genie+ style tips
+          </span>{" "}
+          — rope-drop and general queue advice still applies when unchecked.
+        </span>
+      </label>
+      <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-lg border border-royal/10 bg-white/90 p-3">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+          checked={includeUniversalSkipTips}
+          onChange={(e) => setIncludeUniversalSkipTips(e.target.checked)}
+          disabled={isGenerating}
+        />
+        <span className="min-w-0 font-sans text-xs leading-relaxed text-royal/85">
+          <span className="font-semibold text-royal">
+            Universal Express-style tips
+          </span>{" "}
+          — off if you don&apos;t hold Express on your tickets.
+        </span>
+      </label>
+    </section>
+  );
 
   const customOver = customText.length > MAX_CHARS;
   const canSubmit =
@@ -223,6 +310,7 @@ export function SmartPlanModal({
         </div>
 
         <form onSubmit={(e) => void handleSubmit(e)} className="mt-5 space-y-4">
+          <div className="space-y-3">{skipTheLineSection}</div>
           {mode === "smart" ? (
             <>
               <div className="rounded-lg border border-gold/40 bg-white/80 px-4 py-3 font-sans text-sm leading-relaxed text-royal">

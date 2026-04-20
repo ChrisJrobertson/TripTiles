@@ -95,6 +95,16 @@ export interface TripPlanningPreferences {
   adults: number;
   children: number;
   childAges: number[];
+  /**
+   * When false, Smart Plan and day ride hints omit Disney Lightning Lane /
+   * Multi Pass style tactical copy. Default true when omitted (backwards compatible).
+   */
+  includeDisneySkipTips?: boolean;
+  /**
+   * When false, Smart Plan and day ride hints omit Universal Express-style copy.
+   * Default true when omitted.
+   */
+  includeUniversalSkipTips?: boolean;
 }
 
 export interface Region {

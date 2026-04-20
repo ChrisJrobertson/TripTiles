@@ -76,13 +76,19 @@ export function buildLightningLaneStrategyBlurb(
   mustDo: Attraction[],
   parkHasDisney: boolean,
   parkHasUniversal: boolean,
+  opts?: { includeDisney?: boolean; includeUniversal?: boolean },
 ): string {
+  const includeDisney = opts?.includeDisney !== false;
+  const includeUniversal = opts?.includeUniversal !== false;
+  if (!includeDisney && !includeUniversal) {
+    return "Skip-the-line product tips are turned off in your Smart Plan settings. General rope-drop and queue patience advice still applies.";
+  }
   const tier1 = mustDo.filter((a) => a.skip_line_tier === "multi_pass_tier1");
   const tier2Burner = mustDo.find(
     (a) => a.skip_line_tier === "multi_pass_tier2" && a.name.includes("Haunted"),
   );
   const parts: string[] = [];
-  if (parkHasDisney) {
+  if (parkHasDisney && includeDisney) {
     if (tier1.length) {
       const names = tier1.slice(0, 2).map((a) => a.name).join(" or ");
       parts.push(
@@ -99,7 +105,7 @@ export function buildLightningLaneStrategyBlurb(
       );
     }
   }
-  if (parkHasUniversal) {
+  if (parkHasUniversal && includeUniversal) {
     parts.push(
       "At Universal, Express skips the regular queue on eligible rides — confirm which ticket type you hold before you queue.",
     );

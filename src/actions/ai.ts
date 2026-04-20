@@ -214,6 +214,35 @@ function stripCodeFences(raw: string): string {
   return t.trim();
 }
 
+const DAY_PROMPT_SLOTS: SlotType[] = ["am", "pm", "lunch", "dinner"];
+const DAY_PROMPT_SLOT_LABEL: Record<SlotType, string> = {
+  am: "AM",
+  pm: "PM",
+  lunch: "Lunch",
+  dinner: "Dinner",
+};
+
+/** Human-readable lines for the model: what the guest already placed on this date. */
+function summarizeExistingDayAssignmentsForPrompt(
+  trip: Trip,
+  dateKey: string | null,
+  parksById: Map<string, Park>,
+): string | null {
+  if (!dateKey?.trim()) return null;
+  const day = trip.assignments[dateKey];
+  if (!day || typeof day !== "object") return null;
+  const lines: string[] = [];
+  for (const slot of DAY_PROMPT_SLOTS) {
+    const raw = day[slot];
+    const pid = getParkIdFromSlotValue(raw);
+    if (!pid) continue;
+    const name = parksById.get(pid)?.name ?? pid;
+    lines.push(`- ${DAY_PROMPT_SLOT_LABEL[slot]}: ${name} (park id ${pid})`);
+  }
+  if (lines.length === 0) return null;
+  return lines.join("\n");
+}
+
 function allowedDateKeys(startIso: string, endIso: string): Set<string> {
   const keys = new Set<string>();
   let d = parseDate(startIso);
@@ -389,6 +418,9 @@ function buildPlannerUserMessage(params: {
   diningHint: string | null;
   /** Named assignable restaurant tiles for this region (optional). */
   namedRestaurantHint: string | null;
+  /** Lines describing slots already on the calendar for `dateKey` (day scope). */
+  existingDayPlanLines: string | null;
+  preserveExistingSlots: boolean;
 }): string {
   const {
     mode,
@@ -402,6 +434,8 @@ function buildPlannerUserMessage(params: {
     wizardContext,
     diningHint,
     namedRestaurantHint,
+    existingDayPlanLines,
+    preserveExistingSlots,
   } = params;
 
   const crowdSection =
@@ -426,6 +460,16 @@ function buildPlannerUserMessage(params: {
     dateKey && dateKey.trim().length > 0
       ? `\nDAY-SCOPED MODE: Plan ONLY for calendar date ${dateKey}. Your JSON MUST have a top-level "assignments" object (same shape as full-trip Smart Plan). Under "assignments" include exactly ONE date entry: the key must be "${dateKey}" character-for-character (YYYY-MM-DD, zero-padded). The value is that day's slots object using lowercase keys only: am, pm, lunch, dinner — each a park ID from the list or omit empty slots. Do NOT return a bare slots object at the root; do NOT use other date keys under "assignments".\n`
       : "";
+  const calendarAlreadyBlock =
+    dateKey &&
+    existingDayPlanLines &&
+    existingDayPlanLines.trim().length > 0
+      ? `\nCALENDAR ALREADY SET FOR ${dateKey} — the guest chose these tiles on their trip calendar before running Smart Plan:\n${existingDayPlanLines}\n${
+          preserveExistingSlots
+            ? `These slots are LOCKED for this run: keep the SAME park IDs in those keys in your JSON output (repeat them exactly). Only add or change slots that are still empty on the guest's calendar. In crowd_reasoning, day_crowd_notes, and planner_day_notes, ONLY discuss parks that match this day after merge — the headline parks above plus any parks you assign in empty slots. Do NOT recommend a different headline water park or theme park for AM/PM when those slots are already filled. Dining tips must match the dining tiles if lunch/dinner are already set.\n`
+            : `The guest enabled overwrite — you may replace slots, but their current picks above reflect intent; only change a filled slot if your plan clearly improves their day while respecting their notes.\n`
+        }`
+      : "";
   const cruiseTilePolicy = trip.has_cruise
     ? "CRUISE TILES: This trip includes a cruise segment. Include cruise embark/disembark and ship activities where appropriate when they fit the dates."
     : "CRUISE TILES: This trip does not include a cruise. Do not suggest or assign cruise-only, ship-only, or port-excursion tiles (for example at sea, ship pool, shore excursion) unless the traveller has explicitly asked for them in their notes.";
@@ -435,9 +479,13 @@ function buildPlannerUserMessage(params: {
     return `${coreTrip}
 
 ${crowdSection}
-${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}
+${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}
 
-SMART PLAN MODE — build a full itinerary using crowd patterns to place busier parks on historically lighter days within this window. The user did not write a long custom brief.
+${
+  dateKey
+    ? "DAY-SCOPED SMART PLAN — refine this single calendar day using crowd patterns. Respect locked calendar slots and notes above."
+    : "SMART PLAN MODE — build a full itinerary using crowd patterns to place busier parks on historically lighter days within this window. The user did not write a long custom brief."
+}
 ${extra ? `Optional family notes from the user:\n${extra}\n` : ""}
 ${dateKey ? `For this date only (${dateKey}), add planner_day_notes with 1–2 practical tips tied to that date and assigned parks.` : "For each trip day, add planner_day_notes with 1–2 practical tips tied to that date and the parks you assign (rope drop times, virtual queues, rest-day ideas, dining). Keep each value concise. Skip generic advice that applies to every day."}
 
@@ -447,7 +495,7 @@ Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and p
   return `${coreTrip}
 
 ${crowdSection}
-${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}
+${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}
 
 CUSTOM PROMPT MODE — apply the traveller's preferences first, then use crowd patterns to improve date choices.
 
@@ -745,6 +793,12 @@ export async function runGenerateAIPlan(
     wizardContext,
     diningHint,
     namedRestaurantHint,
+    existingDayPlanLines: summarizeExistingDayAssignmentsForPrompt(
+      trip,
+      normalizedDateKey,
+      parksById,
+    ),
+    preserveExistingSlots: input.preserveExistingSlots !== false,
   });
   logAiGen({
     step: "prompt_build_result",

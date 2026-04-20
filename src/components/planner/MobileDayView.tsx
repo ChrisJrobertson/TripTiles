@@ -961,6 +961,12 @@ export function MobileDayView({
           onPrioritiesUpdated={(items) => {
             onRideDayPrioritiesUpdated(activeDay.dateKey, items);
           }}
+          includeDisneySkipTips={
+            trip.planning_preferences?.includeDisneySkipTips !== false
+          }
+          includeUniversalSkipTips={
+            trip.planning_preferences?.includeUniversalSkipTips !== false
+          }
         />
       ) : null}
 

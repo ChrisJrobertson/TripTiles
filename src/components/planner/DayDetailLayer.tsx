@@ -598,6 +598,12 @@ export function DayDetailLayer({
             parks={parks}
             onClose={closeLayer}
             onPrioritiesUpdated={onPrioritiesUpdated}
+            includeDisneySkipTips={
+              trip.planning_preferences?.includeDisneySkipTips !== false
+            }
+            includeUniversalSkipTips={
+              trip.planning_preferences?.includeUniversalSkipTips !== false
+            }
           />
 
           <section className="mt-6 border-t border-royal/10 pt-4">

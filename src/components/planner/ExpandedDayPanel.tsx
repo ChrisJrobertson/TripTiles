@@ -52,6 +52,9 @@ export type ExpandedDayPanelProps = {
   onPrioritiesUpdated: (items: TripRidePriority[]) => void;
   /** Hides title, close, and legend — used inside Day Detail shell. */
   embedded?: boolean;
+  /** From trip Smart Plan prefs; default true when omitted. */
+  includeDisneySkipTips?: boolean;
+  includeUniversalSkipTips?: boolean;
 };
 
 function formatUkLongDate(dateKey: string): string {
@@ -262,6 +265,8 @@ export function ExpandedDayPanel({
   onClose,
   onPrioritiesUpdated,
   embedded = false,
+  includeDisneySkipTips = true,
+  includeUniversalSkipTips = true,
 }: ExpandedDayPanelProps) {
   const [catalog, setCatalog] = useState<Attraction[]>([]);
   const [pending, setPending] = useState(false);
@@ -350,8 +355,18 @@ export function ExpandedDayPanel({
         mustAttractions,
         parkHasDisney,
         parkHasUniversal,
+        {
+          includeDisney: includeDisneySkipTips,
+          includeUniversal: includeUniversalSkipTips,
+        },
       ),
-    [mustAttractions, parkHasDisney, parkHasUniversal],
+    [
+      mustAttractions,
+      parkHasDisney,
+      parkHasUniversal,
+      includeDisneySkipTips,
+      includeUniversalSkipTips,
+    ],
   );
 
   const selectedAttractionsForHeight = useMemo(() => {
@@ -572,7 +587,9 @@ export function ExpandedDayPanel({
 
       <div className="mb-3 rounded-lg border border-gold/25 bg-white/70 px-3 py-2">
         <p className="font-sans text-[11px] font-semibold uppercase tracking-wide text-royal">
-          ⚡ Lightning Lane strategy
+          {includeDisneySkipTips || includeUniversalSkipTips
+            ? "⚡ Skip-the-line strategy"
+            : "⚡ Queue strategy"}
         </p>
         <p className="mt-1 font-sans text-xs leading-relaxed text-royal/85">
           {strategy}

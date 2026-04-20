@@ -39,6 +39,21 @@ export function formatPlanningPreferencesForPrompt(
     ? `Additional family notes:\n${prefs.additionalNotes.trim()}`
     : "";
 
+  const disneyTips = prefs.includeDisneySkipTips !== false;
+  const universalTips = prefs.includeUniversalSkipTips !== false;
+  const skipLineBlock =
+    disneyTips && universalTips
+      ? ""
+      : [
+          "SKIP_THE_LINE_PRODUCTS (written tips and planner_day_notes only — never invent purchases):",
+          disneyTips
+            ? "- Disney Lightning Lane / Genie+ / Multi Pass style tactics: include when relevant."
+            : "- Disney Lightning Lane / Genie+ / Multi Pass: the guest does NOT want these products assumed — omit LL-specific booking tactics; use general rope-drop / queue patience advice only.",
+          universalTips
+            ? "- Universal Express-style tactics: include when relevant."
+            : "- Universal Express: omit Express-specific queue tactics; use general advice only.",
+        ].join("\n");
+
   return [
     "TRIP WIZARD PREFERENCES (treat as hard requirements where compatible with park rules):",
     `- Party: ${prefs.adults} adult(s), ${prefs.children} child(ren). ${ages}`.trim(),
@@ -50,6 +65,7 @@ export function formatPlanningPreferencesForPrompt(
       ? `- Family priorities (weight these): ${priLabels.join("; ")}.`
       : "",
     notes,
+    skipLineBlock,
   ]
     .filter(Boolean)
     .join("\n");

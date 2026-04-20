@@ -31,6 +31,8 @@ type Props = {
   ridePriorities: TripRidePriority[];
   parks: Park[];
   onPrioritiesUpdated: (items: TripRidePriority[]) => void;
+  includeDisneySkipTips?: boolean;
+  includeUniversalSkipTips?: boolean;
 };
 
 function isDisneyParkGroup(g: string): boolean {
@@ -58,6 +60,8 @@ export function MobileRidesSheet({
   ridePriorities,
   parks,
   onPrioritiesUpdated,
+  includeDisneySkipTips = true,
+  includeUniversalSkipTips = true,
 }: Props) {
   const titleId = useId();
   const [search, setSearch] = useState("");
@@ -96,8 +100,18 @@ export function MobileRidesSheet({
         mustAttractions,
         parkHasDisney,
         parkHasUniversal,
+        {
+          includeDisney: includeDisneySkipTips,
+          includeUniversal: includeUniversalSkipTips,
+        },
       ),
-    [mustAttractions, parkHasDisney, parkHasUniversal],
+    [
+      mustAttractions,
+      parkHasDisney,
+      parkHasUniversal,
+      includeDisneySkipTips,
+      includeUniversalSkipTips,
+    ],
   );
 
   useEffect(() => {
@@ -264,7 +278,9 @@ export function MobileRidesSheet({
                 </div>
                 <div className="mb-3 rounded-lg border border-gold/25 bg-white/80 px-3 py-2">
                   <p className="font-sans text-[11px] font-semibold uppercase tracking-wide text-royal">
-                    ⚡ Lightning Lane strategy
+                    {includeDisneySkipTips || includeUniversalSkipTips
+                      ? "⚡ Skip-the-line strategy"
+                      : "⚡ Queue strategy"}
                   </p>
                   <p className="mt-1 font-sans text-sm leading-relaxed text-royal/85">
                     {strategy}
