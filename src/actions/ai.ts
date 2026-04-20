@@ -69,6 +69,45 @@ function logAiGen(meta: AiGenLogMeta): void {
   });
 }
 
+async function reportDaySmartPlanParseError(params: {
+  message: string;
+  context: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    const admin = createServiceRoleClient();
+    const contextText = JSON.stringify(params.context).slice(0, 2000);
+    await admin.from("feedback").insert({
+      user_id: null,
+      anonymous_email: "noreply@triptiles.app",
+      category: "bug",
+      message: `[AUTO-ERROR][day-smart-plan-parse] ${params.message.slice(0, 1800)}\n\nContext:\n${contextText}`,
+      page_url: null,
+      user_agent: null,
+    });
+  } catch (error) {
+    console.warn("[ai-gen] failed to report day-smart-plan-parse", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
+}
+
+function describeAssignmentsParseFailure(
+  parsed: unknown,
+  dateAllow: Set<string>,
+): string {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return "parsed_not_object";
+  }
+  const obj = parsed as Record<string, unknown>;
+  const inner = obj.assignments;
+  if (!inner || typeof inner !== "object" || Array.isArray(inner)) {
+    return `missing_or_invalid_assignments; top_level_keys=${Object.keys(obj).slice(0, 20).join(",")}`;
+  }
+  const innerKeys = Object.keys(inner as Record<string, unknown>);
+  const notAllowed = innerKeys.filter((k) => !dateAllow.has(k));
+  return `assignment_day_keys=${JSON.stringify(innerKeys)}; keys_rejected_not_in_trip_window=${JSON.stringify(notAllowed)}; allowed_date_sample=${[...dateAllow].slice(0, 3).join(",")}`;
+}
+
 async function reportAiGenAutoError(params: {
   message: string;
   stack?: string;
@@ -96,7 +135,7 @@ async function reportAiGenAutoError(params: {
 const SYSTEM_PROMPT = `You are Smart Plan, TripTiles' warm and practical theme park planner. Output ONLY valid JSON — no markdown, no preamble, no text outside the JSON object.
 
 Shape:
-{ "assignments": { "2026-7-9": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-7-14": "…" }, "planner_day_notes": { "2026-7-9": "…" } }
+{ "assignments": { "2026-07-09": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-07-14": "…" }, "planner_day_notes": { "2026-07-09": "…" } }
 
 Limits: crowd_reasoning ≤400 chars, one paragraph. Each day_crowd_notes value ≤150 chars, one sentence.
 Each planner_day_notes value ≤350 chars: practical tips for THAT day only (hours, virtual queues, rest-day ideas). Omit keys with no specific tip.
@@ -108,7 +147,7 @@ DAY NOTES RULES (CRITICAL):
 CROWD_PATTERNS (when in user message): 0–10 heuristics per park/weekday/month — use internally only. Never put numeric score workings in user-facing strings. Never claim live waits or exact attendance.
 
 Rules:
-- Date keys YYYY-M-D (no zero-padding). Park IDs only from the cached list in the system message.
+- Date keys in assignments, day_crowd_notes, and planner_day_notes MUST be YYYY-MM-DD with zero-padded month and day (e.g. 2026-07-19), matching the trip dates in the user message. Park IDs only from the cached list in the system message.
 - Slots: am, pm, lunch, dinner optional; rest days OK. Rest every 3–4 park days with young children.
 - Day 1 arrival: no theme/water parks in AM/PM (resort/flyout/dining only; slots may be empty). day_crowd_notes must not contradict day-1 assignments.
 - flyout: day 1 only, one AM or PM. flyhome: last day only, one slot — not both same calendar day unless trip is one day.
@@ -385,7 +424,7 @@ function buildPlannerUserMessage(params: {
   const namedRestBlock = namedRest ? `\n${namedRest}\n` : "";
   const dayScopeBlock =
     dateKey && dateKey.trim().length > 0
-      ? `\nDAY-SCOPED MODE: Plan ONLY for date ${dateKey}. Return assignments for exactly this one date key. Do not include other dates in the assignments object.\n`
+      ? `\nDAY-SCOPED MODE: Plan ONLY for calendar date ${dateKey}. Your JSON MUST have a top-level "assignments" object (same shape as full-trip Smart Plan). Under "assignments" include exactly ONE date entry: the key must be "${dateKey}" character-for-character (YYYY-MM-DD, zero-padded). The value is that day's slots object using lowercase keys only: am, pm, lunch, dinner — each a park ID from the list or omit empty slots. Do NOT return a bare slots object at the root; do NOT use other date keys under "assignments".\n`
       : "";
   const cruiseTilePolicy = trip.has_cruise
     ? "CRUISE TILES: This trip includes a cruise segment. Include cruise embark/disembark and ship activities where appropriate when they fit the dates."
@@ -897,6 +936,15 @@ export async function runGenerateAIPlan(
       };
     }
 
+    if (normalizedDateKey && AI_GEN_DEBUG) {
+      console.log("[ai-gen][day] raw response preview", {
+        tripId: input.tripId,
+        dateKey: normalizedDateKey,
+        preview: String(rawText).slice(0, 2000),
+        length: String(rawText).length,
+      });
+    }
+
     const meta = parseCrowdMetadata(parsed, dateAllow);
 
     const sanitized = sanitizeAssignments(parsed, dateAllow, allowedParkIds);
@@ -910,6 +958,19 @@ export async function runGenerateAIPlan(
       },
     });
     if (!sanitized || Object.keys(sanitized).length === 0) {
+      const parseDetail = describeAssignmentsParseFailure(parsed, dateAllow);
+      if (normalizedDateKey) {
+        await reportDaySmartPlanParseError({
+          message: `No valid assignments after validation: ${parseDetail}`,
+          context: {
+            tripId: input.tripId,
+            dateKey: normalizedDateKey,
+            mode: input.mode,
+            parseDetail,
+            responsePreview: String(rawText).slice(0, 1500),
+          },
+        });
+      }
       await supabase.from("ai_generations").insert({
         user_id: user.id,
         trip_id: input.tripId,
@@ -925,7 +986,8 @@ export async function runGenerateAIPlan(
       return {
         ok: false,
         error: "AI_ERROR",
-        message: "Could not build a valid plan from the response.",
+        message:
+          "Smart Plan couldn't generate a plan right now. Please try again in a moment — if it keeps failing, let us know via feedback.",
       };
     }
 
