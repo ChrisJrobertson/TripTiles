@@ -39,6 +39,10 @@ type Props = {
   showFreeTierNote?: boolean;
   isGenerating: boolean;
   submitError: string | null;
+  streamingText?: string;
+  showStreamingSpinner?: boolean;
+  canRetryPartial?: boolean;
+  onRetryPartial?: () => void;
   onGenerate: (payload: SmartPlanGeneratePayload) => Promise<void>;
 };
 
@@ -53,6 +57,10 @@ export function SmartPlanModal({
   showFreeTierNote = true,
   isGenerating,
   submitError,
+  streamingText = "",
+  showStreamingSpinner = false,
+  canRetryPartial = false,
+  onRetryPartial,
   onGenerate,
 }: Props) {
   const [mode, setMode] = useState<"smart" | "custom">("smart");
@@ -420,6 +428,38 @@ export function SmartPlanModal({
             >
               {submitError}
             </p>
+          ) : null}
+
+          {isGenerating || streamingText.trim() ? (
+            <div className="rounded-lg border border-royal/20 bg-white/85 px-3 py-2">
+              <p className="font-sans text-xs font-semibold uppercase tracking-wide text-royal/60">
+                Live response
+              </p>
+              <div className="mt-1 min-h-[3.5rem] whitespace-pre-wrap rounded bg-cream/60 px-2 py-1.5 font-mono text-xs leading-relaxed text-royal">
+                {streamingText.trim() ? (
+                  streamingText
+                ) : showStreamingSpinner ? (
+                  <span className="inline-flex items-center gap-2 font-sans text-sm">
+                    <span
+                      className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-royal/25 border-t-royal"
+                      aria-hidden
+                    />
+                    Generating…
+                  </span>
+                ) : (
+                  "Waiting for first tokens…"
+                )}
+              </div>
+              {canRetryPartial ? (
+                <button
+                  type="button"
+                  onClick={onRetryPartial}
+                  className="mt-2 rounded-md border border-royal/30 bg-white px-2.5 py-1.5 font-sans text-xs font-semibold text-royal hover:bg-cream"
+                >
+                  Stopped early — retry?
+                </button>
+              ) : null}
+            </div>
           ) : null}
 
           <div className="flex flex-wrap gap-2 pt-2">

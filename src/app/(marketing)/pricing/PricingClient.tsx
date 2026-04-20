@@ -51,7 +51,11 @@ export function PricingClient({
 
   useEffect(() => {
     if (cancelled) {
-      showToast("Checkout cancelled — no changes were made.");
+      showToast("Checkout cancelled — no changes were made.", {
+        type: "info",
+        debounceKey: "pricing-checkout-cancelled",
+        debounceMs: 500,
+      });
     }
   }, [cancelled]);
 
@@ -80,7 +84,11 @@ export function PricingClient({
         setMe(j);
         if (j.productTier !== startTier && j.productTier !== "day_tripper") {
           setSuccessOpen(false);
-          showToast(`You're on ${formatTierLabel(j.productTier)}`);
+          showToast(`You're on ${formatTierLabel(j.productTier)}`, {
+            type: "success",
+            debounceKey: "pricing-checkout-success",
+            debounceMs: 500,
+          });
           router.replace("/");
           return;
         }
@@ -112,7 +120,7 @@ export function PricingClient({
       });
       const j = (await r.json()) as { url?: string; error?: string };
       if (!r.ok || !j.url) {
-        showToast(j.error ?? "Could not start checkout.");
+        showToast(j.error ?? "Could not start checkout.", { type: "error" });
         return;
       }
       window.location.href = j.url;
@@ -130,7 +138,7 @@ export function PricingClient({
       });
       const j = (await r.json()) as { url?: string; error?: string };
       if (!r.ok || !j.url) {
-        showToast(j.error ?? "Could not open billing portal.");
+        showToast(j.error ?? "Could not open billing portal.", { type: "error" });
         return;
       }
       window.location.href = j.url;

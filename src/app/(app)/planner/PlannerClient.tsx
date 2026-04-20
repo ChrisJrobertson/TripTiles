@@ -4,7 +4,11 @@ import {
   assignmentWithUpdatedSlotTime,
   countFilledSlots,
 } from "@/lib/assignment-slots";
-import { generateAIPlanAction } from "@/actions/ai";
+import {
+  generateAIPlanAction,
+  type GenerateAIPlanInput,
+  type GenerateAIPlanResult,
+} from "@/actions/ai";
 import {
   deleteTripAction,
   touchTripAction,
@@ -191,34 +195,6 @@ function resolvePaletteRegionId(trip: Trip | null): string | null {
   return null;
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function dateKeyDiff(from: string, to: string): number {
-  const fromDate = parseDate(from);
-  const toDate = parseDate(to);
-  const fromNoon = new Date(
-    fromDate.getFullYear(),
-    fromDate.getMonth(),
-    fromDate.getDate(),
-    12,
-  );
-  const toNoon = new Date(
-    toDate.getFullYear(),
-    toDate.getMonth(),
-    toDate.getDate(),
-    12,
-  );
-  return Math.round((toNoon.getTime() - fromNoon.getTime()) / DAY_MS);
-}
-
-function isTripWithinSmartLandingWindow(trip: Trip, todayKey: string): boolean {
-  const startsIn = dateKeyDiff(todayKey, trip.start_date);
-  const endedAgo = dateKeyDiff(trip.end_date, todayKey);
-  if (startsIn >= 0) return startsIn <= 3;
-  if (endedAgo >= 0) return endedAgo <= 3;
-  return true;
-}
-
 type SmartGenResult = Awaited<ReturnType<typeof generateAIPlanAction>>;
 
 /** One automatic retry after 2s for timeouts and generic Smart Plan failures. */
@@ -256,6 +232,93 @@ async function runSmartPlanWithTimeoutAndRetry(
         "Smart Plan couldn't generate your plan — try again from the planner, or build it yourself.",
     };
   }
+}
+
+type StreamHandlers = {
+  onDelta: (deltaText: string) => void;
+};
+
+async function streamGeneratePlan(
+  input: GenerateAIPlanInput,
+  handlers: StreamHandlers,
+): Promise<GenerateAIPlanResult> {
+  const response = await fetch("/api/ai/generate-plan-stream", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+    cache: "no-store",
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error("Smart Plan stream failed to start.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let doneResult: GenerateAIPlanResult | null = null;
+
+  const parseEventBlock = (block: string) => {
+    const lines = block
+      .split("\n")
+      .map((line) => line.trimEnd())
+      .filter(Boolean);
+    if (lines.length === 0) return;
+
+    let eventName = "message";
+    const dataLines: string[] = [];
+    for (const line of lines) {
+      if (line.startsWith("event:")) {
+        eventName = line.slice("event:".length).trim();
+      } else if (line.startsWith("data:")) {
+        dataLines.push(line.slice("data:".length).trim());
+      }
+    }
+    if (dataLines.length === 0) return;
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(dataLines.join("\n"));
+    } catch {
+      return;
+    }
+
+    if (eventName === "delta") {
+      const text = (payload as { text?: unknown }).text;
+      if (typeof text === "string" && text.length > 0) {
+        handlers.onDelta(text);
+      }
+      return;
+    }
+
+    if (eventName === "done") {
+      doneResult = payload as GenerateAIPlanResult;
+    }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let separatorIndex = buffer.indexOf("\n\n");
+    while (separatorIndex !== -1) {
+      const block = buffer.slice(0, separatorIndex);
+      parseEventBlock(block);
+      buffer = buffer.slice(separatorIndex + 2);
+      separatorIndex = buffer.indexOf("\n\n");
+    }
+  }
+
+  if (buffer.trim().length > 0) {
+    parseEventBlock(buffer.trim());
+  }
+
+  if (!doneResult) {
+    throw new Error("Smart Plan stream ended unexpectedly.");
+  }
+  return doneResult;
 }
 
 type AchievementToastItem = { id: string; def: AchievementDefinition };
@@ -324,6 +387,12 @@ export function PlannerClient({
   const [smartError, setSmartError] = useState<string | null>(null);
   const [smartPlanUndoOpen, setSmartPlanUndoOpen] = useState(false);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
+  const [smartStreamingText, setSmartStreamingText] = useState("");
+  const [smartShowStreamingSpinner, setSmartShowStreamingSpinner] =
+    useState(false);
+  const [smartCanRetryPartial, setSmartCanRetryPartial] = useState(false);
+  const [smartRetryPayload, setSmartRetryPayload] =
+    useState<SmartPlanGeneratePayload | null>(null);
   const [aiGenByTrip, setAiGenByTrip] = useState(initialAiCounts);
   const [achievementToasts, setAchievementToasts] = useState<
     AchievementToastItem[]
@@ -359,6 +428,8 @@ export function PlannerClient({
   const [goToTodayRingDateKey, setGoToTodayRingDateKey] = useState<
     string | null
   >(null);
+  const [isTodayVisibleInViewport, setIsTodayVisibleInViewport] = useState(true);
+  const smartLandingScrollDoneRef = useRef<string | null>(null);
   /** Loaded eagerly for all trips; Day Detail is the future boundary for lazy per-day fetch. */
   const [ridePrioritiesByTripId, setRidePrioritiesByTripId] = useState<
     Record<string, TripRidePriority[]>
@@ -377,7 +448,6 @@ export function PlannerClient({
   >("client");
   const [calendarConflictDotSummary, setCalendarConflictDotSummary] =
     useState<DayConflictDotSummary>({});
-
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
 
   const pathTripIdFromUrl = pathname.match(/^\/trip\/([^/]+)/)?.[1] ?? null;
@@ -392,6 +462,36 @@ export function PlannerClient({
     if (!dayDateFromUrl) return null;
     return formatDateISO(parseDate(dayDateFromUrl));
   }, [dayDateFromUrl]);
+
+  const smartLanding = useMemo(() => {
+    if (!activeTrip) {
+      return { inWindow: false, targetDayKey: null as string | null };
+    }
+    const today = parseDate(formatDateKey(new Date()));
+    const start = parseDate(activeTrip.start_date);
+    const end = parseDate(activeTrip.end_date);
+    const dayMs = 24 * 60 * 60 * 1000;
+    const inWindow =
+      today.getTime() >= start.getTime() - dayMs * 3 &&
+      today.getTime() <= end.getTime() + dayMs * 3;
+    if (!inWindow) return { inWindow: false, targetDayKey: null as string | null };
+    if (today.getTime() < start.getTime()) {
+      return {
+        inWindow: true,
+        targetDayKey: formatDateISO(start),
+      };
+    }
+    if (today.getTime() > end.getTime()) {
+      return {
+        inWindow: true,
+        targetDayKey: formatDateISO(end),
+      };
+    }
+    return {
+      inWindow: true,
+      targetDayKey: formatDateKey(new Date()),
+    };
+  }, [activeTrip]);
 
   useEffect(() => {
     if (!pathTripIdFromUrl) return;
@@ -409,6 +509,57 @@ export function PlannerClient({
     if (!Number.isNaN(y)) mainScrollRef.current.scrollTop = y;
     sessionStorage.removeItem(key);
   }, [dayDetailOpen, activeTripId]);
+
+  useLayoutEffect(() => {
+    if (plannerTab !== "planner") return;
+    if (!activeTrip || !smartLanding.targetDayKey || dayDetailOpen) return;
+    const runKey = `${activeTrip.id}:${smartLanding.targetDayKey}`;
+    if (smartLandingScrollDoneRef.current === runKey) return;
+    let cancelled = false;
+    const targetId = `planner-day-${smartLanding.targetDayKey}`;
+    const tryScroll = (attempt = 0) => {
+      if (cancelled) return;
+      const el = document.getElementById(targetId);
+      if (el) {
+        el.scrollIntoView({ block: "center", behavior: "auto" });
+        smartLandingScrollDoneRef.current = runKey;
+        return;
+      }
+      if (attempt < 8) {
+        window.requestAnimationFrame(() => tryScroll(attempt + 1));
+      }
+    };
+    tryScroll();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTrip, dayDetailOpen, plannerTab, smartLanding.targetDayKey]);
+
+  useEffect(() => {
+    if (plannerTab !== "planner" || dayDetailOpen || !activeTrip) {
+      setIsTodayVisibleInViewport(true);
+      return;
+    }
+    const todayKey = formatDateKey(new Date());
+    const keys = eachDateKeyInRange(activeTrip.start_date, activeTrip.end_date);
+    if (!keys.includes(todayKey)) {
+      setIsTodayVisibleInViewport(true);
+      return;
+    }
+    const el = document.getElementById(`planner-day-${todayKey}`);
+    if (!el) {
+      setIsTodayVisibleInViewport(false);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setIsTodayVisibleInViewport(entries[0]?.isIntersecting ?? false);
+      },
+      { threshold: 0.35 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [activeTrip, dayDetailOpen, plannerTab]);
 
   useEffect(() => {
     setRidePrioritiesByTripId(initialRidePrioritiesByTripId);
@@ -866,7 +1017,15 @@ export function PlannerClient({
     async (payload: SmartPlanGeneratePayload) => {
       if (!activeTripId) return;
       setSmartError(null);
+      setSmartStreamingText("");
+      setSmartCanRetryPartial(false);
+      setSmartRetryPayload(payload);
+      setSmartShowStreamingSpinner(true);
       setIsAiGenerating(true);
+      let sawFirstToken = false;
+      const spinnerTimer = setTimeout(() => {
+        setSmartShowStreamingSpinner(false);
+      }, 500);
       try {
         if (payload.planningPreferences != null) {
           const prefRes = await updateTripPlanningPreferencesAction({
@@ -892,17 +1051,32 @@ export function PlannerClient({
           ? ({ ...tripBefore.preferences } as Record<string, unknown>)
           : ({} as Record<string, unknown>);
         const t = tripBefore;
-        const res = await runSmartPlanWithTimeoutAndRetry(
-          () =>
-            generateAIPlanAction({
-              tripId: activeTripId,
-              mode: payload.mode,
-              userPrompt: payload.userPrompt,
-              preserveExistingSlots: !payload.replaceExistingTiles,
-            }),
-          showToast,
+        const res = await streamGeneratePlan(
+          {
+            tripId: activeTripId,
+            mode: payload.mode,
+            userPrompt: payload.userPrompt,
+            preserveExistingSlots: !payload.replaceExistingTiles,
+          },
+          {
+            onDelta(deltaText) {
+              if (!sawFirstToken) {
+                sawFirstToken = true;
+                setSmartShowStreamingSpinner(false);
+              }
+              setSmartStreamingText((prev) => prev + deltaText);
+            },
+          },
         );
         if (!res.ok) {
+          if (res.stoppedEarly) {
+            if (res.partialResponse) {
+              setSmartStreamingText(res.partialResponse);
+            }
+            setSmartCanRetryPartial(true);
+            setSmartError(res.message || "Stopped early - retry?");
+            return;
+          }
           if (res.error === "TIER_AI_DISABLED") {
             setTierLimitVariant("ai");
             setTierLimitReason(
@@ -957,6 +1131,11 @@ export function PlannerClient({
         setSmartOpen(false);
         startTransition(() => router.refresh());
       } catch (e) {
+        if (sawFirstToken) {
+          setSmartCanRetryPartial(true);
+          setSmartError("Stopped early — retry?");
+          return;
+        }
         if (notifyStaleServerActionIfNeeded(e)) {
           setSmartError(null);
           return;
@@ -966,6 +1145,8 @@ export function PlannerClient({
         setSmartError(msg);
         showToast(msg);
       } finally {
+        clearTimeout(spinnerTimer);
+        setSmartShowStreamingSpinner(false);
         setIsAiGenerating(false);
       }
     },
@@ -1381,11 +1562,11 @@ export function PlannerClient({
   }, [router, overviewHref]);
 
   const showGoToTodayPill = useMemo(() => {
-    if (!activeTrip || dayDetailOpen) return false;
+    if (!activeTrip || dayDetailOpen || plannerTab !== "planner") return false;
     const keys = eachDateKeyInRange(activeTrip.start_date, activeTrip.end_date);
     const today = formatDateKey(new Date());
-    return keys.includes(today);
-  }, [activeTrip, dayDetailOpen]);
+    return smartLanding.inWindow && keys.includes(today) && !isTodayVisibleInViewport;
+  }, [activeTrip, dayDetailOpen, plannerTab, smartLanding.inWindow, isTodayVisibleInViewport]);
 
   const rideCountsByDayForActiveTrip = useMemo(
     () =>
@@ -2214,6 +2395,10 @@ export function PlannerClient({
         onClose={() => {
           setSmartOpen(false);
           setSmartError(null);
+          setSmartStreamingText("");
+          setSmartShowStreamingSpinner(false);
+          setSmartCanRetryPartial(false);
+          setSmartRetryPayload(null);
         }}
         trip={activeTrip}
         parks={smartPlanParks}
@@ -2222,6 +2407,13 @@ export function PlannerClient({
         showFreeTierNote={isFreeTierForTripLimit(productTier)}
         isGenerating={isAiGenerating}
         submitError={smartError}
+        streamingText={smartStreamingText}
+        showStreamingSpinner={smartShowStreamingSpinner}
+        canRetryPartial={smartCanRetryPartial}
+        onRetryPartial={() => {
+          if (!smartRetryPayload || isAiGenerating) return;
+          void handleSmartPlanGenerate(smartRetryPayload);
+        }}
         onGenerate={handleSmartPlanGenerate}
       />
 

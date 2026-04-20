@@ -487,7 +487,7 @@ export function ExpandedDayPanel({
         if (beforeReorderRef.current) {
           onPrioritiesUpdated(beforeReorderRef.current);
         }
-        showToast("Couldn't reorder — try again");
+        showToast("Couldn't reorder — try again", { type: "error" });
       }
     },
     [

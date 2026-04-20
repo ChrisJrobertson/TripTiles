@@ -48,7 +48,9 @@ function ManageSubscriptionControl({
       });
       const j = (await r.json()) as { url?: string; error?: string };
       if (!r.ok || !j.url) {
-        showToast(j.error ?? "Could not open the billing portal.");
+        showToast(j.error ?? "Could not open the billing portal.", {
+          type: "error",
+        });
         return;
       }
       window.location.href = j.url;

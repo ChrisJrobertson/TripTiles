@@ -32,7 +32,7 @@ export function ResetPasswordForm() {
         setLoading(false);
         return;
       }
-      showToast("Password updated. You're signed in.");
+      showToast("Password updated. You're signed in.", { type: "success" });
       router.push("/planner");
       router.refresh();
     } catch {

@@ -129,7 +129,9 @@ export function PaymentsTab({
   const onSave = async () => {
     const pence = parseAmountToPence(formAmount);
     if (pence === null) {
-      showToast("Enter a valid amount (zero or more, up to two decimal places).");
+      showToast("Enter a valid amount (zero or more, up to two decimal places).", {
+        type: "error",
+      });
       return;
     }
     setBusy(true);
@@ -143,10 +145,15 @@ export function PaymentsTab({
       });
       setBusy(false);
       if (!r.ok) {
-        showToast(r.error);
+        showToast(r.error, { type: "error" });
         return;
       }
       applyList(payments.map((x) => (x.id === editingId ? r.payment : x)));
+      showToast("Payment updated", {
+        type: "success",
+        debounceKey: "payment-write",
+        debounceMs: 500,
+      });
       cancelForm();
       return;
     }
@@ -160,10 +167,15 @@ export function PaymentsTab({
     });
     setBusy(false);
     if (!r.ok) {
-      showToast(r.error);
+      showToast(r.error, { type: "error" });
       return;
     }
     applyList([...payments, r.payment]);
+    showToast("Payment added", {
+      type: "success",
+      debounceKey: "payment-write",
+      debounceMs: 500,
+    });
     cancelForm();
   };
 
@@ -172,10 +184,15 @@ export function PaymentsTab({
     const r = await deletePayment(id);
     setBusy(false);
     if (!r.ok) {
-      showToast(r.error);
+      showToast(r.error, { type: "error" });
       return;
     }
     applyList(payments.filter((x) => x.id !== id));
+    showToast("Payment deleted", {
+      type: "success",
+      debounceKey: "payment-write",
+      debounceMs: 500,
+    });
     setDeleteConfirmId(null);
   };
 

@@ -8,6 +8,7 @@ import {
   updateTripBudgetSettingsAction,
 } from "@/actions/budget";
 import { formatMoney } from "@/lib/format";
+import { showToast } from "@/lib/toast";
 import type { BudgetCategory, Trip, TripBudgetItem } from "@/lib/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -136,6 +137,13 @@ export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
     });
     if (res.ok) {
       onTripPatch({ budget_target: num });
+      showToast("Saved", {
+        type: "success",
+        debounceKey: "budget-settings-save",
+        debounceMs: 500,
+      });
+    } else {
+      showToast(res.error, { type: "error" });
     }
   };
 
@@ -145,7 +153,16 @@ export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
       budgetTarget: trip.budget_target,
       budgetCurrency: code,
     });
-    if (res.ok) onTripPatch({ budget_currency: code });
+    if (res.ok) {
+      onTripPatch({ budget_currency: code });
+      showToast("Saved", {
+        type: "success",
+        debounceKey: "budget-settings-save",
+        debounceMs: 500,
+      });
+    } else {
+      showToast(res.error, { type: "error" });
+    }
   };
 
   const submitForm = async () => {
@@ -163,6 +180,9 @@ export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
       if (r.ok) {
         setEditing(null);
         void reload();
+        showToast("Budget item added", { type: "success" });
+      } else {
+        showToast(r.error, { type: "error" });
       }
     } else if (editing) {
       const r = await updateTripBudgetItemAction({
@@ -177,6 +197,9 @@ export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
       if (r.ok) {
         setEditing(null);
         void reload();
+        showToast("Budget item updated", { type: "success" });
+      } else {
+        showToast(r.error, { type: "error" });
       }
     }
   };
@@ -187,13 +210,27 @@ export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
       tripId: trip.id,
       isPaid: !it.is_paid,
     });
-    if (r.ok) void reload();
+    if (r.ok) {
+      void reload();
+      showToast("Saved", {
+        type: "success",
+        debounceKey: "budget-toggle-paid",
+        debounceMs: 500,
+      });
+    } else {
+      showToast(r.error, { type: "error" });
+    }
   };
 
   const removeItem = async (it: TripBudgetItem) => {
     if (!confirm("Remove this item?")) return;
     const r = await deleteTripBudgetItemAction({ itemId: it.id, tripId: trip.id });
-    if (r.ok) void reload();
+    if (r.ok) {
+      void reload();
+      showToast("Budget item deleted", { type: "success" });
+    } else {
+      showToast(r.error, { type: "error" });
+    }
   };
 
   const byCategory = useMemo(() => {
@@ -281,7 +318,11 @@ export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
       </div>
 
       {loading ? (
-        <p className="font-sans text-sm text-royal/60">Loading…</p>
+        <div className="space-y-3 rounded-2xl border border-royal/10 bg-white p-5">
+          <div className="h-4 w-1/3 animate-pulse rounded bg-royal/10" />
+          <div className="h-4 w-full animate-pulse rounded bg-royal/10" />
+          <div className="h-20 w-full animate-pulse rounded-xl bg-royal/10" />
+        </div>
       ) : items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-royal/20 bg-cream/60 p-8 text-center">
           <p className="font-serif text-lg text-royal">

@@ -5,15 +5,23 @@ import { useCallback, useEffect, useState } from "react";
 /** Next.js / bundler message when the client bundle is stale vs deployed server actions. */
 export const STALE_SERVER_ACTION_MESSAGE_SNIPPET = "was not found on the server";
 
-type Listener = (message: string | null) => void;
+export type ToastType = "info" | "success" | "error";
+
+export type ToastPayload = {
+  message: string;
+  type: ToastType;
+};
+
+type Listener = (toast: ToastPayload | null) => void;
 
 const listeners = new Set<Listener>();
 
-let currentMessage: string | null = null;
+let currentToast: ToastPayload | null = null;
 let clearTimer: ReturnType<typeof setTimeout> | null = null;
+const debounceByKey = new Map<string, number>();
 
 function broadcast() {
-  for (const l of listeners) l(currentMessage);
+  for (const l of listeners) l(currentToast);
 }
 
 function errorMessageFromUnknown(err: unknown): string {
@@ -45,18 +53,43 @@ export function notifyStaleServerActionIfNeeded(err: unknown): boolean {
   if (!isStaleServerActionError(err)) return false;
   showToast(
     "The page needs refreshing — please reload and try again.",
-    4500,
+    { durationMs: 4500, type: "error" },
   );
   return true;
 }
 
 /** Imperative toast for non-component code paths (optional). */
-export function showToast(message: string, durationMs = 3000) {
+export function showToast(
+  message: string,
+  options?:
+    | number
+    | {
+        durationMs?: number;
+        type?: ToastType;
+        debounceKey?: string;
+        debounceMs?: number;
+      },
+) {
+  const type = typeof options === "object" ? (options.type ?? "info") : "info";
+  const durationMs =
+    typeof options === "number"
+      ? options
+      : options?.durationMs ?? (type === "error" ? 5000 : 2000);
+  const debounceKey =
+    typeof options === "object" ? options.debounceKey : undefined;
+  const debounceMs =
+    typeof options === "object" ? (options.debounceMs ?? 0) : 0;
+  if (debounceKey) {
+    const now = Date.now();
+    const prev = debounceByKey.get(debounceKey);
+    if (prev != null && now - prev < debounceMs) return;
+    debounceByKey.set(debounceKey, now);
+  }
   if (clearTimer) clearTimeout(clearTimer);
-  currentMessage = message;
+  currentToast = { message, type };
   broadcast();
   clearTimer = setTimeout(() => {
-    currentMessage = null;
+    currentToast = null;
     broadcast();
     clearTimer = null;
   }, durationMs);
@@ -64,20 +97,20 @@ export function showToast(message: string, durationMs = 3000) {
 
 /** Hook: subscribe to toasts + show(). */
 export function useToast() {
-  const [message, setMessage] = useState<string | null>(currentMessage);
+  const [toast, setToast] = useState<ToastPayload | null>(currentToast);
 
   useEffect(() => {
-    const listener: Listener = (m) => setMessage(m);
+    const listener: Listener = (payload) => setToast(payload);
     listeners.add(listener);
-    setMessage(currentMessage);
+    setToast(currentToast);
     return () => {
       listeners.delete(listener);
     };
   }, []);
 
-  const show = useCallback((msg: string) => {
-    showToast(msg);
+  const show = useCallback((msg: string, type: ToastType = "info") => {
+    showToast(msg, { type });
   }, []);
 
-  return { message, show };
+  return { toast, show };
 }

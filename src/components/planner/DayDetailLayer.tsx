@@ -9,6 +9,7 @@ import {
   SaveTemplateDialog,
 } from "@/components/planner/DayTemplateDialogs";
 import { DuplicateDayModal } from "@/components/planner/DuplicateDayModal";
+import { UnsavedChangesModal } from "@/components/app/UnsavedChangesModal";
 import { TierLimitModal } from "@/components/paywall/TierLimitModal";
 import {
   eachDateKeyInRange,
@@ -25,6 +26,7 @@ import {
 } from "@/lib/planner-crowd-level-meta";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { plannerUserDayNotes } from "@/lib/planner-note-maps";
+import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import type { Tier } from "@/lib/tier";
 import type { Park, TemperatureUnit, Trip } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
@@ -133,10 +135,14 @@ export function DayDetailLayer({
     const m = plannerUserDayNotes(trip);
     return m[dayDate] ?? "";
   });
+  const [noteDirty, setNoteDirty] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  useUnsavedChanges(noteDirty);
 
   useEffect(() => {
     const m = plannerUserDayNotes(trip);
     setNoteDraft(m[dayDate] ?? "");
+    setNoteDirty(false);
   }, [trip, dayDate]);
 
   useEffect(() => {
@@ -152,13 +158,63 @@ export function DayDetailLayer({
     [trip, dayDate],
   );
 
-  const navigateTo = useCallback(
+  const navigateToRaw = useCallback(
     (dk: string | null) => {
       if (!dk) return;
       const seg = formatDateISO(parseDate(dk));
       router.push(`${tripBasePath}/day/${seg}`, { scroll: false });
     },
     [router, tripBasePath],
+  );
+
+  const queueAction = useCallback(
+    (action: () => void) => {
+      if (noteDirty) {
+        setPendingAction(() => action);
+        return;
+      }
+      action();
+    },
+    [noteDirty],
+  );
+
+  const saveNoteDraft = useCallback(() => {
+    if (!noteDirty) return;
+    onSaveDayNote(dayDate, noteDraft.slice(0, 500));
+    setNoteDirty(false);
+  }, [dayDate, noteDraft, noteDirty, onSaveDayNote]);
+
+  const runPendingAction = useCallback(() => {
+    const action = pendingAction;
+    setPendingAction(null);
+    action?.();
+  }, [pendingAction]);
+
+  const confirmSaveAndContinue = useCallback(() => {
+    saveNoteDraft();
+    runPendingAction();
+  }, [runPendingAction, saveNoteDraft]);
+
+  const confirmDiscardAndContinue = useCallback(() => {
+    const m = plannerUserDayNotes(trip);
+    setNoteDraft(m[dayDate] ?? "");
+    setNoteDirty(false);
+    runPendingAction();
+  }, [trip, dayDate, runPendingAction]);
+
+  const closeLayer = useCallback(() => {
+    queueAction(() => {
+      setMoreOpen(false);
+      onClose();
+    });
+  }, [onClose, queueAction]);
+
+  const navigateTo = useCallback(
+    (dk: string | null) => {
+      if (!dk) return;
+      queueAction(() => navigateToRaw(dk));
+    },
+    [navigateToRaw, queueAction],
   );
 
   const parkById = useMemo(() => new Map(parks.map((p) => [p.id, p])), [parks]);
@@ -343,7 +399,7 @@ export function DayDetailLayer({
         type="button"
         className="fixed inset-0 z-[95] hidden bg-black/40 md:block"
         aria-label="Close day detail"
-        onClick={onClose}
+        onClick={closeLayer}
       />
       <div
         ref={dialogRef}
@@ -359,7 +415,7 @@ export function DayDetailLayer({
                 type="button"
                 className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-royal/15 bg-white text-lg text-royal shadow-sm transition hover:bg-cream"
                 aria-label="Back to trip overview"
-                onClick={onClose}
+                onClick={closeLayer}
               >
                 ←
               </button>
@@ -399,7 +455,7 @@ export function DayDetailLayer({
               <button
                 type="button"
                 className="min-h-11 shrink-0 rounded-lg border border-royal/15 bg-white px-2 font-sans text-[11px] font-semibold text-royal"
-                onClick={() => setDupOpen(true)}
+                onClick={() => queueAction(() => setDupOpen(true))}
               >
                 Duplicate
               </button>
@@ -467,7 +523,7 @@ export function DayDetailLayer({
                 type="button"
                 className="hidden min-h-11 min-w-11 items-center justify-center rounded-lg border border-royal/15 bg-white text-sm text-royal md:flex"
                 aria-label="Close"
-                onClick={onClose}
+                onClick={closeLayer}
               >
                 ✕
               </button>
@@ -490,7 +546,7 @@ export function DayDetailLayer({
               <button
                 type="button"
                 className="ml-auto rounded-full border border-gold/40 bg-gold/20 px-3 py-1.5 font-sans text-xs font-semibold text-royal"
-                onClick={() => navigateTo(todayK)}
+                onClick={() => queueAction(() => navigateToRaw(todayK))}
               >
                 Jump to today
               </button>
@@ -545,7 +601,7 @@ export function DayDetailLayer({
             childAges={trip.child_ages ?? []}
             ridePriorities={ridePriorities}
             parks={parks}
-            onClose={onClose}
+            onClose={closeLayer}
             onPrioritiesUpdated={onPrioritiesUpdated}
           />
 
@@ -580,8 +636,14 @@ export function DayDetailLayer({
               className="mt-2 min-h-[6rem] w-full resize-y rounded-lg border border-royal/20 bg-white px-3 py-2 font-sans text-sm text-royal focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/40"
               maxLength={500}
               value={noteDraft}
-              onChange={(e) => setNoteDraft(e.target.value)}
-              onBlur={() => onSaveDayNote(dayDate, noteDraft.slice(0, 500))}
+              onChange={(e) => {
+                setNoteDraft(e.target.value);
+                setNoteDirty(true);
+              }}
+              onBlur={() => {
+                if (!noteDirty) return;
+                saveNoteDraft();
+              }}
               placeholder="Notes for this day — reminders, bookings, must-dos…"
               aria-label="Day note"
             />
@@ -633,7 +695,11 @@ export function DayDetailLayer({
           openNavigatorUpsell();
         }}
         onSaved={() => {
-          showToast("Template saved");
+          showToast("Template saved", {
+            type: "success",
+            debounceKey: "day-template-saved",
+            debounceMs: 500,
+          });
           refreshTrip();
         }}
       />
@@ -649,7 +715,11 @@ export function DayDetailLayer({
           openNavigatorUpsell();
         }}
         onApplied={() => {
-          showToast("Template applied");
+          showToast("Template applied", {
+            type: "success",
+            debounceKey: "day-template-applied",
+            debounceMs: 500,
+          });
           refreshTrip();
         }}
       />
@@ -666,9 +736,19 @@ export function DayDetailLayer({
           openNavigatorUpsell();
         }}
         onSuccess={() => {
-          showToast("Day duplicated");
+          showToast("Day duplicated", {
+            type: "success",
+            debounceKey: "day-duplicated",
+            debounceMs: 500,
+          });
           refreshTrip();
         }}
+      />
+      <UnsavedChangesModal
+        isOpen={pendingAction != null}
+        onCancel={() => setPendingAction(null)}
+        onSaveAndContinue={confirmSaveAndContinue}
+        onDiscardChanges={confirmDiscardAndContinue}
       />
     </>
   );
