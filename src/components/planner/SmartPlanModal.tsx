@@ -276,11 +276,17 @@ export function SmartPlanModal({
           <strong>↶ Undo Smart Plan</strong> after a run if you want to revert.
         </p>
 
-        <div
-          className="mt-4 flex rounded-lg border border-royal/20 bg-white p-1"
-          role="radiogroup"
-          aria-label="Plan mode"
+        <form
+          onSubmit={(e) => void handleSubmit(e)}
+          className="mt-4 space-y-4"
         >
+          <div className="space-y-3">{skipTheLineSection}</div>
+
+          <div
+            className="flex rounded-lg border border-royal/20 bg-white p-1"
+            role="radiogroup"
+            aria-label="Plan mode"
+          >
           <button
             type="button"
             role="radio"
@@ -307,10 +313,8 @@ export function SmartPlanModal({
           >
             Custom prompt
           </button>
-        </div>
+          </div>
 
-        <form onSubmit={(e) => void handleSubmit(e)} className="mt-5 space-y-4">
-          <div className="space-y-3">{skipTheLineSection}</div>
           {mode === "smart" ? (
             <>
               <div className="rounded-lg border border-gold/40 bg-white/80 px-4 py-3 font-sans text-sm leading-relaxed text-royal">
