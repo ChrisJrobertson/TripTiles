@@ -36,8 +36,7 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
     if (initialEmail) setEmail(initialEmail);
   }, [initialEmail]);
 
-  async function handleMagicLink(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleMagicLink() {
     setError(null);
     setMagicLoading(true);
 
@@ -97,8 +96,17 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
     }
   }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (password.trim().length > 0) {
+      await handlePasswordSignIn();
+      return;
+    }
+    await handleMagicLink();
+  }
+
   return (
-    <form onSubmit={handleMagicLink} className="mt-8 space-y-5">
+    <form onSubmit={(e) => void handleSubmit(e)} className="mt-8 space-y-5">
       <div aria-live="polite" role="status">
         {error ? (
           <p
