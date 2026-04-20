@@ -5,6 +5,8 @@ import {
   deletePayment,
   updatePayment,
 } from "@/actions/payments";
+import { PdfExportButton } from "@/components/planner/PdfExportButton";
+import { currencyApproximationText, formatMoney } from "@/lib/format";
 import { showToast } from "@/lib/toast";
 import type { Trip } from "@/lib/types";
 import type { PaymentCurrency, TripPayment } from "@/types/payments";
@@ -14,6 +16,7 @@ type Props = {
   trip: Trip;
   payments: TripPayment[];
   onPaymentsChange: (tripId: string, next: TripPayment[]) => void;
+  embedded?: boolean;
 };
 
 function sortPayments(items: TripPayment[]): TripPayment[] {
@@ -47,19 +50,6 @@ function addDaysKey(dateKey: string, days: number): string {
   return `${yy}-${mm}-${dd}`;
 }
 
-function formatMoneyMajor(amountPence: number, currency: PaymentCurrency): string {
-  const major = amountPence / 100;
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 2,
-    }).format(major);
-  } catch {
-    return `${currency} ${major.toFixed(2)}`;
-  }
-}
-
 function parseAmountToPence(raw: string): number | null {
   const t = raw.trim().replace(/,/g, "");
   if (t === "") return null;
@@ -78,7 +68,12 @@ function paymentStatus(
   return "normal";
 }
 
-export function PaymentsTab({ trip, payments, onPaymentsChange }: Props) {
+export function PaymentsTab({
+  trip,
+  payments,
+  onPaymentsChange,
+  embedded = false,
+}: Props) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
@@ -192,8 +187,8 @@ export function PaymentsTab({ trip, payments, onPaymentsChange }: Props) {
       .filter((p) => p.currency === "USD")
       .reduce((s, p) => s + p.amount_pence, 0);
     const parts: string[] = [];
-    if (gbp > 0) parts.push(formatMoneyMajor(gbp, "GBP"));
-    if (usd > 0) parts.push(formatMoneyMajor(usd, "USD"));
+    if (gbp > 0) parts.push(formatMoney(gbp, "GBP"));
+    if (usd > 0) parts.push(formatMoney(usd, "USD"));
     if (parts.length === 0) return "£0.00";
     return parts.join(" + ");
   }, [payments]);
@@ -201,7 +196,9 @@ export function PaymentsTab({ trip, payments, onPaymentsChange }: Props) {
   const formActive = adding || editingId !== null;
 
   return (
-    <div className="space-y-6 font-sans text-royal">
+    <section
+      className={`space-y-6 font-sans text-royal ${embedded ? "" : "mx-auto max-w-3xl pb-24"}`}
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-serif text-xl font-semibold text-royal">
@@ -211,15 +208,22 @@ export function PaymentsTab({ trip, payments, onPaymentsChange }: Props) {
             Track deposits, balances, tickets, and flights in one place.
           </p>
         </div>
-        {!formActive ? (
-          <button
-            type="button"
-            onClick={startAdd}
-            className="min-h-[44px] rounded-lg bg-royal px-4 py-2.5 text-sm font-semibold text-cream shadow-sm transition hover:bg-royal/90"
-          >
-            Add payment
-          </button>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <PdfExportButton
+            tripId={trip.id}
+            buttonLabel="Payments schedule PDF"
+            defaultModeOnOpen="payments_schedule"
+          />
+          {!formActive ? (
+            <button
+              type="button"
+              onClick={startAdd}
+              className="min-h-[44px] rounded-lg bg-royal px-4 py-2.5 text-sm font-semibold text-cream shadow-sm transition hover:bg-royal/90"
+            >
+              Add payment
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {formActive ? (
@@ -303,8 +307,17 @@ export function PaymentsTab({ trip, payments, onPaymentsChange }: Props) {
 
       {sorted.length === 0 && !formActive ? (
         <div className="rounded-2xl border border-dashed border-royal/20 bg-white/80 px-4 py-10 text-center text-sm text-royal/70">
-          No payments tracked yet. Add cruise deposits, villa balances, tickets,
-          or flights to keep everything in one place.
+          <p>
+            Track cruise deposits, hotel balances, flights, tickets, and insurance
+            here.
+          </p>
+          <button
+            type="button"
+            onClick={startAdd}
+            className="mt-4 min-h-[44px] rounded-lg bg-royal px-4 py-2 font-semibold text-cream shadow-sm transition hover:bg-royal/90"
+          >
+            Add your first payment →
+          </button>
         </div>
       ) : null}
 
@@ -341,9 +354,20 @@ export function PaymentsTab({ trip, payments, onPaymentsChange }: Props) {
                       </span>
                     ) : null}
                   </div>
-                  <p className="text-lg font-semibold text-royal">
-                    {formatMoneyMajor(p.amount_pence, p.currency)}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-lg font-semibold text-royal">
+                      {formatMoney(p.amount_pence, p.currency)}
+                    </p>
+                    {currencyApproximationText(p.amount_pence, p.currency, {
+                      tripCurrency: trip.budget_currency,
+                    }) ? (
+                      <p className="text-xs text-royal/50">
+                        {currencyApproximationText(p.amount_pence, p.currency, {
+                          tripCurrency: trip.budget_currency,
+                        })}
+                      </p>
+                    ) : null}
+                  </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-royal/65">
                     {p.booking_date ? (
                       <span>Booked {p.booking_date}</span>
@@ -409,6 +433,6 @@ export function PaymentsTab({ trip, payments, onPaymentsChange }: Props) {
           Total outstanding: {totalsLine}
         </div>
       ) : null}
-    </div>
+    </section>
   );
 }

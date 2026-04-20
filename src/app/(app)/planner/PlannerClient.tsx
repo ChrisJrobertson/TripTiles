@@ -29,9 +29,7 @@ import { Calendar } from "@/components/planner/Calendar";
 import { CompareDaysPanel } from "@/components/planner/CompareDaysPanel";
 import { CrowdStrategyBanner } from "@/components/planner/CrowdStrategyBanner";
 import { MobileDayView } from "@/components/planner/MobileDayView";
-import { PaymentsTab } from "@/components/planner/PaymentsTab";
-import { TripBudgetView } from "@/components/planner/TripBudgetView";
-import { TripChecklistView } from "@/components/planner/TripChecklistView";
+import { PlanningSections } from "@/components/planner/PlanningSections";
 import { Countdown } from "@/components/planner/Countdown";
 import { CustomTileModal } from "@/components/planner/CustomTileModal";
 import { DayDetailLayer } from "@/components/planner/DayDetailLayer";
@@ -151,7 +149,9 @@ type Props = {
   /** From `user_custom_tile_limit` RPC. */
   customTileLimit: number;
   /** From `?tab=` on the planner URL. */
-  plannerTab?: "planner" | "budget" | "payments" | "checklist";
+  plannerTab?: "planner" | "planning";
+  /** Legacy deep-link mapping for Planning accordion pre-open. */
+  initialPlanningSection?: "todo" | "payments" | "budget" | null;
   /** From `profiles.temperature_unit` for calendar weather labels. */
   temperatureUnit?: TemperatureUnit;
   /** When true, milestone reminder emails are suppressed for every trip. */
@@ -189,6 +189,34 @@ function resolvePaletteRegionId(trip: Trip | null): string | null {
   if (trip.region_id) return trip.region_id;
   if (trip.destination !== "custom") return trip.destination;
   return null;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function dateKeyDiff(from: string, to: string): number {
+  const fromDate = parseDate(from);
+  const toDate = parseDate(to);
+  const fromNoon = new Date(
+    fromDate.getFullYear(),
+    fromDate.getMonth(),
+    fromDate.getDate(),
+    12,
+  );
+  const toNoon = new Date(
+    toDate.getFullYear(),
+    toDate.getMonth(),
+    toDate.getDate(),
+    12,
+  );
+  return Math.round((toNoon.getTime() - fromNoon.getTime()) / DAY_MS);
+}
+
+function isTripWithinSmartLandingWindow(trip: Trip, todayKey: string): boolean {
+  const startsIn = dateKeyDiff(todayKey, trip.start_date);
+  const endedAgo = dateKeyDiff(trip.end_date, todayKey);
+  if (startsIn >= 0) return startsIn <= 3;
+  if (endedAgo >= 0) return endedAgo <= 3;
+  return true;
 }
 
 type SmartGenResult = Awaited<ReturnType<typeof generateAIPlanAction>>;
@@ -252,6 +280,7 @@ export function PlannerClient({
   initialAutoGenerate = false,
   customTileLimit,
   plannerTab = "planner",
+  initialPlanningSection = null,
   temperatureUnit = "c",
   emailMarketingOptOut = false,
   initialRidePrioritiesByTripId,
@@ -1862,25 +1891,14 @@ export function PlannerClient({
             </div>
           ) : null}
 
-          {plannerTab === "budget" ? (
-            <div className="mt-8 w-full max-w-4xl">
-              <TripBudgetView
-                trip={activeTrip}
-                onTripPatch={(patch) => applyLocalPatch(activeTrip.id, patch)}
-              />
-            </div>
-          ) : plannerTab === "payments" ? (
-            <div className="mt-8 w-full max-w-4xl">
-              <PaymentsTab
-                trip={activeTrip}
-                payments={paymentsByTripId[activeTrip.id] ?? []}
-                onPaymentsChange={handlePaymentsChange}
-              />
-            </div>
-          ) : plannerTab === "checklist" ? (
-            <div className="mt-8 w-full max-w-4xl">
-              <TripChecklistView trip={activeTrip} />
-            </div>
+          {plannerTab === "planning" ? (
+            <PlanningSections
+              trip={activeTrip}
+              payments={paymentsByTripId[activeTrip.id] ?? []}
+              onPaymentsChange={handlePaymentsChange}
+              onTripPatch={(patch) => applyLocalPatch(activeTrip.id, patch)}
+              initialSection={initialPlanningSection}
+            />
           ) : (
             <div
               className={`mt-8 grid items-start gap-6 ${
@@ -1930,6 +1948,18 @@ export function PlannerClient({
                   />
                 ) : (
                   <>
+                    <TripStatsCard
+                      trip={activeTrip}
+                      parks={calendarParks}
+                      payments={paymentsByTripId[activeTrip.id] ?? []}
+                      destinationLabel={activeRegionLabel}
+                      onToast={showToast}
+                      onViewAllPayments={() => {
+                        startTransition(() => {
+                          router.push(`${tripRouteBase ?? "/planner"}?tab=payments`);
+                        });
+                      }}
+                    />
                     {!hasAnyAssignment ? (
                       <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-3 sm:p-4">
                         <div className="pointer-events-auto w-full max-w-md">
@@ -2014,12 +2044,6 @@ export function PlannerClient({
                       onSlotTimeChange={onSlotTimeChange}
                     />
                     </div>
-                    <TripStatsCard
-                      trip={activeTrip}
-                      parks={calendarParks}
-                      destinationLabel={activeRegionLabel}
-                      onToast={showToast}
-                    />
                   </>
                 )}
               </div>

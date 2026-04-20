@@ -592,7 +592,8 @@ export function ExpandedDayPanel({
             </p>
             {mustRows.length === 0 ? (
               <p className="py-2 font-sans text-xs italic text-royal/50">
-                No must-dos yet — add from Available below.
+                No ride priorities yet for this day. Tap a ride in the parks list
+                to set Must-do or If-time.
               </p>
             ) : (
               <SortableContext
@@ -645,7 +646,8 @@ export function ExpandedDayPanel({
             </p>
             {mustRows.length === 0 ? (
               <p className="py-2 font-sans text-xs italic text-royal/50">
-                No must-dos yet — add from Available below.
+                No ride priorities yet for this day. Tap a ride in the parks list
+                to set Must-do or If-time.
               </p>
             ) : (
               mustRows.map((row, i) => (

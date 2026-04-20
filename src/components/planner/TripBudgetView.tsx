@@ -7,8 +7,8 @@ import {
   updateTripBudgetItemAction,
   updateTripBudgetSettingsAction,
 } from "@/actions/budget";
+import { formatMoney } from "@/lib/format";
 import type { BudgetCategory, Trip, TripBudgetItem } from "@/lib/types";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const CATEGORIES: BudgetCategory[] = [
@@ -46,24 +46,13 @@ const CURRENCIES = [
   { code: "AED", label: "AED (د.إ)" },
 ];
 
-function formatMoney(amount: number, code: string): string {
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: code,
-      minimumFractionDigits: 2,
-    }).format(amount);
-  } catch {
-    return `${code} ${amount.toFixed(2)}`;
-  }
-}
-
 type Props = {
   trip: Trip;
   onTripPatch: (patch: Partial<Trip>) => void;
+  embedded?: boolean;
 };
 
-export function TripBudgetView({ trip, onTripPatch }: Props) {
+export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
   const [items, setItems] = useState<TripBudgetItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [targetDraft, setTargetDraft] = useState(
@@ -219,18 +208,16 @@ export function TripBudgetView({ trip, onTripPatch }: Props) {
   }, [items]);
 
   return (
-    <section className="mx-auto max-w-3xl space-y-6 pb-24">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <h2 className="font-serif text-2xl font-semibold text-royal">
-          Trip budget
-        </h2>
-        <Link
-          href="/planner"
-          className="font-sans text-sm font-medium text-royal/70 underline-offset-2 hover:text-royal hover:underline"
-        >
-          ← Back to planner
-        </Link>
-      </div>
+    <section
+      className={`space-y-6 ${embedded ? "" : "mx-auto max-w-3xl pb-24"}`}
+    >
+      {!embedded ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <h2 className="font-serif text-2xl font-semibold text-royal">
+            Trip budget
+          </h2>
+        </div>
+      ) : null}
 
       <div className="rounded-2xl border border-royal/10 bg-white p-4 shadow-sm sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
@@ -297,7 +284,9 @@ export function TripBudgetView({ trip, onTripPatch }: Props) {
         <p className="font-sans text-sm text-royal/60">Loading…</p>
       ) : items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-royal/20 bg-cream/60 p-8 text-center">
-          <p className="font-serif text-lg text-royal">No budget items yet</p>
+          <p className="font-serif text-lg text-royal">
+            Set a total budget and break it down by category.
+          </p>
           <p className="mt-2 font-sans text-sm text-royal/70">
             Track your trip costs — flights, hotels, tickets, dining — and see
             how you&apos;re doing against your target.

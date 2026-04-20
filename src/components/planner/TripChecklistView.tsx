@@ -9,7 +9,6 @@ import {
   updateTripChecklistItemCheckedAction,
 } from "@/actions/checklist";
 import type { ChecklistCategory, Trip, TripChecklistItem } from "@/lib/types";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const ORDER: ChecklistCategory[] = [
@@ -32,9 +31,10 @@ const LABELS: Record<ChecklistCategory, string> = {
 
 type Props = {
   trip: Trip;
+  embedded?: boolean;
 };
 
-export function TripChecklistView({ trip }: Props) {
+export function TripChecklistView({ trip, embedded = false }: Props) {
   const [items, setItems] = useState<TripChecklistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [customLabel, setCustomLabel] = useState("");
@@ -129,18 +129,14 @@ export function TripChecklistView({ trip }: Props) {
   };
 
   return (
-    <section className="mx-auto max-w-3xl space-y-6 pb-24">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <h2 className="font-serif text-2xl font-semibold text-royal">
-          Trip checklist
-        </h2>
-        <Link
-          href="/planner"
-          className="font-sans text-sm font-medium text-royal/70 underline-offset-2 hover:text-royal hover:underline"
-        >
-          ← Back to planner
-        </Link>
-      </div>
+    <section className={`space-y-6 ${embedded ? "" : "mx-auto max-w-3xl pb-24"}`}>
+      {!embedded ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <h2 className="font-serif text-2xl font-semibold text-royal">
+            Trip checklist
+          </h2>
+        </div>
+      ) : null}
 
       <div className="rounded-2xl border border-royal/10 bg-white p-4 shadow-sm sm:p-6">
         <p className="font-sans text-sm text-royal/80">
@@ -155,11 +151,21 @@ export function TripChecklistView({ trip }: Props) {
       </div>
 
       {loading ? (
-        <p className="font-sans text-sm text-royal/60">Loading…</p>
+        <div className="space-y-2">
+          {[0, 1, 2].map((idx) => (
+            <div
+              key={idx}
+              className="h-14 rounded-xl border border-royal/10 bg-royal/5 animate-pulse"
+            />
+          ))}
+        </div>
       ) : items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-royal/20 bg-cream/60 p-8 text-center">
           <p className="font-sans text-sm text-royal/80">
-            No checklist yet. Add a suggested packing list for this trip.
+            No todos yet. Add your first one to keep track of what&apos;s left before you travel.
+          </p>
+          <p className="mt-2 font-sans text-xs text-royal/65">
+            Start with the suggested list, then customise items for your family.
           </p>
           <button
             type="button"
