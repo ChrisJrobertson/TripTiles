@@ -37,11 +37,61 @@ import { formatRegionalDiningForPrompt } from "@/data/regional-dining";
 import { formatPlanningPreferencesForPrompt } from "@/lib/planning-preferences-prompt";
 import { isNamedRestaurantPark } from "@/lib/named-restaurant-tiles";
 import { assertTierAllows, tierErrorToClientPayload } from "@/lib/tier";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY ?? "",
 });
 
 const SMART_PLAN_MODEL = "claude-haiku-4-5-20251001";
+const AI_GEN_DEBUG =
+  process.env.AI_GEN_DEBUG === "1" || process.env.NODE_ENV !== "production";
+
+type AiGenLogMeta = {
+  step: string;
+  tripId?: string;
+  dateKey?: string | null;
+  userId?: string;
+  tier?: string | null;
+  regionId?: string | null;
+  parksCount?: number;
+  hasPrompt?: boolean;
+  mode?: "smart" | "custom";
+  preserveExistingSlots?: boolean;
+  promptLength?: number;
+  details?: Record<string, unknown>;
+};
+
+function logAiGen(meta: AiGenLogMeta): void {
+  if (!AI_GEN_DEBUG) return;
+  console.info("[ai-gen]", {
+    ...meta,
+    at: new Date().toISOString(),
+  });
+}
+
+async function reportAiGenAutoError(params: {
+  message: string;
+  stack?: string;
+  context: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    const admin = createServiceRoleClient();
+    const stackText = params.stack ?? "";
+    const contextText = JSON.stringify(params.context).slice(0, 2000);
+    await admin.from("feedback").insert({
+      user_id: null,
+      anonymous_email: "noreply@triptiles.com",
+      category: "bug",
+      message: `[AUTO-ERROR][ai-gen] ${params.message.slice(0, 2000)}\n\nStack:\n${stackText.slice(0, 8000)}\n\nContext:\n${contextText}`,
+      page_url: null,
+      user_agent: null,
+    });
+  } catch (error) {
+    console.warn("[ai-gen] failed to report AUTO-ERROR", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
+}
 
 const SYSTEM_PROMPT = `You are Smart Plan, TripTiles' warm and practical theme park planner. Output ONLY valid JSON — no markdown, no preamble, no text outside the JSON object.
 
@@ -366,16 +416,50 @@ export async function runGenerateAIPlan(
   input: GenerateAIPlanInput,
   options: GenerateAIPlanOptions = {},
 ): Promise<GenerateAIPlanResult> {
+  logAiGen({
+    step: "action_enter",
+    tripId: input.tripId,
+    dateKey: null,
+    mode: input.mode,
+    hasPrompt: Boolean(input.userPrompt.trim()),
+    preserveExistingSlots: input.preserveExistingSlots !== false,
+    promptLength: input.userPrompt.trim().length,
+  });
   const user = await getCurrentUser();
   if (!user) {
+    logAiGen({
+      step: "action_exit_result",
+      tripId: input.tripId,
+      details: { ok: false, error: "NOT_AUTHED" },
+    });
     return { ok: false, error: "NOT_AUTHED", message: "Not signed in." };
   }
 
   try {
+    logAiGen({
+      step: "entitlement_check_start",
+      tripId: input.tripId,
+      userId: user.id,
+      mode: input.mode,
+      hasPrompt: Boolean(input.userPrompt.trim()),
+      preserveExistingSlots: input.preserveExistingSlots !== false,
+    });
     await assertTierAllows(user.id, "ai");
+    logAiGen({
+      step: "entitlement_check_result",
+      tripId: input.tripId,
+      userId: user.id,
+      details: { allowed: true, source: "assertTierAllows" },
+    });
   } catch (e) {
     const mapped = tierErrorToClientPayload(e);
     if (mapped?.code === "TIER_AI_DISABLED") {
+      logAiGen({
+        step: "action_exit_result",
+        tripId: input.tripId,
+        userId: user.id,
+        details: { ok: false, error: "TIER_AI_DISABLED" },
+      });
       return {
         ok: false,
         error: "TIER_AI_DISABLED",
@@ -387,6 +471,12 @@ export async function runGenerateAIPlan(
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {
+    logAiGen({
+      step: "action_exit_result",
+      tripId: input.tripId,
+      userId: user.id,
+      details: { ok: false, error: "AI_ERROR", reason: "missing_anthropic_key" },
+    });
     return {
       ok: false,
       error: "AI_ERROR",
@@ -396,6 +486,12 @@ export async function runGenerateAIPlan(
 
   const trip = await getTripById(input.tripId);
   if (!trip || trip.owner_id !== user.id) {
+    logAiGen({
+      step: "action_exit_result",
+      tripId: input.tripId,
+      userId: user.id,
+      details: { ok: false, error: "TRIP_NOT_FOUND" },
+    });
     return { ok: false, error: "TRIP_NOT_FOUND", message: "Trip not found." };
   }
 
@@ -403,6 +499,12 @@ export async function runGenerateAIPlan(
     trip.region_id ??
     (trip.destination !== "custom" ? trip.destination : null);
   if (!rid) {
+    logAiGen({
+      step: "action_exit_result",
+      tripId: input.tripId,
+      userId: user.id,
+      details: { ok: false, error: "AI_ERROR", reason: "missing_region" },
+    });
     return {
       ok: false,
       error: "AI_ERROR",
@@ -411,14 +513,34 @@ export async function runGenerateAIPlan(
     };
   }
 
+  logAiGen({
+    step: "region_lookup_start",
+    tripId: input.tripId,
+    userId: user.id,
+    regionId: rid,
+  });
   const region = await getRegionById(rid);
   if (!region) {
+    logAiGen({
+      step: "region_lookup_result",
+      tripId: input.tripId,
+      userId: user.id,
+      regionId: rid,
+      details: { found: false },
+    });
     return {
       ok: false,
       error: "AI_ERROR",
       message: "Could not load destination region for this trip.",
     };
   }
+  logAiGen({
+    step: "region_lookup_result",
+    tripId: input.tripId,
+    userId: user.id,
+    regionId: rid,
+    details: { found: true },
+  });
 
   const supabase = await createClient();
 
@@ -431,6 +553,12 @@ export async function runGenerateAIPlan(
   let canGenerateAi: boolean;
   try {
     canGenerateAi = await currentUserCanGenerateAI();
+    logAiGen({
+      step: "entitlement_check_result",
+      tripId: input.tripId,
+      userId: user.id,
+      details: { allowed: canGenerateAi, source: "currentUserCanGenerateAI" },
+    });
   } catch (e) {
     if (isTierLoadFailure(e)) {
       return {
@@ -443,6 +571,12 @@ export async function runGenerateAIPlan(
   }
 
   if (!canGenerateAi) {
+    logAiGen({
+      step: "action_exit_result",
+      tripId: input.tripId,
+      userId: user.id,
+      details: { ok: false, error: "TIER_LIMIT" },
+    });
     return {
       ok: false,
       error: "TIER_LIMIT",
@@ -462,8 +596,29 @@ export async function runGenerateAIPlan(
     : customAsParks.filter((p) => !requiresCruiseSegment(p));
 
   const parksForPrompt = [...builtFiltered, ...customFiltered];
+  logAiGen({
+    step: "parks_lookup_result",
+    tripId: input.tripId,
+    userId: user.id,
+    regionId: rid,
+    parksCount: parksForPrompt.length,
+    details: {
+      builtInCount: builtInParks.length,
+      builtFilteredCount: builtFiltered.length,
+      customCount: customAsParks.length,
+      customFilteredCount: customFiltered.length,
+    },
+  });
 
   if (parksForPrompt.length === 0) {
+    logAiGen({
+      step: "action_exit_result",
+      tripId: input.tripId,
+      userId: user.id,
+      regionId: rid,
+      parksCount: 0,
+      details: { ok: false, error: "AI_ERROR", reason: "no_parks_for_prompt" },
+    });
     return {
       ok: false,
       error: "AI_ERROR",
@@ -529,6 +684,17 @@ export async function runGenerateAIPlan(
     diningHint,
     namedRestaurantHint,
   });
+  logAiGen({
+    step: "prompt_build_result",
+    tripId: input.tripId,
+    userId: user.id,
+    regionId: rid,
+    parksCount: parksForPrompt.length,
+    mode: input.mode,
+    hasPrompt: Boolean(input.userPrompt.trim()),
+    preserveExistingSlots: input.preserveExistingSlots !== false,
+    promptLength: composedUserMessage.length,
+  });
 
   const model = SMART_PLAN_MODEL;
 
@@ -541,6 +707,14 @@ export async function runGenerateAIPlan(
     let streamStoppedEarly = false;
 
     try {
+      logAiGen({
+        step: "anthropic_call_start",
+        tripId: input.tripId,
+        userId: user.id,
+        regionId: rid,
+        mode: input.mode,
+        parksCount: parksForPrompt.length,
+      });
       const stream = await anthropic.messages.create({
         model,
         max_tokens: 3000,
@@ -584,8 +758,43 @@ export async function runGenerateAIPlan(
           }
         }
       }
-    } catch {
+      logAiGen({
+        step: "anthropic_call_success",
+        tripId: input.tripId,
+        userId: user.id,
+        details: {
+          inputTokens,
+          outputTokens,
+          latencyMs: Date.now() - t0,
+        },
+      });
+    } catch (streamError) {
       streamStoppedEarly = rawText.trim().length > 0;
+      logAiGen({
+        step: "anthropic_call_fail",
+        tripId: input.tripId,
+        userId: user.id,
+        details: {
+          streamStoppedEarly,
+          partialChars: rawText.trim().length,
+          message:
+            streamError instanceof Error ? streamError.message : "unknown_stream_error",
+        },
+      });
+      await reportAiGenAutoError({
+        message:
+          streamError instanceof Error
+            ? streamError.message
+            : "Unknown error while streaming Anthropic response",
+        stack: streamError instanceof Error ? streamError.stack : undefined,
+        context: {
+          tripId: input.tripId,
+          mode: input.mode,
+          phase: "anthropic_stream",
+          streamStoppedEarly,
+          partialChars: rawText.trim().length,
+        },
+      });
       if (!streamStoppedEarly) throw new Error("AI stream failed before output");
     }
 
@@ -665,6 +874,15 @@ export async function runGenerateAIPlan(
     const meta = parseCrowdMetadata(parsed, dateAllow);
 
     const sanitized = sanitizeAssignments(parsed, dateAllow, allowedParkIds);
+    logAiGen({
+      step: "assignment_parse_result",
+      tripId: input.tripId,
+      userId: user.id,
+      details: {
+        parsed: Boolean(parsed),
+        assignmentDays: sanitized ? Object.keys(sanitized).length : 0,
+      },
+    });
     if (!sanitized || Object.keys(sanitized).length === 0) {
       await supabase.from("ai_generations").insert({
         user_id: user.id,
@@ -741,6 +959,14 @@ export async function runGenerateAIPlan(
       nextPrefs.day_notes = { ...baseDn, ...meta.planner_day_notes };
     }
 
+    logAiGen({
+      step: "db_write_start",
+      tripId: input.tripId,
+      userId: user.id,
+      details: {
+        assignmentDays: Object.keys(merged).length,
+      },
+    });
     const { error: upErr } = await supabase
       .from("trips")
       .update({
@@ -754,6 +980,16 @@ export async function runGenerateAIPlan(
       })
       .eq("id", input.tripId)
       .eq("owner_id", user.id);
+    logAiGen({
+      step: "db_write_result",
+      tripId: input.tripId,
+      userId: user.id,
+      details: {
+        ok: !upErr,
+        updatedAssignmentDays: Object.keys(merged).length,
+        error: upErr?.message ?? null,
+      },
+    });
 
     if (upErr) {
       await supabase.from("ai_generations").insert({
@@ -816,6 +1052,12 @@ export async function runGenerateAIPlan(
     if (firstAi.ok && firstAi.justEarned) newAchievements.push("first_ai_plan");
 
     revalidatePath("/planner");
+    logAiGen({
+      step: "action_exit_result",
+      tripId: input.tripId,
+      userId: user.id,
+      details: { ok: true, generationsUsedForTrip },
+    });
 
     return {
       ok: true,
@@ -830,6 +1072,23 @@ export async function runGenerateAIPlan(
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
+    const stack = e instanceof Error ? e.stack : undefined;
+    await reportAiGenAutoError({
+      message: msg,
+      stack,
+      context: {
+        tripId: input.tripId,
+        mode: input.mode,
+        preserveExistingSlots: input.preserveExistingSlots !== false,
+        hasPrompt: Boolean(input.userPrompt.trim()),
+      },
+    });
+    logAiGen({
+      step: "action_exit_result",
+      tripId: input.tripId,
+      userId: user.id,
+      details: { ok: false, error: "AI_ERROR", message: msg },
+    });
     const supabase2 = await createClient();
     await supabase2.from("ai_generations").insert({
       user_id: user.id,

@@ -139,7 +139,7 @@ export function SmartPlanModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-royal/85 p-4"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-royal/85 p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="smart-plan-title"
