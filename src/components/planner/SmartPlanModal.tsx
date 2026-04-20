@@ -1,7 +1,9 @@
 "use client";
 
+import { updateTripPlanningPreferencesAction } from "@/actions/trips";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { daysBetween, parseDate } from "@/lib/date-helpers";
+import { showToast } from "@/lib/toast";
 import {
   PACE_OPTIONS,
   PRIORITY_OPTIONS,
@@ -12,7 +14,7 @@ import type {
   Trip,
   TripPlanningPreferences,
 } from "@/lib/types";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 
 const MAX_CHARS = 500;
 const DEFAULT_FREE_CAP = 5;
@@ -47,6 +49,8 @@ type Props = {
   canRetryPartial?: boolean;
   onRetryPartial?: () => void;
   onGenerate: (payload: SmartPlanGeneratePayload) => Promise<void>;
+  /** Keep trip.planning_preferences in sync when skip-line toggles change (avoids stale local state). */
+  onTripPatch?: (patch: Partial<Trip>) => void;
 };
 
 export function SmartPlanModal({
@@ -65,6 +69,7 @@ export function SmartPlanModal({
   canRetryPartial = false,
   onRetryPartial,
   onGenerate,
+  onTripPatch,
 }: Props) {
   const [mode, setMode] = useState<"smart" | "custom">("smart");
   const [pace, setPace] = useState<PlanningPace>("balanced");
@@ -73,14 +78,7 @@ export function SmartPlanModal({
   const [additionalNotes, setAdditionalNotes] = useState("");
   const [customText, setCustomText] = useState("");
   const [replaceExistingTiles, setReplaceExistingTiles] = useState(false);
-  const [includeDisneySkipTips, setIncludeDisneySkipTips] = useState(true);
-  const [includeUniversalSkipTips, setIncludeUniversalSkipTips] =
-    useState(true);
-
-  const prefsSerial = useMemo(() => {
-    if (!trip?.planning_preferences) return "";
-    return JSON.stringify(trip.planning_preferences);
-  }, [trip?.planning_preferences]);
+  const [skipPrefsSaving, setSkipPrefsSaving] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !trip) return;
@@ -90,21 +88,59 @@ export function SmartPlanModal({
       setMustDoParks(new Set(p.mustDoParks ?? []));
       setPriorities(new Set(p.priorities ?? []));
       setAdditionalNotes(p.additionalNotes ?? "");
-      setIncludeDisneySkipTips(p.includeDisneySkipTips !== false);
-      setIncludeUniversalSkipTips(p.includeUniversalSkipTips !== false);
     } else {
       setPace("balanced");
       setMustDoParks(new Set());
       setPriorities(new Set());
       setAdditionalNotes("");
-      setIncludeDisneySkipTips(true);
-      setIncludeUniversalSkipTips(true);
     }
     setCustomText("");
     setMode("smart");
     setReplaceExistingTiles(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `prefsSerial` tracks planning_preferences; omitting `trip` avoids wiping in-progress edits on parent re-renders.
-  }, [isOpen, trip?.id, prefsSerial]);
+    // Intentionally not depending on `trip` object — we only re-seed the form
+    // when the modal opens or the active trip changes, not on planning_preferences
+    // patches (e.g. skip-line toggles) to avoid resetting in-progress choices.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, trip?.id]);
+
+  const persistSkipLinePrefs = useCallback(
+    async (nextDisney: boolean, nextUniversal: boolean) => {
+      if (!trip) return;
+      setSkipPrefsSaving(true);
+      try {
+        const base = trip.planning_preferences;
+        const next: TripPlanningPreferences = base
+          ? {
+              ...base,
+              includeDisneySkipTips: nextDisney,
+              includeUniversalSkipTips: nextUniversal,
+            }
+          : {
+              pace: "balanced",
+              mustDoParks: [],
+              priorities: [],
+              additionalNotes: null,
+              adults: trip.adults,
+              children: trip.children,
+              childAges: trip.child_ages ?? [],
+              includeDisneySkipTips: nextDisney,
+              includeUniversalSkipTips: nextUniversal,
+            };
+        const res = await updateTripPlanningPreferencesAction({
+          tripId: trip.id,
+          planningPreferences: next,
+        });
+        if (!res.ok) {
+          showToast(res.error);
+          return;
+        }
+        onTripPatch?.({ planning_preferences: next });
+      } finally {
+        setSkipPrefsSaving(false);
+      }
+    },
+    [trip, onTripPatch],
+  );
 
   const isDayScope = scope === "day" && Boolean(dayDateKey);
 
@@ -151,6 +187,10 @@ export function SmartPlanModal({
     if (isGenerating) return;
     if (mode === "custom" && !customText.trim()) return;
     const base = trip.planning_preferences;
+    const skipDisney =
+      trip.planning_preferences?.includeDisneySkipTips !== false;
+    const skipUniversal =
+      trip.planning_preferences?.includeUniversalSkipTips !== false;
     const planningPreferences: TripPlanningPreferences =
       mode === "smart"
         ? {
@@ -161,14 +201,14 @@ export function SmartPlanModal({
             adults: trip.adults,
             children: trip.children,
             childAges: trip.child_ages ?? [],
-            includeDisneySkipTips,
-            includeUniversalSkipTips,
+            includeDisneySkipTips: skipDisney,
+            includeUniversalSkipTips: skipUniversal,
           }
         : base
           ? {
               ...base,
-              includeDisneySkipTips,
-              includeUniversalSkipTips,
+              includeDisneySkipTips: skipDisney,
+              includeUniversalSkipTips: skipUniversal,
             }
           : {
               pace: "balanced",
@@ -178,8 +218,8 @@ export function SmartPlanModal({
               adults: trip.adults,
               children: trip.children,
               childAges: trip.child_ages ?? [],
-              includeDisneySkipTips,
-              includeUniversalSkipTips,
+              includeDisneySkipTips: skipDisney,
+              includeUniversalSkipTips: skipUniversal,
             };
     await onGenerate({
       mode,
@@ -203,9 +243,14 @@ export function SmartPlanModal({
         <input
           type="checkbox"
           className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
-          checked={includeDisneySkipTips}
-          onChange={(e) => setIncludeDisneySkipTips(e.target.checked)}
-          disabled={isGenerating}
+          checked={trip.planning_preferences?.includeDisneySkipTips !== false}
+          onChange={(e) =>
+            void persistSkipLinePrefs(
+              e.target.checked,
+              trip.planning_preferences?.includeUniversalSkipTips !== false,
+            )
+          }
+          disabled={isGenerating || skipPrefsSaving}
         />
         <span className="min-w-0 font-sans text-xs leading-relaxed text-royal/85">
           <span className="font-semibold text-royal">
@@ -218,9 +263,16 @@ export function SmartPlanModal({
         <input
           type="checkbox"
           className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
-          checked={includeUniversalSkipTips}
-          onChange={(e) => setIncludeUniversalSkipTips(e.target.checked)}
-          disabled={isGenerating}
+          checked={
+            trip.planning_preferences?.includeUniversalSkipTips !== false
+          }
+          onChange={(e) =>
+            void persistSkipLinePrefs(
+              trip.planning_preferences?.includeDisneySkipTips !== false,
+              e.target.checked,
+            )
+          }
+          disabled={isGenerating || skipPrefsSaving}
         />
         <span className="min-w-0 font-sans text-xs leading-relaxed text-royal/85">
           <span className="font-semibold text-royal">

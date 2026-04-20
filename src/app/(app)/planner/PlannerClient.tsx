@@ -2400,6 +2400,10 @@ export function PlannerClient({
           void handleSmartPlanGenerate(smartRetryPayload);
         }}
         onGenerate={handleSmartPlanGenerate}
+        onTripPatch={(patch) => {
+          if (!activeTripId) return;
+          applyLocalPatch(activeTripId, patch);
+        }}
       />
 
       {fullPageAiBusy ? (
