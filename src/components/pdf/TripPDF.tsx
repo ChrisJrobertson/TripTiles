@@ -18,6 +18,7 @@ import {
   crowdPdfSymbolForTone,
   heuristicCrowdToneFromNoteText,
 } from "@/lib/planner-crowd-level-meta";
+import { formatMoney } from "@/lib/format";
 import { pdfDayConditionLine } from "@/lib/planner-day-conditions";
 import type {
   Assignments,
@@ -39,6 +40,11 @@ import {
   Text,
   View,
 } from "@react-pdf/renderer";
+
+export type PdfExportMode =
+  | "with_notes"
+  | "clean_printable"
+  | "payments_schedule";
 
 const COLOURS = {
   royal: "#0B1E5C",
@@ -312,6 +318,131 @@ const styles = StyleSheet.create({
     color: COLOURS.royal,
     marginTop: 8,
   },
+  paymentsSchedulePage: {
+    paddingTop: 0,
+    paddingBottom: 40,
+    paddingHorizontal: 34,
+    fontFamily: "Times-Roman",
+    fontSize: 10,
+    color: COLOURS.royal,
+    backgroundColor: COLOURS.cream,
+  },
+  paymentsHeaderBand: {
+    backgroundColor: COLOURS.royal,
+    paddingTop: 18,
+    paddingBottom: 12,
+    paddingHorizontal: 14,
+    marginLeft: -34,
+    marginRight: -34,
+    marginBottom: 0,
+  },
+  paymentsHeaderTitle: {
+    fontSize: 22,
+    color: COLOURS.cream,
+    fontWeight: "bold",
+    letterSpacing: 0.3,
+  },
+  paymentsHeaderSubtitle: {
+    marginTop: 3,
+    fontSize: 10,
+    color: "#E4D7B5",
+  },
+  paymentsAccentRule: {
+    height: 4,
+    backgroundColor: COLOURS.gold,
+    marginLeft: -34,
+    marginRight: -34,
+    marginBottom: 14,
+  },
+  paymentsMetaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  paymentsMetaText: {
+    fontSize: 9,
+    color: COLOURS.royal,
+  },
+  paymentsTableHeader: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: COLOURS.gold,
+    backgroundColor: "#F3EEE2",
+    paddingVertical: 6,
+    paddingHorizontal: 5,
+  },
+  paymentsTableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 0.6,
+    borderBottomColor: "#DCCFAF",
+    paddingVertical: 6,
+    paddingHorizontal: 5,
+    alignItems: "flex-start",
+  },
+  paymentsTableLabelCol: {
+    width: "34%",
+    paddingRight: 6,
+  },
+  paymentsTableAmountCol: {
+    width: "16%",
+    paddingRight: 6,
+  },
+  paymentsTableBookingCol: {
+    width: "16%",
+    paddingRight: 6,
+  },
+  paymentsTableDueCol: {
+    width: "16%",
+    paddingRight: 6,
+  },
+  paymentsTableDaysCol: {
+    width: "18%",
+  },
+  paymentsTableHeadText: {
+    fontSize: 8,
+    fontWeight: "bold",
+    textTransform: "uppercase",
+    color: COLOURS.royal,
+  },
+  paymentsTableCellText: {
+    fontSize: 9,
+    color: COLOURS.royal,
+    lineHeight: 1.25,
+  },
+  paymentsTableCellMuted: {
+    color: "#6F6A5D",
+  },
+  paymentsOverdueText: {
+    color: "#B42318",
+    fontWeight: "bold",
+  },
+  paymentsTotalsWrap: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: COLOURS.gold,
+    backgroundColor: "#FFFDF6",
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+  },
+  paymentsTotalsTitle: {
+    fontSize: 8,
+    textTransform: "uppercase",
+    color: COLOURS.royal,
+    marginBottom: 4,
+    fontWeight: "bold",
+    letterSpacing: 0.4,
+  },
+  paymentsTotalsLine: {
+    fontSize: 10,
+    color: COLOURS.royal,
+    marginBottom: 2,
+  },
+  paymentsNoRowsText: {
+    marginTop: 10,
+    fontSize: 10,
+    color: COLOURS.royal,
+    fontStyle: "italic",
+  },
   packingItemLine: {
     fontSize: 10,
     color: COLOURS.royal,
@@ -372,15 +503,7 @@ const BUDGET_PDF_LABEL: Record<BudgetCategory, string> = {
 };
 
 function formatPdfMoney(amount: number, code: string): string {
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: code,
-      minimumFractionDigits: 2,
-    }).format(amount);
-  } catch {
-    return `${code} ${amount.toFixed(2)}`;
-  }
+  return formatMoney(Math.round(amount * 100), code);
 }
 
 function buildPdfWeekRows(startIso: string, endIso: string): Date[][] {
@@ -434,6 +557,7 @@ export interface TripPDFProps {
   /** Shown on the itinerary page when `includeNotes` is true (not in clean printable). */
   tripPayments?: TripPayment[];
   temperatureUnit?: TemperatureUnit;
+  exportMode?: PdfExportMode;
 }
 
 export function TripPDF({
@@ -449,6 +573,7 @@ export function TripPDF({
   checklistItems = [],
   tripPayments = [],
   temperatureUnit = "c",
+  exportMode = "with_notes",
 }: TripPDFProps) {
   const itemsById = new Map<string, { name: string; icon?: string | null }>();
   const colourById = new Map<string, string>();
@@ -523,6 +648,14 @@ export function TripPDF({
   const paymentTotalsUsd = sortedTripPayments
     .filter((p) => p.currency === "USD")
     .reduce((s, p) => s + p.amount_pence, 0);
+  const paymentTotalByCurrency = new Map<string, number>();
+  for (const payment of sortedTripPayments) {
+    const curr = payment.currency || "GBP";
+    paymentTotalByCurrency.set(
+      curr,
+      (paymentTotalByCurrency.get(curr) ?? 0) + payment.amount_pence,
+    );
+  }
 
   const paymentPdfTotalsText =
     [
@@ -531,6 +664,178 @@ export function TripPDF({
     ]
       .filter(Boolean)
       .join(" + ") || formatPdfMoney(0, "GBP");
+
+  const todayDate = new Date();
+  const todayNoon = new Date(
+    todayDate.getFullYear(),
+    todayDate.getMonth(),
+    todayDate.getDate(),
+    12,
+  );
+  const paymentsScheduleRows = sortedTripPayments.map((payment) => {
+    const dueDate =
+      payment.due_date != null ? parseDate(payment.due_date) : null;
+    const dueNoon = dueDate
+      ? new Date(
+          dueDate.getFullYear(),
+          dueDate.getMonth(),
+          dueDate.getDate(),
+          12,
+        )
+      : null;
+    const daysUntilDue =
+      dueNoon != null
+        ? Math.round((dueNoon.getTime() - todayNoon.getTime()) / (24 * 60 * 60 * 1000))
+        : null;
+    return { payment, daysUntilDue };
+  });
+
+  if (exportMode === "payments_schedule") {
+    return (
+      <Document
+        title={`${trip.adventure_name} - Payments schedule`}
+        author={familyName}
+        creator="TripTiles"
+      >
+        <Page size="A4" style={styles.paymentsSchedulePage}>
+          <View style={styles.paymentsHeaderBand}>
+            <Text style={styles.paymentsHeaderTitle}>Payments schedule</Text>
+            <Text style={styles.paymentsHeaderSubtitle}>
+              {trip.adventure_name} · {familyName}
+            </Text>
+          </View>
+          <View style={styles.paymentsAccentRule} />
+
+          <View style={styles.paymentsMetaRow}>
+            <Text style={styles.paymentsMetaText}>
+              Generated{" "}
+              {todayDate.toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })}
+            </Text>
+            <Text style={styles.paymentsMetaText}>
+              Rows: {paymentsScheduleRows.length}
+            </Text>
+          </View>
+
+          <View style={styles.paymentsTableHeader}>
+            <View style={styles.paymentsTableLabelCol}>
+              <Text style={styles.paymentsTableHeadText}>Label</Text>
+            </View>
+            <View style={styles.paymentsTableAmountCol}>
+              <Text style={styles.paymentsTableHeadText}>Amount</Text>
+            </View>
+            <View style={styles.paymentsTableBookingCol}>
+              <Text style={styles.paymentsTableHeadText}>Booking date</Text>
+            </View>
+            <View style={styles.paymentsTableDueCol}>
+              <Text style={styles.paymentsTableHeadText}>Due date</Text>
+            </View>
+            <View style={styles.paymentsTableDaysCol}>
+              <Text style={styles.paymentsTableHeadText}>Days until due</Text>
+            </View>
+          </View>
+
+          {paymentsScheduleRows.length === 0 ? (
+            <Text style={styles.paymentsNoRowsText}>
+              No payments recorded for this trip yet.
+            </Text>
+          ) : (
+            paymentsScheduleRows.map(({ payment, daysUntilDue }) => (
+              <View key={payment.id} style={styles.paymentsTableRow}>
+                <View style={styles.paymentsTableLabelCol}>
+                  <Text style={styles.paymentsTableCellText}>{payment.label}</Text>
+                </View>
+                <View style={styles.paymentsTableAmountCol}>
+                  <Text style={styles.paymentsTableCellText}>
+                    {formatPdfMoney(payment.amount_pence / 100, payment.currency)}
+                  </Text>
+                </View>
+                <View style={styles.paymentsTableBookingCol}>
+                  <Text
+                    style={
+                      payment.booking_date
+                        ? styles.paymentsTableCellText
+                        : [
+                            styles.paymentsTableCellText,
+                            styles.paymentsTableCellMuted,
+                          ]
+                    }
+                  >
+                    {payment.booking_date ?? "—"}
+                  </Text>
+                </View>
+                <View style={styles.paymentsTableDueCol}>
+                  <Text
+                    style={
+                      payment.due_date
+                        ? styles.paymentsTableCellText
+                        : [
+                            styles.paymentsTableCellText,
+                            styles.paymentsTableCellMuted,
+                          ]
+                    }
+                  >
+                    {payment.due_date ?? "—"}
+                  </Text>
+                </View>
+                <View style={styles.paymentsTableDaysCol}>
+                  <Text
+                    style={
+                      daysUntilDue == null
+                        ? [
+                            styles.paymentsTableCellText,
+                            styles.paymentsTableCellMuted,
+                          ]
+                        : daysUntilDue < 0
+                          ? [
+                              styles.paymentsTableCellText,
+                              styles.paymentsOverdueText,
+                            ]
+                          : styles.paymentsTableCellText
+                    }
+                  >
+                    {daysUntilDue == null
+                      ? "—"
+                      : daysUntilDue < 0
+                        ? `Overdue by ${Math.abs(daysUntilDue)}`
+                        : daysUntilDue === 0
+                          ? "Due today"
+                          : `${daysUntilDue}`}
+                  </Text>
+                </View>
+              </View>
+            ))
+          )}
+
+          <View style={styles.paymentsTotalsWrap}>
+            <Text style={styles.paymentsTotalsTitle}>Totals per currency</Text>
+            {[...paymentTotalByCurrency.entries()].map(([currency, totalPence]) => (
+              <Text key={currency} style={styles.paymentsTotalsLine}>
+                {currency}: {formatPdfMoney(totalPence / 100, currency)}
+              </Text>
+            ))}
+            {paymentTotalByCurrency.size === 0 ? (
+              <Text style={styles.paymentsTotalsLine}>
+                GBP: {formatPdfMoney(0, "GBP")}
+              </Text>
+            ) : null}
+          </View>
+
+          {watermark ? (
+            <Text style={styles.watermark} fixed>
+              Made with TripTiles · triptiles.app
+            </Text>
+          ) : null}
+          <Text style={styles.footer} fixed>
+            Generated with TripTiles · triptiles.app · Payments schedule
+          </Text>
+        </Page>
+      </Document>
+    );
+  }
 
   const hasAppendixContent =
     days.some((dayKey) => {

@@ -8,7 +8,7 @@ import { parkMatchesPlannerRegion } from "@/lib/park-matches-planner-region";
 import { parkChromaTileStyle } from "@/lib/theme-colours";
 import type { ThemeKey } from "@/lib/themes";
 import type { CustomTile, Park } from "@/lib/types";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 type Props = {
   parks: Park[];
@@ -39,6 +39,17 @@ export function Palette({
   onDeleteCustom,
 }: Props) {
   const [menuTileId, setMenuTileId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const normalisedQuery = searchQuery.trim().toLowerCase();
+
+  const matchesSearch = useCallback(
+    (name: string, icon?: string | null) => {
+      if (!normalisedQuery) return true;
+      const hay = `${name} ${icon ?? ""}`.toLowerCase();
+      return hay.includes(normalisedQuery);
+    },
+    [normalisedQuery],
+  );
 
   const builtInForRegion = useMemo(() => {
     const raw = parks.filter((p) => parkMatchesPlannerRegion(p, regionId));
@@ -48,6 +59,21 @@ export function Palette({
 
   const hasCatalog = builtInForRegion.length > 0;
   const hasCustom = customTiles.length > 0;
+  const hasVisibleResults = useMemo(() => {
+    return GROUP_ORDER.some((groupKey) => {
+      const groupParks = parks.filter(
+        (p) =>
+          p.park_group === groupKey &&
+          parkMatchesPlannerRegion(p, regionId) &&
+          (showCruiseTiles || !isCruisePaletteTileName(p.name)) &&
+          matchesSearch(p.name, p.icon),
+      );
+      const groupCustom = customTiles.filter(
+        (t) => t.park_group === groupKey && matchesSearch(t.name, t.icon),
+      );
+      return groupParks.length > 0 || groupCustom.length > 0;
+    });
+  }, [customTiles, matchesSearch, parks, regionId, showCruiseTiles]);
 
   if (!hasCatalog && !hasCustom) {
     return (
@@ -69,6 +95,19 @@ export function Palette({
       <h2 className="mb-3 font-serif text-base font-semibold text-royal">
         Parks
       </h2>
+      <label className="mb-3 block">
+        <span className="mb-1 block font-sans text-xs font-semibold uppercase tracking-wide text-royal/60">
+          Search
+        </span>
+        <input
+          data-planner-parks-search
+          type="search"
+          placeholder="Search parks…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="min-h-[44px] w-full rounded-lg border border-gold/30 bg-white px-3 py-2 font-sans text-sm text-royal placeholder:text-royal/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+        />
+      </label>
       <div className="flex flex-col gap-2">
         {GROUP_ORDER.map((groupKey) => {
           const meta = GROUP_META[groupKey];
@@ -77,10 +116,11 @@ export function Palette({
             (p) =>
               p.park_group === groupKey &&
               parkMatchesPlannerRegion(p, regionId) &&
-              (showCruiseTiles || !isCruisePaletteTileName(p.name)),
+              (showCruiseTiles || !isCruisePaletteTileName(p.name)) &&
+              matchesSearch(p.name, p.icon),
           );
           const groupCustom = customTiles.filter(
-            (t) => t.park_group === groupKey,
+            (t) => t.park_group === groupKey && matchesSearch(t.name, t.icon),
           );
           if (groupParks.length === 0 && groupCustom.length === 0) return null;
 
@@ -317,6 +357,11 @@ export function Palette({
           );
         })}
       </div>
+      {!hasVisibleResults ? (
+        <p className="mt-3 rounded-lg border border-dashed border-royal/20 bg-white/70 px-3 py-2 font-sans text-xs text-royal/70">
+          No parks match your search yet.
+        </p>
+      ) : null}
       <RegionalDiningSection regionId={regionId} />
     </aside>
   );

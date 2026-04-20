@@ -8,12 +8,16 @@ import { TripPDF } from "@/components/pdf/TripPDF";
 import { pdf } from "@react-pdf/renderer";
 import { useCallback, useState } from "react";
 
+export type PdfExportMode = "with_notes" | "clean_printable" | "payments_schedule";
+
 interface Props {
   tripId: string;
   disabled?: boolean;
   /** For programmatic click from "More" menu */
   buttonId?: string;
   onAchievementKeys?: (keys: string[]) => void;
+  buttonLabel?: string;
+  defaultModeOnOpen?: PdfExportMode;
 }
 
 export function PdfExportButton({
@@ -21,14 +25,16 @@ export function PdfExportButton({
   disabled,
   buttonId,
   onAchievementKeys,
+  buttonLabel = "📄 Export to PDF",
+  defaultModeOnOpen = "with_notes",
 }: Props) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [includeNotes, setIncludeNotes] = useState(true);
+  const [exportMode, setExportMode] = useState<PdfExportMode>(defaultModeOnOpen);
 
   const runExport = useCallback(
-    async (withNotes: boolean) => {
+    async (mode: PdfExportMode) => {
       setIsGenerating(true);
       setError(null);
       try {
@@ -52,9 +58,10 @@ export function PdfExportButton({
             design={result.design}
             familyName={result.familyName}
             bookingAffiliateLinks={
-              withNotes ? result.bookingLinks : undefined
+              mode === "with_notes" ? result.bookingLinks : undefined
             }
-            includeNotes={withNotes}
+            includeNotes={mode === "with_notes"}
+            exportMode={mode}
             budgetItems={result.budgetItems}
             checklistItems={result.checklistItems}
             tripPayments={result.tripPayments}
@@ -65,7 +72,13 @@ export function PdfExportButton({
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `${result.trip.adventure_name.replace(/[^a-z0-9]/gi, "_")}_triptiles.pdf`;
+        const safeTripName = result.trip.adventure_name.replace(/[^a-z0-9]/gi, "_");
+        if (mode === "payments_schedule") {
+          const dateStamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+          link.download = `${safeTripName}-payments-${dateStamp}.pdf`;
+        } else {
+          link.download = `${safeTripName}_triptiles.pdf`;
+        }
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -92,13 +105,13 @@ export function PdfExportButton({
         id={buttonId}
         type="button"
         onClick={() => {
-          setIncludeNotes(true);
+          setExportMode(defaultModeOnOpen);
           setModalOpen(true);
         }}
         disabled={disabled || isGenerating}
         className="rounded-lg bg-royal px-4 py-2.5 font-serif text-sm font-bold text-gold shadow-sm transition hover:bg-royal/90 disabled:opacity-50"
       >
-        {isGenerating ? "Generating PDF…" : "📄 Export to PDF"}
+        {isGenerating ? "Generating PDF…" : buttonLabel}
       </button>
       {error ? (
         <p className="mt-2 max-w-xs font-sans text-sm text-red-600">{error}</p>
@@ -119,8 +132,7 @@ export function PdfExportButton({
               Export PDF
             </h2>
             <p className="mt-2 font-sans text-sm text-royal/70">
-              Pick a layout: full detail for your binder, or a compact calendar
-              for the fridge.
+              Pick an export layout for your trip plans.
             </p>
 
             <fieldset className="mt-5 space-y-3 font-sans text-sm text-royal">
@@ -130,8 +142,8 @@ export function PdfExportButton({
                   type="radio"
                   name="pdf-notes"
                   className="mt-0.5 accent-royal"
-                  checked={includeNotes}
-                  onChange={() => setIncludeNotes(true)}
+                  checked={exportMode === "with_notes"}
+                  onChange={() => setExportMode("with_notes")}
                 />
                 <span>
                   <span className="font-semibold">With notes and tips</span>
@@ -145,13 +157,28 @@ export function PdfExportButton({
                   type="radio"
                   name="pdf-notes"
                   className="mt-0.5 accent-royal"
-                  checked={!includeNotes}
-                  onChange={() => setIncludeNotes(false)}
+                  checked={exportMode === "clean_printable"}
+                  onChange={() => setExportMode("clean_printable")}
                 />
                 <span>
                   <span className="font-semibold">Clean printable version</span>
                   <span className="mt-0.5 block text-royal/65">
                     Cover and calendar only — perfect for the fridge
+                  </span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-royal/15 bg-white px-3 py-2.5 has-[:checked]:border-gold/60 has-[:checked]:ring-1 has-[:checked]:ring-gold/40">
+                <input
+                  type="radio"
+                  name="pdf-notes"
+                  className="mt-0.5 accent-royal"
+                  checked={exportMode === "payments_schedule"}
+                  onChange={() => setExportMode("payments_schedule")}
+                />
+                <span>
+                  <span className="font-semibold">Payments schedule</span>
+                  <span className="mt-0.5 block text-royal/65">
+                    Single-page table of payment dates, totals, and due countdowns
                   </span>
                 </span>
               </label>
@@ -168,7 +195,7 @@ export function PdfExportButton({
               </button>
               <button
                 type="button"
-                onClick={() => void runExport(includeNotes)}
+                onClick={() => void runExport(exportMode)}
                 disabled={isGenerating}
                 className="rounded-lg bg-gold px-5 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition hover:bg-gold/90 disabled:opacity-50"
               >

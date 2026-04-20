@@ -48,7 +48,9 @@ function ManageSubscriptionControl({
       });
       const j = (await r.json()) as { url?: string; error?: string };
       if (!r.ok || !j.url) {
-        showToast(j.error ?? "Could not open the billing portal.");
+        showToast(j.error ?? "Could not open the billing portal.", {
+          type: "error",
+        });
         return;
       }
       window.location.href = j.url;
@@ -71,7 +73,7 @@ function ManageSubscriptionControl({
 
 function plannerHrefPreservingQuery(
   searchParams: URLSearchParams,
-  tab: "planner" | "budget" | "payments" | "checklist",
+  tab: "planner" | "planning",
 ): string {
   const next = new URLSearchParams(searchParams.toString());
   if (tab === "planner") next.delete("tab");
@@ -134,26 +136,10 @@ function AppNavHeaderFallback({
                 </li>
                 <li>
                   <Link
-                    href="/planner?tab=budget"
+                    href="/planner?tab=planning"
                     className={mobileNavLinkClass(false)}
                   >
-                    Budget
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/planner?tab=payments"
-                    className={mobileNavLinkClass(false)}
-                  >
-                    Payments
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/planner?tab=checklist"
-                    className={mobileNavLinkClass(false)}
-                  >
-                    Checklist
+                    Planning
                   </Link>
                 </li>
                 <li>
@@ -195,22 +181,10 @@ function AppNavHeaderFallback({
               Planner
             </Link>
             <Link
-              href="/planner?tab=budget"
+              href="/planner?tab=planning"
               className="rounded-full px-3 py-1 font-sans text-sm font-medium text-royal/70 transition hover:bg-royal/5 hover:text-royal"
             >
-              Budget
-            </Link>
-            <Link
-              href="/planner?tab=payments"
-              className="rounded-full px-3 py-1 font-sans text-sm font-medium text-royal/70 transition hover:bg-royal/5 hover:text-royal"
-            >
-              Payments
-            </Link>
-            <Link
-              href="/planner?tab=checklist"
-              className="rounded-full px-3 py-1 font-sans text-sm font-medium text-royal/70 transition hover:bg-royal/5 hover:text-royal"
-            >
-              Checklist
+              Planning
             </Link>
             <Link
               href="/achievements"
@@ -302,27 +276,22 @@ function AppNavHeaderInner({
   const onPlanner = pathname === "/planner";
   const tabRaw = searchParams.get("tab");
   const tab =
-    tabRaw === "budget" || tabRaw === "payments" || tabRaw === "checklist"
-      ? tabRaw
+    tabRaw === "planning" ||
+    tabRaw === "budget" ||
+    tabRaw === "payments" ||
+    tabRaw === "checklist"
+      ? "planning"
       : "planner";
 
   const plannerHomeHref = onPlanner
     ? plannerHrefPreservingQuery(searchParams, "planner")
     : "/planner";
-  const budgetHref = onPlanner
-    ? plannerHrefPreservingQuery(searchParams, "budget")
-    : "/planner?tab=budget";
-  const paymentsHref = onPlanner
-    ? plannerHrefPreservingQuery(searchParams, "payments")
-    : "/planner?tab=payments";
-  const checklistHref = onPlanner
-    ? plannerHrefPreservingQuery(searchParams, "checklist")
-    : "/planner?tab=checklist";
+  const planningHref = onPlanner
+    ? plannerHrefPreservingQuery(searchParams, "planning")
+    : "/planner?tab=planning";
 
   const plannerHomeActive = onPlanner && tab === "planner";
-  const budgetActive = onPlanner && tab === "budget";
-  const paymentsActive = onPlanner && tab === "payments";
-  const checklistActive = onPlanner && tab === "checklist";
+  const planningActive = onPlanner && tab === "planning";
   const passportActive =
     pathname === "/achievements" || pathname?.startsWith("/achievements/");
   const settingsActive =
@@ -382,29 +351,11 @@ function AppNavHeaderInner({
                 </li>
                 <li>
                   <Link
-                    href={budgetHref}
-                    className={mobileNavLinkClass(budgetActive)}
-                    aria-current={budgetActive ? "page" : undefined}
+                    href={planningHref}
+                    className={mobileNavLinkClass(planningActive)}
+                    aria-current={planningActive ? "page" : undefined}
                   >
-                    Budget
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href={paymentsHref}
-                    className={mobileNavLinkClass(paymentsActive)}
-                    aria-current={paymentsActive ? "page" : undefined}
-                  >
-                    Payments
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href={checklistHref}
-                    className={mobileNavLinkClass(checklistActive)}
-                    aria-current={checklistActive ? "page" : undefined}
-                  >
-                    Checklist
+                    Planning
                   </Link>
                 </li>
                 <li>
@@ -448,13 +399,11 @@ function AppNavHeaderInner({
             aria-label="Main"
           >
             {linkOrCurrent("planner", plannerHomeHref, "Planner", plannerHomeActive)}
-            {linkOrCurrent("budget", budgetHref, "Budget", budgetActive)}
-            {linkOrCurrent("payments", paymentsHref, "Payments", paymentsActive)}
             {linkOrCurrent(
-              "checklist",
-              checklistHref,
-              "Checklist",
-              checklistActive,
+              "planning",
+              planningHref,
+              "Planning",
+              planningActive,
             )}
             {passportActive ? (
               <span

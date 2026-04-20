@@ -200,6 +200,7 @@ export function Calendar({
   const parkById = new Map(parks.map((p) => [p.id, p]));
   const themeKey = normaliseThemeKey(trip.colour_theme);
   const regionForConditions = plannerRegionId ?? trip.region_id;
+  const [skeletonActive, setSkeletonActive] = useState(true);
   const [editingNoteKey, setEditingNoteKey] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const noteSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -296,6 +297,16 @@ export function Calendar({
     [flushDayNoteSave, onSaveDayNote],
   );
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    // Smooth out first paint for the planner calendar on initial load.
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        setSkeletonActive(false);
+      });
+    });
+  }, []);
+
   useEffect(
     () => () => {
       if (noteSaveTimer.current) clearTimeout(noteSaveTimer.current);
@@ -305,6 +316,26 @@ export function Calendar({
 
   return (
     <div className="w-full min-w-0 overflow-x-auto">
+      {skeletonActive ? (
+        <div
+          aria-hidden
+          className="mb-2 space-y-1 rounded-md border border-royal/10 bg-white p-2"
+        >
+          <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={`sh-head-${i}`} className="h-6 rounded bg-royal/10 animate-pulse" />
+            ))}
+          </div>
+          <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
+            {Array.from({ length: 14 }).map((_, i) => (
+              <div
+                key={`sh-day-${i}`}
+                className="min-h-[5.75rem] rounded border border-royal/10 bg-cream/50 animate-pulse"
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="w-full min-w-[min(100%,64rem)]">
         <div
           className="grid gap-1"
@@ -421,7 +452,7 @@ export function Calendar({
                       aria-hidden
                     />
                   ) : null}
-                  <div className="flex items-center justify-between gap-0.5 border-b border-royal/10 px-1 py-0.5 md:py-1">
+                  <div className="sticky top-16 z-10 flex items-center justify-between gap-0.5 border-b border-royal/10 bg-white/95 px-1 py-0.5 backdrop-blur md:top-[4.5rem] md:py-1">
                     {!readOnly && (onRideDayPrioritiesUpdated || onOpenDayDetail) ? (
                       <button
                         type="button"

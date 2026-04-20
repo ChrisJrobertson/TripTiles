@@ -196,9 +196,14 @@ export function AchievementsClient({
         </div>
 
         {visible.length === 0 ? (
-          <p className="mt-10 text-center font-sans text-sm text-royal/60">
-            No stamps in this category yet.
-          </p>
+          <div className="mt-10 rounded-2xl border border-dashed border-royal/20 bg-white/80 p-8 text-center">
+            <p className="font-serif text-lg text-royal">
+              Unlock achievements as you plan trips, export PDFs, and share plans with other families.
+            </p>
+            <p className="mt-2 font-sans text-sm text-royal/65">
+              Try adding a trip day, exporting your plan, or publishing a share link to start collecting stamps.
+            </p>
+          </div>
         ) : (
           <ul className="mt-8 grid list-none grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {visible.map((def, i) => {

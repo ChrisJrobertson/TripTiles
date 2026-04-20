@@ -7,8 +7,9 @@ import {
   updateTripBudgetItemAction,
   updateTripBudgetSettingsAction,
 } from "@/actions/budget";
+import { formatMoney } from "@/lib/format";
+import { showToast } from "@/lib/toast";
 import type { BudgetCategory, Trip, TripBudgetItem } from "@/lib/types";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const CATEGORIES: BudgetCategory[] = [
@@ -46,24 +47,13 @@ const CURRENCIES = [
   { code: "AED", label: "AED (د.إ)" },
 ];
 
-function formatMoney(amount: number, code: string): string {
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency: code,
-      minimumFractionDigits: 2,
-    }).format(amount);
-  } catch {
-    return `${code} ${amount.toFixed(2)}`;
-  }
-}
-
 type Props = {
   trip: Trip;
   onTripPatch: (patch: Partial<Trip>) => void;
+  embedded?: boolean;
 };
 
-export function TripBudgetView({ trip, onTripPatch }: Props) {
+export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
   const [items, setItems] = useState<TripBudgetItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [targetDraft, setTargetDraft] = useState(
@@ -147,6 +137,13 @@ export function TripBudgetView({ trip, onTripPatch }: Props) {
     });
     if (res.ok) {
       onTripPatch({ budget_target: num });
+      showToast("Saved", {
+        type: "success",
+        debounceKey: "budget-settings-save",
+        debounceMs: 500,
+      });
+    } else {
+      showToast(res.error, { type: "error" });
     }
   };
 
@@ -156,7 +153,16 @@ export function TripBudgetView({ trip, onTripPatch }: Props) {
       budgetTarget: trip.budget_target,
       budgetCurrency: code,
     });
-    if (res.ok) onTripPatch({ budget_currency: code });
+    if (res.ok) {
+      onTripPatch({ budget_currency: code });
+      showToast("Saved", {
+        type: "success",
+        debounceKey: "budget-settings-save",
+        debounceMs: 500,
+      });
+    } else {
+      showToast(res.error, { type: "error" });
+    }
   };
 
   const submitForm = async () => {
@@ -174,6 +180,9 @@ export function TripBudgetView({ trip, onTripPatch }: Props) {
       if (r.ok) {
         setEditing(null);
         void reload();
+        showToast("Budget item added", { type: "success" });
+      } else {
+        showToast(r.error, { type: "error" });
       }
     } else if (editing) {
       const r = await updateTripBudgetItemAction({
@@ -188,6 +197,9 @@ export function TripBudgetView({ trip, onTripPatch }: Props) {
       if (r.ok) {
         setEditing(null);
         void reload();
+        showToast("Budget item updated", { type: "success" });
+      } else {
+        showToast(r.error, { type: "error" });
       }
     }
   };
@@ -198,13 +210,27 @@ export function TripBudgetView({ trip, onTripPatch }: Props) {
       tripId: trip.id,
       isPaid: !it.is_paid,
     });
-    if (r.ok) void reload();
+    if (r.ok) {
+      void reload();
+      showToast("Saved", {
+        type: "success",
+        debounceKey: "budget-toggle-paid",
+        debounceMs: 500,
+      });
+    } else {
+      showToast(r.error, { type: "error" });
+    }
   };
 
   const removeItem = async (it: TripBudgetItem) => {
     if (!confirm("Remove this item?")) return;
     const r = await deleteTripBudgetItemAction({ itemId: it.id, tripId: trip.id });
-    if (r.ok) void reload();
+    if (r.ok) {
+      void reload();
+      showToast("Budget item deleted", { type: "success" });
+    } else {
+      showToast(r.error, { type: "error" });
+    }
   };
 
   const byCategory = useMemo(() => {
@@ -219,18 +245,16 @@ export function TripBudgetView({ trip, onTripPatch }: Props) {
   }, [items]);
 
   return (
-    <section className="mx-auto max-w-3xl space-y-6 pb-24">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <h2 className="font-serif text-2xl font-semibold text-royal">
-          Trip budget
-        </h2>
-        <Link
-          href="/planner"
-          className="font-sans text-sm font-medium text-royal/70 underline-offset-2 hover:text-royal hover:underline"
-        >
-          ← Back to planner
-        </Link>
-      </div>
+    <section
+      className={`space-y-6 ${embedded ? "" : "mx-auto max-w-3xl pb-24"}`}
+    >
+      {!embedded ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <h2 className="font-serif text-2xl font-semibold text-royal">
+            Trip budget
+          </h2>
+        </div>
+      ) : null}
 
       <div className="rounded-2xl border border-royal/10 bg-white p-4 shadow-sm sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
@@ -294,10 +318,16 @@ export function TripBudgetView({ trip, onTripPatch }: Props) {
       </div>
 
       {loading ? (
-        <p className="font-sans text-sm text-royal/60">Loading…</p>
+        <div className="space-y-3 rounded-2xl border border-royal/10 bg-white p-5">
+          <div className="h-4 w-1/3 animate-pulse rounded bg-royal/10" />
+          <div className="h-4 w-full animate-pulse rounded bg-royal/10" />
+          <div className="h-20 w-full animate-pulse rounded-xl bg-royal/10" />
+        </div>
       ) : items.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-royal/20 bg-cream/60 p-8 text-center">
-          <p className="font-serif text-lg text-royal">No budget items yet</p>
+          <p className="font-serif text-lg text-royal">
+            Set a total budget and break it down by category.
+          </p>
           <p className="mt-2 font-sans text-sm text-royal/70">
             Track your trip costs — flights, hotels, tickets, dining — and see
             how you&apos;re doing against your target.

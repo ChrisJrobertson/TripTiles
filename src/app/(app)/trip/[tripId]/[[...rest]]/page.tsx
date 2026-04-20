@@ -101,6 +101,7 @@ export default async function TripPlannerPage({
       initialCustomTiles={p.initialCustomTiles}
       customTileLimit={p.customTileLimit}
       plannerTab={p.plannerTab}
+      initialPlanningSection={p.initialPlanningSection}
       temperatureUnit={p.initialTemperatureUnit}
       emailMarketingOptOut={p.emailMarketingOptOut}
       initialRidePrioritiesByTripId={p.initialRidePrioritiesByTripId}

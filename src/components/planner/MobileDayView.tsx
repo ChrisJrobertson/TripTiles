@@ -578,7 +578,7 @@ export function MobileDayView({
           key={safeIndex}
           className="animate-mobile-card-enter"
         >
-          <div className="mb-4">
+          <div className="sticky top-[4.25rem] z-10 mb-4 border-b border-gold/20 bg-cream/95 pb-2 backdrop-blur">
             <div className="font-sans text-xs font-semibold uppercase tracking-wider text-gold">
               Day {safeIndex + 1} of {days.length}
             </div>

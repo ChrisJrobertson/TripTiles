@@ -60,7 +60,8 @@ export type PlannerClientServerProps = {
   initialTileScrubNotice: number | null;
   initialCustomTiles: Awaited<ReturnType<typeof getUserCustomTiles>>;
   customTileLimit: number;
-  plannerTab: "planner" | "budget" | "payments" | "checklist";
+  plannerTab: "planner" | "planning";
+  initialPlanningSection: "todo" | "payments" | "budget" | null;
   initialTemperatureUnit: TemperatureUnit;
   emailMarketingOptOut: boolean;
   initialRidePrioritiesByTripId: Record<string, TripRidePriority[]>;
@@ -83,9 +84,21 @@ function firstParam(
 
 function normalisePlannerTab(
   raw: string | undefined,
-): "planner" | "budget" | "payments" | "checklist" {
-  if (raw === "budget" || raw === "payments" || raw === "checklist") return raw;
+): "planner" | "planning" {
+  if (raw === "planning") return "planning";
+  if (raw === "budget" || raw === "payments" || raw === "checklist") {
+    return "planning";
+  }
   return "planner";
+}
+
+function initialPlanningSectionFromLegacyTab(
+  raw: string | undefined,
+): "todo" | "payments" | "budget" | null {
+  if (raw === "checklist") return "todo";
+  if (raw === "payments") return "payments";
+  if (raw === "budget") return "budget";
+  return null;
 }
 
 export async function loadPlannerClientServerData(input: {
@@ -122,6 +135,7 @@ export async function loadPlannerClientServerData(input: {
         initialCustomTiles: [],
         customTileLimit: 0,
         plannerTab: "planner",
+        initialPlanningSection: null,
         initialTemperatureUnit: "c",
         emailMarketingOptOut: false,
         initialRidePrioritiesByTripId: {},
@@ -143,7 +157,9 @@ export async function loadPlannerClientServerData(input: {
 
   const initialOpenSmartPlan = firstParam(sp.openSmartPlan) === "true";
   const initialAutoGenerate = firstParam(sp.autoGenerate) === "true";
-  const plannerTab = normalisePlannerTab(firstParam(sp.tab));
+  const tabParam = firstParam(sp.tab);
+  const plannerTab = normalisePlannerTab(tabParam);
+  const initialPlanningSection = initialPlanningSectionFromLegacyTab(tabParam);
 
   const tileScrubRaw = firstParam(sp.tile_scrubbed);
   const initialTileScrubNotice =
@@ -277,6 +293,7 @@ export async function loadPlannerClientServerData(input: {
       initialCustomTiles: customTiles,
       customTileLimit,
       plannerTab,
+      initialPlanningSection,
       initialTemperatureUnit: profileBundle.temperatureUnit,
       emailMarketingOptOut: profileBundle.emailMarketingOptOut,
       initialRidePrioritiesByTripId,

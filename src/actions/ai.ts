@@ -218,6 +218,48 @@ type AnthropicMessageUsage = {
   cache_read_input_tokens?: number;
 };
 
+export type GenerateAIPlanInput = {
+  tripId: string;
+  mode: "smart" | "custom";
+  userPrompt: string;
+  /**
+   * When false, AI output overwrites existing tiles where both specify a slot.
+   * Default true: only empty slots are filled (manual picks kept).
+   */
+  preserveExistingSlots?: boolean;
+};
+
+export type GenerateAIPlanResult =
+  | {
+      ok: true;
+      assignments: Assignments;
+      tokensUsed: number;
+      model: string;
+      newAchievements: string[];
+      crowdSummary: string | null;
+      dayCrowdNotes: Record<string, string> | null;
+      /** Successful AI runs for this trip after this request (for UI counter). */
+      generationsUsedForTrip: number;
+      /** Same as DB `previous_assignments_snapshot_at` for optimistic UI. */
+      undoSnapshotAt: string;
+    }
+  | {
+      ok: false;
+      error:
+        | "NOT_AUTHED"
+        | "TRIP_NOT_FOUND"
+        | "TIER_LIMIT"
+        | "TIER_AI_DISABLED"
+        | "AI_ERROR";
+      message: string;
+      partialResponse?: string;
+      stoppedEarly?: boolean;
+    };
+
+type GenerateAIPlanOptions = {
+  onTextDelta?: (deltaText: string) => void | Promise<void>;
+};
+
 function inputTokensFromUsage(usage: AnthropicMessageUsage | undefined): number {
   const u = usage ?? {};
   return (
@@ -325,40 +367,10 @@ For each trip day, add planner_day_notes with 1–2 practical tips tied to that 
 Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and planner_day_notes when possible).`;
 }
 
-export async function generateAIPlanAction(input: {
-  tripId: string;
-  mode: "smart" | "custom";
-  userPrompt: string;
-  /**
-   * When false, AI output overwrites existing tiles where both specify a slot.
-   * Default true: only empty slots are filled (manual picks kept).
-   */
-  preserveExistingSlots?: boolean;
-}): Promise<
-  | {
-      ok: true;
-      assignments: Assignments;
-      tokensUsed: number;
-      model: string;
-      newAchievements: string[];
-      crowdSummary: string | null;
-      dayCrowdNotes: Record<string, string> | null;
-      /** Successful AI runs for this trip after this request (for UI counter). */
-      generationsUsedForTrip: number;
-      /** Same as DB `previous_assignments_snapshot_at` for optimistic UI. */
-      undoSnapshotAt: string;
-    }
-  | {
-      ok: false;
-      error:
-        | "NOT_AUTHED"
-        | "TRIP_NOT_FOUND"
-        | "TIER_LIMIT"
-        | "TIER_AI_DISABLED"
-        | "AI_ERROR";
-      message: string;
-    }
-> {
+export async function runGenerateAIPlan(
+  input: GenerateAIPlanInput,
+  options: GenerateAIPlanOptions = {},
+): Promise<GenerateAIPlanResult> {
   const user = await getCurrentUser();
   if (!user) {
     return { ok: false, error: "NOT_AUTHED", message: "Not signed in." };
@@ -542,27 +554,80 @@ export async function generateAIPlanAction(input: {
 
   try {
     const t0 = Date.now();
-    const response = await anthropic.messages.create({
-      model,
-      max_tokens: 3000,
-      system: [
-        {
-          type: "text",
-          text: SYSTEM_PROMPT,
-          cache_control: { type: "ephemeral" },
-        },
-        {
-          type: "text",
-          text: parksSystemText,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [{ role: "user", content: composedUserMessage }],
-    });
+    let rawText = "";
+    let streamStoppedEarly = false;
 
-    const usage = response.usage as AnthropicMessageUsage | undefined;
-    inputTokens = inputTokensFromUsage(usage);
-    outputTokens = usage?.output_tokens ?? 0;
+    try {
+      const stream = await anthropic.messages.create({
+        model,
+        max_tokens: 3000,
+        stream: true,
+        system: [
+          {
+            type: "text",
+            text: SYSTEM_PROMPT,
+            cache_control: { type: "ephemeral" },
+          },
+          {
+            type: "text",
+            text: parksSystemText,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages: [{ role: "user", content: composedUserMessage }],
+      });
+
+      for await (const event of stream) {
+        if (event.type === "message_start") {
+          const usage = event.message.usage as AnthropicMessageUsage | undefined;
+          inputTokens = inputTokensFromUsage(usage);
+          outputTokens = usage?.output_tokens ?? outputTokens;
+          continue;
+        }
+        if (event.type === "message_delta") {
+          const usage = event.usage as AnthropicMessageUsage | undefined;
+          outputTokens = usage?.output_tokens ?? outputTokens;
+          continue;
+        }
+        if (
+          event.type === "content_block_delta" &&
+          event.delta.type === "text_delta"
+        ) {
+          const delta = event.delta.text;
+          if (!delta) continue;
+          rawText += delta;
+          if (options.onTextDelta) {
+            await options.onTextDelta(delta);
+          }
+        }
+      }
+    } catch {
+      streamStoppedEarly = rawText.trim().length > 0;
+      if (!streamStoppedEarly) throw new Error("AI stream failed before output");
+    }
+
+    if (streamStoppedEarly) {
+      await supabase.from("ai_generations").insert({
+        user_id: user.id,
+        trip_id: input.tripId,
+        prompt: composedUserMessage,
+        model,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_gbp_pence: null,
+        success: false,
+        error: "AI stream stopped early",
+      });
+
+      return {
+        ok: false,
+        error: "AI_ERROR",
+        message: "Stopped early — retry?",
+        partialResponse: rawText,
+        stoppedEarly: true,
+      };
+    }
+
     const latencyMs = Date.now() - t0;
     void logTrippUsage({
       userId: user.id,
@@ -575,21 +640,35 @@ export async function generateAIPlanAction(input: {
 
     if (process.env.NODE_ENV === "development") {
       console.info("[ai] anthropic usage", {
-        input_tokens: usage?.input_tokens,
-        cache_creation_input_tokens: usage?.cache_creation_input_tokens,
-        cache_read_input_tokens: usage?.cache_read_input_tokens,
-        output_tokens: usage?.output_tokens,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
       });
     }
-
-    const textBlock = response.content.find((b) => b.type === "text");
-    const rawText =
-      textBlock && textBlock.type === "text" ? textBlock.text : "";
 
     let parsed: unknown;
     try {
       parsed = JSON.parse(stripCodeFences(rawText));
     } catch {
+      if (rawText.trim().length > 0) {
+        await supabase.from("ai_generations").insert({
+          user_id: user.id,
+          trip_id: input.tripId,
+          prompt: composedUserMessage,
+          model,
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
+          cost_gbp_pence: null,
+          success: false,
+          error: "AI stream incomplete (invalid JSON)",
+        });
+        return {
+          ok: false,
+          error: "AI_ERROR",
+          message: "Stopped early — retry?",
+          partialResponse: rawText,
+          stoppedEarly: true,
+        };
+      }
       await supabase.from("ai_generations").insert({
         user_id: user.id,
         trip_id: input.tripId,
@@ -792,4 +871,10 @@ export async function generateAIPlanAction(input: {
 
     return { ok: false, error: "AI_ERROR", message: msg };
   }
+}
+
+export async function generateAIPlanAction(
+  input: GenerateAIPlanInput,
+): Promise<GenerateAIPlanResult> {
+  return runGenerateAIPlan(input);
 }
