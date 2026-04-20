@@ -1,7 +1,5 @@
-import {
-  archiveExcessTripsAfterDowngrade,
-  upsertPurchaseFromStripeSubscription,
-} from "@/lib/stripe/purchase-sync";
+import { upsertPurchaseFromStripeSubscription } from "@/lib/stripe/purchase-sync";
+import { enqueueSubscriptionPaymentFailedEmail } from "@/lib/stripe/enqueue-payment-failed-email";
 import { getStripeClient } from "@/lib/stripe/client";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { NextResponse } from "next/server";
@@ -27,6 +25,19 @@ async function resolveUserIdFromSubscription(
     .from("profiles")
     .select("id")
     .eq("stripe_customer_id", cust)
+    .maybeSingle();
+  return data?.id ? String(data.id) : null;
+}
+
+async function resolveUserIdFromStripeCustomerId(
+  admin: ReturnType<typeof createServiceRoleClient>,
+  customerId: string | null,
+): Promise<string | null> {
+  if (!customerId?.trim()) return null;
+  const { data } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("stripe_customer_id", customerId.trim())
     .maybeSingle();
   return data?.id ? String(data.id) : null;
 }
@@ -100,6 +111,7 @@ export async function POST(req: Request) {
         }
         break;
       }
+      case "customer.subscription.created":
       case "customer.subscription.updated": {
         const sub = event.data.object as Stripe.Subscription;
         const userId = await resolveUserIdFromSubscription(admin, sub);
@@ -130,25 +142,38 @@ export async function POST(req: Request) {
             subscription: sub,
           });
         }
-        const cpe = sub.current_period_end
-          ? new Date(sub.current_period_end * 1000).toISOString()
-          : new Date().toISOString();
-        const endMs = new Date(cpe).getTime();
-        if (userId && !Number.isNaN(endMs) && endMs <= Date.now()) {
-          await admin
-            .from("profiles")
-            .update({
-              tier: "free",
-              tier_expires_at: null,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", userId);
-          await archiveExcessTripsAfterDowngrade(admin, userId);
+        break;
+      }
+      case "invoice.paid": {
+        const inv = event.data.object as Stripe.Invoice;
+        const subRaw = inv.subscription;
+        const subId =
+          typeof subRaw === "string" ? subRaw : subRaw?.id ?? null;
+        if (!subId) break;
+        const sub = await stripe.subscriptions.retrieve(subId);
+        const userId = await resolveUserIdFromSubscription(admin, sub);
+        const cust =
+          typeof sub.customer === "string"
+            ? sub.customer
+            : sub.customer?.id ?? "";
+        if (userId && cust) {
+          await upsertPurchaseFromStripeSubscription(admin, {
+            userId,
+            stripeCustomerId: cust,
+            subscription: sub,
+          });
         }
         break;
       }
       case "invoice.payment_failed": {
         const inv = event.data.object as Stripe.Invoice;
+        const custRaw = inv.customer;
+        const custId =
+          typeof custRaw === "string" ? custRaw : custRaw?.id ?? null;
+        const userId = await resolveUserIdFromStripeCustomerId(admin, custId);
+        if (userId) {
+          await enqueueSubscriptionPaymentFailedEmail(admin, userId);
+        }
         console.error("[stripe webhook] invoice.payment_failed", inv.id);
         break;
       }

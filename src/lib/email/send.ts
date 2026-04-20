@@ -4,6 +4,7 @@ import { followupEmailHtml } from "./templates/followup-1d";
 import { inviteEmailHtml } from "./templates/invite";
 import { shareNotificationEmailHtml } from "./templates/share-notification";
 import { tripReminderEmailHtml } from "./templates/trip-reminder";
+import { subscriptionPaymentFailedEmailHtml } from "./templates/subscription-payment-failed";
 import { welcomeEmailHtml } from "./templates/welcome";
 
 export type EmailTemplate =
@@ -13,7 +14,8 @@ export type EmailTemplate =
   | "welcome"
   | "share_notification"
   | "year_review"
-  | "trip_reminder";
+  | "trip_reminder"
+  | "subscription_payment_failed";
 
 function renderTemplate(
   template: EmailTemplate,
@@ -66,6 +68,12 @@ function renderTemplate(
           ? (data.bulletLines as unknown[]).map((x) => String(x))
           : [],
         siteUrl: String(data.siteUrl ?? "https://www.triptiles.app"),
+      });
+    case "subscription_payment_failed":
+      return subscriptionPaymentFailedEmailHtml({
+        siteUrl: String(data.siteUrl ?? "https://www.triptiles.app"),
+        firstName: String(data.firstName ?? ""),
+        settingsUrl: String(data.settingsUrl ?? ""),
       });
   }
 }

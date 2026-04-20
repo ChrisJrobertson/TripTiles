@@ -1,6 +1,6 @@
 # TripTiles
 
-Next.js theme park trip planner. Copy [`.env.local.example`](.env.local.example) to `.env.local` and configure Supabase, Anthropic, optional Payhip, and **Stripe** (`STRIPE_SECRET_KEY`, the four `STRIPE_PRICE_*` IDs, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_SITE_URL` for checkout return URLs).
+Next.js theme park trip planner. Copy [`.env.local.example`](.env.local.example) to `.env.local` and configure Supabase, Anthropic, and **Stripe** subscriptions (`STRIPE_SECRET_KEY`, the four `STRIPE_PRICE_PRO_*` / `STRIPE_PRICE_FAMILY_*` price IDs, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_SITE_URL` for checkout return URLs).
 
 ## Database migrations
 

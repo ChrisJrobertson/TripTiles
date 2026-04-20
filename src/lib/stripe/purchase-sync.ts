@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
+import { logTierChange } from "@/lib/stripe/tier-change-log";
 import { priceIdToTier } from "@/lib/stripe/products";
 import type { UserTier } from "@/lib/types";
 
@@ -20,6 +21,28 @@ function billingIntervalFromSub(
 
 function userTierFromPaid(tier: "pro" | "family"): UserTier {
   return tier;
+}
+
+export async function downgradeProfileToFree(
+  admin: SupabaseClient,
+  userId: string,
+  source: string,
+): Promise<void> {
+  logTierChange({
+    action: "downgrade_to_free",
+    user_id: userId,
+    source,
+  });
+  const { error: pErr } = await admin
+    .from("profiles")
+    .update({
+      tier: "free",
+      tier_expires_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", userId);
+  if (pErr) throw new Error(pErr.message);
+  await archiveExcessTripsAfterDowngrade(admin, userId);
 }
 
 export async function upsertPurchaseFromStripeSubscription(
@@ -65,7 +88,11 @@ export async function upsertPurchaseFromStripeSubscription(
   });
   if (error) throw new Error(error.message);
 
-  if (sub.status === "active" || sub.status === "trialing") {
+  if (
+    sub.status === "active" ||
+    sub.status === "trialing" ||
+    sub.status === "past_due"
+  ) {
     const atPeriodEnd = Boolean(sub.cancel_at_period_end) && cpe;
     const { error: pErr } = await admin
       .from("profiles")
@@ -79,14 +106,29 @@ export async function upsertPurchaseFromStripeSubscription(
     if (pErr) throw new Error(pErr.message);
   } else if (sub.status === "canceled") {
     const end = cpe ?? new Date().toISOString();
-    const { error: pErr } = await admin
-      .from("profiles")
-      .update({
-        tier_expires_at: end,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", input.userId);
-    if (pErr) throw new Error(pErr.message);
+    const endMs = new Date(end).getTime();
+    if (!Number.isNaN(endMs) && endMs <= Date.now()) {
+      await downgradeProfileToFree(
+        admin,
+        input.userId,
+        "stripe_subscription_canceled",
+      );
+    } else {
+      const { error: pErr } = await admin
+        .from("profiles")
+        .update({
+          tier_expires_at: end,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", input.userId);
+      if (pErr) throw new Error(pErr.message);
+    }
+  } else if (sub.status === "unpaid" || sub.status === "incomplete_expired") {
+    await downgradeProfileToFree(
+      admin,
+      input.userId,
+      `stripe_subscription_${sub.status}`,
+    );
   }
 }
 

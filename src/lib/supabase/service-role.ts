@@ -3,7 +3,7 @@ import { getSupabaseUrl } from "@/lib/supabase/env";
 
 /**
  * Server-only Supabase client with the service role key (bypasses RLS).
- * Use only in trusted contexts (e.g. Payhip webhook).
+ * Use only in trusted server contexts (e.g. Stripe webhooks, cron).
  */
 export function createServiceRoleClient() {
   const url = getSupabaseUrl();

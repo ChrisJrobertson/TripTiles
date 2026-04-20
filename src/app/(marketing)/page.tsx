@@ -52,7 +52,7 @@ const FEATURES = [
   {
     icon: "👨‍👩‍👧‍👦",
     title: "Family sharing",
-    body: "Invite editors on Family and Premium — plan together in one place.",
+    body: "Invite editors on the Family plan — plan together in one place.",
   },
   {
     icon: "🌍",
@@ -61,15 +61,15 @@ const FEATURES = [
   },
   {
     icon: "💳",
-    title: "One-time pricing",
-    body: "No subscriptions — pay once, keep access for that tier forever.",
+    title: "Fair subscriptions",
+    body: "From £4.99 a month on Pro — cancel anytime. Annual plans save up to £35.89.",
   },
 ];
 
 const FAQ = [
   {
     q: "Is this a subscription?",
-    a: "No. TripTiles is a one-time purchase per tier. Your access does not expire.",
+    a: "Pro and Family are billed monthly or annually through Stripe until you cancel. Free stays free with one trip and Smart Plan limits.",
   },
   {
     q: "Which theme parks are included?",
@@ -85,7 +85,7 @@ const FAQ = [
   },
   {
     q: "Can I share with my family?",
-    a: "Yes. Family and Premium tiers include collaborator invites so you can plan together.",
+    a: "Yes. The Family plan includes collaborator invites for up to four family members.",
   },
 ];
 
@@ -121,9 +121,9 @@ export default async function MarketingHomePage() {
               Plan your theme park trip in minutes, not hours
             </h1>
             <p className="mt-6 max-w-xl font-sans text-lg leading-relaxed text-royal/80">
-              Plan every detail yourself, or let Trip build your itinerary in
-              seconds — then export a beautiful PDF to take with you. Disney,
-              Universal, and 300+ parks worldwide. Family-friendly pricing.
+              Replace 10 hours of planning with one beautiful PDF. Free to try,
+              from £4.99/month when you&apos;re ready. Disney, Universal, and
+              300+ parks worldwide.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <Link
@@ -328,13 +328,19 @@ export default async function MarketingHomePage() {
           <h2 className="text-center font-serif text-2xl font-semibold text-royal md:text-3xl">
             Simple pricing
           </h2>
+          <p className="mx-auto mt-4 max-w-xl text-center font-sans text-sm leading-relaxed text-royal/75">
+            From £{tierPro.monthlyGbp?.toFixed(2) ?? "4.99"} a month. Cancel
+            anytime. Annual plans save up to £
+            {tierFamily.annualSavingsVsMonthlyGbp?.toFixed(2) ?? "35.89"}. Free
+            forever for one trip.
+          </p>
           <div className="mt-10 grid gap-6 sm:grid-cols-3">
             <div className="rounded-2xl border border-royal/10 bg-cream p-6 text-center">
               <p className="font-serif text-lg font-semibold text-royal">Free</p>
               <p className="mt-2 font-serif text-3xl text-gold">£0</p>
               <p className="mt-3 font-sans text-xs text-royal/70">
                 {tierFree.features.max_trips ?? 1} trip ·{" "}
-                {tierFree.features.max_smart_plan_lifetime ?? 3} Smart Plan runs
+                {tierFree.features.max_smart_plan_lifetime ?? 5} Smart Plan runs
                 (lifetime)
               </p>
             </div>
@@ -345,8 +351,11 @@ export default async function MarketingHomePage() {
               <p className="mt-1 font-serif text-lg font-semibold text-royal">
                 Pro
               </p>
-              <p className="mt-2 font-serif text-3xl text-gold">
-                £{tierPro.price_gbp.toFixed(2)}
+              <p className="mt-2 font-serif text-2xl font-semibold text-gold">
+                £{tierPro.annualGbp?.toFixed(2) ?? "39.99"}/year
+              </p>
+              <p className="mt-1 font-sans text-xs text-royal/60">
+                or £{tierPro.monthlyGbp?.toFixed(2) ?? "4.99"}/month
               </p>
               <p className="mt-3 font-sans text-xs text-royal/70">
                 Unlimited trips, Smart Plan, and custom tiles
@@ -356,8 +365,11 @@ export default async function MarketingHomePage() {
               <p className="font-serif text-lg font-semibold text-royal">
                 Family
               </p>
-              <p className="mt-2 font-serif text-3xl text-gold">
-                £{tierFamily.price_gbp.toFixed(2)}
+              <p className="mt-2 font-serif text-2xl font-semibold text-gold">
+                £{tierFamily.annualGbp?.toFixed(2) ?? "59.99"}/year
+              </p>
+              <p className="mt-1 font-sans text-xs text-royal/60">
+                or £{tierFamily.monthlyGbp?.toFixed(2) ?? "7.99"}/month
               </p>
               <p className="mt-3 font-sans text-xs text-royal/70">
                 Share planning with family members
@@ -369,7 +381,7 @@ export default async function MarketingHomePage() {
               href="/pricing"
               className="inline-flex font-sans text-sm font-semibold text-royal underline decoration-gold/60 underline-offset-4 hover:text-gold"
             >
-              See full comparison →
+              See pricing
             </Link>
           </div>
         </div>

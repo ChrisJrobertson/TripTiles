@@ -1,6 +1,8 @@
 "use client";
 
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { formatProductTierName } from "@/lib/product-tier-labels";
+import { normalizeToRetailTier } from "@/lib/tiers";
 import type { UserTier } from "@/lib/types";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -26,11 +28,9 @@ type NavProps = {
 function tierLabel(tier: UserTier | null, tierLoadError: boolean): string {
   if (tierLoadError) return "Plan unknown";
   if (tier == null || tier === "free") return "Free";
-  if (tier === "pro") return "Pro";
-  if (tier === "family") return "Family";
-  if (tier === "premium") return "Premium";
   if (tier === "concierge") return "Concierge";
-  return "Pro+";
+  if (tier === "agent_admin" || tier === "agent_staff") return "Team";
+  return formatProductTierName(normalizeToRetailTier(String(tier)));
 }
 
 function ManageSubscriptionControl({

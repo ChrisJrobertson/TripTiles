@@ -2,7 +2,7 @@ import { AppNavHeader } from "@/components/app/AppNavHeader";
 import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
 import { SettingsAccountPanel } from "@/components/settings/SettingsAccountPanel";
 import { getUserTier } from "@/lib/tier";
-import { getTierConfig } from "@/lib/tiers";
+import { getTierConfig, renewalPriceLabelGbp } from "@/lib/tiers";
 import { getUserTripCount } from "@/lib/db/trips";
 import {
   getOauthIdentityLabel,
@@ -191,9 +191,34 @@ export default async function SettingsPage() {
                   month: "short",
                   year: "numeric",
                 })}
-                . You can resubscribe anytime on Pricing.
+                . You can resubscribe anytime from{" "}
+                <Link href="/pricing" className="font-semibold underline">
+                  Pricing
+                </Link>
+                .
               </div>
             ) : null;
+          })()}
+          {(() => {
+            const stripeRows = purchases.filter((p) => p.provider === "stripe");
+            const latestStripe = stripeRows[0] ?? null;
+            const st = latestStripe?.subscription_status ?? null;
+            if (
+              productTier !== "free" &&
+              (st === "past_due" || st === "unpaid")
+            ) {
+              return (
+                <div className="mt-4 rounded-lg border border-amber-400/90 bg-amber-50 px-4 py-3 font-sans text-sm text-royal">
+                  <p className="font-semibold">Payment failed — retrying</p>
+                  <p className="mt-1 text-royal/80">
+                    Stripe is attempting to collect payment. Update your card in
+                    the billing portal if you need to.
+                  </p>
+                  <ManageSubscriptionButton label="Manage billing" />
+                </div>
+              );
+            }
+            return null;
           })()}
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <span className="text-2xl" aria-hidden>
@@ -201,38 +226,94 @@ export default async function SettingsPage() {
             </span>
             <div>
               <p className="font-sans text-sm font-semibold text-royal">
-                Current plan: {planCfg.name}
+                {productTier === "free"
+                  ? "Current plan: Free"
+                  : (() => {
+                      const stripeRows = purchases.filter(
+                        (p) => p.provider === "stripe",
+                      );
+                      const s = stripeRows[0] ?? null;
+                      const interval =
+                        s?.billing_interval === "year"
+                          ? "billed annually"
+                          : s?.billing_interval === "month"
+                            ? "billed monthly"
+                            : "";
+                      return `Current plan: ${planCfg.name}${interval ? ` — ${interval}` : ""}`;
+                    })()}
               </p>
               {productTier === "free" ? (
-                <p className="mt-1 font-sans text-sm text-royal/70">
-                  Upgrade for unlimited trips, Smart Plan, and more.
-                </p>
+                (() => {
+                  const stripeRows = purchases.filter(
+                    (p) => p.provider === "stripe",
+                  );
+                  const ended = stripeRows.find((p) =>
+                    ["canceled", "unpaid"].includes(
+                      String(p.subscription_status ?? ""),
+                    ),
+                  );
+                  const endIso = ended?.subscription_period_end ?? null;
+                  const endDate = endIso ? new Date(endIso) : null;
+                  if (endDate && !Number.isNaN(endDate.getTime())) {
+                    return (
+                      <p className="mt-1 font-sans text-sm text-royal/70">
+                        Subscription ended on{" "}
+                        {endDate.toLocaleDateString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}{" "}
+                        — see{" "}
+                        <Link href="/pricing" className="font-semibold underline">
+                          pricing
+                        </Link>{" "}
+                        to resubscribe.
+                      </p>
+                    );
+                  }
+                  return (
+                    <p className="mt-1 font-sans text-sm text-royal/70">
+                      Not subscribed — see{" "}
+                      <Link href="/pricing" className="font-semibold underline">
+                        pricing
+                      </Link>
+                      .
+                    </p>
+                  );
+                })()
               ) : (
                 <p className="mt-1 font-sans text-sm text-royal/70">
-                  You&apos;re on the {planCfg.name} plan. Subscription renews via
-                  Stripe.
                   {(() => {
                     const stripeRows = purchases.filter(
                       (p) => p.provider === "stripe",
                     );
                     const s = stripeRows[0] ?? null;
-                    if (!s?.subscription_period_end || !s.billing_interval) {
-                      return null;
+                    if (!s?.subscription_period_end) {
+                      return "Subscription renews via Stripe.";
                     }
                     const end = new Date(s.subscription_period_end);
-                    if (Number.isNaN(end.getTime())) return null;
-                    const interval =
-                      s.billing_interval === "year" ? "yearly" : "monthly";
+                    if (Number.isNaN(end.getTime())) {
+                      return "Subscription renews via Stripe.";
+                    }
+                    const nextPrice = renewalPriceLabelGbp(
+                      s.product,
+                      s.billing_interval ?? null,
+                    );
                     return (
                       <>
-                        {" "}
-                        Billing is {interval}; next date{" "}
+                        Next renewal{" "}
                         {end.toLocaleDateString("en-GB", {
                           day: "numeric",
                           month: "short",
                           year: "numeric",
                         })}
-                        .
+                        {nextPrice ? (
+                          <>
+                            {" "}
+                            — {nextPrice} (before any proration or tax shown in
+                            Stripe).
+                          </>
+                        ) : null}
                       </>
                     );
                   })()}
@@ -241,8 +322,8 @@ export default async function SettingsPage() {
             </div>
           </div>
           <p className="mt-4 font-sans text-xs text-royal/55">
-            Cancel anytime from the Stripe billing portal. Paid access continues
-            until the end of the billing period.
+            Change card, cancel, switch between monthly and annual billing, or
+            move between Pro and Family in the Stripe Customer Portal.
           </p>
           {(() => {
             const stripeRows = purchases.filter((p) => p.provider === "stripe");
@@ -251,7 +332,15 @@ export default async function SettingsPage() {
                 profileRow.stripe_customer_id?.trim(),
             );
             if (hasStripeCustomer) {
-              return <ManageSubscriptionButton />;
+              return (
+                <div className="mt-2 space-y-1">
+                  <ManageSubscriptionButton label="Manage billing" />
+                  <ManageSubscriptionButton
+                    label="Cancel subscription"
+                    variant="link"
+                  />
+                </div>
+              );
             }
             return null;
           })()}
@@ -260,19 +349,19 @@ export default async function SettingsPage() {
               href="/pricing"
               className="mt-6 inline-flex items-center justify-center rounded-lg bg-gold px-5 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition hover:bg-gold/90"
             >
-              View plans
+              See pricing
             </Link>
           ) : null}
         </section>
 
         <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
           <h3 className="font-serif text-lg font-semibold text-royal">
-            Purchase history
+            Billing history
           </h3>
           {purchases.length === 0 ? (
             <p className="mt-3 font-sans text-sm text-royal/65">
-              No purchases recorded yet. When you buy on Payhip, receipts appear
-              here.
+              No subscription payments recorded yet. Successful renewals appear
+              here after Stripe confirms them.
             </p>
           ) : (
             <ul className="mt-4 divide-y divide-royal/10">

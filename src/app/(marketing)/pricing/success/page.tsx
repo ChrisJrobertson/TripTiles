@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 function tierFromQuery(raw: string | string[] | undefined): UserTier {
   const v = Array.isArray(raw) ? raw[0] : raw;
   const s = (v ?? "pro").toLowerCase();
-  if (s === "family" || s === "premium") return s as UserTier;
+  if (s === "family") return "family";
   if (s === "pro") return "pro";
   return "pro";
 }
@@ -45,13 +45,11 @@ export default async function PricingSuccessPage({
         <p className="mt-3 font-sans text-sm text-royal/70">
           {stripeCheckout
             ? "Stripe will email your receipt. If your plan label does not update straight away, wait a few seconds and refresh."
-            : "Check your email for your receipt and licence details from Payhip."}
+            : "Stripe will email your receipt once checkout completes."}
         </p>
         <p className="mt-2 font-sans text-xs text-royal/55">
-          If your tier doesn&apos;t update immediately, wait a few seconds —
-          {stripeCheckout
-            ? "our server confirms subscriptions via Stripe webhook."
-            : "Payhip confirms purchases via webhook."}
+          If your tier doesn&apos;t update immediately, wait a few seconds — our
+          server confirms subscriptions via Stripe webhook.
         </p>
         <Link
           href="/planner"

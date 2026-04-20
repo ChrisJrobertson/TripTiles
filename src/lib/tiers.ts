@@ -3,16 +3,22 @@ import type { UserTier } from "@/lib/types";
 /** Retail tiers shown in product UI (maps from legacy `profiles.tier` values). */
 export type RetailTier = "free" | "pro" | "family";
 
-/** @deprecated Prefer `RetailTier`; kept for Payhip and legacy call sites. */
+/** @deprecated Prefer `RetailTier`; kept for legacy call sites. */
 export type Tier = UserTier;
 
 export interface TierConfig {
   id: RetailTier;
   name: string;
+  /** One-off display price (legacy); prefer monthly/annual subscription fields. */
   price_gbp: number;
   price_pence: number;
+  /** GBP/month when billed monthly (paid tiers). */
+  monthlyGbp?: number;
+  /** GBP/year when billed annually (paid tiers). */
+  annualGbp?: number;
+  /** Saving vs twelve monthly payments at the monthly rate. */
+  annualSavingsVsMonthlyGbp?: number;
   description: string;
-  payhip_url: string | null;
   features: {
     max_trips: number | null;
     /** @deprecated Display only; Smart Plan limits use `max_smart_plan_lifetime`. */
@@ -20,8 +26,8 @@ export interface TierConfig {
     max_smart_plan_lifetime: number | null;
     max_custom_tiles: number | null;
     pdf_watermark: boolean;
-    pdf_design: "standard" | "premium";
-    ai_model: "claude-haiku-4-5" | "claude-sonnet-4-6";
+    pdf_design: "standard";
+    ai_model: "claude-haiku-4-5";
     family_sharing: boolean;
     max_family_members: number;
     priority_support: boolean;
@@ -34,18 +40,6 @@ export interface TierConfig {
   achievement_key: string | null;
 }
 
-function envPayhipUrl(key: "pro" | "family" | "premium"): string | null {
-  const env = process.env;
-  const u =
-    key === "pro"
-      ? env.NEXT_PUBLIC_PAYHIP_PRO_URL
-      : key === "family"
-        ? env.NEXT_PUBLIC_PAYHIP_FAMILY_URL
-        : env.NEXT_PUBLIC_PAYHIP_PREMIUM_URL;
-  const t = u?.trim();
-  return t || null;
-}
-
 export const TIERS: Record<RetailTier, TierConfig> = {
   free: {
     id: "free",
@@ -53,11 +47,10 @@ export const TIERS: Record<RetailTier, TierConfig> = {
     price_gbp: 0,
     price_pence: 0,
     description: "Plan one trip and try Smart Plan",
-    payhip_url: null,
     features: {
       max_trips: 1,
-      max_ai_per_trip: 3,
-      max_smart_plan_lifetime: 3,
+      max_ai_per_trip: 5,
+      max_smart_plan_lifetime: 5,
       max_custom_tiles: 5,
       pdf_watermark: true,
       pdf_design: "standard",
@@ -76,10 +69,12 @@ export const TIERS: Record<RetailTier, TierConfig> = {
   pro: {
     id: "pro",
     name: "Pro",
-    price_gbp: 6.99,
-    price_pence: 699,
+    price_gbp: 4.99,
+    price_pence: 499,
+    monthlyGbp: 4.99,
+    annualGbp: 39.99,
+    annualSavingsVsMonthlyGbp: 19.89,
     description: "Unlimited trips, full Smart Plan, clean PDFs",
-    payhip_url: envPayhipUrl("pro"),
     features: {
       max_trips: null,
       max_ai_per_trip: null,
@@ -102,10 +97,12 @@ export const TIERS: Record<RetailTier, TierConfig> = {
   family: {
     id: "family",
     name: "Family",
-    price_gbp: 11.99,
-    price_pence: 1199,
+    price_gbp: 7.99,
+    price_pence: 799,
+    monthlyGbp: 7.99,
+    annualGbp: 59.99,
+    annualSavingsVsMonthlyGbp: 35.89,
     description: "Everything in Pro, plus share with up to four family members",
-    payhip_url: envPayhipUrl("family"),
     features: {
       max_trips: null,
       max_ai_per_trip: null,
@@ -129,7 +126,7 @@ export const TIERS: Record<RetailTier, TierConfig> = {
 
 export const PUBLIC_TIERS: RetailTier[] = ["free", "pro", "family"];
 
-/** Maps legacy DB / Stripe labels to a retail tier key. */
+/** Maps legacy DB / Stripe labels to a retail tier key (`premium` → Family-tier entitlements). */
 export function normalizeToRetailTier(tier: string | null | undefined): RetailTier {
   const t = (tier ?? "free").toLowerCase();
   if (t === "navigator" || t === "pro") return "pro";
@@ -168,26 +165,25 @@ export function getEffectiveRetailTier(profile: ProfileTierInput): RetailTier {
 }
 
 export function getTierConfig(tier: string): TierConfig {
-  const t = (tier ?? "free").toLowerCase();
-  if (t === "premium") {
-    return {
-      ...TIERS.family,
-      id: "family",
-      name: "Premium",
-      price_gbp: 59.99,
-      price_pence: 5999,
-      description: "Grandfathered Premium access",
-      payhip_url: envPayhipUrl("premium"),
-      features: {
-        ...TIERS.family.features,
-        pdf_design: "premium",
-        ai_model: "claude-sonnet-4-6",
-      },
-      badge_emoji: "💎",
-      achievement_key: "upgraded_premium",
-    };
-  }
   return TIERS[normalizeToRetailTier(tier)];
+}
+
+/** Next renewal amount copy for Stripe subscription rows (GBP). */
+export function renewalPriceLabelGbp(
+  product: string | null | undefined,
+  billingInterval: string | null | undefined,
+): string | null {
+  const rt = normalizeToRetailTier(product ?? "free");
+  if (rt === "free") return null;
+  const cfg = TIERS[rt];
+  const interval = billingInterval === "year" ? "year" : "month";
+  if (interval === "year" && cfg.annualGbp != null) {
+    return `£${cfg.annualGbp.toFixed(2)}/year`;
+  }
+  if (cfg.monthlyGbp != null) {
+    return `£${cfg.monthlyGbp.toFixed(2)}/month`;
+  }
+  return null;
 }
 
 export function isPaidRetailTier(tier: RetailTier): boolean {
@@ -198,11 +194,10 @@ export function isPaidTier(tier: UserTier): boolean {
   return tier !== "free";
 }
 
-const PAID_TIER_RANK: Record<string, number> = {
+const PAID_TIER_RANK: Record<RetailTier, number> = {
   free: 0,
   pro: 1,
   family: 2,
-  premium: 2,
 };
 
 const INTERNAL_TIER_RANK: Record<string, number> = {
@@ -213,8 +208,8 @@ const INTERNAL_TIER_RANK: Record<string, number> = {
 
 export function tierUpgradeRank(tier: string | null | undefined): number {
   const t = tier ?? "free";
-  if (t in INTERNAL_TIER_RANK) return INTERNAL_TIER_RANK[t];
-  return PAID_TIER_RANK[t] ?? 0;
+  if (t in INTERNAL_TIER_RANK) return INTERNAL_TIER_RANK[t]!;
+  return PAID_TIER_RANK[normalizeToRetailTier(t)] ?? 0;
 }
 
 export function shouldUpgradeTier(

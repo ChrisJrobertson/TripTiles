@@ -73,7 +73,6 @@ export async function getPdfExportContextAction(tripId: string): Promise<
       parks: Park[];
       customTiles: CustomTile[];
       watermark: boolean;
-      design: "standard" | "premium";
       familyName: string;
       bookingLinks: Array<{ label: string; url: string }>;
       budgetItems: TripBudgetItem[];
@@ -200,7 +199,6 @@ export async function getPdfExportContextAction(tripId: string): Promise<
     parks,
     customTiles,
     watermark: config.features.pdf_watermark,
-    design: config.features.pdf_design,
     familyName: trip.family_name?.trim() || "Your family",
     bookingLinks,
     budgetItems,

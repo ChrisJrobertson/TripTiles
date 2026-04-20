@@ -167,12 +167,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     textDecoration: "underline",
   },
-  premiumBar: {
-    height: 5,
-    backgroundColor: COLOURS.gold,
-    marginBottom: 14,
-    width: "100%",
-  },
   calendarDowRow: {
     flexDirection: "row",
     marginBottom: 6,
@@ -547,7 +541,6 @@ export interface TripPDFProps {
   parks: Park[];
   customTiles: CustomTile[];
   watermark: boolean;
-  design: "standard" | "premium";
   familyName: string;
   bookingAffiliateLinks?: Array<{ label: string; url: string }>;
   /** When false: cover + itinerary slots only (no strategy, day tips, or booking links). */
@@ -565,7 +558,6 @@ export function TripPDF({
   parks,
   customTiles,
   watermark,
-  design,
   familyName,
   bookingAffiliateLinks,
   includeNotes = true,
@@ -888,18 +880,6 @@ export function TripPDF({
             ? `, ${trip.children} child${trip.children !== 1 ? "ren" : ""}`
             : ""}
         </Text>
-        {design === "premium" ? (
-          <Text
-            style={{
-              marginTop: 28,
-              fontSize: 11,
-              color: COLOURS.royal,
-              letterSpacing: 2,
-            }}
-          >
-            Premium edition
-          </Text>
-        ) : null}
         {watermark ? (
           <Text
             style={{
@@ -915,7 +895,6 @@ export function TripPDF({
       </Page>
 
       <Page size="A4" style={styles.page} wrap>
-        {design === "premium" ? <View style={styles.premiumBar} /> : null}
         {crowdSummary ? (
           <View style={styles.strategyBlock} wrap>
             <Text style={styles.sectionTitle}>Crowd strategy</Text>
@@ -1087,7 +1066,6 @@ export function TripPDF({
 
       {budgetItems.length > 0 ? (
         <Page size="A4" style={styles.page} wrap>
-          {design === "premium" ? <View style={styles.premiumBar} /> : null}
           <Text style={styles.sectionTitle}>Budget summary</Text>
           <Text style={styles.budgetSummaryLine}>
             Total: {formatPdfMoney(budgetTotalAll, displayCurrency)}
@@ -1140,7 +1118,6 @@ export function TripPDF({
 
       {checklistItems.length > 0 ? (
         <Page size="A4" style={styles.page} wrap>
-          {design === "premium" ? <View style={styles.premiumBar} /> : null}
           <Text style={styles.sectionTitle}>Packing checklist</Text>
           <Text style={styles.packingIntro}>
             Print this page and tick off items as you pack.
@@ -1164,7 +1141,6 @@ export function TripPDF({
 
       {includeNotes && hasAppendixContent ? (
         <Page size="A4" style={styles.page} wrap>
-          {design === "premium" ? <View style={styles.premiumBar} /> : null}
           <Text style={styles.sectionTitle}>Day notes</Text>
           {days.map((dayKey, i) => {
             const noteText = dayCrowdNoteText(trip, dayKey);

@@ -77,9 +77,10 @@ export default function PrivacyPage() {
             (stored to provide the service), timestamps, and model identifiers.
           </li>
           <li>
-            <strong>Payment data:</strong> Payhip transaction references and
-            product identifiers. We do not receive or store your full card
-            details — Payhip processes card data.
+            <strong>Payment data:</strong> Stripe customer and subscription
+            identifiers, invoice references, and product/price identifiers. We do
+            not receive or store your full card details — Stripe processes card
+            data.
           </li>
           <li>
             <strong>Technical data:</strong> IP address, user agent, essential
@@ -122,7 +123,7 @@ export default function PrivacyPage() {
         <h2>4. How we use your data</h2>
         <ul>
           <li>Providing the planner, AI features, PDF export, and sharing.</li>
-          <li>Processing upgrades via Payhip.</li>
+          <li>Processing subscriptions and billing via Stripe.</li>
           <li>
             Sending service emails (account, security, trip lifecycle, invites).
           </li>
@@ -167,10 +168,10 @@ export default function PrivacyPage() {
             — email delivery.
           </li>
           <li>
-            <a href="https://payhip.com/privacy" target="_blank" rel="noreferrer">
-              Payhip
+            <a href="https://stripe.com/gb/privacy" target="_blank" rel="noreferrer">
+              Stripe
             </a>{" "}
-            — payment checkout.
+            — subscription billing and card payments.
           </li>
           <li>
             <a

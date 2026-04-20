@@ -55,7 +55,6 @@ export function PdfExportButton({
             parks={result.parks}
             customTiles={result.customTiles}
             watermark={result.watermark}
-            design={result.design}
             familyName={result.familyName}
             bookingAffiliateLinks={
               mode === "with_notes" ? result.bookingLinks : undefined

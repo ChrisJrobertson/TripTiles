@@ -67,6 +67,8 @@ function progressHint(
   return null;
 }
 
+const RETIRED_ACHIEVEMENT_KEYS = new Set(["upgraded_premium"]);
+
 export function AchievementsClient({
   definitions,
   earned,
@@ -74,28 +76,37 @@ export function AchievementsClient({
 }: Props) {
   const [filter, setFilter] = useState<AchievementCategory | "all">("all");
 
+  const definitionsVisible = useMemo(
+    () => definitions.filter((d) => !RETIRED_ACHIEVEMENT_KEYS.has(d.key)),
+    [definitions],
+  );
+  const earnedVisible = useMemo(
+    () => earned.filter((a) => !RETIRED_ACHIEVEMENT_KEYS.has(a.achievement_key)),
+    [earned],
+  );
+
   const earnedByKey = useMemo(() => {
     const m = new Map<string, Achievement>();
-    for (const a of earned) m.set(a.achievement_key, a);
+    for (const a of earnedVisible) m.set(a.achievement_key, a);
     return m;
-  }, [earned]);
+  }, [earnedVisible]);
 
   const sorted = useMemo(() => {
-    return [...definitions].sort((a, b) => {
+    return [...definitionsVisible].sort((a, b) => {
       const ae = earnedByKey.has(a.key) ? 1 : 0;
       const be = earnedByKey.has(b.key) ? 1 : 0;
       if (ae !== be) return be - ae;
       return a.sort_order - b.sort_order;
     });
-  }, [definitions, earnedByKey]);
+  }, [definitionsVisible, earnedByKey]);
 
   const visible = useMemo(() => {
     if (filter === "all") return sorted;
     return sorted.filter((d) => d.category === filter);
   }, [sorted, filter]);
 
-  const total = definitions.length;
-  const unlocked = earned.length;
+  const total = definitionsVisible.length;
+  const unlocked = earnedVisible.length;
   const pct = total > 0 ? Math.round((unlocked / total) * 100) : 0;
 
   return (

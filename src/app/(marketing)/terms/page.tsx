@@ -25,7 +25,7 @@ export default function TermsPage() {
   return (
     <LegalArticle title="Terms of service">
       <p className="text-sm text-royal/70">
-        <strong>Last updated:</strong> 11 April 2026
+        <strong>Last updated:</strong> 20 April 2026
       </p>
       <p className="text-sm text-royal/70">
         <strong>Registered address:</strong>{" "}
@@ -66,30 +66,68 @@ export default function TermsPage() {
       </section>
 
       <section id="payments">
-        <h2>4. Subscriptions and payments</h2>
-        <p>
-          Plans include Free, Pro (£24.99), Family (£39.99), and Premium
-          (£59.99). Payments are <strong>one-time</strong>, not subscriptions.
-          Checkout is processed by Payhip — their terms also apply. Access for a
-          purchased tier is intended to be ongoing; prices may change for new
-          buyers without affecting past purchases. VAT is included for UK
-          buyers where applicable.
-        </p>
-      </section>
+        <h2>4. Payments, subscriptions, and refunds</h2>
 
-      <section id="refunds">
-        <h2>5. Refunds</h2>
+        <h3 className="mt-5 font-serif text-lg font-semibold text-royal">
+          Payments and subscriptions
+        </h3>
         <p>
-          We offer a <strong>30-day money-back guarantee</strong>. Request via{" "}
-          <a href="mailto:hello@triptiles.com">hello@triptiles.com</a> or through
-          Payhip. After 30 days, refunds are considered case-by-case. Refunded
-          accounts revert to the Free tier but your trip data generally remains
-          available on Free limits.
+          TripTiles offers two paid subscription tiers (Pro and Family), billed
+          monthly or annually via Stripe. You can cancel at any time via the
+          customer portal in your account settings. On cancellation you retain
+          access until the end of your current billing period.
+        </p>
+
+        <h3 className="mt-6 font-serif text-lg font-semibold text-royal">
+          Refunds and cooling-off
+        </h3>
+        <p>
+          Under the UK Consumer Contracts (Information, Cancellation and
+          Additional Charges) Regulations 2013, you have a 14-day right to
+          cancel from the date you first subscribe. If you request cancellation
+          within this 14-day period <strong>and</strong> have not substantially
+          used the Service (defined below), we will refund your most recent
+          payment in full.
+        </p>
+        <p>
+          &quot;Substantial use&quot; means any of: more than 2 PDF exports, more
+          than 10 AI Smart Plan generations, or publishing a trip publicly. If
+          you have substantially used the Service within the cooling-off period,
+          we reserve the right to decline a refund, or offer a partial refund,
+          in line with the Regulations.
+        </p>
+        <p>
+          After the 14-day cooling-off period, payments are non-refundable. You
+          may cancel to prevent future billing at any time.
+        </p>
+        <p>
+          Refund requests: email{" "}
+          <a href="mailto:hello@triptiles.app">hello@triptiles.app</a>. We aim to
+          respond within 5 working days.
+        </p>
+
+        <h3 className="mt-6 font-serif text-lg font-semibold text-royal">
+          Price changes
+        </h3>
+        <p>
+          We may change subscription prices with 30 days&apos; advance notice by
+          email. Your existing subscription continues at the price you signed up
+          at until your next renewal.
+        </p>
+
+        <h3 className="mt-6 font-serif text-lg font-semibold text-royal">
+          Failed payments
+        </h3>
+        <p>
+          If a renewal payment fails, Stripe will retry automatically over
+          approximately 7 days. We will email you if the payment cannot be
+          recovered. After that period, your subscription will be cancelled and
+          your account will return to the Free tier.
         </p>
       </section>
 
       <section id="user-content">
-        <h2>6. User content</h2>
+        <h2>5. User content</h2>
         <p>
           You own the trip plans, itineraries, and custom tiles you create. By
           marking a trip public you grant TripTiles a limited licence to display
@@ -99,7 +137,7 @@ export default function TermsPage() {
       </section>
 
       <section id="ip">
-        <h2>7. Intellectual property</h2>
+        <h2>6. Intellectual property</h2>
         <p>
           The TripTiles name, branding, design, and software are our property.
           Park information is compiled from public sources. Affiliate links may
@@ -109,7 +147,7 @@ export default function TermsPage() {
       </section>
 
       <section id="ai">
-        <h2>8. AI-generated content</h2>
+        <h2>7. AI-generated content</h2>
         <p>
           AI plans are <strong>suggestions only</strong>, not professional travel
           advice. Crowd patterns, wait times, and schedules may be inaccurate.
@@ -119,7 +157,7 @@ export default function TermsPage() {
       </section>
 
       <section id="warranty">
-        <h2>9. Warranty disclaimer</h2>
+        <h2>8. Warranty disclaimer</h2>
         <p>
           The service is provided &quot;as is&quot; without warranties of any
           kind to the fullest extent permitted by law. We do not guarantee
@@ -128,7 +166,7 @@ export default function TermsPage() {
       </section>
 
       <section id="liability">
-        <h2>10. Limitation of liability</h2>
+        <h2>9. Limitation of liability</h2>
         <p>
           To the extent permitted by UK law, our total liability arising out of
           or in connection with these terms is limited to the amount you paid us
@@ -139,7 +177,7 @@ export default function TermsPage() {
       </section>
 
       <section id="affiliates">
-        <h2>11. Affiliate disclosures</h2>
+        <h2>10. Affiliate disclosures</h2>
         <p>
           Some links are affiliate links. We may earn commission when you book
           through them at no extra cost to you. Partners include Booking.com,
@@ -148,7 +186,7 @@ export default function TermsPage() {
       </section>
 
       <section id="termination">
-        <h2>12. Termination</h2>
+        <h2>11. Termination</h2>
         <p>
           You may delete your account in Settings. We may terminate for
           violations. On termination you lose access to paid-tier features; data
@@ -157,7 +195,7 @@ export default function TermsPage() {
       </section>
 
       <section id="law">
-        <h2>13. Governing law</h2>
+        <h2>12. Governing law</h2>
         <p>
           These terms are governed by the laws of <strong>England and Wales</strong>.
           Disputes are subject to the exclusive jurisdiction of the courts of
@@ -166,7 +204,7 @@ export default function TermsPage() {
       </section>
 
       <section id="changes-terms">
-        <h2>14. Changes</h2>
+        <h2>13. Changes</h2>
         <p>
           We may update these terms. Material changes will be notified where
           appropriate. Continued use after changes may constitute acceptance.
@@ -174,7 +212,7 @@ export default function TermsPage() {
       </section>
 
       <section id="contact-terms">
-        <h2>15. Contact</h2>
+        <h2>14. Contact</h2>
         <p>
           General:{" "}
           <a href="mailto:hello@triptiles.com">hello@triptiles.com</a>

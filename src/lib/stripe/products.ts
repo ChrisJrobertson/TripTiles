@@ -1,8 +1,6 @@
-// Required env vars (set in Vercel Production + Preview):
-//   STRIPE_PRICE_PRO_MONTHLY = price_1TNXd2JBjlYCYeTT9PhzJAgj (£6.99/mo)
-//   STRIPE_PRICE_PRO_ANNUAL = price_1TNXd8JBjlYCYeTT6cssGWp8 (£39.00/yr)
-//   STRIPE_PRICE_FAMILY_MONTHLY = price_1TNXctJBjlYCYeTTQDbM2ZEp (£11.99/mo)
-//   STRIPE_PRICE_FAMILY_ANNUAL = price_1TNXcxJBjlYCYeTT6oZzKdHN (£69.00/yr)
+// Required env vars (set in Vercel Production + Preview) — map to live Stripe GBP prices:
+//   STRIPE_PRICE_PRO_MONTHLY (£4.99/mo), STRIPE_PRICE_PRO_ANNUAL (£39.99/yr)
+//   STRIPE_PRICE_FAMILY_MONTHLY (£7.99/mo), STRIPE_PRICE_FAMILY_ANNUAL (£59.99/yr)
 
 export type PaidTier = "pro" | "family";
 export type BillingInterval = "month" | "year";

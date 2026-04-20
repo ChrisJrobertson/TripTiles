@@ -74,7 +74,7 @@ async function handleCronRequest(request: NextRequest) {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("email")
+      .select("email, display_name")
       .eq("id", userId)
       .maybeSingle();
 
@@ -96,6 +96,21 @@ async function handleCronRequest(request: NextRequest) {
 
     if (template === "welcome") {
       data = { siteUrl };
+    } else if (template === "subscription_payment_failed") {
+      const raw =
+        profile &&
+        typeof profile === "object" &&
+        "display_name" in profile &&
+        typeof (profile as { display_name?: string | null }).display_name ===
+          "string"
+          ? (profile as { display_name: string }).display_name.trim()
+          : "";
+      const firstName = raw ? raw.split(/\s+/)[0] ?? "" : "";
+      data = {
+        siteUrl,
+        firstName,
+        settingsUrl: `${siteUrl}/settings`,
+      };
     } else if (
       tripId &&
       (template === "countdown_3d" || template === "followup_1d")

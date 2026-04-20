@@ -3,6 +3,7 @@
 import { showToast } from "@/lib/toast";
 import type { ProductTier } from "@/lib/product-tier-labels";
 import { formatProductTierName } from "@/lib/product-tier-labels";
+import { TIERS } from "@/lib/tiers";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -99,21 +100,54 @@ export function PricingClient({
     };
   }, [success, router]);
 
-  const proPrice = useMemo(
-    () =>
-      billing === "yearly"
-        ? { main: "£39.00 / year", sub: "£3.25 per month, billed annually" }
-        : { main: "£6.99 / month", sub: "£83.88 per year if paying monthly" },
-    [billing],
-  );
+  const pro = TIERS.pro;
+  const family = TIERS.family;
 
-  const familyPrice = useMemo(
-    () =>
-      billing === "yearly"
-        ? { main: "£69.00 / year", sub: "Great value for households" }
-        : { main: "£11.99 / month", sub: "Billed monthly, cancel anytime" },
-    [billing],
-  );
+  const proPrice = useMemo(() => {
+    if (billing === "yearly" && pro.annualGbp != null && pro.monthlyGbp != null) {
+      return {
+        main: `£${pro.annualGbp.toFixed(2)}/year`,
+        sub: `or £${pro.monthlyGbp.toFixed(2)}/month`,
+        save:
+          pro.annualSavingsVsMonthlyGbp != null
+            ? `Save £${pro.annualSavingsVsMonthlyGbp.toFixed(2)}/year`
+            : null,
+      };
+    }
+    return {
+      main: `£${pro.monthlyGbp?.toFixed(2) ?? "4.99"}/month`,
+      sub:
+        pro.annualGbp != null
+          ? `or £${pro.annualGbp.toFixed(2)}/year billed annually`
+          : "",
+      save: null,
+    };
+  }, [billing, pro]);
+
+  const familyPrice = useMemo(() => {
+    if (
+      billing === "yearly" &&
+      family.annualGbp != null &&
+      family.monthlyGbp != null
+    ) {
+      return {
+        main: `£${family.annualGbp.toFixed(2)}/year`,
+        sub: `or £${family.monthlyGbp.toFixed(2)}/month`,
+        save:
+          family.annualSavingsVsMonthlyGbp != null
+            ? `Save £${family.annualSavingsVsMonthlyGbp.toFixed(2)}/year`
+            : null,
+      };
+    }
+    return {
+      main: `£${family.monthlyGbp?.toFixed(2) ?? "7.99"}/month`,
+      sub:
+        family.annualGbp != null
+          ? `or £${family.annualGbp.toFixed(2)}/year billed annually`
+          : "",
+      save: null,
+    };
+  }, [billing, family]);
 
   const startCheckout = async (tier: "pro" | "family") => {
     setBusy(tier);
@@ -205,22 +239,9 @@ export function PricingClient({
         </div>
       ) : null}
 
-      <div className="mb-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-        <span className="font-sans text-sm font-medium text-royal/70">
-          Billing
-        </span>
-        <div className="inline-flex rounded-full border border-royal/15 bg-white p-1">
-          <button
-            type="button"
-            className={`min-h-[44px] rounded-full px-4 py-2 font-sans text-sm font-semibold ${
-              billing === "yearly"
-                ? "bg-royal text-cream"
-                : "text-royal/70 hover:bg-cream"
-            }`}
-            onClick={() => setBilling("yearly")}
-          >
-            Yearly (default)
-          </button>
+      <div className="mb-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:flex-wrap">
+        <span className="font-sans text-sm font-medium text-royal/70">Billing</span>
+        <div className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-royal/15 bg-white p-1">
           <button
             type="button"
             className={`min-h-[44px] rounded-full px-4 py-2 font-sans text-sm font-semibold ${
@@ -232,18 +253,39 @@ export function PricingClient({
           >
             Monthly
           </button>
+          <button
+            type="button"
+            className={`min-h-[44px] rounded-full px-4 py-2 font-sans text-sm font-semibold ${
+              billing === "yearly"
+                ? "bg-royal text-cream"
+                : "text-royal/70 hover:bg-cream"
+            }`}
+            onClick={() => setBilling("yearly")}
+          >
+            Annual
+          </button>
         </div>
+        {billing === "yearly" ? (
+          <span className="rounded-full bg-gold/25 px-3 py-1 font-sans text-xs font-semibold text-royal">
+            Save up to £35.89
+          </span>
+        ) : null}
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
         <article className="flex flex-col rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
           <h2 className="font-serif text-xl font-semibold text-royal">Free</h2>
           <p className="mt-4 font-serif text-3xl font-semibold text-royal">
-            £0 <span className="text-lg font-medium text-royal/70">/ forever</span>
+            £0 <span className="text-lg font-medium text-royal/70">forever</span>
           </p>
-          <p className="mt-3 font-sans text-sm leading-relaxed text-royal/75">
-            Plan one trip, see what TripTiles does.
-          </p>
+          <p className="mt-1 font-sans text-xs text-royal/60">Cancel anytime — no card required</p>
+          <ul className="mt-4 flex-1 list-inside list-disc space-y-1.5 font-sans text-sm text-royal/80">
+            <li>1 active trip</li>
+            <li>5 Smart Plan runs per account (lifetime on Free)</li>
+            <li>5 custom tiles total</li>
+            <li>Watermarked PDF export</li>
+            <li>Haiku 4.5 model</li>
+          </ul>
           <div className="mt-6 flex flex-1 flex-col justify-end">
             {current === "free" && me ? (
               <span className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-royal/15 bg-cream px-4 py-2 text-center font-sans text-sm font-semibold text-royal/60">
@@ -254,7 +296,7 @@ export function PricingClient({
                 href="/signup"
                 className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-royal/20 bg-white px-4 py-2 text-center font-sans text-sm font-semibold text-royal hover:bg-cream"
               >
-                Start free
+                Get started free
               </Link>
             )}
           </div>
@@ -271,9 +313,17 @@ export function PricingClient({
             {proPrice.main}
           </p>
           <p className="mt-1 font-sans text-xs text-royal/65">{proPrice.sub}</p>
-          <p className="mt-3 font-sans text-sm leading-relaxed text-royal/75">
-            Unlimited trips, full Smart Plan, clean PDFs.
-          </p>
+          {proPrice.save ? (
+            <p className="mt-1 font-sans text-xs font-semibold text-gold">{proPrice.save}</p>
+          ) : null}
+          <p className="mt-2 font-sans text-xs text-royal/55">Cancel anytime</p>
+          <ul className="mt-3 flex-1 list-inside list-disc space-y-1.5 font-sans text-sm text-royal/80">
+            <li>Unlimited trips</li>
+            <li>Unlimited Smart Plan</li>
+            <li>Unlimited custom tiles</li>
+            <li>Clean PDF export</li>
+            <li>Haiku 4.5 — no family sharing</li>
+          </ul>
           <button
             type="button"
             disabled={Boolean(busy) || current === "pro"}
@@ -284,7 +334,7 @@ export function PricingClient({
               ? "Your current plan"
               : busy === "pro"
                 ? "Redirecting…"
-                : "Get Pro"}
+                : "Start with Pro"}
           </button>
         </article>
 
@@ -301,9 +351,15 @@ export function PricingClient({
             {familyPrice.main}
           </p>
           <p className="mt-1 font-sans text-xs text-royal/65">{familyPrice.sub}</p>
-          <p className="mt-3 font-sans text-sm leading-relaxed text-royal/75">
-            Everything in Pro, plus share with up to four family members.
-          </p>
+          {familyPrice.save ? (
+            <p className="mt-1 font-sans text-xs font-semibold text-gold">{familyPrice.save}</p>
+          ) : null}
+          <p className="mt-2 font-sans text-xs text-royal/55">Cancel anytime</p>
+          <ul className="mt-3 flex-1 list-inside list-disc space-y-1.5 font-sans text-sm text-royal/80">
+            <li>Everything in Pro</li>
+            <li>Up to 4 family members with shared access</li>
+            <li>Haiku 4.5 (not Sonnet)</li>
+          </ul>
           <button
             type="button"
             disabled={Boolean(busy) || current === "family"}
@@ -314,7 +370,7 @@ export function PricingClient({
               ? "Your current plan"
               : busy === "family"
                 ? "Redirecting…"
-                : "Get Family"}
+                : "Start with Family"}
           </button>
         </article>
       </div>
@@ -339,7 +395,13 @@ export function PricingClient({
             </tr>
             <tr className="border-b border-royal/10">
               <td className="px-4 py-2">Smart Plan (AI)</td>
-              <td className="px-4 py-2">3 lifetime</td>
+              <td className="px-4 py-2">5 lifetime (Free tier)</td>
+              <td className="px-4 py-2">Unlimited</td>
+              <td className="px-4 py-2">Unlimited</td>
+            </tr>
+            <tr className="border-b border-royal/10">
+              <td className="px-4 py-2">Custom tiles</td>
+              <td className="px-4 py-2">5 total</td>
               <td className="px-4 py-2">Unlimited</td>
               <td className="px-4 py-2">Unlimited</td>
             </tr>

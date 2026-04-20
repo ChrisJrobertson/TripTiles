@@ -56,7 +56,7 @@ export function FamilyInvitePanel({ tripId, userTier }: Props) {
     setBusy(false);
     if (!r.ok) {
       if (r.error === "TIER_LIMIT") {
-        setMsg("Family invites require a Family or Premium plan.");
+        setMsg("Family invites require a Family plan.");
       } else {
         setMsg(r.error);
       }
@@ -81,7 +81,7 @@ export function FamilyInvitePanel({ tripId, userTier }: Props) {
         <p className="mt-2 text-xs leading-relaxed text-royal/70">
           Invite partners and grandparents on{" "}
           <Link href="/pricing" className="font-semibold text-gold underline">
-            Family or Premium
+            Family plan
           </Link>
           .
         </p>
