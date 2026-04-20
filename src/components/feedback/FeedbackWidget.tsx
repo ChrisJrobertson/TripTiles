@@ -1,6 +1,7 @@
 "use client";
 
 import { submitFeedbackAction, type FeedbackCategory } from "@/actions/feedback";
+import { browserUserAgent } from "@/lib/clipboard-access";
 import { useCallback, useState } from "react";
 
 const CATEGORIES: { id: FeedbackCategory; label: string }[] = [
@@ -27,8 +28,7 @@ export function FeedbackWidget() {
       category,
       message,
       pageUrl: typeof window !== "undefined" ? window.location.href : null,
-      userAgent:
-        typeof navigator !== "undefined" ? navigator.userAgent : null,
+      userAgent: browserUserAgent(),
     });
     if (!r.ok) {
       setError(r.error);

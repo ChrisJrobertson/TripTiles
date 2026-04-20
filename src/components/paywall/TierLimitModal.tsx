@@ -13,18 +13,18 @@ type Props = {
   onClose: () => void;
   reason: string;
   variant?: Variant;
-  /** Paid plan to promote in the CTA (Navigator is the usual upgrade path). */
-  upgradeTargetTier?: Exclude<ProductTier, "day_tripper">;
+  /** Paid plan to promote in the CTA. */
+  upgradeTargetTier?: Exclude<ProductTier, "free">;
 };
 
 function headingFor(
   v: Variant,
-  upgradeTargetTier: Exclude<ProductTier, "day_tripper">,
+  upgradeTargetTier: Exclude<ProductTier, "free">,
 ): string {
   const name = formatProductTierName(upgradeTargetTier);
   switch (v) {
     case "ai":
-      return `Unlock Tripp with ${name}`;
+      return `Unlock Smart Plan with ${name}`;
     case "custom":
       return `${name} unlocks more custom tiles`;
     default:
@@ -34,16 +34,16 @@ function headingFor(
 
 function subFor(
   v: Variant,
-  upgradeTargetTier: Exclude<ProductTier, "day_tripper">,
+  upgradeTargetTier: Exclude<ProductTier, "free">,
 ): string {
   const name = formatProductTierName(upgradeTargetTier);
   switch (v) {
     case "ai":
-      return `${name} includes Tripp for Smart Plan on your trips.`;
+      return `${name} includes unlimited Smart Plan runs on your trips.`;
     case "custom":
       return `${name} raises your custom tile limit so you can build richer calendars.`;
     default:
-      return `Day Tripper keeps one active trip at a time. ${name} raises your cap — pick the plan that fits on Pricing.`;
+      return `Free keeps one active trip at a time. ${name} raises your cap — pick the plan that fits on Pricing.`;
   }
 }
 
@@ -52,7 +52,7 @@ export function TierLimitModal({
   onClose,
   reason,
   variant = "trips",
-  upgradeTargetTier = "navigator",
+  upgradeTargetTier = "pro",
 }: Props) {
   if (!isOpen) return null;
 

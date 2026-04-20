@@ -1,4 +1,7 @@
-import { PricingClient } from "@/app/(marketing)/pricing/PricingClient";
+import {
+  PricingClient,
+  type CheckoutPriceIds,
+} from "@/app/(marketing)/pricing/PricingClient";
 import { getUserTier } from "@/lib/tier";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type { Metadata } from "next";
@@ -12,11 +15,11 @@ const siteUrl =
 export const metadata: Metadata = {
   title: "Pricing - TripTiles",
   description:
-    "TripTiles subscriptions — Day Tripper, Navigator with Tripp (Haiku), and Captain with Tripp (Sonnet).",
+    "TripTiles subscriptions — Free, Pro, and Family plans with Smart Plan for theme park holidays.",
   openGraph: {
     title: "Pricing - TripTiles",
     description:
-      "Choose Day Tripper, Navigator, or Captain — Tripp-powered planning for theme park holidays.",
+      "Pick Free, Pro, or Family — Smart Plan helps you build crowd-aware theme park itineraries.",
     url: `${siteUrl}/pricing`,
     siteName: "TripTiles",
     locale: "en_GB",
@@ -26,18 +29,14 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Pricing - TripTiles",
     description:
-      "Choose Day Tripper, Navigator, or Captain — Tripp-powered planning for theme park holidays.",
+      "Pick Free, Pro, or Family — Smart Plan for theme park holidays.",
   },
 };
 
 const FAQ = [
   {
     q: "Is this a subscription?",
-    a: "Yes — Navigator and Captain renew monthly or yearly until you cancel in the billing portal. Day Tripper stays free.",
-  },
-  {
-    q: "What is the LAUNCH50 code?",
-    a: "Enter LAUNCH50 on the Stripe Checkout page for 50% off the first three months (offer ends 30 June 2026).",
+    a: "Pro and Family renew monthly or yearly until you cancel in the Stripe billing portal. Free stays free.",
   },
   {
     q: "Can I cancel?",
@@ -46,6 +45,10 @@ const FAQ = [
   {
     q: "Do I need an account?",
     a: "Yes — sign in to TripTiles before upgrading so we can link your subscription securely.",
+  },
+  {
+    q: "Who processes payments?",
+    a: "Stripe processes card payments. TripTiles never stores your full card number.",
   },
   {
     q: "Is my data safe?",
@@ -60,6 +63,15 @@ const FAQ = [
     ),
   },
 ];
+
+function checkoutPriceIdsFromEnv(): CheckoutPriceIds {
+  return {
+    proMonth: process.env.STRIPE_PRICE_PRO_MONTHLY?.trim() ?? "",
+    proYear: process.env.STRIPE_PRICE_PRO_ANNUAL?.trim() ?? "",
+    familyMonth: process.env.STRIPE_PRICE_FAMILY_MONTHLY?.trim() ?? "",
+    familyYear: process.env.STRIPE_PRICE_FAMILY_ANNUAL?.trim() ?? "",
+  };
+}
 
 async function loadInitialMe() {
   const user = await getCurrentUser();
@@ -80,6 +92,7 @@ async function loadInitialMe() {
 
 export default async function PricingPage() {
   const initialMe = await loadInitialMe();
+  const checkoutPriceIds = checkoutPriceIdsFromEnv();
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-12 sm:px-6 sm:py-14">
@@ -90,8 +103,7 @@ export default async function PricingPage() {
         Pick your perfect plan
       </h1>
       <p className="mx-auto mt-4 max-w-2xl text-center font-sans text-lg leading-relaxed text-royal/80">
-        Subscriptions in GBP — upgrade when you&apos;re ready for Tripp-powered
-        Smart Plan.
+        Cancel anytime. Works on every device.
       </p>
 
       <div className="mt-12">
@@ -100,7 +112,7 @@ export default async function PricingPage() {
             <div className="h-40 animate-pulse rounded-2xl bg-royal/5" aria-hidden />
           }
         >
-          <PricingClient initialMe={initialMe} />
+          <PricingClient initialMe={initialMe} checkoutPriceIds={checkoutPriceIds} />
         </Suspense>
       </div>
 
@@ -128,10 +140,10 @@ export default async function PricingPage() {
       <p className="mt-12 text-center font-sans text-sm text-royal/70">
         Questions? Email{" "}
         <a
-          href="mailto:hello@triptiles.com"
+          href="mailto:hello@triptiles.app"
           className="font-semibold text-royal underline underline-offset-2"
         >
-          hello@triptiles.com
+          hello@triptiles.app
         </a>
       </p>
 

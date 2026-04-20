@@ -28,7 +28,7 @@ export default async function DayTemplatesSettingsPage() {
   if (!user) redirect("/login?next=/settings/templates");
 
   const tier = await getUserTier(user.id);
-  if (tier === "day_tripper") {
+  if (tier === "free") {
     redirect("/pricing");
   }
 

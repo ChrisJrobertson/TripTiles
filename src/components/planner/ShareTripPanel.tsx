@@ -1,6 +1,7 @@
 "use client";
 
 import { updateTripSharingAction } from "@/actions/trips";
+import { copyTextToClipboard } from "@/lib/clipboard-access";
 import { useCallback, useEffect, useState } from "react";
 
 type Props = {
@@ -63,7 +64,7 @@ export function ShareTripPanel({
   const copy = useCallback(async () => {
     if (!shareUrl) return;
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await copyTextToClipboard(shareUrl);
       setMsg("Link copied.");
     } catch {
       setMsg("Copy the link manually.");

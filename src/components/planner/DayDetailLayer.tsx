@@ -260,7 +260,7 @@ export function DayDetailLayer({
     : null;
   const crowdLevel = tone ? crowdLevelFromHeuristicTone(tone) : null;
 
-  const trippLine =
+  const smartPlanPreviewLine =
     aiNoteForDay && aiNoteForDay.length > 0
       ? aiNoteForDay.split(/\n+/)[0]!.slice(0, 220)
       : null;
@@ -377,15 +377,10 @@ export function DayDetailLayer({
   }, [trip, dayDate, parkById]);
 
   const handlePlanMyDay = () => {
-    if (productTier === "day_tripper") {
-      onClose();
-      router.push("/pricing");
-      return;
-    }
     onOpenSmartPlan();
   };
 
-  const openNavigatorUpsell = () => {
+  const openProUpsell = () => {
     setTierLimitOpen(true);
   };
 
@@ -482,17 +477,17 @@ export function DayDetailLayer({
                       className="flex w-full min-h-11 flex-col items-start gap-0.5 px-3 py-2 text-left font-sans text-sm text-royal hover:bg-cream"
                       onClick={() => {
                         setMoreOpen(false);
-                        if (productTier === "day_tripper") {
-                          openNavigatorUpsell();
+                        if (productTier === "free") {
+                          openProUpsell();
                           return;
                         }
                         setSaveTplOpen(true);
                       }}
                     >
                       <span>Save as template…</span>
-                      {productTier === "day_tripper" ? (
+                      {productTier === "free" ? (
                         <span className="font-sans text-[0.65rem] text-royal/55">
-                          🔒 Navigator feature
+                          🔒 Pro feature
                         </span>
                       ) : null}
                     </button>
@@ -502,17 +497,17 @@ export function DayDetailLayer({
                       className="flex w-full min-h-11 flex-col items-start gap-0.5 px-3 py-2 text-left font-sans text-sm text-royal hover:bg-cream"
                       onClick={() => {
                         setMoreOpen(false);
-                        if (productTier === "day_tripper") {
-                          openNavigatorUpsell();
+                        if (productTier === "free") {
+                          openProUpsell();
                           return;
                         }
                         setApplyTplOpen(true);
                       }}
                     >
                       <span>Apply template…</span>
-                      {productTier === "day_tripper" ? (
+                      {productTier === "free" ? (
                         <span className="font-sans text-[0.65rem] text-royal/55">
-                          🔒 Navigator feature
+                          🔒 Pro feature
                         </span>
                       ) : null}
                     </button>
@@ -565,15 +560,15 @@ export function DayDetailLayer({
             tripId={trip.id}
             dayDate={dayDate}
             conflicts={dayConflicts}
-            onAskTripp={onOpenSmartPlan}
+            onOpenSmartPlan={onOpenSmartPlan}
           />
           <section className="mb-4 rounded-lg border border-royal/10 bg-white/90 p-3">
             <p className="font-sans text-[11px] font-semibold uppercase tracking-wide text-royal/60">
-              Tripp&apos;s take
+              Smart Plan
             </p>
-            {trippLine ? (
+            {smartPlanPreviewLine ? (
               <p className="mt-1 font-sans text-sm leading-relaxed text-royal/85">
-                {trippLine}
+                {smartPlanPreviewLine}
               </p>
             ) : (
               <p className="mt-1 font-sans text-sm italic text-royal/55">
@@ -679,7 +674,7 @@ export function DayDetailLayer({
       <TierLimitModal
         isOpen={tierLimitOpen}
         onClose={() => setTierLimitOpen(false)}
-        reason="That option is part of Navigator and Captain — upgrade to unlock day templates and recurring duplicates."
+        reason="That option is part of Pro and Family — upgrade to unlock day templates and recurring duplicates."
         variant="custom"
       />
 
@@ -692,7 +687,7 @@ export function DayDetailLayer({
         productTier={productTier}
         onLocked={() => {
           setSaveTplOpen(false);
-          openNavigatorUpsell();
+          openProUpsell();
         }}
         onSaved={() => {
           showToast("Template saved", {
@@ -712,7 +707,7 @@ export function DayDetailLayer({
         productTier={productTier}
         onLocked={() => {
           setApplyTplOpen(false);
-          openNavigatorUpsell();
+          openProUpsell();
         }}
         onApplied={() => {
           showToast("Template applied", {
@@ -731,9 +726,9 @@ export function DayDetailLayer({
         tripId={trip.id}
         sourceDate={dayDate}
         productTier={productTier}
-        onLockedNavigator={() => {
+        onLockedPaidTemplates={() => {
           setDupOpen(false);
-          openNavigatorUpsell();
+          openProUpsell();
         }}
         onSuccess={() => {
           showToast("Day duplicated", {

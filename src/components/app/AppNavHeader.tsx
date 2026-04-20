@@ -42,7 +42,7 @@ function ManageSubscriptionControl({
   const openPortal = useCallback(async () => {
     setBusy(true);
     try {
-      const r = await fetch("/api/stripe/create-portal-session", {
+      const r = await fetch("/api/customer-portal", {
         method: "POST",
         credentials: "include",
       });

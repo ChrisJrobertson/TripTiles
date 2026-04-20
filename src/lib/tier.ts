@@ -1,67 +1,88 @@
 import { createClient } from "@/lib/supabase/server";
-import { readProfileRow, tierFromProfileRow } from "@/lib/supabase/profile-read";
-import type { UserTier } from "@/lib/types";
+import { readProfileRow } from "@/lib/supabase/profile-read";
 import { TierError, type TierErrorCode } from "@/lib/tier-errors";
+import { getEffectiveRetailTier, normalizeToRetailTier, type RetailTier } from "@/lib/tiers";
 
-/** Product tiers used for Stripe + gating (legacy Payhip tiers map in `getUserTier`). */
-export type Tier = "day_tripper" | "navigator" | "captain";
+/** Product tier for planner gating (Free / Pro / Family). */
+export type Tier = RetailTier;
+
+export type ProductTier = RetailTier;
 
 export type TierFeature = "trips" | "ai";
-/** Alias for spec / readability. */
-export type Feature = TierFeature;
 
 export { formatProductTierName } from "./product-tier-labels";
 
 export const TIER_LIMITS: Record<
-  Tier,
-  { activeTrips: number | "unlimited"; aiEnabled: boolean; aiModel: "haiku" | "sonnet" | null }
+  RetailTier,
+  { activeTrips: number | "unlimited"; aiEnabled: boolean }
 > = {
-  day_tripper: {
+  free: {
     activeTrips: 1,
-    aiEnabled: false,
-    aiModel: null,
-  },
-  navigator: {
-    activeTrips: 5,
     aiEnabled: true,
-    aiModel: "haiku",
   },
-  captain: {
+  pro: {
     activeTrips: "unlimited",
     aiEnabled: true,
-    aiModel: "sonnet",
+  },
+  family: {
+    activeTrips: "unlimited",
+    aiEnabled: true,
   },
 };
 
-type UserSubRow = {
-  status: string;
-  tier: string;
-  grace_until: string | null;
+type PurchaseRow = {
+  subscription_status: string | null;
+  product: string | null;
 };
 
-function legacyProfileTierToProductTier(tier: UserTier): Tier {
-  if (tier === "free") return "day_tripper";
-  if (tier === "premium" || tier === "concierge") return "captain";
-  if (tier === "pro" || tier === "family") return "captain";
-  if (tier === "agent_admin" || tier === "agent_staff") return "captain";
-  return "day_tripper";
-}
+async function activeStripeRetailTier(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<RetailTier | null> {
+  const { data, error } = await supabase
+    .from("purchases")
+    .select("subscription_status, product, created_at")
+    .eq("user_id", userId)
+    .eq("provider", "stripe")
+    .in("subscription_status", ["active", "trialing", "past_due"])
+    .order("created_at", { ascending: false })
+    .limit(1);
 
-function stripeSubToProductTier(row: UserSubRow): Tier | null {
-  const s = row.status;
-  if (s === "active" || s === "trialing") {
-    if (row.tier === "day_tripper") return "day_tripper";
-    return row.tier === "captain" ? "captain" : "navigator";
+  if (error) throw new Error(error.message);
+  const row = (data?.[0] ?? null) as PurchaseRow | null;
+  if (!row?.subscription_status) return null;
+  const st = row.subscription_status;
+  if (st === "active" || st === "trialing") {
+    return normalizeToRetailTier(row.product ?? "pro");
   }
-  if (s === "past_due") {
-    const grace = row.grace_until;
-    if (grace && new Date(grace).getTime() > Date.now()) {
-      if (row.tier === "day_tripper") return "day_tripper";
-      return row.tier === "captain" ? "captain" : "navigator";
-    }
-    return "day_tripper";
+  if (st === "past_due") {
+    return normalizeToRetailTier(row.product ?? "pro");
   }
   return null;
+}
+
+/**
+ * Effective retail tier for the user (Stripe purchase row wins when active;
+ * otherwise profile tier + expiry).
+ */
+export async function getUserTier(userId: string): Promise<Tier> {
+  const supabase = await createClient();
+  const fromStripe = await activeStripeRetailTier(supabase, userId);
+  if (fromStripe === "pro" || fromStripe === "family") {
+    return fromStripe;
+  }
+
+  const pr = await readProfileRow<{
+    tier: string;
+    tier_expires_at?: string | null;
+  }>(supabase, userId, "tier, tier_expires_at");
+  if (!pr.ok) {
+    throw new Error(`TIER_LOAD_FAILED: ${pr.message}`);
+  }
+  return getEffectiveRetailTier({
+    tier: pr.data.tier,
+    tier_expires_at: pr.data.tier_expires_at ?? null,
+  });
 }
 
 /** Active (non-archived) trips for caps. */
@@ -76,55 +97,11 @@ export async function countActiveTripsForUser(userId: string): Promise<number> {
   return count ?? 0;
 }
 
-/**
- * Resolves the user's effective product tier.
- * Stripe `user_subscriptions` wins when present; otherwise Payhip-era `profiles.tier` maps to closest product tier.
- */
-export async function getUserTier(userId: string): Promise<Tier> {
-  const supabase = await createClient();
-  const { data: subRows, error: subErr } = await supabase
-    .from("user_subscriptions")
-    .select("status, tier, grace_until, updated_at")
-    .eq("user_id", userId)
-    .in("status", ["active", "trialing", "past_due"])
-    .order("updated_at", { ascending: false })
-    .limit(1);
-
-  if (subErr) throw new Error(subErr.message);
-  const sub = (subRows?.[0] ?? null) as UserSubRow | null;
-  if (sub) {
-    const mapped = stripeSubToProductTier(sub);
-    if (mapped) return mapped;
-  }
-
-  const pr = await readProfileRow<{ tier: string }>(supabase, userId, "tier");
-  if (!pr.ok) {
-    throw new Error(`TIER_LOAD_FAILED: ${pr.message}`);
-  }
-  const profileTier = tierFromProfileRow(pr.data) as UserTier;
-  return legacyProfileTierToProductTier(profileTier);
-}
-
-/** Stripe Navigator has a 5-trip cap; legacy paid users stay unlimited. */
-export async function maxActiveTripsForUser(userId: string): Promise<number | "unlimited"> {
-  const supabase = await createClient();
-  const { data: subRows } = await supabase
-    .from("user_subscriptions")
-    .select("status, tier, grace_until, updated_at")
-    .eq("user_id", userId)
-    .in("status", ["active", "trialing", "past_due"])
-    .order("updated_at", { ascending: false })
-    .limit(1);
-  const sub = subRows?.[0] as UserSubRow | undefined;
-  if (sub) {
-    const mapped = stripeSubToProductTier(sub);
-    if (mapped === "day_tripper") return 1;
-    if (mapped === "navigator") return 5;
-    if (mapped === "captain") return "unlimited";
-  }
+export async function maxActiveTripsForUser(
+  userId: string,
+): Promise<number | "unlimited"> {
   const tier = await getUserTier(userId);
   const lim = TIER_LIMITS[tier].activeTrips;
-  if (tier === "captain") return "unlimited";
   return lim === "unlimited" ? "unlimited" : lim;
 }
 

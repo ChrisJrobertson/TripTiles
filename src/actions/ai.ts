@@ -36,19 +36,14 @@ import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { formatRegionalDiningForPrompt } from "@/data/regional-dining";
 import { formatPlanningPreferencesForPrompt } from "@/lib/planning-preferences-prompt";
 import { isNamedRestaurantPark } from "@/lib/named-restaurant-tiles";
-import {
-  assertTierAllows,
-  getUserTier,
-  tierErrorToClientPayload,
-} from "@/lib/tier";
-import { logTrippUsage } from "@/lib/tripp-usage-log";
-import { resolveTrippModel } from "@/lib/tripp-model";
-import { TierError } from "@/lib/tier-errors";
+import { assertTierAllows, tierErrorToClientPayload } from "@/lib/tier";
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY ?? "",
 });
 
-const SYSTEM_PROMPT = `You are Tripp, TripTiles' warm and practical theme park planner. Output ONLY valid JSON — no markdown, no preamble, no text outside the JSON object.
+const SMART_PLAN_MODEL = "claude-haiku-4-5-20251001";
+
+const SYSTEM_PROMPT = `You are Smart Plan, TripTiles' warm and practical theme park planner. Output ONLY valid JSON — no markdown, no preamble, no text outside the JSON object.
 
 Shape:
 { "assignments": { "2026-7-9": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-7-14": "…" }, "planner_day_notes": { "2026-7-9": "…" } }
@@ -385,7 +380,7 @@ export async function runGenerateAIPlan(
         ok: false,
         error: "TIER_AI_DISABLED",
         message:
-          "Tripp is not included on the Day Tripper plan. Upgrade to Navigator or Captain on Pricing.",
+          "Smart Plan is not available on your current plan. Upgrade on Pricing.",
       };
     }
     throw e;
@@ -535,19 +530,7 @@ export async function runGenerateAIPlan(
     namedRestaurantHint,
   });
 
-  let model = "claude-haiku-4-5";
-  try {
-    model = await resolveTrippModel(user.id);
-  } catch (e) {
-    if (e instanceof TierError && e.code === "TIER_AI_DISABLED") {
-      return {
-        ok: false,
-        error: "TIER_AI_DISABLED",
-        message: e.message,
-      };
-    }
-    throw e;
-  }
+  const model = SMART_PLAN_MODEL;
 
   let inputTokens = 0;
   let outputTokens = 0;
@@ -628,20 +611,11 @@ export async function runGenerateAIPlan(
       };
     }
 
-    const latencyMs = Date.now() - t0;
-    void logTrippUsage({
-      userId: user.id,
-      tier: await getUserTier(user.id),
-      model,
-      inputTokens,
-      outputTokens,
-      latencyMs,
-    });
-
     if (process.env.NODE_ENV === "development") {
       console.info("[ai] anthropic usage", {
         input_tokens: inputTokens,
         output_tokens: outputTokens,
+        latency_ms: Date.now() - t0,
       });
     }
 

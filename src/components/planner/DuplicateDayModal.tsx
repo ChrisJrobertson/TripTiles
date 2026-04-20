@@ -26,7 +26,7 @@ type Props = {
   tripId: string;
   sourceDate: string;
   productTier: Tier;
-  onLockedNavigator: () => void;
+  onLockedPaidTemplates: () => void;
   onSuccess: () => void;
 };
 
@@ -37,7 +37,7 @@ export function DuplicateDayModal({
   tripId,
   sourceDate,
   productTier,
-  onLockedNavigator,
+  onLockedPaidTemplates,
   onSuccess,
 }: Props) {
   const [tab, setTab] = useState<"specific" | "recurring">("specific");
@@ -89,8 +89,8 @@ export function DuplicateDayModal({
   };
 
   const submit = useCallback(async () => {
-    if (tab === "recurring" && productTier === "day_tripper") {
-      onLockedNavigator();
+    if (tab === "recurring" && productTier === "free") {
+      onLockedPaidTemplates();
       return;
     }
     if (targets.length === 0) return;
@@ -109,7 +109,7 @@ export function DuplicateDayModal({
         },
       );
       if (res.status === 403) {
-        onLockedNavigator();
+        onLockedPaidTemplates();
         return;
       }
       if (!res.ok) throw new Error();
@@ -125,7 +125,7 @@ export function DuplicateDayModal({
     merge,
     tripId,
     sourceDate,
-    onLockedNavigator,
+    onLockedPaidTemplates,
     onSuccess,
     onClose,
   ]);
@@ -169,8 +169,8 @@ export function DuplicateDayModal({
                 tab === "recurring" ? "bg-royal text-cream" : "text-royal"
               }`}
               onClick={() => {
-                if (productTier === "day_tripper") {
-                  onLockedNavigator();
+                if (productTier === "free") {
+                  onLockedPaidTemplates();
                   return;
                 }
                 setTab("recurring");
@@ -178,8 +178,8 @@ export function DuplicateDayModal({
             >
               <span className="inline-flex items-center gap-1">
                 Recurring weekday
-                {productTier === "day_tripper" ? (
-                  <span aria-hidden title="Navigator feature">
+                {productTier === "free" ? (
+                  <span aria-hidden title="Pro or Family feature">
                     🔒
                   </span>
                 ) : null}

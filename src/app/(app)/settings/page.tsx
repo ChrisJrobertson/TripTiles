@@ -15,9 +15,10 @@ import {
 } from "@/lib/supabase/profile-read";
 import { createClient } from "@/lib/supabase/server";
 import { DevTierWidget } from "@/components/settings/DevTierWidget";
+import { ManageSubscriptionButton } from "@/components/settings/ManageSubscriptionButton";
 import { TemperatureUnitSettings } from "@/components/settings/TemperatureUnitSettings";
 import { EmailPreferencesSettings } from "@/components/settings/EmailPreferencesSettings";
-import type { TemperatureUnit } from "@/lib/types";
+import type { TemperatureUnit, UserTier } from "@/lib/types";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -36,6 +37,11 @@ type PurchaseRow = {
   amount_gbp_pence: number;
   currency: string | null;
   metadata: Record<string, unknown> | null;
+  provider?: string | null;
+  provider_customer_id?: string | null;
+  subscription_status?: string | null;
+  subscription_period_end?: string | null;
+  billing_interval?: string | null;
 };
 
 export default async function SettingsPage() {
@@ -73,15 +79,17 @@ export default async function SettingsPage() {
       display_name?: string | null;
       temperature_unit?: string | null;
       email_marketing_opt_out?: boolean | null;
+      tier_expires_at?: string | null;
+      stripe_customer_id?: string | null;
     }>(
       supabase,
       user.id,
-      "tier, display_name, temperature_unit, email_marketing_opt_out",
+      "tier, display_name, temperature_unit, email_marketing_opt_out, tier_expires_at, stripe_customer_id",
     ),
     supabase
       .from("purchases")
       .select(
-        "id, created_at, product, amount_gbp_pence, currency, metadata",
+        "id, created_at, product, amount_gbp_pence, currency, metadata, provider, provider_customer_id, subscription_status, subscription_period_end, billing_interval",
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
@@ -96,7 +104,7 @@ export default async function SettingsPage() {
 
   const profileRow = profileRead.data;
   const tier = tierFromProfileRow(profileRow);
-  const cfg = getTierConfig(tier);
+  const planCfg = getTierConfig(productTier);
   const displayName = profileRow.display_name ?? null;
   const profileCreated = user.created_at ?? null;
   const purchases = (purchasesRes.data ?? []) as PurchaseRow[];
@@ -112,12 +120,13 @@ export default async function SettingsPage() {
     <div className="min-h-screen bg-cream pb-16 pt-0">
       <AppNavHeader
         userEmail={user.email ?? ""}
-        userTier={tier}
+        userTier={(productTier === "free" ? "free" : tier) as UserTier}
         tripCount={tripCount}
         freeTripLimit={freeMax}
+        showUpgradeNavCta={productTier === "free"}
       />
       <main className="mx-auto max-w-2xl space-y-8 px-4 py-8 sm:px-6">
-        {productTier !== "day_tripper" ? (
+        {productTier !== "free" ? (
           <p className="font-sans text-sm text-royal/80">
             <Link
               href="/settings/templates"
@@ -150,8 +159,8 @@ export default async function SettingsPage() {
           email={user.email ?? ""}
           displayName={displayName}
           createdAt={profileCreated}
-          tierLabel={cfg.name}
-          tierBadge={cfg.badge_emoji}
+          tierLabel={planCfg.name}
+          tierBadge={planCfg.badge_emoji}
           hasPasswordAuth={hasPasswordAuth}
           oauthProviderLabel={oauthProviderLabel}
         />
@@ -164,35 +173,94 @@ export default async function SettingsPage() {
 
         <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
           <h2 className="font-serif text-xl font-semibold text-royal">Billing</h2>
+          {(() => {
+            const stripeRows = purchases.filter((p) => p.provider === "stripe");
+            const latestStripe = stripeRows[0] ?? null;
+            const expRaw = profileRow.tier_expires_at ?? null;
+            const expDate = expRaw ? new Date(expRaw) : null;
+            const showCancelBanner =
+              latestStripe?.subscription_status === "canceled" &&
+              expDate &&
+              !Number.isNaN(expDate.getTime()) &&
+              expDate.getTime() > Date.now();
+            return showCancelBanner ? (
+              <div className="mt-4 rounded-lg border border-amber-300/80 bg-amber-50 px-4 py-3 font-sans text-sm text-royal">
+                Your {planCfg.name} access ends on{" "}
+                {expDate.toLocaleDateString("en-GB", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+                . You can resubscribe anytime on Pricing.
+              </div>
+            ) : null;
+          })()}
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <span className="text-2xl" aria-hidden>
-              {cfg.badge_emoji}
+              {planCfg.badge_emoji}
             </span>
             <div>
               <p className="font-sans text-sm font-semibold text-royal">
-                Current plan: {cfg.name}
+                Current plan: {planCfg.name}
               </p>
-              {tier === "free" ? (
+              {productTier === "free" ? (
                 <p className="mt-1 font-sans text-sm text-royal/70">
-                  Upgrade to unlock unlimited trips, AI, and custom tiles.
+                  Upgrade for unlimited trips, Smart Plan, and more.
                 </p>
               ) : (
                 <p className="mt-1 font-sans text-sm text-royal/70">
-                  You&apos;re on the {cfg.name} plan. All included features are
-                  unlocked.
+                  You&apos;re on the {planCfg.name} plan. Subscription renews via
+                  Stripe.
+                  {(() => {
+                    const stripeRows = purchases.filter(
+                      (p) => p.provider === "stripe",
+                    );
+                    const s = stripeRows[0] ?? null;
+                    if (!s?.subscription_period_end || !s.billing_interval) {
+                      return null;
+                    }
+                    const end = new Date(s.subscription_period_end);
+                    if (Number.isNaN(end.getTime())) return null;
+                    const interval =
+                      s.billing_interval === "year" ? "yearly" : "monthly";
+                    return (
+                      <>
+                        {" "}
+                        Billing is {interval}; next date{" "}
+                        {end.toLocaleDateString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                        .
+                      </>
+                    );
+                  })()}
                 </p>
               )}
             </div>
           </div>
           <p className="mt-4 font-sans text-xs text-royal/55">
-            One-time payment, no subscription. Your access is permanent.
+            Cancel anytime from the Stripe billing portal. Paid access continues
+            until the end of the billing period.
           </p>
-          {tier === "free" ? (
+          {(() => {
+            const stripeRows = purchases.filter((p) => p.provider === "stripe");
+            const hasStripeCustomer = Boolean(
+              stripeRows.find((p) => p.provider_customer_id?.trim()) ||
+                profileRow.stripe_customer_id?.trim(),
+            );
+            if (hasStripeCustomer) {
+              return <ManageSubscriptionButton />;
+            }
+            return null;
+          })()}
+          {productTier === "free" ? (
             <Link
               href="/pricing"
               className="mt-6 inline-flex items-center justify-center rounded-lg bg-gold px-5 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition hover:bg-gold/90"
             >
-              Upgrade your plan
+              View plans
             </Link>
           ) : null}
         </section>

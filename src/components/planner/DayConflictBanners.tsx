@@ -10,7 +10,7 @@ type Props = {
   tripId: string;
   dayDate: string;
   conflicts: DayConflict[];
-  onAskTripp: () => void;
+  onOpenSmartPlan: () => void;
 };
 
 function bannerMessage(c: DayConflict): string {
@@ -32,7 +32,7 @@ export function DayConflictBanners({
   tripId,
   dayDate,
   conflicts,
-  onAskTripp,
+  onOpenSmartPlan,
 }: Props) {
   const statusId = useId();
   const [expanded, setExpanded] = useState(false);
@@ -103,9 +103,9 @@ export function DayConflictBanners({
             <button
               type="button"
               className="mt-2 min-h-11 rounded-lg border border-royal/20 bg-white px-3 font-sans text-xs font-semibold text-royal"
-              onClick={onAskTripp}
+              onClick={onOpenSmartPlan}
             >
-              Ask Tripp →
+              Smart Plan →
             </button>
           ) : null}
           <button

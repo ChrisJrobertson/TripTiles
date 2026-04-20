@@ -1,23 +1,23 @@
 "use client";
 
-import type { Tier } from "@/lib/tier";
+import type { ProductTier } from "@/lib/product-tier-labels";
 import { useCallback, useState } from "react";
 
-const LABELS: Record<Tier, string> = {
-  day_tripper: "Day Tripper",
-  navigator: "Navigator",
-  captain: "Captain",
+const LABELS: Record<ProductTier, string> = {
+  free: "Free",
+  pro: "Pro",
+  family: "Family",
 };
 
 export function DevTierWidget() {
-  const [busy, setBusy] = useState<Tier | null>(null);
+  const [busy, setBusy] = useState<ProductTier | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const setTier = useCallback(async (tier: Tier) => {
+  const setTier = useCallback(async (tier: ProductTier) => {
     setErr(null);
     setBusy(tier);
     try {
-      const res = await fetch("/api/dev/set-tier", {
+      const res = await fetch("/api/dev/set-profile-tier", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tier }),
@@ -39,14 +39,14 @@ export function DevTierWidget() {
         Dev: product tier
       </h2>
       <p className="mt-1 font-sans text-xs text-royal/70">
-        Sets a local <code className="rounded bg-white/80 px-1">user_subscriptions</code>{" "}
+        Updates your <code className="rounded bg-white/80 px-1">profiles.tier</code>{" "}
         row (no Stripe). Reloads the page after each change.
       </p>
       {err ? (
         <p className="mt-2 font-sans text-xs text-red-800">{err}</p>
       ) : null}
       <div className="mt-3 flex flex-wrap gap-2">
-        {(Object.keys(LABELS) as Tier[]).map((tier) => (
+        {(Object.keys(LABELS) as ProductTier[]).map((tier) => (
           <button
             key={tier}
             type="button"

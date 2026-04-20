@@ -124,8 +124,8 @@ export async function loadPlannerClientServerData(input: {
         initialActiveTripId: null,
         userEmail,
         profileTier: "free",
-        productTier: "day_tripper",
-        productPlanLabel: formatProductTierName("day_tripper"),
+        productTier: "free",
+        productPlanLabel: formatProductTierName("free"),
         maxActiveTripCap: 1,
         stripeCustomerId: null,
         achievementDefs: await getAchievementDefinitions(),
@@ -255,7 +255,7 @@ export async function loadPlannerClientServerData(input: {
     });
   }
 
-  let productTier: Tier = "day_tripper";
+  let productTier: Tier = "free";
   let maxActiveTripCap: number | "unlimited" = 1;
   try {
     productTier = await getUserTier(userId);

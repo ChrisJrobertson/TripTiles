@@ -43,7 +43,7 @@ export function SaveTemplateDialog({
   }, [open]);
 
   const save = useCallback(async () => {
-    if (productTier === "day_tripper") {
+    if (productTier === "free") {
       onLocked();
       return;
     }
@@ -202,7 +202,7 @@ export function ApplyTemplateDialog({
   }, [open, onLocked]);
 
   const apply = useCallback(async () => {
-    if (productTier === "day_tripper") {
+    if (productTier === "free") {
       onLocked();
       return;
     }

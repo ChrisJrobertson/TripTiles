@@ -16,6 +16,7 @@ import {
   type DayConflict,
 } from "@/lib/planner-day-conflicts";
 import { mapAttractionRow, mapPriorityRow } from "@/lib/ride-priority-rows";
+import { currentUserCanCreateRidePriority } from "@/lib/entitlements";
 import { revalidatePath } from "next/cache";
 import { unstable_cache } from "next/cache";
 
@@ -242,6 +243,12 @@ export async function toggleRidePriority(
       .eq("id", existing.id);
     if (error) throw new Error(error.message);
   } else {
+    const canAdd = await currentUserCanCreateRidePriority(tripId);
+    if (!canAdd) {
+      throw new Error(
+        "You've reached the ride priority limit on the Free plan. Upgrade to Pro for unlimited priorities.",
+      );
+    }
     const { data: maxRow } = await supabase
       .from("trip_ride_priorities")
       .select("sort_order")

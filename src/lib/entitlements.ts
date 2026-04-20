@@ -1,18 +1,14 @@
-import { getTierConfig, type Tier } from "@/lib/tiers";
+import { getTierConfig } from "@/lib/tiers";
 import {
   readProfileRow,
   tierFromProfileRow,
 } from "@/lib/supabase/profile-read";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
-import {
-  TIER_LIMITS,
-  countActiveTripsForUser,
-  getUserTier,
-  maxActiveTripsForUser,
-} from "@/lib/tier";
+import { countActiveTripsForUser, getUserTier, maxActiveTripsForUser } from "@/lib/tier";
+import type { UserTier } from "@/lib/types";
 
 /** Loads `profiles.tier` for the signed-in user. Throws if the row is missing or invalid. */
-export async function getCurrentTier(): Promise<Tier> {
+export async function getCurrentTier(): Promise<UserTier> {
   const user = await getCurrentUser();
   if (!user) return "free";
   const supabase = await createClient();
@@ -20,7 +16,7 @@ export async function getCurrentTier(): Promise<Tier> {
   if (!r.ok) {
     throw new Error(`TIER_LOAD_FAILED: ${r.message}`);
   }
-  return tierFromProfileRow(r.data) as Tier;
+  return tierFromProfileRow(r.data) as UserTier;
 }
 
 export async function currentUserCanCreateTrip(): Promise<boolean> {
@@ -36,8 +32,30 @@ export async function currentUserCanGenerateAI(): Promise<boolean> {
   const user = await getCurrentUser();
   if (!user) return false;
 
-  const ut = await getUserTier(user.id);
-  return TIER_LIMITS[ut].aiEnabled;
+  const supabase = await createClient();
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("ai_generations_lifetime")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+
+  const rt = await getUserTier(user.id);
+  const cfg = getTierConfig(rt);
+  const cap = cfg.features.max_smart_plan_lifetime;
+  if (cap === null) return true;
+  const used = Number(
+    (profile as { ai_generations_lifetime?: number } | null)
+      ?.ai_generations_lifetime ?? 0,
+  );
+  return used < cap;
+}
+
+export async function currentUserCanUseAIDayPlanner(): Promise<boolean> {
+  const user = await getCurrentUser();
+  if (!user) return false;
+  const rt = await getUserTier(user.id);
+  return getTierConfig(rt).features.ai_day_planner;
 }
 
 export async function currentUserCanCreateCustomTile(): Promise<boolean> {
@@ -55,4 +73,40 @@ export async function currentUserCanCreateCustomTile(): Promise<boolean> {
     .eq("user_id", user.id);
 
   return (count ?? 0) < (config.features.max_custom_tiles ?? 0);
+}
+
+export async function currentUserCanCreatePayment(
+  tripId: string,
+): Promise<boolean> {
+  const user = await getCurrentUser();
+  if (!user) return false;
+  const rt = await getUserTier(user.id);
+  const lim = getTierConfig(rt).features.max_payments_per_trip;
+  if (lim === null) return true;
+
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("trip_payments")
+    .select("*", { count: "exact", head: true })
+    .eq("trip_id", tripId);
+  if (error) throw new Error(error.message);
+  return (count ?? 0) < lim;
+}
+
+export async function currentUserCanCreateRidePriority(
+  tripId: string,
+): Promise<boolean> {
+  const user = await getCurrentUser();
+  if (!user) return false;
+  const rt = await getUserTier(user.id);
+  const lim = getTierConfig(rt).features.max_ride_priorities_per_trip;
+  if (lim === null) return true;
+
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("trip_ride_priorities")
+    .select("*", { count: "exact", head: true })
+    .eq("trip_id", tripId);
+  if (error) throw new Error(error.message);
+  return (count ?? 0) < lim;
 }

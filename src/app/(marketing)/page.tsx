@@ -14,7 +14,7 @@ const site = getPublicSiteUrl() || "https://www.triptiles.app";
 export const metadata: Metadata = {
   title: "TripTiles — Plan your theme park trips in minutes",
   description:
-    "Trip-powered itineraries for Disney, Universal, and 300+ parks worldwide. Beautiful PDFs. Family-friendly pricing.",
+    "Smart Plan itineraries for Disney, Universal, and 300+ parks worldwide. Beautiful PDFs. Family-friendly pricing.",
   openGraph: {
     title: "TripTiles — Plan your theme park trips in minutes",
     description:
@@ -36,8 +36,8 @@ export const metadata: Metadata = {
 const FEATURES = [
   {
     icon: "🤖",
-    title: "Trip-powered planning",
-    body: "Trip drafts a day-by-day plan using crowd patterns and your group.",
+    title: "Smart Plan",
+    body: "Smart Plan drafts a day-by-day itinerary using crowd patterns and your group.",
   },
   {
     icon: "📅",
@@ -100,7 +100,6 @@ export default async function MarketingHomePage() {
   const tierFree = TIERS.free;
   const tierPro = TIERS.pro;
   const tierFamily = TIERS.family;
-  const tierPremium = TIERS.premium;
 
   return (
     <main className="flex flex-1 flex-col">
@@ -329,13 +328,14 @@ export default async function MarketingHomePage() {
           <h2 className="text-center font-serif text-2xl font-semibold text-royal md:text-3xl">
             Simple pricing
           </h2>
-          <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-10 grid gap-6 sm:grid-cols-3">
             <div className="rounded-2xl border border-royal/10 bg-cream p-6 text-center">
               <p className="font-serif text-lg font-semibold text-royal">Free</p>
               <p className="mt-2 font-serif text-3xl text-gold">£0</p>
               <p className="mt-3 font-sans text-xs text-royal/70">
                 {tierFree.features.max_trips ?? 1} trip ·{" "}
-                {tierFree.features.max_ai_per_trip ?? 5} Smart Plan runs per trip
+                {tierFree.features.max_smart_plan_lifetime ?? 3} Smart Plan runs
+                (lifetime)
               </p>
             </div>
             <div className="rounded-2xl border-2 border-gold/50 bg-white p-6 text-center shadow-md">
@@ -361,17 +361,6 @@ export default async function MarketingHomePage() {
               </p>
               <p className="mt-3 font-sans text-xs text-royal/70">
                 Share planning with family members
-              </p>
-            </div>
-            <div className="rounded-2xl border border-royal/10 bg-cream p-6 text-center">
-              <p className="font-serif text-lg font-semibold text-royal">
-                Premium
-              </p>
-              <p className="mt-2 font-serif text-3xl text-gold">
-                £{tierPremium.price_gbp.toFixed(2)}
-              </p>
-              <p className="mt-3 font-sans text-xs text-royal/70">
-                Enhanced Smart Plan (Sonnet model)
               </p>
             </div>
           </div>

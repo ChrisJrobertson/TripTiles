@@ -1,8 +1,8 @@
-/** Pure labels for Stripe product tiers — safe for Client Components. */
-export type ProductTier = "day_tripper" | "navigator" | "captain";
+/** Pure labels for product tiers — safe for Client Components. */
+export type ProductTier = "free" | "pro" | "family";
 
 export function formatProductTierName(tier: ProductTier): string {
-  if (tier === "day_tripper") return "Day Tripper";
-  if (tier === "navigator") return "Navigator";
-  return "Captain";
+  if (tier === "free") return "Free";
+  if (tier === "pro") return "Pro";
+  return "Family";
 }

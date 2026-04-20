@@ -1,8 +1,8 @@
-import { getStripe } from "@/lib/stripe-server";
 import {
   archiveExcessTripsAfterDowngrade,
-  upsertUserSubscriptionFromStripe,
-} from "@/lib/stripe-subscription-db";
+  upsertPurchaseFromStripeSubscription,
+} from "@/lib/stripe/purchase-sync";
+import { getStripeClient } from "@/lib/stripe/client";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
@@ -13,7 +13,10 @@ async function resolveUserIdFromSubscription(
   admin: ReturnType<typeof createServiceRoleClient>,
   sub: Stripe.Subscription,
 ): Promise<string | null> {
-  const meta = sub.metadata?.supabase_user_id?.trim();
+  const meta =
+    sub.metadata?.user_id?.trim() ||
+    sub.metadata?.supabase_user_id?.trim() ||
+    "";
   if (meta) return meta;
   const cust =
     typeof sub.customer === "string"
@@ -42,7 +45,7 @@ export async function POST(req: Request) {
   const raw = await req.text();
   let event: Stripe.Event;
   try {
-    event = getStripe().webhooks.constructEvent(raw, sig, secret);
+    event = getStripeClient().webhooks.constructEvent(raw, sig, secret);
   } catch {
     return NextResponse.json({ error: "Invalid signature." }, { status: 400 });
   }
@@ -59,7 +62,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Dedupe failed." }, { status: 500 });
   }
 
-  const stripe = getStripe();
+  const stripe = getStripeClient();
 
   try {
     switch (event.type) {
@@ -70,7 +73,10 @@ export async function POST(req: Request) {
           typeof sess.subscription === "string"
             ? sess.subscription
             : sess.subscription?.id;
-        const userId = sess.client_reference_id?.trim();
+        const userId =
+          sess.client_reference_id?.trim() ||
+          sess.metadata?.user_id?.trim() ||
+          "";
         if (!subId || !userId) break;
         const sub = await stripe.subscriptions.retrieve(subId);
         const custRaw = sess.customer;
@@ -86,7 +92,7 @@ export async function POST(req: Request) {
             .eq("id", userId);
         }
         if (cust) {
-          await upsertUserSubscriptionFromStripe(admin, {
+          await upsertPurchaseFromStripeSubscription(admin, {
             userId,
             stripeCustomerId: cust,
             subscription: sub,
@@ -103,72 +109,47 @@ export async function POST(req: Request) {
             ? sub.customer
             : sub.customer?.id ?? "";
         if (!cust) break;
-        await upsertUserSubscriptionFromStripe(admin, {
+        await upsertPurchaseFromStripeSubscription(admin, {
           userId,
           stripeCustomerId: cust,
           subscription: sub,
         });
-        if (sub.status !== "past_due") {
-          await admin
-            .from("user_subscriptions")
-            .update({
-              grace_until: null,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("stripe_subscription_id", sub.id);
-        }
         break;
       }
       case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
         const userId = await resolveUserIdFromSubscription(admin, sub);
-        await admin
-          .from("user_subscriptions")
-          .delete()
-          .eq("stripe_subscription_id", sub.id);
-        if (userId) {
-          await archiveExcessTripsAfterDowngrade(admin, userId);
-        }
-        break;
-      }
-      case "invoice.payment_succeeded": {
-        const inv = event.data.object as Stripe.Invoice;
-        const subRef = inv.subscription;
-        const subId =
-          typeof subRef === "string" ? subRef : subRef?.id ?? null;
-        if (!subId) break;
-        const sub = await stripe.subscriptions.retrieve(subId);
-        const userId = await resolveUserIdFromSubscription(admin, sub);
-        if (!userId) break;
         const cust =
           typeof sub.customer === "string"
             ? sub.customer
             : sub.customer?.id ?? "";
-        if (!cust) break;
-        await upsertUserSubscriptionFromStripe(admin, {
-          userId,
-          stripeCustomerId: cust,
-          subscription: sub,
-        });
+        if (userId && cust) {
+          await upsertPurchaseFromStripeSubscription(admin, {
+            userId,
+            stripeCustomerId: cust,
+            subscription: sub,
+          });
+        }
+        const cpe = sub.current_period_end
+          ? new Date(sub.current_period_end * 1000).toISOString()
+          : new Date().toISOString();
+        const endMs = new Date(cpe).getTime();
+        if (userId && !Number.isNaN(endMs) && endMs <= Date.now()) {
+          await admin
+            .from("profiles")
+            .update({
+              tier: "free",
+              tier_expires_at: null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", userId);
+          await archiveExcessTripsAfterDowngrade(admin, userId);
+        }
         break;
       }
       case "invoice.payment_failed": {
         const inv = event.data.object as Stripe.Invoice;
-        const subRef = inv.subscription;
-        const subId =
-          typeof subRef === "string" ? subRef : subRef?.id ?? null;
-        if (!subId) break;
-        await admin
-          .from("user_subscriptions")
-          .update({
-            grace_until: new Date(
-              Date.now() + 3 * 24 * 60 * 60 * 1000,
-            ).toISOString(),
-            payment_status: "past_due",
-            status: "past_due",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("stripe_subscription_id", subId);
+        console.error("[stripe webhook] invoice.payment_failed", inv.id);
         break;
       }
       default:

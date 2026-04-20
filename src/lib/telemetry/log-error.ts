@@ -1,3 +1,5 @@
+import { browserUserAgent } from "@/lib/clipboard-access";
+
 export async function logClientError(
   error: Error,
   context?: Record<string, unknown>,
@@ -16,8 +18,7 @@ export async function logClientError(
         stack: error.stack,
         context,
         url: typeof window !== "undefined" ? window.location.href : null,
-        userAgent:
-          typeof navigator !== "undefined" ? navigator.userAgent : null,
+        userAgent: browserUserAgent(),
         timestamp: new Date().toISOString(),
       }),
       keepalive: true,

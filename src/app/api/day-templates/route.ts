@@ -14,8 +14,11 @@ export async function GET() {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
   const tier = await getUserTier(user.id);
-  if (tier === "day_tripper") {
-    return NextResponse.json({ error: "Navigator or Captain required." }, { status: 403 });
+  if (tier === "free") {
+    return NextResponse.json(
+      { error: "Pro or Family plan required." },
+      { status: 403 },
+    );
   }
 
   const supabase = await createClient();
@@ -61,8 +64,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
   const tier = await getUserTier(user.id);
-  if (tier === "day_tripper") {
-    return NextResponse.json({ error: "Navigator or Captain required." }, { status: 403 });
+  if (tier === "free") {
+    return NextResponse.json(
+      { error: "Pro or Family plan required." },
+      { status: 403 },
+    );
   }
 
   const body = (await req.json()) as { name?: string; payload?: unknown };

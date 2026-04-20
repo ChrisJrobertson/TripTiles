@@ -5,6 +5,7 @@ import {
   computeTripStats,
   type TripStatsSummary,
 } from "@/lib/compute-trip-stats";
+import { copyTextToClipboard } from "@/lib/clipboard-access";
 import { currencyApproximationText, formatMoney } from "@/lib/format";
 import type { Park, Trip } from "@/lib/types";
 import type { TripPayment } from "@/types/payments";
@@ -91,7 +92,7 @@ export function TripStatsCard({
   async function copyShare() {
     const text = buildTripStatsShareText(stats, destinationLabel);
     try {
-      await navigator.clipboard.writeText(text);
+      await copyTextToClipboard(text);
       onToast("Stats copied — share it with your group!");
     } catch {
       onToast("Couldn’t copy — try again.");

@@ -1,5 +1,6 @@
 "use server";
 
+import { currentUserCanCreatePayment } from "@/lib/entitlements";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type { PaymentCurrency, TripPayment } from "@/types/payments";
 import { revalidatePath } from "next/cache";
@@ -108,6 +109,15 @@ export async function createPayment(input: {
   }
   if (dueDate === undefined) {
     return { ok: false, error: "Invalid due date." };
+  }
+
+  const canAdd = await currentUserCanCreatePayment(input.tripId);
+  if (!canAdd) {
+    return {
+      ok: false,
+      error:
+        "You've reached the payment tracker limit on the Free plan. Upgrade to Pro for unlimited entries.",
+    };
   }
 
   const supabase = await createClient();

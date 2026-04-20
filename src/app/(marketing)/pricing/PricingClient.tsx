@@ -1,12 +1,11 @@
 "use client";
 
 import { showToast } from "@/lib/toast";
+import type { ProductTier } from "@/lib/product-tier-labels";
+import { formatProductTierName } from "@/lib/product-tier-labels";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-type ProductTier = "day_tripper" | "navigator" | "captain";
-type Billing = "monthly" | "yearly";
 
 type MePayload = {
   productTier: ProductTier;
@@ -14,16 +13,21 @@ type MePayload = {
   stripeCustomerId: string | null;
 };
 
-function formatTierLabel(t: ProductTier): string {
-  if (t === "day_tripper") return "Day Tripper";
-  if (t === "navigator") return "Navigator";
-  return "Captain";
-}
+type Billing = "monthly" | "yearly";
+
+export type CheckoutPriceIds = {
+  proMonth: string;
+  proYear: string;
+  familyMonth: string;
+  familyYear: string;
+};
 
 export function PricingClient({
   initialMe,
+  checkoutPriceIds,
 }: {
   initialMe: MePayload | null;
+  checkoutPriceIds: CheckoutPriceIds;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -32,14 +36,13 @@ export function PricingClient({
   const [me, setMe] = useState<MePayload | null>(initialMe);
   const [successOpen, setSuccessOpen] = useState(false);
   const [fallbackBanner, setFallbackBanner] = useState(false);
-  const [promoOpen, setPromoOpen] = useState(false);
 
   const success = searchParams.get("success") === "1";
   const cancelled = searchParams.get("cancelled") === "1";
   const successHandled = useRef(false);
 
   const refreshMe = useCallback(async () => {
-    const r = await fetch("/api/subscriptions/me", { credentials: "include" });
+    const r = await fetch("/api/account/plan", { credentials: "include" });
     if (!r.ok) return;
     const j = (await r.json()) as MePayload;
     setMe(j);
@@ -66,25 +69,21 @@ export function PricingClient({
     (async () => {
       setSuccessOpen(true);
       setFallbackBanner(false);
-      const base = await fetch("/api/subscriptions/me", { credentials: "include" });
+      const base = await fetch("/api/account/plan", { credentials: "include" });
       const baseJson = base.ok
         ? ((await base.json()) as MePayload)
-        : ({ productTier: "day_tripper" } as MePayload);
+        : ({ productTier: "free" } as MePayload);
       const startTier = baseJson.productTier;
-      await fetch("/api/subscriptions/refresh", {
-        method: "POST",
-        credentials: "include",
-      });
       for (let i = 0; i < 10; i += 1) {
         if (cancelledLocal) return;
         await new Promise((r) => setTimeout(r, 2000));
-        const r = await fetch("/api/subscriptions/me", { credentials: "include" });
+        const r = await fetch("/api/account/plan", { credentials: "include" });
         if (!r.ok) continue;
         const j = (await r.json()) as MePayload;
         setMe(j);
-        if (j.productTier !== startTier && j.productTier !== "day_tripper") {
+        if (j.productTier !== startTier && j.productTier !== "free") {
           setSuccessOpen(false);
-          showToast(`You're on ${formatTierLabel(j.productTier)}`, {
+          showToast(`You're on ${formatProductTierName(j.productTier)}`, {
             type: "success",
             debounceKey: "pricing-checkout-success",
             debounceMs: 500,
@@ -100,23 +99,44 @@ export function PricingClient({
     };
   }, [success, router]);
 
-  const navigatorPrice = useMemo(
-    () => (billing === "yearly" ? "£39.00 / year" : "£4.99 / month"),
-    [billing],
-  );
-  const captainPrice = useMemo(
-    () => (billing === "yearly" ? "£79.00 / year" : "£9.99 / month"),
+  const proPrice = useMemo(
+    () =>
+      billing === "yearly"
+        ? { main: "£39.00 / year", sub: "£3.25 per month, billed annually" }
+        : { main: "£6.99 / month", sub: "£83.88 per year if paying monthly" },
     [billing],
   );
 
-  const startCheckout = async (tier: "navigator" | "captain") => {
+  const familyPrice = useMemo(
+    () =>
+      billing === "yearly"
+        ? { main: "£69.00 / year", sub: "Great value for households" }
+        : { main: "£11.99 / month", sub: "Billed monthly, cancel anytime" },
+    [billing],
+  );
+
+  const startCheckout = async (tier: "pro" | "family") => {
     setBusy(tier);
     try {
-      const r = await fetch("/api/stripe/create-checkout-session", {
+      const resolved =
+        tier === "pro"
+          ? billing === "yearly"
+            ? checkoutPriceIds.proYear
+            : checkoutPriceIds.proMonth
+          : billing === "yearly"
+            ? checkoutPriceIds.familyYear
+            : checkoutPriceIds.familyMonth;
+      if (!resolved?.trim()) {
+        showToast("Pricing is not configured in this environment.", {
+          type: "error",
+        });
+        return;
+      }
+      const r = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ tier, billing }),
+        body: JSON.stringify({ priceId: resolved.trim() }),
       });
       const j = (await r.json()) as { url?: string; error?: string };
       if (!r.ok || !j.url) {
@@ -132,7 +152,7 @@ export function PricingClient({
   const openPortal = async () => {
     setBusy("portal");
     try {
-      const r = await fetch("/api/stripe/create-portal-session", {
+      const r = await fetch("/api/customer-portal", {
         method: "POST",
         credentials: "include",
       });
@@ -147,7 +167,7 @@ export function PricingClient({
     }
   };
 
-  const current = me?.productTier ?? "day_tripper";
+  const current = me?.productTier ?? "free";
 
   return (
     <div className="w-full">
@@ -162,7 +182,7 @@ export function PricingClient({
               Welcome aboard
             </p>
             <p className="mt-3 font-sans text-sm text-royal/80">
-              Tripp just got smarter ✨ We&apos;re confirming your subscription…
+              We&apos;re confirming your subscription with Smart Plan access…
             </p>
             {fallbackBanner ? (
               <p className="mt-4 font-sans text-xs text-royal/70">
@@ -199,7 +219,7 @@ export function PricingClient({
             }`}
             onClick={() => setBilling("yearly")}
           >
-            Yearly (best value)
+            Yearly (default)
           </button>
           <button
             type="button"
@@ -217,104 +237,132 @@ export function PricingClient({
 
       <div className="grid gap-6 md:grid-cols-3">
         <article className="flex flex-col rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
-          <h2 className="font-serif text-xl font-semibold text-royal">
-            Day Tripper
-          </h2>
-          <p className="mt-4 font-serif text-3xl font-semibold text-royal">Free</p>
+          <h2 className="font-serif text-xl font-semibold text-royal">Free</h2>
+          <p className="mt-4 font-serif text-3xl font-semibold text-royal">
+            £0 <span className="text-lg font-medium text-royal/70">/ forever</span>
+          </p>
           <p className="mt-3 font-sans text-sm leading-relaxed text-royal/75">
-            Plan one trip at a time, the classic way. No AI — just you and your
-            tiles.
+            Plan one trip, see what TripTiles does.
           </p>
           <div className="mt-6 flex flex-1 flex-col justify-end">
-            {current === "day_tripper" ? (
+            {current === "free" && me ? (
               <span className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-royal/15 bg-cream px-4 py-2 text-center font-sans text-sm font-semibold text-royal/60">
-                Current plan
+                Your current plan
               </span>
             ) : (
               <Link
-                href="/feedback"
+                href="/signup"
                 className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-royal/20 bg-white px-4 py-2 text-center font-sans text-sm font-semibold text-royal hover:bg-cream"
               >
-                Downgrade via support
+                Start free
               </Link>
             )}
           </div>
         </article>
 
         <article className="flex flex-col rounded-2xl border border-gold/50 bg-white p-6 shadow-md ring-2 ring-gold/20">
-          <h2 className="font-serif text-xl font-semibold text-royal">
-            Navigator
-          </h2>
-          <p className="mt-4 font-serif text-3xl font-semibold text-royal">
-            {navigatorPrice}
+          <p className="font-sans text-[11px] font-bold uppercase tracking-wide text-royal">
+            <span className="rounded-full bg-royal px-2 py-0.5 text-cream">
+              Most popular
+            </span>
           </p>
-          {billing === "yearly" ? (
-            <p className="mt-1 font-sans text-xs text-emerald-700">
-              Save vs paying monthly for a year.
-            </p>
-          ) : null}
+          <h2 className="mt-2 font-serif text-xl font-semibold text-royal">Pro</h2>
+          <p className="mt-4 font-serif text-3xl font-semibold text-royal">
+            {proPrice.main}
+          </p>
+          <p className="mt-1 font-sans text-xs text-royal/65">{proPrice.sub}</p>
           <p className="mt-3 font-sans text-sm leading-relaxed text-royal/75">
-            Tripp lends a hand. Five trips at once, full budgets, full checklists,
-            14 days free.
+            Unlimited trips, full Smart Plan, clean PDFs.
           </p>
           <button
             type="button"
-            disabled={Boolean(busy) || current === "navigator"}
-            onClick={() => void startCheckout("navigator")}
+            disabled={Boolean(busy) || current === "pro"}
+            onClick={() => void startCheckout("pro")}
             className="mt-6 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-royal px-4 py-2.5 font-sans text-sm font-semibold text-cream shadow-sm transition hover:bg-royal/90 disabled:opacity-50"
           >
-            {current === "navigator"
-              ? "Current plan"
-              : busy === "navigator"
+            {current === "pro"
+              ? "Your current plan"
+              : busy === "pro"
                 ? "Redirecting…"
-                : "Upgrade to Navigator"}
+                : "Get Pro"}
           </button>
         </article>
 
         <article className="flex flex-col rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
-          <h2 className="font-serif text-xl font-semibold text-royal">Captain</h2>
-          <p className="mt-4 font-serif text-3xl font-semibold text-royal">
-            {captainPrice}
+          <p className="font-sans text-[11px] font-bold uppercase tracking-wide text-gold">
+            <span className="rounded-full bg-gold/25 px-2 py-0.5 text-royal">
+              Best for families
+            </span>
           </p>
-          {billing === "yearly" ? (
-            <p className="mt-1 font-sans text-xs text-emerald-700">
-              Best value for frequent planners.
-            </p>
-          ) : null}
+          <h2 className="mt-2 font-serif text-xl font-semibold text-royal">
+            Family
+          </h2>
+          <p className="mt-4 font-serif text-3xl font-semibold text-royal">
+            {familyPrice.main}
+          </p>
+          <p className="mt-1 font-sans text-xs text-royal/65">{familyPrice.sub}</p>
           <p className="mt-3 font-sans text-sm leading-relaxed text-royal/75">
-            Tripp at full power. Unlimited trips, early access to new features,
-            priority support.
+            Everything in Pro, plus share with up to four family members.
           </p>
           <button
             type="button"
-            disabled={Boolean(busy) || current === "captain"}
-            onClick={() => void startCheckout("captain")}
+            disabled={Boolean(busy) || current === "family"}
+            onClick={() => void startCheckout("family")}
             className="mt-6 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-gold px-4 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition hover:bg-gold/90 disabled:opacity-50"
           >
-            {current === "captain"
-              ? "Current plan"
-              : busy === "captain"
+            {current === "family"
+              ? "Your current plan"
+              : busy === "family"
                 ? "Redirecting…"
-                : "Upgrade to Captain"}
+                : "Get Family"}
           </button>
         </article>
       </div>
 
-      <div className="mt-10 rounded-xl border border-royal/10 bg-white/80 p-4">
-        <button
-          type="button"
-          className="flex min-h-[44px] w-full items-center justify-between font-sans text-sm font-semibold text-royal"
-          onClick={() => setPromoOpen((v) => !v)}
-        >
-          <span>Have a promo code?</span>
-          <span className="text-royal/50">{promoOpen ? "▲" : "▼"}</span>
-        </button>
-        {promoOpen ? (
-          <p className="mt-2 font-sans text-xs text-royal/65">
-            Enter <strong>LAUNCH50</strong> on the Stripe Checkout page (after you
-            choose a plan) — promotion codes are redeemed there, not on this screen.
-          </p>
-        ) : null}
+      <div className="mt-12 overflow-x-auto rounded-xl border border-royal/10 bg-white/90">
+        <table className="w-full min-w-[520px] border-collapse font-sans text-sm text-royal">
+          <caption className="sr-only">Plan comparison</caption>
+          <thead>
+            <tr className="border-b border-royal/10 bg-cream/80 text-left">
+              <th className="px-4 py-3 font-semibold">Feature</th>
+              <th className="px-4 py-3 font-semibold">Free</th>
+              <th className="px-4 py-3 font-semibold">Pro</th>
+              <th className="px-4 py-3 font-semibold">Family</th>
+            </tr>
+          </thead>
+          <tbody className="text-royal/85">
+            <tr className="border-b border-royal/10">
+              <td className="px-4 py-2">Active trips</td>
+              <td className="px-4 py-2">1</td>
+              <td className="px-4 py-2">Unlimited</td>
+              <td className="px-4 py-2">Unlimited</td>
+            </tr>
+            <tr className="border-b border-royal/10">
+              <td className="px-4 py-2">Smart Plan (AI)</td>
+              <td className="px-4 py-2">3 lifetime</td>
+              <td className="px-4 py-2">Unlimited</td>
+              <td className="px-4 py-2">Unlimited</td>
+            </tr>
+            <tr className="border-b border-royal/10">
+              <td className="px-4 py-2">AI Day Planner</td>
+              <td className="px-4 py-2">—</td>
+              <td className="px-4 py-2">Included</td>
+              <td className="px-4 py-2">Included</td>
+            </tr>
+            <tr className="border-b border-royal/10">
+              <td className="px-4 py-2">PDF export</td>
+              <td className="px-4 py-2">Watermarked</td>
+              <td className="px-4 py-2">Clean</td>
+              <td className="px-4 py-2">Clean</td>
+            </tr>
+            <tr>
+              <td className="px-4 py-2">Family sharing</td>
+              <td className="px-4 py-2">—</td>
+              <td className="px-4 py-2">—</td>
+              <td className="px-4 py-2">Up to 4 members</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       {me?.stripeCustomerId ? (

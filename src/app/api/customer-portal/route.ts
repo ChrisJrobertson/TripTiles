@@ -1,4 +1,4 @@
-import { getStripe } from "@/lib/stripe-server";
+import { getStripeClient } from "@/lib/stripe/client";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -13,15 +13,19 @@ export async function POST() {
 
     const supabase = await createClient();
     const { data: row, error } = await supabase
-      .from("profiles")
-      .select("stripe_customer_id")
-      .eq("id", user.id)
+      .from("purchases")
+      .select("provider_customer_id, created_at")
+      .eq("user_id", user.id)
+      .eq("provider", "stripe")
+      .not("provider_customer_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
-    if (error || !row?.stripe_customer_id?.trim()) {
+    if (error || !row?.provider_customer_id?.trim()) {
       return NextResponse.json(
-        { error: "No Stripe customer on file yet." },
-        { status: 400 },
+        { error: "No billing account on file yet." },
+        { status: 404 },
       );
     }
 
@@ -29,22 +33,22 @@ export async function POST() {
       process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ??
       "https://www.triptiles.app";
 
-    const stripe = getStripe();
-    const session = await stripe.billingPortal.sessions.create({
-      customer: row.stripe_customer_id.trim(),
-      return_url: `${siteUrl}/planner`,
+    const stripe = getStripeClient();
+    const portal = await stripe.billingPortal.sessions.create({
+      customer: row.provider_customer_id.trim(),
+      return_url: `${siteUrl}/settings`,
     });
 
-    if (!session.url) {
+    if (!portal.url) {
       return NextResponse.json(
         { error: "Stripe did not return a portal URL." },
         { status: 502 },
       );
     }
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({ url: portal.url });
   } catch (e) {
-    console.error("[stripe] create-portal-session", e);
+    console.error("[customer-portal]", e);
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Portal session failed." },
       { status: 500 },

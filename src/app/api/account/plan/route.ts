@@ -26,9 +26,9 @@ export async function GET() {
       stripeCustomerId: profile?.stripe_customer_id ?? null,
     });
   } catch (e) {
-    console.error("[subscriptions/me]", e);
+    console.error("[account/plan]", e);
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Failed to load subscription." },
+      { error: e instanceof Error ? e.message : "Failed to load plan." },
       { status: 500 },
     );
   }

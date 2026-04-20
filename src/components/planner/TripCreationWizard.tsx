@@ -27,7 +27,7 @@ export type TripCreationWizardProps = {
   onCancel: () => void;
   /** Called after the trip is created successfully (closes planner overlay). */
   onTripCreated?: () => void;
-  /** Server hit active-trip cap (Navigator/Day Tripper). */
+  /** Server hit active-trip cap (Free vs paid). */
   onTripTierLimit?: () => void;
   /** Full-page onboarding vs modal overlay from planner. */
   variant?: "page" | "modal";

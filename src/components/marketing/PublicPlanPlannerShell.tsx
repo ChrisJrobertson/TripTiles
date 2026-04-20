@@ -6,6 +6,7 @@ import {
   plannerAiDayCrowdNotes,
   plannerUserDayNotes,
 } from "@/lib/planner-note-maps";
+import { copyTextToClipboard } from "@/lib/clipboard-access";
 import { normaliseThemeKey, plannerThemeStyleVars } from "@/lib/themes";
 import type { Park, Trip } from "@/lib/types";
 import { useMemo } from "react";
@@ -58,7 +59,7 @@ export function PublicPlanPlannerShell({ trip, parks, shareUrl }: Props) {
         plannerRegionId={trip.region_id}
         temperatureUnit="c"
         onMenuShare={() => {
-          void navigator.clipboard?.writeText(shareUrl);
+          void copyTextToClipboard(shareUrl);
         }}
       />
     </div>

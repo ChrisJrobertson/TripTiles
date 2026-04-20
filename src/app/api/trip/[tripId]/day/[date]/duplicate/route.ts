@@ -27,9 +27,9 @@ export async function POST(
   const source =
     body.source === "recurring-weekday" ? "recurring-weekday" : "specific";
 
-  if (source === "recurring-weekday" && tier === "day_tripper") {
+  if (source === "recurring-weekday" && tier === "free") {
     return NextResponse.json(
-      { error: "Navigator or Captain required for recurring duplicate." },
+      { error: "Pro or Family plan required for recurring duplicate." },
       { status: 403 },
     );
   }

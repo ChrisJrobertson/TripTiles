@@ -67,6 +67,7 @@ import { formatUndoSnapshotHint } from "@/lib/date-helpers";
 import { buildSurpriseDayPlan } from "@/lib/surprise-day";
 import { isCruisePaletteTileName } from "@/lib/cruise-tiles";
 import { parkMatchesPlannerRegion } from "@/lib/park-matches-planner-region";
+import { copyTextToClipboard } from "@/lib/clipboard-access";
 import {
   sleep,
   SMART_PLAN_CLIENT_TIMEOUT_MS,
@@ -177,7 +178,7 @@ const ASSIGN_DEBOUNCE_MS = 450;
 const SAVE_FLASH_MS = 500;
 
 function isFreeTierForTripLimit(tier: Tier): boolean {
-  return tier === "day_tripper";
+  return tier === "free";
 }
 
 function shouldBlockNewTripWizard(
@@ -656,7 +657,7 @@ export function PlannerClient({
     [],
   );
 
-  const timelineUnlocked = productTier !== "day_tripper";
+  const timelineUnlocked = productTier !== "free";
 
   const shellThemeStyle = useMemo(
     () =>
@@ -867,7 +868,7 @@ export function PlannerClient({
     const slug = t?.public_slug?.trim();
     const base = siteUrl.replace(/\/$/, "");
     const url = slug ? `${base}/plans/${slug}` : window.location.href;
-    void navigator.clipboard?.writeText(url);
+    void copyTextToClipboard(url);
     showToast("Link copied");
   }, [activeTripId, trips, siteUrl]);
 
@@ -1081,7 +1082,7 @@ export function PlannerClient({
             setTierLimitVariant("ai");
             setTierLimitReason(
               res.message ||
-                "Tripp is not included on Day Tripper. Upgrade to Navigator or Captain on Pricing.",
+                "Smart Plan is not included on the Free plan. Upgrade on Pricing.",
             );
             setTierLimitOpen(true);
             return;
@@ -1089,7 +1090,7 @@ export function PlannerClient({
           if (res.error === "TIER_LIMIT") {
             setTierLimitVariant("ai");
             setTierLimitReason(
-              "Smart Plan is not available on your current plan. Check Pricing for Navigator or Captain.",
+              "Smart Plan is not available on your current plan. See Pricing for Pro or Family.",
             );
             setTierLimitOpen(true);
             return;
@@ -1192,13 +1193,13 @@ export function PlannerClient({
             setTierLimitVariant("ai");
             setTierLimitReason(
               res.message ||
-                "Tripp is not included on Day Tripper. Upgrade to Navigator or Captain on Pricing.",
+                "Smart Plan is not included on the Free plan. Upgrade on Pricing.",
             );
             setTierLimitOpen(true);
           } else if (res.error === "TIER_LIMIT") {
             setTierLimitVariant("ai");
             setTierLimitReason(
-              "Smart Plan is not available on your current plan. Check Pricing for Navigator or Captain.",
+              "Smart Plan is not available on your current plan. See Pricing for Pro or Family.",
             );
             setTierLimitOpen(true);
           } else {
@@ -1721,7 +1722,7 @@ export function PlannerClient({
         freeTripLimit={1}
         planBadgeLabel={productPlanLabel}
         activeTripCap={maxActiveTripCap}
-        showUpgradeNavCta={productTier === "day_tripper"}
+        showUpgradeNavCta={productTier === "free"}
         stripeCustomerId={stripeCustomerId}
       />
 
@@ -1840,7 +1841,7 @@ export function PlannerClient({
                   setTierLimitVariant("trips");
                   setTierLimitReason(
                     maxActiveTripCap === 1
-                      ? "Day Tripper includes one active trip. Move to Navigator or Captain on Pricing for more."
+                      ? "Free includes one active trip. Upgrade to Pro or Family on Pricing for more."
                       : `Your plan allows ${maxActiveTripCap} active trips. Archive one or upgrade on Pricing.`,
                   );
                   setTierLimitOpen(true);
@@ -2287,7 +2288,7 @@ export function PlannerClient({
               setTierLimitVariant("trips");
               setTierLimitReason(
                 maxActiveTripCap === 1
-                  ? "Day Tripper includes one active trip. Move to Navigator or Captain on Pricing for more."
+                  ? "Free includes one active trip. Upgrade to Pro or Family on Pricing for more."
                   : `Your plan allows ${maxActiveTripCap} active trips. Archive one or upgrade on Pricing.`,
               );
               setTierLimitOpen(true);

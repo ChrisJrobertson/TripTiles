@@ -15,9 +15,9 @@ export async function POST(
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
   const tier = await getUserTier(user.id);
-  if (tier === "day_tripper") {
+  if (tier === "free") {
     return NextResponse.json(
-      { error: "Navigator or Captain required." },
+      { error: "Pro or Family plan required." },
       { status: 403 },
     );
   }
