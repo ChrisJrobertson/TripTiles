@@ -10,6 +10,6 @@ export function getResend(): Resend {
 }
 
 /** Transactional sender — must match a verified domain in Resend. */
-export const FROM_ADDRESS = "TripTiles <noreply@triptiles.com>";
+export const FROM_ADDRESS = "TripTiles <noreply@triptiles.app>";
 /** Where human replies to automated mail should land. */
-export const REPLY_TO_HELLO = "hello@triptiles.com";
+export const REPLY_TO_HELLO = "hello@triptiles.app";

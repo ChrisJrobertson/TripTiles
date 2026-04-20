@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     const admin = createServiceRoleClient();
     await admin.from("feedback").insert({
       user_id: null,
-      anonymous_email: "noreply@triptiles.com",
+      anonymous_email: "noreply@triptiles.app",
       category: "bug",
       message: `[AUTO-ERROR] ${msg}\n\nStack:\n${stack}\n\nContext:\n${ctx}\n\nURL: ${body.url ?? ""}`,
       page_url: body.url ?? null,

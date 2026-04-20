@@ -6,123 +6,145 @@ export type RetailTier = "free" | "pro" | "family";
 /** @deprecated Prefer `RetailTier`; kept for legacy call sites. */
 export type Tier = UserTier;
 
-export interface TierConfig {
+export interface TierFeatures {
+  max_trips: number | null;
+  /** @deprecated Display only; Smart Plan limits use `max_smart_plan_lifetime`. */
+  max_ai_per_trip: number | null;
+  max_smart_plan_lifetime: number | null;
+  max_custom_tiles: number | null;
+  pdf_watermark: boolean;
+  pdf_design: "standard";
+  ai_model: "claude-haiku-4-5";
+  family_sharing: boolean;
+  max_family_members: number;
+  priority_support: boolean;
+  ai_day_planner: boolean;
+  max_ride_priorities_per_trip: number | null;
+  max_payments_per_trip: number | null;
+  public_share: boolean;
+}
+
+interface TierConfigBase {
   id: RetailTier;
   name: string;
   /** One-off display price (legacy); prefer monthly/annual subscription fields. */
   price_gbp: number;
   price_pence: number;
-  /** GBP/month when billed monthly (paid tiers). */
-  monthlyGbp?: number;
-  /** GBP/year when billed annually (paid tiers). */
-  annualGbp?: number;
-  /** Saving vs twelve monthly payments at the monthly rate. */
-  annualSavingsVsMonthlyGbp?: number;
   description: string;
-  features: {
-    max_trips: number | null;
-    /** @deprecated Display only; Smart Plan limits use `max_smart_plan_lifetime`. */
-    max_ai_per_trip: number | null;
-    max_smart_plan_lifetime: number | null;
-    max_custom_tiles: number | null;
-    pdf_watermark: boolean;
-    pdf_design: "standard";
-    ai_model: "claude-haiku-4-5";
-    family_sharing: boolean;
-    max_family_members: number;
-    priority_support: boolean;
-    ai_day_planner: boolean;
-    max_ride_priorities_per_trip: number | null;
-    max_payments_per_trip: number | null;
-    public_share: boolean;
-  };
+  features: TierFeatures;
   badge_emoji: string;
   achievement_key: string | null;
 }
 
-export const TIERS: Record<RetailTier, TierConfig> = {
-  free: {
-    id: "free",
-    name: "Free",
-    price_gbp: 0,
-    price_pence: 0,
-    description: "Plan one trip and try Smart Plan",
-    features: {
-      max_trips: 1,
-      max_ai_per_trip: 5,
-      max_smart_plan_lifetime: 5,
-      max_custom_tiles: 5,
-      pdf_watermark: true,
-      pdf_design: "standard",
-      ai_model: "claude-haiku-4-5",
-      family_sharing: false,
-      max_family_members: 0,
-      priority_support: false,
-      ai_day_planner: false,
-      max_ride_priorities_per_trip: 5,
-      max_payments_per_trip: 3,
-      public_share: false,
-    },
-    badge_emoji: "✈️",
-    achievement_key: null,
+/** Retail tier config. Paid tiers always include GBP subscription list prices. */
+export type TierConfig =
+  | (TierConfigBase & { id: "free" })
+  | (TierConfigBase & {
+      id: "pro";
+      monthlyGbp: number;
+      annualGbp: number;
+      annualSavingsVsMonthlyGbp: number;
+    })
+  | (TierConfigBase & {
+      id: "family";
+      monthlyGbp: number;
+      annualGbp: number;
+      annualSavingsVsMonthlyGbp: number;
+    });
+
+export type FreeTierConfig = Extract<TierConfig, { id: "free" }>;
+export type ProTierConfig = Extract<TierConfig, { id: "pro" }>;
+export type FamilyTierConfig = Extract<TierConfig, { id: "family" }>;
+
+const freeTier: FreeTierConfig = {
+  id: "free",
+  name: "Free",
+  price_gbp: 0,
+  price_pence: 0,
+  description: "Plan one trip and try Smart Plan",
+  features: {
+    max_trips: 1,
+    max_ai_per_trip: 5,
+    max_smart_plan_lifetime: 5,
+    max_custom_tiles: 5,
+    pdf_watermark: true,
+    pdf_design: "standard",
+    ai_model: "claude-haiku-4-5",
+    family_sharing: false,
+    max_family_members: 0,
+    priority_support: false,
+    ai_day_planner: false,
+    max_ride_priorities_per_trip: 5,
+    max_payments_per_trip: 3,
+    public_share: false,
   },
-  pro: {
-    id: "pro",
-    name: "Pro",
-    price_gbp: 4.99,
-    price_pence: 499,
-    monthlyGbp: 4.99,
-    annualGbp: 39.99,
-    annualSavingsVsMonthlyGbp: 19.89,
-    description: "Unlimited trips, full Smart Plan, clean PDFs",
-    features: {
-      max_trips: null,
-      max_ai_per_trip: null,
-      max_smart_plan_lifetime: null,
-      max_custom_tiles: null,
-      pdf_watermark: false,
-      pdf_design: "standard",
-      ai_model: "claude-haiku-4-5",
-      family_sharing: false,
-      max_family_members: 0,
-      priority_support: false,
-      ai_day_planner: true,
-      max_ride_priorities_per_trip: null,
-      max_payments_per_trip: null,
-      public_share: true,
-    },
-    badge_emoji: "⭐",
-    achievement_key: "upgraded_pro",
-  },
-  family: {
-    id: "family",
-    name: "Family",
-    price_gbp: 7.99,
-    price_pence: 799,
-    monthlyGbp: 7.99,
-    annualGbp: 59.99,
-    annualSavingsVsMonthlyGbp: 35.89,
-    description: "Everything in Pro, plus share with up to four family members",
-    features: {
-      max_trips: null,
-      max_ai_per_trip: null,
-      max_smart_plan_lifetime: null,
-      max_custom_tiles: null,
-      pdf_watermark: false,
-      pdf_design: "standard",
-      ai_model: "claude-haiku-4-5",
-      family_sharing: true,
-      max_family_members: 4,
-      priority_support: false,
-      ai_day_planner: true,
-      max_ride_priorities_per_trip: null,
-      max_payments_per_trip: null,
-      public_share: true,
-    },
-    badge_emoji: "👨‍👩‍👧‍👦",
-    achievement_key: "upgraded_family",
-  },
+  badge_emoji: "✈️",
+  achievement_key: null,
 };
+
+const proTier: ProTierConfig = {
+  id: "pro",
+  name: "Pro",
+  price_gbp: 4.99,
+  price_pence: 499,
+  monthlyGbp: 4.99,
+  annualGbp: 39.99,
+  annualSavingsVsMonthlyGbp: 19.89,
+  description: "Unlimited trips, full Smart Plan, clean PDFs",
+  features: {
+    max_trips: null,
+    max_ai_per_trip: null,
+    max_smart_plan_lifetime: null,
+    max_custom_tiles: null,
+    pdf_watermark: false,
+    pdf_design: "standard",
+    ai_model: "claude-haiku-4-5",
+    family_sharing: false,
+    max_family_members: 0,
+    priority_support: false,
+    ai_day_planner: true,
+    max_ride_priorities_per_trip: null,
+    max_payments_per_trip: null,
+    public_share: true,
+  },
+  badge_emoji: "⭐",
+  achievement_key: "upgraded_pro",
+};
+
+const familyTier: FamilyTierConfig = {
+  id: "family",
+  name: "Family",
+  price_gbp: 7.99,
+  price_pence: 799,
+  monthlyGbp: 7.99,
+  annualGbp: 59.99,
+  annualSavingsVsMonthlyGbp: 35.89,
+  description: "Everything in Pro, plus share with up to four family members",
+  features: {
+    max_trips: null,
+    max_ai_per_trip: null,
+    max_smart_plan_lifetime: null,
+    max_custom_tiles: null,
+    pdf_watermark: false,
+    pdf_design: "standard",
+    ai_model: "claude-haiku-4-5",
+    family_sharing: true,
+    max_family_members: 4,
+    priority_support: false,
+    ai_day_planner: true,
+    max_ride_priorities_per_trip: null,
+    max_payments_per_trip: null,
+    public_share: true,
+  },
+  badge_emoji: "👨‍👩‍👧‍👦",
+  achievement_key: "upgraded_family",
+};
+
+export const TIERS = {
+  free: freeTier,
+  pro: proTier,
+  family: familyTier,
+} satisfies Record<RetailTier, TierConfig>;
 
 export const PUBLIC_TIERS: RetailTier[] = ["free", "pro", "family"];
 
@@ -174,16 +196,13 @@ export function renewalPriceLabelGbp(
   billingInterval: string | null | undefined,
 ): string | null {
   const rt = normalizeToRetailTier(product ?? "free");
-  if (rt === "free") return null;
   const cfg = TIERS[rt];
+  if (cfg.id === "free") return null;
   const interval = billingInterval === "year" ? "year" : "month";
-  if (interval === "year" && cfg.annualGbp != null) {
+  if (interval === "year") {
     return `£${cfg.annualGbp.toFixed(2)}/year`;
   }
-  if (cfg.monthlyGbp != null) {
-    return `£${cfg.monthlyGbp.toFixed(2)}/month`;
-  }
-  return null;
+  return `£${cfg.monthlyGbp.toFixed(2)}/month`;
 }
 
 export function isPaidRetailTier(tier: RetailTier): boolean {

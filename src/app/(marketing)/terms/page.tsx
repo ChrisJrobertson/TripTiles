@@ -215,10 +215,10 @@ export default function TermsPage() {
         <h2>14. Contact</h2>
         <p>
           General:{" "}
-          <a href="mailto:hello@triptiles.com">hello@triptiles.com</a>
+          <a href="mailto:hello@triptiles.app">hello@triptiles.app</a>
           <br />
           Data protection:{" "}
-          <a href="mailto:privacy@triptiles.com">privacy@triptiles.com</a>
+          <a href="mailto:privacy@triptiles.app">privacy@triptiles.app</a>
         </p>
       </section>
     </LegalArticle>

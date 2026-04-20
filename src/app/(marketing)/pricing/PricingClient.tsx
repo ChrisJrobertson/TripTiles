@@ -104,47 +104,31 @@ export function PricingClient({
   const family = TIERS.family;
 
   const proPrice = useMemo(() => {
-    if (billing === "yearly" && pro.annualGbp != null && pro.monthlyGbp != null) {
+    if (billing === "yearly") {
       return {
         main: `£${pro.annualGbp.toFixed(2)}/year`,
         sub: `or £${pro.monthlyGbp.toFixed(2)}/month`,
-        save:
-          pro.annualSavingsVsMonthlyGbp != null
-            ? `Save £${pro.annualSavingsVsMonthlyGbp.toFixed(2)}/year`
-            : null,
+        save: `Save £${pro.annualSavingsVsMonthlyGbp.toFixed(2)}/year`,
       };
     }
     return {
-      main: `£${pro.monthlyGbp?.toFixed(2) ?? "4.99"}/month`,
-      sub:
-        pro.annualGbp != null
-          ? `or £${pro.annualGbp.toFixed(2)}/year billed annually`
-          : "",
+      main: `£${pro.monthlyGbp.toFixed(2)}/month`,
+      sub: `or £${pro.annualGbp.toFixed(2)}/year billed annually`,
       save: null,
     };
   }, [billing, pro]);
 
   const familyPrice = useMemo(() => {
-    if (
-      billing === "yearly" &&
-      family.annualGbp != null &&
-      family.monthlyGbp != null
-    ) {
+    if (billing === "yearly") {
       return {
         main: `£${family.annualGbp.toFixed(2)}/year`,
         sub: `or £${family.monthlyGbp.toFixed(2)}/month`,
-        save:
-          family.annualSavingsVsMonthlyGbp != null
-            ? `Save £${family.annualSavingsVsMonthlyGbp.toFixed(2)}/year`
-            : null,
+        save: `Save £${family.annualSavingsVsMonthlyGbp.toFixed(2)}/year`,
       };
     }
     return {
-      main: `£${family.monthlyGbp?.toFixed(2) ?? "7.99"}/month`,
-      sub:
-        family.annualGbp != null
-          ? `or £${family.annualGbp.toFixed(2)}/year billed annually`
-          : "",
+      main: `£${family.monthlyGbp.toFixed(2)}/month`,
+      sub: `or £${family.annualGbp.toFixed(2)}/year billed annually`,
       save: null,
     };
   }, [billing, family]);
@@ -267,7 +251,7 @@ export function PricingClient({
         </div>
         {billing === "yearly" ? (
           <span className="rounded-full bg-gold/25 px-3 py-1 font-sans text-xs font-semibold text-royal">
-            Save up to £35.89
+            Save up to £{TIERS.family.annualSavingsVsMonthlyGbp.toFixed(2)}
           </span>
         ) : null}
       </div>

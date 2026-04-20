@@ -80,7 +80,7 @@ async function reportAiGenAutoError(params: {
     const contextText = JSON.stringify(params.context).slice(0, 2000);
     await admin.from("feedback").insert({
       user_id: null,
-      anonymous_email: "noreply@triptiles.com",
+      anonymous_email: "noreply@triptiles.app",
       category: "bug",
       message: `[AUTO-ERROR][ai-gen] ${params.message.slice(0, 2000)}\n\nStack:\n${stackText.slice(0, 8000)}\n\nContext:\n${contextText}`,
       page_url: null,

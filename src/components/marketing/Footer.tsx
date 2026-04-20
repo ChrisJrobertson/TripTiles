@@ -81,7 +81,7 @@ export function MarketingFooter() {
             </li>
             <li>
               <a
-                href="mailto:hello@triptiles.com"
+                href="mailto:hello@triptiles.app"
                 className="hover:text-royal"
               >
                 Contact

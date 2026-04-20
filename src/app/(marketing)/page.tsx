@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   },
 };
 
-const FEATURES = [
+const FEATURES_STATIC = [
   {
     icon: "🤖",
     title: "Smart Plan",
@@ -59,12 +59,7 @@ const FEATURES = [
     title: "300+ parks",
     body: "Disney, Universal, Legoland, SeaWorld, and regional favourites.",
   },
-  {
-    icon: "💳",
-    title: "Fair subscriptions",
-    body: "From £4.99 a month on Pro — cancel anytime. Annual plans save up to £35.89.",
-  },
-];
+] as const;
 
 const FAQ = [
   {
@@ -101,6 +96,15 @@ export default async function MarketingHomePage() {
   const tierPro = TIERS.pro;
   const tierFamily = TIERS.family;
 
+  const features = [
+    ...FEATURES_STATIC,
+    {
+      icon: "💳",
+      title: "Fair subscriptions",
+      body: `From £${tierPro.monthlyGbp.toFixed(2)} a month on Pro — cancel anytime. Annual plans save up to £${tierFamily.annualSavingsVsMonthlyGbp.toFixed(2)}.`,
+    },
+  ];
+
   return (
     <main className="flex flex-1 flex-col">
       <section className="relative overflow-hidden px-6 pb-16 pt-12 md:pb-24 md:pt-16">
@@ -122,8 +126,8 @@ export default async function MarketingHomePage() {
             </h1>
             <p className="mt-6 max-w-xl font-sans text-lg leading-relaxed text-royal/80">
               Replace 10 hours of planning with one beautiful PDF. Free to try,
-              from £4.99/month when you&apos;re ready. Disney, Universal, and
-              300+ parks worldwide.
+              from £{tierPro.monthlyGbp.toFixed(2)}/month when you&apos;re ready.
+              Disney, Universal, and 300+ parks worldwide.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <Link
@@ -220,7 +224,7 @@ export default async function MarketingHomePage() {
             Everything you need
           </h2>
           <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.map((f) => (
+            {features.map((f) => (
               <li
                 key={f.title}
                 className="rounded-2xl border border-royal/10 bg-white p-5 shadow-sm"
@@ -329,9 +333,9 @@ export default async function MarketingHomePage() {
             Simple pricing
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-center font-sans text-sm leading-relaxed text-royal/75">
-            From £{tierPro.monthlyGbp?.toFixed(2) ?? "4.99"} a month. Cancel
-            anytime. Annual plans save up to £
-            {tierFamily.annualSavingsVsMonthlyGbp?.toFixed(2) ?? "35.89"}. Free
+            From £{tierPro.monthlyGbp.toFixed(2)} a month. Cancel anytime.
+            Annual plans save up to £
+            {tierFamily.annualSavingsVsMonthlyGbp.toFixed(2)}. Free
             forever for one trip.
           </p>
           <div className="mt-10 grid gap-6 sm:grid-cols-3">
@@ -341,7 +345,7 @@ export default async function MarketingHomePage() {
               <p className="mt-3 font-sans text-xs text-royal/70">
                 {tierFree.features.max_trips ?? 1} trip ·{" "}
                 {tierFree.features.max_smart_plan_lifetime ?? 5} Smart Plan runs
-                (lifetime)
+                total
               </p>
             </div>
             <div className="rounded-2xl border-2 border-gold/50 bg-white p-6 text-center shadow-md">
@@ -352,10 +356,10 @@ export default async function MarketingHomePage() {
                 Pro
               </p>
               <p className="mt-2 font-serif text-2xl font-semibold text-gold">
-                £{tierPro.annualGbp?.toFixed(2) ?? "39.99"}/year
+                £{tierPro.annualGbp.toFixed(2)}/year
               </p>
               <p className="mt-1 font-sans text-xs text-royal/60">
-                or £{tierPro.monthlyGbp?.toFixed(2) ?? "4.99"}/month
+                or £{tierPro.monthlyGbp.toFixed(2)}/month
               </p>
               <p className="mt-3 font-sans text-xs text-royal/70">
                 Unlimited trips, Smart Plan, and custom tiles
@@ -366,10 +370,10 @@ export default async function MarketingHomePage() {
                 Family
               </p>
               <p className="mt-2 font-serif text-2xl font-semibold text-gold">
-                £{tierFamily.annualGbp?.toFixed(2) ?? "59.99"}/year
+                £{tierFamily.annualGbp.toFixed(2)}/year
               </p>
               <p className="mt-1 font-sans text-xs text-royal/60">
-                or £{tierFamily.monthlyGbp?.toFixed(2) ?? "7.99"}/month
+                or £{tierFamily.monthlyGbp.toFixed(2)}/month
               </p>
               <p className="mt-3 font-sans text-xs text-royal/70">
                 Share planning with family members
