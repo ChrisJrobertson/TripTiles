@@ -13,6 +13,10 @@ import {
 } from "@/lib/ai-plan-guardrails";
 import { addDays, formatDateKey, parseDate } from "@/lib/date-helpers";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
+import {
+  formatDayRidePicksForPrompt,
+  formatDaySlotLinesWithTimesForPrompt,
+} from "@/lib/ai-day-prompt-context";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import type {
   Assignment,
@@ -36,6 +40,7 @@ import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { formatRegionalDiningForPrompt } from "@/data/regional-dining";
 import { formatPlanningPreferencesForPrompt } from "@/lib/planning-preferences-prompt";
 import { isNamedRestaurantPark } from "@/lib/named-restaurant-tiles";
+import { getRidePrioritiesForDay } from "@/actions/ride-priorities";
 import { assertTierAllows, tierErrorToClientPayload } from "@/lib/tier";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 const anthropic = new Anthropic({
@@ -156,6 +161,7 @@ Rules:
 - True rest = restful tiles in AM and PM both; no half-rest + full park split.
 - Dining: owl, tsr, char, specd, villa as documented.
 - Honour family notes (young children / teens / queue patience).
+- When the user message includes a day’s slot **block start times** (~HH:mm) and/or a **ride pick list** for a single date: use them only to shape a *rough* plan. Those times are informal pacing (which park when), not exact show, restaurant, or attraction times. The ride list is a wish list with guest ordering — put suggested touring order in **planner_day_notes** as a flexible draft, never in JSON "assignments" (assignments are park/dining slot IDs only). Do not state times as Lightning Lane, Genie+, Virtual Queue, or ADR bookings.
 
 Return ONLY the JSON.`;
 
@@ -212,35 +218,6 @@ function stripCodeFences(raw: string): string {
     t = t.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/m, "");
   }
   return t.trim();
-}
-
-const DAY_PROMPT_SLOTS: SlotType[] = ["am", "pm", "lunch", "dinner"];
-const DAY_PROMPT_SLOT_LABEL: Record<SlotType, string> = {
-  am: "AM",
-  pm: "PM",
-  lunch: "Lunch",
-  dinner: "Dinner",
-};
-
-/** Human-readable lines for the model: what the guest already placed on this date. */
-function summarizeExistingDayAssignmentsForPrompt(
-  trip: Trip,
-  dateKey: string | null,
-  parksById: Map<string, Park>,
-): string | null {
-  if (!dateKey?.trim()) return null;
-  const day = trip.assignments[dateKey];
-  if (!day || typeof day !== "object") return null;
-  const lines: string[] = [];
-  for (const slot of DAY_PROMPT_SLOTS) {
-    const raw = day[slot];
-    const pid = getParkIdFromSlotValue(raw);
-    if (!pid) continue;
-    const name = parksById.get(pid)?.name ?? pid;
-    lines.push(`- ${DAY_PROMPT_SLOT_LABEL[slot]}: ${name} (park id ${pid})`);
-  }
-  if (lines.length === 0) return null;
-  return lines.join("\n");
 }
 
 function allowedDateKeys(startIso: string, endIso: string): Set<string> {
@@ -420,6 +397,8 @@ function buildPlannerUserMessage(params: {
   namedRestaurantHint: string | null;
   /** Lines describing slots already on the calendar for `dateKey` (day scope). */
   existingDayPlanLines: string | null;
+  /** Must-do / if-time ride list for the day (day scope). */
+  dayRidePicksLines: string | null;
   preserveExistingSlots: boolean;
 }): string {
   const {
@@ -435,6 +414,7 @@ function buildPlannerUserMessage(params: {
     diningHint,
     namedRestaurantHint,
     existingDayPlanLines,
+    dayRidePicksLines,
     preserveExistingSlots,
   } = params;
 
@@ -464,11 +444,31 @@ function buildPlannerUserMessage(params: {
     dateKey &&
     existingDayPlanLines &&
     existingDayPlanLines.trim().length > 0
-      ? `\nCALENDAR ALREADY SET FOR ${dateKey} — the guest chose these tiles on their trip calendar before running Smart Plan:\n${existingDayPlanLines}\n${
+      ? `\nCALENDAR ALREADY SET FOR ${dateKey} — the guest chose these tiles on their trip calendar (each line includes the ~block start time for that slot — 24h, for pacing, not individual ride times):\n${existingDayPlanLines}\n${
           preserveExistingSlots
-            ? `These slots are LOCKED for this run: keep the SAME park IDs in those keys in your JSON output (repeat them exactly). Only add or change slots that are still empty on the guest's calendar. In crowd_reasoning, day_crowd_notes, and planner_day_notes, ONLY discuss parks that match this day after merge — the headline parks above plus any parks you assign in empty slots. Do NOT recommend a different headline water park or theme park for AM/PM when those slots are already filled. Dining tips must match the dining tiles if lunch/dinner are already set.\n`
-            : `The guest enabled overwrite — you may replace slots, but their current picks above reflect intent; only change a filled slot if your plan clearly improves their day while respecting their notes.\n`
+            ? `These slots are LOCKED for this run: keep the SAME park IDs in those keys in your JSON output (repeat them exactly). Only add or change slots that are still empty on the guest's calendar. In crowd_reasoning, day_crowd_notes, and planner_day_notes, ONLY discuss parks that match this day after merge — the headline parks above plus any parks you assign in empty slots. Do NOT recommend a different headline water park or theme park for AM/PM when those slots are already filled. Dining tips must match the dining tiles if lunch/dinner are already set. Use the block start times to reason about *order* of the day and when to be in which park, as a draft plan.\n`
+            : `The guest enabled overwrite — you may replace slots, but their current picks and times above reflect intent; only change a filled slot if your plan clearly improves their day while respecting their notes.\n`
         }`
+      : "";
+  const hasDaySlots = Boolean(
+    dateKey &&
+      existingDayPlanLines &&
+      existingDayPlanLines.trim().length > 0,
+  );
+  const hasDayRides = Boolean(
+    dateKey && dayRidePicksLines && dayRidePicksLines.trim().length > 0,
+  );
+  const dayPacingAndRidesBlock =
+    dateKey && (hasDaySlots || hasDayRides)
+      ? `\nDAY PACING & RIDE DRAFT (rough plan — not a fixed schedule, not reservations):\n${
+          hasDayRides
+            ? `GUEST RIDE/SHOW PICKS for ${dateKey} — list order is the guest’s order in the planner; tags show must-do vs if-time:\n${dayRidePicksLines}\n\n`
+            : ""
+        }${
+          hasDaySlots
+            ? `The ~HH:mm times are in "CALENDAR ALREADY SET" above. They are *block* start times (AM / lunch / PM / dinner) for pacing and which park when — not exact ride, show, or meal times.\n`
+            : "Park slot tiles for this day are not filled (or all empty) — you may place parks in empty slots; use the ride list to infer which parks to assign and a reasonable flow in planner_day_notes.\n"
+        }- Use CROWD_PATTERNS in **planner_day_notes** for ${dateKey} to suggest a *rough* touring order when helpful (especially when ride picks exist: e.g. which must-dos to hit first, or a land-by-land flow). Keep wording flexible; suggest swaps if waits spike. JSON "assignments" must stay park/dining slot IDs only — all ride order detail lives in planner_day_notes.\n`
       : "";
   const cruiseTilePolicy = trip.has_cruise
     ? "CRUISE TILES: This trip includes a cruise segment. Include cruise embark/disembark and ship activities where appropriate when they fit the dates."
@@ -479,11 +479,11 @@ function buildPlannerUserMessage(params: {
     return `${coreTrip}
 
 ${crowdSection}
-${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}
+${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}${dayPacingAndRidesBlock}
 
 ${
   dateKey
-    ? "DAY-SCOPED SMART PLAN — refine this single calendar day using crowd patterns. Respect locked calendar slots and notes above."
+    ? "DAY-SCOPED SMART PLAN — refine this single calendar day using crowd patterns, slot block times, and (if any) the guest ride list. Respect locked calendar slots and notes above. Treat the day as a draft plan from historic patterns, not a guarantee."
     : "SMART PLAN MODE — build a full itinerary using crowd patterns to place busier parks on historically lighter days within this window. The user did not write a long custom brief."
 }
 ${extra ? `Optional family notes from the user:\n${extra}\n` : ""}
@@ -495,7 +495,7 @@ Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and p
   return `${coreTrip}
 
 ${crowdSection}
-${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}
+${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}${dayPacingAndRidesBlock}
 
 CUSTOM PROMPT MODE — apply the traveller's preferences first, then use crowd patterns to improve date choices.
 
@@ -781,6 +781,15 @@ export async function runGenerateAIPlan(
       ? `NAMED_RESTAURANT_TILES: The following named restaurants are available as dining tiles for this region: ${namedRestaurantNames.join(", ")}. You may assign 1–2 of these to Lunch or Dinner slots where appropriate, using their exact names. Prefer named restaurants over generic "Table Service" or "Quick Service" tiles where a specific restaurant fits the day's location and vibe.`
       : null;
 
+  let dayRidePicksLines: string | null = null;
+  if (normalizedDateKey) {
+    const rideRows = await getRidePrioritiesForDay(
+      input.tripId,
+      normalizedDateKey,
+    );
+    dayRidePicksLines = formatDayRidePicksForPrompt(rideRows);
+  }
+
   const composedUserMessage = buildPlannerUserMessage({
     mode: input.mode,
     userPrompt: input.userPrompt,
@@ -793,11 +802,12 @@ export async function runGenerateAIPlan(
     wizardContext,
     diningHint,
     namedRestaurantHint,
-    existingDayPlanLines: summarizeExistingDayAssignmentsForPrompt(
+    existingDayPlanLines: formatDaySlotLinesWithTimesForPrompt(
       trip,
       normalizedDateKey,
       parksById,
     ),
+    dayRidePicksLines,
     preserveExistingSlots: input.preserveExistingSlots !== false,
   });
   logAiGen({
