@@ -452,7 +452,7 @@ export function Calendar({
                       aria-hidden
                     />
                   ) : null}
-                  <div className="sticky top-16 z-10 flex items-center justify-between gap-0.5 border-b border-royal/10 bg-white/95 px-1 py-0.5 backdrop-blur md:top-[4.5rem] md:py-1">
+                  <div className="relative z-[1] flex items-center justify-between gap-0.5 border-b border-royal/10 bg-white/95 px-1 py-0.5 md:py-1">
                     {!readOnly && (onRideDayPrioritiesUpdated || onOpenDayDetail) ? (
                       <button
                         type="button"
