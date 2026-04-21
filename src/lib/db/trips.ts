@@ -144,6 +144,14 @@ function parsePlanningPreferences(
     Number.isFinite(childrenRaw) && childrenRaw >= 0 && childrenRaw <= 10
       ? Math.floor(childrenRaw)
       : 0;
+  const includeDisneySkipTips =
+    typeof o.includeDisneySkipTips === "boolean"
+      ? o.includeDisneySkipTips
+      : undefined;
+  const includeUniversalSkipTips =
+    typeof o.includeUniversalSkipTips === "boolean"
+      ? o.includeUniversalSkipTips
+      : undefined;
   return {
     pace,
     mustDoParks,
@@ -152,6 +160,12 @@ function parsePlanningPreferences(
     adults,
     children,
     childAges,
+    ...(includeDisneySkipTips !== undefined
+      ? { includeDisneySkipTips }
+      : {}),
+    ...(includeUniversalSkipTips !== undefined
+      ? { includeUniversalSkipTips }
+      : {}),
   };
 }
 
