@@ -1,23 +1,66 @@
 "use client";
 
+import { generateDaySequenceAction } from "@/actions/day-sequencer";
 import { updateTripPlanningPreferencesAction } from "@/actions/trips";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { daysBetween, parseDate } from "@/lib/date-helpers";
+import {
+  collectAssignmentParkIdsForDay,
+  dayShowsTouringPlanModeToggle,
+  defaultDayPlannerMode,
+} from "@/lib/day-touring-plan";
+import type { ParkDaySequenceOutput } from "@/lib/day-sequencer";
+import { planningPaceToSequencerPace } from "@/lib/day-sequencer";
+import type { SequencerPace } from "@/lib/day-sequencer";
 import { showToast } from "@/lib/toast";
 import {
   PACE_OPTIONS,
   PRIORITY_OPTIONS,
 } from "@/lib/planning-preference-options";
+import { sortPrioritiesForDay } from "@/lib/ride-plan-display";
 import type {
   Park,
   PlanningPace,
   Trip,
   TripPlanningPreferences,
 } from "@/lib/types";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import type { TripRidePriority } from "@/types/attractions";
+import { SequenceTimeline } from "@/components/planner/SequenceTimeline";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 
 const MAX_CHARS = 500;
 const DEFAULT_FREE_CAP = 5;
+
+const SEQUENCER_STATUS_LINES = [
+  "Crunching wait times…",
+  "Routing around dining reservations…",
+  "Working out rope drop priority…",
+  "Sequencing your day…",
+] as const;
+
+function touringFailureUserMessage(code: string, serverMessage: string): string {
+  switch (code) {
+    case "NO_PARKS_FOR_DAY":
+      return "Assign at least one park to this day before generating a touring plan.";
+    case "ANCHORS_OVERLAP":
+      return "Your scheduled events overlap. Please adjust your dining or Lightning Lane times before generating.";
+    case "ANCHOR_ATTRACTION_WRONG_PARK":
+      return "One of your anchored events isn't at a park you're visiting today. Please remove it or assign the matching park.";
+    case "EMPTY_PRIORITIES":
+      return "Pick at least one must-ride from your priorities list before generating a touring plan.";
+    case "ENGINE_CRASH":
+      return "Something went wrong generating the plan. We've logged it — please try again in a moment.";
+    default:
+      return serverMessage || "Something went wrong. Please try again.";
+  }
+}
 
 export type SmartPlanGeneratePayload = {
   mode: "smart" | "custom";
@@ -51,6 +94,8 @@ type Props = {
   onGenerate: (payload: SmartPlanGeneratePayload) => Promise<void>;
   /** Keep trip.planning_preferences in sync when skip-line toggles change (avoids stale local state). */
   onTripPatch?: (patch: Partial<Trip>) => void;
+  /** Day-detail ride priorities for this date (for touring summaries and names). */
+  ridePrioritiesForDay?: TripRidePriority[];
 };
 
 export function SmartPlanModal({
@@ -70,6 +115,7 @@ export function SmartPlanModal({
   onRetryPartial,
   onGenerate,
   onTripPatch,
+  ridePrioritiesForDay = [],
 }: Props) {
   const [mode, setMode] = useState<"smart" | "custom">("smart");
   const [pace, setPace] = useState<PlanningPace>("balanced");
@@ -79,6 +125,21 @@ export function SmartPlanModal({
   const [customText, setCustomText] = useState("");
   const [replaceExistingTiles, setReplaceExistingTiles] = useState(false);
   const [skipPrefsSaving, setSkipPrefsSaving] = useState(false);
+
+  const [dayPlannerSource, setDayPlannerSource] = useState<"touring" | "ai">(
+    "ai",
+  );
+  const [touringPace, setTouringPace] = useState<SequencerPace>("balanced");
+  const [entMultiLl, setEntMultiLl] = useState(false);
+  const [entSingleLl, setEntSingleLl] = useState(false);
+  const [entUx, setEntUx] = useState(false);
+  const [entEarly, setEntEarly] = useState(false);
+  const [sequencerBusy, setSequencerBusy] = useState(false);
+  const [sequencerStatusIdx, setSequencerStatusIdx] = useState(0);
+  const [touringSequence, setTouringSequence] =
+    useState<ParkDaySequenceOutput | null>(null);
+  const [touringError, setTouringError] = useState<string | null>(null);
+  const touringRunRef = useRef(0);
 
   useEffect(() => {
     if (!isOpen || !trip) return;
@@ -97,11 +158,27 @@ export function SmartPlanModal({
     setCustomText("");
     setMode("smart");
     setReplaceExistingTiles(false);
+    setTouringSequence(null);
+    setTouringError(null);
+    setSequencerBusy(false);
+    setEntMultiLl(false);
+    setEntSingleLl(false);
+    setEntUx(false);
+    setEntEarly(false);
+    const seqPace = planningPaceToSequencerPace(
+      (p?.pace ?? "balanced") as PlanningPace,
+    );
+    setTouringPace(seqPace);
+    if (scope === "day" && dayDateKey) {
+      setDayPlannerSource(defaultDayPlannerMode(trip, dayDateKey));
+    } else {
+      setDayPlannerSource("ai");
+    }
     // Intentionally not depending on `trip` object — we only re-seed the form
     // when the modal opens or the active trip changes, not on planning_preferences
     // patches (e.g. skip-line toggles) to avoid resetting in-progress choices.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, trip?.id]);
+  }, [isOpen, trip?.id, scope, dayDateKey]);
 
   const persistSkipLinePrefs = useCallback(
     async (nextDisney: boolean, nextUniversal: boolean) => {
@@ -156,6 +233,105 @@ export function SmartPlanModal({
     );
   }, [trip, isDayScope, dayDateKey]);
 
+  const showTouringPlanToggle = useMemo(() => {
+    if (!trip || !isDayScope || !dayDateKey) return false;
+    return dayShowsTouringPlanModeToggle(trip, dayDateKey);
+  }, [trip, isDayScope, dayDateKey]);
+
+  const dayParkIds = useMemo(() => {
+    if (!trip || !dayDateKey) return [];
+    return collectAssignmentParkIdsForDay(trip, dayDateKey);
+  }, [trip, dayDateKey]);
+
+  const prioritiesOnDayParks = useMemo(() => {
+    const set = new Set(dayParkIds);
+    return sortPrioritiesForDay(
+      ridePrioritiesForDay.filter(
+        (r) => r.attraction && set.has(r.attraction.park_id),
+      ),
+    );
+  }, [ridePrioritiesForDay, dayParkIds]);
+
+  const attractionNameById = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const r of ridePrioritiesForDay) {
+      if (r.attraction) m[r.attraction_id] = r.attraction.name;
+    }
+    return m;
+  }, [ridePrioritiesForDay]);
+
+  const mergedAttractionNames = useMemo(() => {
+    const base = { ...attractionNameById };
+    if (!touringSequence) return base;
+    for (const it of touringSequence.sequence) {
+      if (it.type === "ride" && !base[it.attraction_id]) {
+        base[it.attraction_id] = "Ride";
+      }
+    }
+    return base;
+  }, [attractionNameById, touringSequence]);
+
+  const runTouringGenerate = useCallback(async () => {
+    if (!trip || !dayDateKey) return;
+    const runId = ++touringRunRef.current;
+    setTouringError(null);
+    setSequencerBusy(true);
+    try {
+      const res = await generateDaySequenceAction({
+        tripId: trip.id,
+        dateKey: dayDateKey,
+        entitlements: {
+          has_lightning_lane_multi_pass: entMultiLl,
+          has_lightning_lane_single_pass: entSingleLl,
+          has_universal_express: entUx,
+          has_early_entry: entEarly,
+        },
+        pace: touringPace,
+      });
+      if (touringRunRef.current !== runId) return;
+      if (!res.ok) {
+        setTouringError(touringFailureUserMessage(res.code, res.message));
+        return;
+      }
+      setTouringSequence(res.sequence);
+    } catch (err) {
+      if (touringRunRef.current === runId) {
+        setTouringError(
+          touringFailureUserMessage(
+            "ENGINE_CRASH",
+            err instanceof Error ? err.message : "Error",
+          ),
+        );
+      }
+    } finally {
+      if (touringRunRef.current === runId) setSequencerBusy(false);
+    }
+  }, [
+    trip,
+    dayDateKey,
+    entMultiLl,
+    entSingleLl,
+    entUx,
+    entEarly,
+    touringPace,
+  ]);
+
+  useEffect(() => {
+    if (dayPlannerSource === "ai") {
+      setTouringSequence(null);
+      setTouringError(null);
+    }
+  }, [dayPlannerSource]);
+
+  useEffect(() => {
+    if (!sequencerBusy) return;
+    setSequencerStatusIdx(0);
+    const id = window.setInterval(() => {
+      setSequencerStatusIdx((i) => (i + 1) % SEQUENCER_STATUS_LINES.length);
+    }, 1500);
+    return () => window.clearInterval(id);
+  }, [sequencerBusy]);
+
   if (!isOpen || !trip) return null;
 
   const dayLabel = isDayScope
@@ -184,7 +360,11 @@ export function SmartPlanModal({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!trip) return;
-    if (isGenerating) return;
+    if (isGenerating || sequencerBusy) return;
+    if (showTouringPlanToggle && dayPlannerSource === "touring") {
+      await runTouringGenerate();
+      return;
+    }
     if (mode === "custom" && !customText.trim()) return;
     const base = trip.planning_preferences;
     const skipDisney =
@@ -285,8 +465,13 @@ export function SmartPlanModal({
   );
 
   const customOver = customText.length > MAX_CHARS;
-  const canSubmit =
-    mode === "smart" ? true : Boolean(customText.trim()) && !customOver;
+  const touringSubmitReady =
+    showTouringPlanToggle && dayPlannerSource === "touring";
+  const canSubmit = touringSubmitReady
+    ? true
+    : mode === "smart"
+      ? true
+      : Boolean(customText.trim()) && !customOver;
 
   return (
     <div
@@ -304,71 +489,253 @@ export function SmartPlanModal({
             ? `Let Trip plan ${dayLabel ?? "this day"}`
             : "Let Trip build your itinerary"}
         </h2>
-        <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
-          Tell Trip your priorities — Trip will fill your calendar with
-          the best parks, dining, and activities for your family.
-        </p>
-        <p className="mt-1 font-sans text-xs leading-relaxed text-royal/60">
-          Crowd-aware scheduling uses patterns we ship in-app — not live park
-          data.
-        </p>
 
-        <div
-          className="mt-4 rounded-xl border border-amber-200/90 bg-amber-50/95 px-3 py-2.5 font-sans text-xs leading-relaxed text-royal/90"
-          role="note"
-        >
-          <strong className="font-semibold text-royal">Smart Plan disclaimer:</strong>{" "}
-          Smart Plan is a draft. It can make mistakes — always verify park
-          hours, refurbishments, and reservations with official sources before
-          you travel.
-        </div>
-        <p className="mt-2 font-sans text-[0.7rem] leading-snug text-royal/55">
-          <strong className="text-royal/70">Tip:</strong> leave &quot;Overwrite
-          existing tiles&quot; off to keep what you&apos;ve placed; use{" "}
-          <strong>↶ Undo Smart Plan</strong> after a run if you want to revert.
-        </p>
+        {showTouringPlanToggle ? (
+          <div
+            className="mt-4 flex min-w-0 flex-col gap-2 rounded-lg border border-royal/20 bg-white p-1 sm:flex-row"
+            role="tablist"
+            aria-label="Day planner mode"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={dayPlannerSource === "touring"}
+              onClick={() => setDayPlannerSource("touring")}
+              className={`min-h-11 flex-1 rounded-md px-3 py-2 text-center font-sans text-sm font-medium transition ${
+                dayPlannerSource === "touring"
+                  ? "bg-royal text-cream"
+                  : "text-royal/80 hover:bg-cream"
+              }`}
+            >
+              Touring Plan
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={dayPlannerSource === "ai"}
+              onClick={() => setDayPlannerSource("ai")}
+              className={`min-h-11 flex-1 rounded-md px-3 py-2 text-center font-sans text-sm font-medium transition ${
+                dayPlannerSource === "ai"
+                  ? "bg-royal text-cream"
+                  : "text-royal/80 hover:bg-cream"
+              }`}
+            >
+              Smart Plan (AI)
+            </button>
+          </div>
+        ) : null}
+
+        {touringSubmitReady && touringSequence ? (
+          <div className="mt-4 min-w-0">
+            <SequenceTimeline
+              sequence={touringSequence}
+              attractionNameById={mergedAttractionNames}
+              onRegenerate={() => void runTouringGenerate()}
+            />
+          </div>
+        ) : null}
+
+        {touringSubmitReady && !touringSequence ? (
+          <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
+            Choose your pace and passes for today. Trip sequences your priority
+            rides using typical waits — dining reservations and Lightning Lane
+            windows will slot in automatically once they are linked.
+          </p>
+        ) : !touringSubmitReady ? (
+          <>
+            <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
+              Tell Trip your priorities — Trip will fill your calendar with the
+              best parks, dining, and activities for your family.
+            </p>
+            <p className="mt-1 font-sans text-xs leading-relaxed text-royal/60">
+              Crowd-aware scheduling uses patterns we ship in-app — not live
+              park data.
+            </p>
+          </>
+        ) : null}
+
+        {touringSubmitReady ? (
+          <div
+            className="mt-4 rounded-xl border border-royal/15 bg-white/90 px-3 py-2.5 font-sans text-xs leading-relaxed text-royal/85"
+            role="note"
+          >
+            <strong className="font-semibold text-royal">Touring Plan:</strong>{" "}
+            This is a draft sequence from historic averages — always check
+            posted waits and showtimes in-park.
+          </div>
+        ) : (
+          <div
+            className="mt-4 rounded-xl border border-amber-200/90 bg-amber-50/95 px-3 py-2.5 font-sans text-xs leading-relaxed text-royal/90"
+            role="note"
+          >
+            <strong className="font-semibold text-royal">
+              Smart Plan disclaimer:
+            </strong>{" "}
+            Smart Plan is a draft. It can make mistakes — always verify park
+            hours, refurbishments, and reservations with official sources before
+            you travel.
+          </div>
+        )}
+        {!touringSubmitReady ? (
+          <p className="mt-2 font-sans text-[0.7rem] leading-snug text-royal/55">
+            <strong className="text-royal/70">Tip:</strong> leave &quot;Overwrite
+            existing tiles&quot; off to keep what you&apos;ve placed; use{" "}
+            <strong>↶ Undo Smart Plan</strong> after a run if you want to revert.
+          </p>
+        ) : null}
 
         <form
           onSubmit={(e) => void handleSubmit(e)}
-          className="mt-4 space-y-4"
+          className="mt-4 min-w-0 space-y-4"
         >
-          <div className="space-y-3">{skipTheLineSection}</div>
+          {!touringSubmitReady ? (
+            <div className="space-y-3">{skipTheLineSection}</div>
+          ) : (
+            <div className="space-y-4 rounded-lg border border-royal/15 bg-white/85 px-4 py-4">
+              <section>
+                <h3 className="font-sans text-sm font-semibold text-royal">
+                  Pace today
+                </h3>
+                <div className="mt-2 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-3">
+                  {(
+                    [
+                      { id: "relaxed" as const, label: "Relaxed" },
+                      { id: "balanced" as const, label: "Balanced" },
+                      { id: "go-go-go" as const, label: "Go-go-go" },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setTouringPace(opt.id)}
+                      disabled={sequencerBusy || isGenerating}
+                      className={`min-h-11 rounded-xl border px-3 py-2 text-left font-sans text-sm font-medium transition ${
+                        touringPace === opt.id
+                          ? "border-royal bg-white ring-2 ring-royal/20"
+                          : "border-royal/15 bg-white hover:border-royal/30"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+              <section>
+                <h3 className="font-sans text-sm font-semibold text-royal">
+                  Passes today
+                </h3>
+                <p className="mt-1 font-sans text-xs leading-relaxed text-royal/65">
+                  These change the wait times the plan assumes. Lightning Lane
+                  turns your must-dos into ~10&nbsp;min waits; Universal Express
+                  turns Express-eligible rides into ~15&nbsp;min waits.
+                </p>
+                <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-md border border-royal/10 bg-cream/50 px-2 py-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+                    checked={entMultiLl}
+                    onChange={(e) => setEntMultiLl(e.target.checked)}
+                    disabled={sequencerBusy || isGenerating}
+                  />
+                  <span className="font-sans text-xs text-royal/85">
+                    We have Lightning Lane Multi Pass today
+                  </span>
+                </label>
+                <label className="mt-1 flex cursor-pointer items-start gap-2 rounded-md border border-royal/10 bg-cream/50 px-2 py-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+                    checked={entSingleLl}
+                    onChange={(e) => setEntSingleLl(e.target.checked)}
+                    disabled={sequencerBusy || isGenerating}
+                  />
+                  <span className="font-sans text-xs text-royal/85">
+                    We have Lightning Lane Single Pass today
+                  </span>
+                </label>
+                <label className="mt-1 flex cursor-pointer items-start gap-2 rounded-md border border-royal/10 bg-cream/50 px-2 py-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+                    checked={entUx}
+                    onChange={(e) => setEntUx(e.target.checked)}
+                    disabled={sequencerBusy || isGenerating}
+                  />
+                  <span className="font-sans text-xs text-royal/85">
+                    We have Universal Express today
+                  </span>
+                </label>
+                <label className="mt-1 flex cursor-pointer items-start gap-2 rounded-md border border-royal/10 bg-cream/50 px-2 py-2">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+                    checked={entEarly}
+                    onChange={(e) => setEntEarly(e.target.checked)}
+                    disabled={sequencerBusy || isGenerating}
+                  />
+                  <span className="font-sans text-xs text-royal/85">
+                    We have Early Entry today
+                  </span>
+                </label>
+              </section>
+              <section className="font-sans text-xs leading-relaxed text-royal/80">
+                <p>
+                  <span className="font-semibold text-royal">Respecting:</span>{" "}
+                  {/* TODO(V1.1): Replace with live anchors when the anchor store exists. */}
+                  No dining reservations or Lightning Lane windows are linked
+                  for this day yet.
+                </p>
+                <p className="mt-2">
+                  <span className="font-semibold text-royal">
+                    Routing around your top {prioritiesOnDayParks.length} rides:
+                  </span>{" "}
+                  {prioritiesOnDayParks.length === 0
+                    ? "none picked for these parks yet."
+                    : prioritiesOnDayParks
+                        .map((r) => r.attraction?.name ?? "Ride")
+                        .join(", ")}
+                </p>
+              </section>
+            </div>
+          )}
 
-          <div
-            className="flex rounded-lg border border-royal/20 bg-white p-1"
-            role="radiogroup"
-            aria-label="Plan mode"
-          >
-          <button
-            type="button"
-            role="radio"
-            aria-checked={mode === "smart"}
-            onClick={() => setMode("smart")}
-            className={`flex-1 rounded-md px-3 py-2 text-center font-sans text-sm font-medium transition ${
-              mode === "smart"
-                ? "bg-royal text-cream"
-                : "text-royal/80 hover:bg-cream"
-            }`}
-          >
-            Smart Plan
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={mode === "custom"}
-            onClick={() => setMode("custom")}
-            className={`flex-1 rounded-md px-3 py-2 text-center font-sans text-sm font-medium transition ${
-              mode === "custom"
-                ? "bg-royal text-cream"
-                : "text-royal/80 hover:bg-cream"
-            }`}
-          >
-            Custom prompt
-          </button>
-          </div>
-
-          {mode === "smart" ? (
+          {!touringSubmitReady ? (
             <>
+              <div
+                className="flex rounded-lg border border-royal/20 bg-white p-1"
+                role="radiogroup"
+                aria-label="Plan mode"
+              >
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === "smart"}
+                  onClick={() => setMode("smart")}
+                  className={`flex-1 rounded-md px-3 py-2 text-center font-sans text-sm font-medium transition ${
+                    mode === "smart"
+                      ? "bg-royal text-cream"
+                      : "text-royal/80 hover:bg-cream"
+                  }`}
+                >
+                  Smart Plan
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === "custom"}
+                  onClick={() => setMode("custom")}
+                  className={`flex-1 rounded-md px-3 py-2 text-center font-sans text-sm font-medium transition ${
+                    mode === "custom"
+                      ? "bg-royal text-cream"
+                      : "text-royal/80 hover:bg-cream"
+                  }`}
+                >
+                  Custom prompt
+                </button>
+              </div>
+
+              {mode === "smart" ? (
+                <>
               <div className="rounded-lg border border-gold/40 bg-white/80 px-4 py-3 font-sans text-sm leading-relaxed text-royal">
                 {smartSummary}
               </div>
@@ -525,7 +892,11 @@ export function SmartPlanModal({
               </span>
             </label>
           )}
+            </>
+          ) : null}
 
+          {!touringSubmitReady ? (
+            <>
           {showFreeTierNote ? (
             <p className="font-sans text-xs text-royal/65">
               Free plan:{" "}
@@ -578,6 +949,8 @@ export function SmartPlanModal({
             weather, school holidays, and events. Always confirm official park
             hours before you travel.
           </p>
+            </>
+          ) : null}
 
           {submitError ? (
             <p
@@ -586,6 +959,27 @@ export function SmartPlanModal({
             >
               {submitError}
             </p>
+          ) : null}
+
+          {touringError ? (
+            <p
+              className="rounded-lg border-2 border-red-300 bg-red-50/95 px-3 py-2 font-sans text-sm text-red-950"
+              role="alert"
+            >
+              {touringError}
+            </p>
+          ) : null}
+
+          {sequencerBusy ? (
+            <div className="rounded-lg border border-royal/20 bg-white/85 px-3 py-2">
+              <span className="inline-flex items-center gap-2 font-sans text-sm text-royal/85">
+                <span
+                  className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-royal/25 border-t-royal"
+                  aria-hidden
+                />
+                {SEQUENCER_STATUS_LINES[sequencerStatusIdx]}
+              </span>
+            </div>
           ) : null}
 
           {isGenerating ? (
@@ -613,14 +1007,14 @@ export function SmartPlanModal({
             <button
               type="button"
               onClick={onClose}
-              disabled={isGenerating}
+              disabled={isGenerating || sequencerBusy}
               className="rounded-lg border border-royal/30 bg-white px-4 py-2.5 font-sans text-sm font-medium text-royal disabled:opacity-60"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isGenerating || !canSubmit}
+              disabled={isGenerating || sequencerBusy || !canSubmit}
               className="min-h-[44px] min-w-[12rem] flex-1 rounded-lg bg-[color:var(--tt-ring)] px-4 py-3 font-serif text-sm font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-60"
             >
               {isGenerating ? (
@@ -631,6 +1025,16 @@ export function SmartPlanModal({
                   />
                   Generating your plan…
                 </span>
+              ) : sequencerBusy ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <span
+                    className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white"
+                    aria-hidden
+                  />
+                  {SEQUENCER_STATUS_LINES[sequencerStatusIdx]}
+                </span>
+              ) : touringSubmitReady ? (
+                "Generate touring plan ✨"
               ) : (
                 "Generate plan ✨"
               )}

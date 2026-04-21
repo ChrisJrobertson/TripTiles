@@ -2394,6 +2394,11 @@ export function PlannerClient({
         submitError={smartError}
         scope={dayDetailOpen && dayCanonicalForDetail ? "day" : "trip"}
         dayDateKey={dayDetailOpen ? dayCanonicalForDetail : null}
+        ridePrioritiesForDay={
+          dayDetailOpen && dayCanonicalForDetail
+            ? (ridePrioritiesByDayForActiveTrip[dayCanonicalForDetail] ?? [])
+            : []
+        }
         canRetryPartial={smartCanRetryPartial}
         onRetryPartial={() => {
           if (!smartRetryPayload || isAiGenerating) return;
