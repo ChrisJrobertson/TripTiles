@@ -25,21 +25,29 @@ export function TripSelector({
 
   return (
     <div
-      className={`flex flex-col gap-3 rounded-xl border border-royal/10 bg-white px-4 py-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${className}`}
+      className={`flex flex-col gap-3 rounded-xl border border-royal/10 bg-white px-4 py-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5 sm:py-4 ${className}`}
     >
-      <label className="flex flex-wrap items-center gap-2 font-sans text-sm text-royal">
-        <span className="font-medium">Current trip:</span>
-        <select
-          value={activeTripId}
-          onChange={(e) => onSwitch(e.target.value)}
-          className="min-h-11 min-w-[12rem] rounded-lg border border-royal/25 bg-white px-3 py-2 text-sm text-royal"
+      <label className="flex flex-wrap items-center gap-3 font-sans text-base text-royal">
+        <span
+          className="select-none text-3xl leading-none sm:text-4xl"
+          aria-hidden
         >
-          {trips.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.family_name} — {t.adventure_name}
-            </option>
-          ))}
-        </select>
+          🎢
+        </span>
+        <span className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+          <span className="font-semibold">Current trip:</span>
+          <select
+            value={activeTripId}
+            onChange={(e) => onSwitch(e.target.value)}
+            className="min-h-12 min-w-[min(100%,14rem)] flex-1 rounded-lg border border-royal/25 bg-white px-3 py-2.5 text-base text-royal sm:min-w-[16rem]"
+          >
+            {trips.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.family_name} — {t.adventure_name}
+              </option>
+            ))}
+          </select>
+        </span>
       </label>
       <div className="flex flex-wrap gap-2">
         <button

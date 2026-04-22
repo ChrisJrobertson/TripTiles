@@ -72,7 +72,7 @@ export function TripTimeline({ trip, variant = "card" }: Props) {
   if (!ready) {
     if (variant === "inline") {
       return (
-        <div className="max-w-xl rounded-lg border border-royal/10 bg-cream/60 px-3 py-2 font-sans text-xs leading-snug text-royal/85">
+        <div className="max-w-xl rounded-lg border border-royal/10 bg-cream/60 px-4 py-2.5 font-sans text-sm leading-snug text-royal/85">
           <span className="invisible" aria-hidden>
             Starts in 0 days
           </span>
@@ -100,7 +100,7 @@ export function TripTimeline({ trip, variant = "card" }: Props) {
 
   if (variant === "inline") {
     return (
-      <div className="max-w-xl rounded-lg border border-royal/10 bg-cream/60 px-3 py-2 font-sans text-xs leading-snug text-royal/85">
+      <div className="max-w-2xl rounded-lg border border-royal/10 bg-cream/60 px-4 py-2.5 font-sans text-sm leading-snug text-royal/85">
         <span className="font-semibold text-royal">{label}</span>
         <span className="mx-1.5 text-royal/30" aria-hidden>
           ·

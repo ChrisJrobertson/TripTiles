@@ -336,7 +336,7 @@ export function Calendar({
           </div>
         </div>
       ) : null}
-      <div className="w-full min-w-[min(100%,64rem)]">
+      <div className="w-full min-w-0">
         <div
           className="grid gap-1"
           style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}

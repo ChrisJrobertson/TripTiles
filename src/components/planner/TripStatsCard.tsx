@@ -107,8 +107,11 @@ export function TripStatsCard({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
-        <h3 className="font-serif text-lg font-semibold text-royal">
-          📊 Your trip at a glance
+        <h3 className="flex items-center gap-2 font-serif text-xl font-semibold text-royal sm:text-2xl">
+          <span className="text-2xl leading-none sm:text-3xl" aria-hidden>
+            📊
+          </span>
+          Your trip at a glance
         </h3>
         <span className="text-royal/50">{open ? "▾" : "▸"}</span>
       </button>

@@ -50,7 +50,7 @@ export function Countdown({ startDate, endDate }: Props) {
   if (line === null) {
     return (
       <p
-        className="text-center text-base font-bold italic text-magic"
+        className="text-center text-lg font-bold italic text-magic sm:text-xl md:text-2xl"
         aria-busy="true"
       >
         <span className="inline-block min-h-[1.5em]" aria-hidden>
@@ -66,13 +66,15 @@ export function Countdown({ startDate, endDate }: Props) {
 
   if (line === "holiday") {
     return (
-      <p className="text-center text-base font-bold italic text-magic">
+      <p className="text-center text-lg font-bold italic text-magic sm:text-xl md:text-2xl">
         ✨ Enjoying your holiday! ✨
       </p>
     );
   }
 
   return (
-    <p className="text-center text-base font-bold italic text-magic">{line}</p>
+    <p className="text-center text-lg font-bold italic text-magic sm:text-xl md:text-2xl">
+      {line}
+    </p>
   );
 }

@@ -1714,7 +1714,7 @@ export function PlannerClient({
         stripeCustomerId={stripeCustomerId}
       />
 
-      <div className="mx-auto max-w-7xl px-4 pt-2">
+      <div className="mx-auto w-full max-w-screen-2xl px-4 pt-2 sm:px-6 lg:px-8">
         <PlannerTopNotices
           hasTrip={trips.length > 0}
           hasAnyAssignment={hasAnyAssignment}
@@ -1724,12 +1724,12 @@ export function PlannerClient({
       {activeTrip ? (
         <main
           ref={mainScrollRef}
-          className="mx-auto max-w-7xl px-4 py-4 sm:py-6"
+          className="mx-auto w-full max-w-screen-2xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8"
         >
           <header className="border-b border-royal/10 pb-5">
             <div className="flex flex-col gap-1">
               <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-                <h1 className="min-w-0 flex-1 text-balance font-serif text-2xl font-semibold tracking-tight text-royal sm:text-3xl">
+                <h1 className="min-w-0 flex-1 text-balance font-serif text-3xl font-semibold tracking-tight text-royal sm:text-4xl">
                   <EditableTitle
                     key={`${activeTrip.id}-fam`}
                     value={activeTrip.family_name}
@@ -2074,7 +2074,7 @@ export function PlannerClient({
               className={`mt-8 grid items-start gap-6 ${
                 compareMode
                   ? ""
-                  : "lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] lg:gap-8"
+                  : "lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:gap-8 xl:gap-10"
               }`}
             >
               {!compareMode ? (
