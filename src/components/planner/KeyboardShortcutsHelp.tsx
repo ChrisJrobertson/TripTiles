@@ -8,7 +8,7 @@ type Props = {
 const SHORTCUTS = [
   { key: "/", action: "Focus parks search" },
   { key: "n", action: "Open create trip modal" },
-  { key: "p", action: "Jump to Planning tab" },
+  { key: "p", action: "Jump to Organise tab" },
   { key: "c", action: "Jump to Calendar tab" },
   { key: "?", action: "Show this shortcuts panel" },
   { key: "esc", action: "Close open modal/sheet" },

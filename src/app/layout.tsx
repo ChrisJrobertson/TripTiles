@@ -20,6 +20,9 @@ const siteBase = getPublicSiteUrl() || "https://www.triptiles.app";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteBase),
+  icons: {
+    icon: [{ url: "/favicon.png", type: "image/png" }],
+  },
   title: {
     default: "TripTiles — Plan your theme park trips in minutes",
     template: "%s · TripTiles",

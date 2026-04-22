@@ -1,5 +1,7 @@
 "use client";
 
+import { TrippMascotImg } from "@/components/mascot/TrippMascotImg";
+
 type Props = {
   onGenerateAi: () => void;
   onAddManually: () => void;
@@ -21,6 +23,13 @@ export function EmptyCalendarCta({
       role="region"
       aria-label="Get started with your calendar"
     >
+      <div className="mb-4 flex justify-center">
+        <TrippMascotImg
+          width={96}
+          height={96}
+          className="h-24 w-24 object-contain"
+        />
+      </div>
       <p className="text-center font-serif text-lg font-semibold text-royal">
         Your calendar is empty
       </p>

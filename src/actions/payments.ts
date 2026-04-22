@@ -2,26 +2,12 @@
 
 import { currentUserCanCreatePayment } from "@/lib/entitlements";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
+import { mapPaymentRow } from "@/lib/trip-payment-row";
 import type { PaymentCurrency, TripPayment } from "@/types/payments";
 import { revalidatePath } from "next/cache";
 
 function revalidatePlanner() {
   revalidatePath("/planner");
-}
-
-function mapPaymentRow(r: Record<string, unknown>): TripPayment {
-  return {
-    id: String(r.id),
-    trip_id: String(r.trip_id),
-    label: String(r.label ?? ""),
-    amount_pence: Number(r.amount_pence ?? 0),
-    currency: (r.currency === "USD" ? "USD" : "GBP") as PaymentCurrency,
-    booking_date: r.booking_date != null ? String(r.booking_date) : null,
-    due_date: r.due_date != null ? String(r.due_date) : null,
-    sort_order: Number(r.sort_order ?? 0),
-    created_at: String(r.created_at ?? ""),
-    updated_at: String(r.updated_at ?? ""),
-  };
 }
 
 function sortPaymentsList(items: TripPayment[]): TripPayment[] {

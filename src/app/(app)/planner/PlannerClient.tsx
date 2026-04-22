@@ -58,6 +58,8 @@ import { hasAnyAffiliatePartner } from "@/lib/affiliates";
 import { PdfExportButton } from "@/components/planner/PdfExportButton";
 import { TripTimeline } from "@/components/planner/TripTimeline";
 import { TripStatsCard } from "@/components/planner/TripStatsCard";
+import { TrippMascotImg } from "@/components/mascot/TrippMascotImg";
+import { TrippSpeechBubble } from "@/components/mascot/TrippSpeechBubble";
 import { EmptyCalendarCta } from "@/components/planner/EmptyCalendarCta";
 import { TripCreationWizard } from "@/components/planner/TripCreationWizard";
 import { TripThemePicker } from "@/components/planner/TripThemePicker";
@@ -2220,7 +2222,17 @@ export function PlannerClient({
         </main>
       ) : (
         <main className="mx-auto max-w-lg px-4 py-16 text-center">
-          <p className="font-serif text-2xl font-semibold text-royal">
+          <div className="mx-auto flex max-w-md flex-col items-center">
+            <TrippMascotImg
+              width={80}
+              height={80}
+              className="h-20 w-20 object-contain"
+            />
+            <TrippSpeechBubble maxWidthClass="max-w-md">
+              Ready to plan something amazing? Let&apos;s get started! 🗺️
+            </TrippSpeechBubble>
+          </div>
+          <p className="mt-10 font-serif text-2xl font-semibold text-royal">
             Let&apos;s plan your adventure
           </p>
           <p className="mt-3 font-sans text-sm leading-relaxed text-royal/75">

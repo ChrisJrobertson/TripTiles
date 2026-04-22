@@ -1,10 +1,12 @@
 "use client";
 
+import { markPaymentPaid } from "@/actions/planning";
 import {
   createPayment,
   deletePayment,
   updatePayment,
 } from "@/actions/payments";
+import { CountdownChip } from "@/components/planning/CountdownChip";
 import { PdfExportButton } from "@/components/planner/PdfExportButton";
 import { currencyApproximationText, formatMoney } from "@/lib/format";
 import { showToast } from "@/lib/toast";
@@ -61,7 +63,9 @@ function parseAmountToPence(raw: string): number | null {
 function paymentStatus(
   due: string | null,
   today: string,
+  paidAt: string | null,
 ): "overdue" | "due_soon" | "normal" {
+  if (paidAt) return "normal";
   if (!due) return "normal";
   if (due < today) return "overdue";
   if (due <= addDaysKey(today, 14)) return "due_soon";
@@ -77,6 +81,7 @@ export function PaymentsTab({
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [formLabel, setFormLabel] = useState("");
   const [formAmount, setFormAmount] = useState("");
@@ -177,6 +182,29 @@ export function PaymentsTab({
       debounceMs: 500,
     });
     cancelForm();
+  };
+
+  const onMarkPaid = async (p: TripPayment) => {
+    const snapshot = payments;
+    const optimistic: TripPayment = {
+      ...p,
+      paid_at: new Date().toISOString(),
+    };
+    applyList(snapshot.map((x) => (x.id === p.id ? optimistic : x)));
+    setMarkingPaidId(p.id);
+    const r = await markPaymentPaid(p.id);
+    setMarkingPaidId(null);
+    if (!r.ok) {
+      applyList(snapshot);
+      showToast(r.error, { type: "error" });
+      return;
+    }
+    applyList(snapshot.map((x) => (x.id === p.id ? r.payment : x)));
+    showToast("Marked as paid", {
+      type: "success",
+      debounceKey: "payment-write",
+      debounceMs: 500,
+    });
   };
 
   const onConfirmDelete = async (id: string) => {
@@ -340,7 +368,7 @@ export function PaymentsTab({
 
       <ul className="space-y-3">
         {sorted.map((p) => {
-          const st = paymentStatus(p.due_date, today);
+          const st = paymentStatus(p.due_date, today, p.paid_at);
           const borderClass =
             st === "overdue"
               ? "border-l-4 border-l-red-500"
@@ -360,15 +388,12 @@ export function PaymentsTab({
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-medium text-royal">{p.label}</p>
-                    {st === "overdue" ? (
-                      <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700">
-                        Overdue
-                      </span>
-                    ) : null}
-                    {st === "due_soon" ? (
-                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                        Due soon
-                      </span>
+                    {p.due_date || p.paid_at ? (
+                      <CountdownChip
+                        targetDate={p.due_date ?? p.paid_at!}
+                        paidAt={p.paid_at}
+                        label={`${p.label} due`}
+                      />
                     ) : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -396,6 +421,16 @@ export function PaymentsTab({
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {!p.paid_at ? (
+                    <button
+                      type="button"
+                      onClick={() => void onMarkPaid(p)}
+                      disabled={busy || formActive || markingPaidId === p.id}
+                      className="min-h-[44px] min-w-[44px] rounded-lg border-2 border-[#0B1E5C]/25 bg-white px-3 py-2 text-sm font-semibold text-[#0B1E5C] transition hover:bg-[#FAF8F3] disabled:opacity-50"
+                    >
+                      Mark as paid ✓
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => startEdit(p)}

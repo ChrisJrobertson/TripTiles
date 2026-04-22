@@ -1,3 +1,4 @@
+import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
 import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -12,12 +13,14 @@ export default function ForgotPasswordPage() {
   return (
     <main className="min-h-screen bg-cream px-4 py-12">
       <div className="mx-auto w-full max-w-md rounded-2xl border border-royal/10 bg-white/80 p-8 shadow-lg shadow-royal/5 backdrop-blur-sm md:p-10">
-        <Link
-          href="/"
-          className="block text-center font-serif text-2xl font-semibold tracking-tight text-gold md:text-3xl"
-        >
-          TripTiles
-        </Link>
+        <div className="flex justify-center">
+          <TripTilesLogoLink
+            href="/"
+            height={56}
+            imgClassName="h-14 w-auto max-h-[56px]"
+            className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-sm"
+          />
+        </div>
         <h1 className="mt-8 text-center font-serif text-2xl font-semibold text-royal">
           Reset your password
         </h1>

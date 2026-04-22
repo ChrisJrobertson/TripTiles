@@ -78,7 +78,7 @@ export function TripStatsCard({
       12,
     );
     return payments
-      .filter((p) => p.due_date)
+      .filter((p) => p.due_date && !p.paid_at)
       .map((p) => {
         const dueDate = parseDateKey(p.due_date!);
         return { ...p, dueDate };

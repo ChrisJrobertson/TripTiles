@@ -1,6 +1,9 @@
 "use client";
 
 import { createTripAction, touchTripAction } from "@/actions/trips";
+import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
+import { TrippMascotImg } from "@/components/mascot/TrippMascotImg";
+import { TrippSpeechBubble } from "@/components/mascot/TrippSpeechBubble";
 import { parkMatchesPlannerRegion } from "@/lib/park-matches-planner-region";
 import type { ThemeKey } from "@/lib/themes";
 import { normaliseThemeKey } from "@/lib/themes";
@@ -260,6 +263,16 @@ export function TripCreationWizard({
       </div>
 
       <div className="mx-auto max-w-lg rounded-2xl border border-royal/10 bg-white p-6 shadow-lg sm:p-8">
+        {variant === "page" ? (
+          <div className="mb-5 flex justify-center">
+            <TripTilesLogoLink
+              href="/planner"
+              height={56}
+              imgClassName="h-14 w-auto max-h-[56px]"
+              className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-sm"
+            />
+          </div>
+        ) : null}
         <p className="font-sans text-xs font-semibold uppercase tracking-wider text-gold">
           {progressLabel}
         </p>
@@ -271,8 +284,18 @@ export function TripCreationWizard({
 
         {step === 0 ? (
           <div className="mt-6 text-center">
-            <h1 className="font-serif text-2xl font-semibold text-royal md:text-3xl">
-              Welcome to TripTiles{firstName ? `, ${firstName}` : ""}!
+            <div className="flex flex-col items-center">
+              <TrippMascotImg
+                width={80}
+                height={80}
+                className="h-20 w-20 object-contain"
+              />
+              <TrippSpeechBubble maxWidthClass="max-w-sm">
+                Hi! I&apos;m Tripp. Let&apos;s build your perfect adventure. 🐾
+              </TrippSpeechBubble>
+            </div>
+            <h1 className="mt-8 font-serif text-2xl font-semibold text-royal md:text-3xl">
+              Welcome{firstName ? `, ${firstName}` : ""}!
             </h1>
             <p className="mt-3 font-sans text-sm leading-relaxed text-royal/75">
               Let&apos;s set up your first adventure — it only takes a minute.

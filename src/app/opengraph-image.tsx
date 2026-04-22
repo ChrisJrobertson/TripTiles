@@ -1,5 +1,10 @@
 import { ImageResponse } from "next/og";
 
+/**
+ * OG canvas uses royal blue (#0B1E5C). The full-colour logo PNG has a white box
+ * around the artwork, so we keep a gold text wordmark here until a transparent
+ * logo asset exists for dark backgrounds.
+ */
 export const runtime = "edge";
 export const alt = "TripTiles — Plan your theme park trips";
 export const size = { width: 1200, height: 630 };

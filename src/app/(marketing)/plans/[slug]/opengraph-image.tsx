@@ -1,6 +1,7 @@
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { ImageResponse } from "next/og";
 
+/** Royal blue OG canvas — text wordmark only (logo PNG is white-backed). */
 export const alt = "TripTiles plan";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";

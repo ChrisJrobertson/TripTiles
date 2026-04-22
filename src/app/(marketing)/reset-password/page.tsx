@@ -1,3 +1,4 @@
+import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
 import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
 import { createClient } from "@/lib/supabase/server";
 import type { Metadata } from "next";
@@ -20,12 +21,14 @@ export default async function ResetPasswordPage() {
   return (
     <main className="min-h-screen bg-cream px-4 py-12">
       <div className="mx-auto w-full max-w-md rounded-2xl border border-royal/10 bg-white/80 p-8 shadow-lg shadow-royal/5 backdrop-blur-sm md:p-10">
-        <Link
-          href="/"
-          className="block text-center font-serif text-2xl font-semibold tracking-tight text-gold md:text-3xl"
-        >
-          TripTiles
-        </Link>
+        <div className="flex justify-center">
+          <TripTilesLogoLink
+            href="/"
+            height={56}
+            imgClassName="h-14 w-auto max-h-[56px]"
+            className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-sm"
+          />
+        </div>
 
         {!user ? (
           <div className="mt-8 space-y-4 font-sans text-sm text-royal/80">

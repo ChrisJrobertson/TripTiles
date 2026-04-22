@@ -1,5 +1,6 @@
 "use client";
 
+import { KeyDatesPanel } from "@/components/planning/KeyDatesPanel";
 import { PaymentsTab } from "@/components/planner/PaymentsTab";
 import { TripBudgetView } from "@/components/planner/TripBudgetView";
 import { TripChecklistView } from "@/components/planner/TripChecklistView";
@@ -110,12 +111,15 @@ export function PlanningSections({
               <div id={panelId} className="border-t border-royal/10 p-4 sm:p-5">
                 {key === "todo" ? <TripChecklistView trip={trip} embedded /> : null}
                 {key === "payments" ? (
-                  <PaymentsTab
-                    trip={trip}
-                    payments={payments}
-                    onPaymentsChange={onPaymentsChange}
-                    embedded
-                  />
+                  <div className="space-y-8">
+                    <PaymentsTab
+                      trip={trip}
+                      payments={payments}
+                      onPaymentsChange={onPaymentsChange}
+                      embedded
+                    />
+                    <KeyDatesPanel trip={trip} />
+                  </div>
                 ) : null}
                 {key === "budget" ? (
                   <TripBudgetView

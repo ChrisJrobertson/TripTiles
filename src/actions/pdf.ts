@@ -9,6 +9,7 @@ import { getCurrentTier } from "@/lib/entitlements";
 import { isTierLoadFailure } from "@/lib/supabase/tier-load-error";
 import { buildAffiliateUrl, hasAnyAffiliatePartner } from "@/lib/affiliates";
 import { getTierConfig } from "@/lib/tiers";
+import { mapPaymentRow } from "@/lib/trip-payment-row";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type {
   BudgetCategory,
@@ -20,7 +21,7 @@ import type {
   TripBudgetItem,
   TripChecklistItem,
 } from "@/lib/types";
-import type { PaymentCurrency, TripPayment } from "@/types/payments";
+import type { TripPayment } from "@/types/payments";
 
 function mapBudgetRow(r: Record<string, unknown>): TripBudgetItem {
   return {
@@ -38,20 +39,6 @@ function mapBudgetRow(r: Record<string, unknown>): TripBudgetItem {
   };
 }
 
-function mapPaymentRow(r: Record<string, unknown>): TripPayment {
-  return {
-    id: String(r.id),
-    trip_id: String(r.trip_id),
-    label: String(r.label ?? ""),
-    amount_pence: Number(r.amount_pence ?? 0),
-    currency: (r.currency === "USD" ? "USD" : "GBP") as PaymentCurrency,
-    booking_date: r.booking_date != null ? String(r.booking_date) : null,
-    due_date: r.due_date != null ? String(r.due_date) : null,
-    sort_order: Number(r.sort_order ?? 0),
-    created_at: String(r.created_at ?? ""),
-    updated_at: String(r.updated_at ?? ""),
-  };
-}
 
 function mapChecklistRow(r: Record<string, unknown>): TripChecklistItem {
   return {

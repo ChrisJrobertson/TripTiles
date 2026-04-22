@@ -48,27 +48,46 @@ export function FeedbackWidget() {
           setStatus("idle");
           setError(null);
         }}
-        className="fixed bottom-5 right-5 z-[90] hidden h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-gold to-[#b8924f] text-2xl shadow-lg shadow-royal/20 transition hover:opacity-95 md:flex"
-        aria-label="Feedback"
+        className="fixed bottom-5 right-5 z-50 hidden h-14 w-14 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-transparent bg-cream shadow-lg shadow-royal/20 ring-offset-2 ring-offset-cream transition hover:scale-110 hover:ring-2 hover:ring-[#C9A961] md:flex"
+        aria-label="Chat with Tripp"
       >
-        💬
+        {/* eslint-disable-next-line @next/next/no-img-element -- fixed-size mascot crop */}
+        <img
+          src="/images/tripp-mascot.png"
+          alt=""
+          width={56}
+          height={56}
+          className="h-full w-full object-cover"
+          aria-hidden
+        />
       </button>
 
       {open ? (
         <div
-          className="fixed inset-0 z-[95] flex items-end justify-end bg-royal/40 p-4 sm:items-center sm:justify-center"
+          className="fixed inset-0 z-[100] flex items-end justify-end bg-royal/40 p-4 sm:items-center sm:justify-center"
           role="dialog"
           aria-modal="true"
           aria-labelledby="fb-title"
         >
           <div className="w-full max-w-md rounded-2xl border border-royal/15 bg-cream p-6 shadow-xl">
             <div className="flex items-start justify-between gap-3">
-              <h2
-                id="fb-title"
-                className="font-serif text-xl font-semibold text-royal"
-              >
-                Share your thoughts
-              </h2>
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/images/tripp-mascot.png"
+                  alt=""
+                  width={32}
+                  height={32}
+                  className="h-8 w-8 shrink-0 rounded-full object-cover"
+                  aria-hidden
+                />
+                <h2
+                  id="fb-title"
+                  className="font-serif text-xl font-semibold text-royal"
+                >
+                  Ask Tripp
+                </h2>
+              </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}

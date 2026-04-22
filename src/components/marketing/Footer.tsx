@@ -1,3 +1,4 @@
+import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
 import Link from "next/link";
 
 const DEST_LINKS: { label: string; href: string }[] = [
@@ -13,7 +14,12 @@ export function MarketingFooter() {
     <footer className="mt-auto border-t border-royal/10 bg-cream px-6 py-12">
       <div className="mx-auto grid max-w-5xl gap-10 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <p className="font-serif text-lg font-semibold text-gold">TripTiles</p>
+          <TripTilesLogoLink
+            href="/"
+            height={32}
+            imgClassName="h-8 w-auto max-h-[32px]"
+            className="inline-flex shrink-0 items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream rounded-sm"
+          />
           <p className="mt-2 font-sans text-sm text-royal/70">
             Plan your theme park trips in minutes.
           </p>

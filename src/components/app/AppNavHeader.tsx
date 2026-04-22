@@ -1,5 +1,6 @@
 "use client";
 
+import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { formatProductTierName } from "@/lib/product-tier-labels";
 import { normalizeToRetailTier } from "@/lib/tiers";
@@ -114,12 +115,12 @@ function AppNavHeaderFallback({
     <header className="sticky top-0 z-30 border-b border-royal/10 bg-cream/95 px-4 py-3 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <Link
+          <TripTilesLogoLink
             href="/planner"
-            className="font-serif text-lg font-semibold text-gold transition hover:text-gold/90"
-          >
-            TripTiles
-          </Link>
+            height={48}
+            imgClassName="h-12 w-auto max-h-[48px]"
+            className="inline-flex shrink-0 items-center transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream rounded-sm"
+          />
           <details className="relative sm:hidden">
             <summary className="list-none cursor-pointer rounded-full border border-royal/20 bg-white/90 px-3 py-1.5 font-sans text-sm font-semibold text-royal shadow-sm [&::-webkit-details-marker]:hidden">
               Menu
@@ -139,7 +140,7 @@ function AppNavHeaderFallback({
                     href="/planner?tab=planning"
                     className={mobileNavLinkClass(false)}
                   >
-                    Planning
+                    Organise
                   </Link>
                 </li>
                 <li>
@@ -184,7 +185,7 @@ function AppNavHeaderFallback({
               href="/planner?tab=planning"
               className="rounded-full px-3 py-1 font-sans text-sm font-medium text-royal/70 transition hover:bg-royal/5 hover:text-royal"
             >
-              Planning
+              Organise
             </Link>
             <Link
               href="/achievements"
@@ -325,12 +326,12 @@ function AppNavHeaderInner({
     <header className="sticky top-0 z-30 border-b border-royal/10 bg-cream/95 px-4 py-3 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <Link
+          <TripTilesLogoLink
             href="/planner"
-            className="font-serif text-lg font-semibold text-gold transition hover:text-gold/90"
-          >
-            TripTiles
-          </Link>
+            height={48}
+            imgClassName="h-12 w-auto max-h-[48px]"
+            className="inline-flex shrink-0 items-center transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream rounded-sm"
+          />
           <details className="relative sm:hidden">
             <summary className="list-none cursor-pointer rounded-full border border-royal/20 bg-white/90 px-3 py-1.5 font-sans text-sm font-semibold text-royal shadow-sm [&::-webkit-details-marker]:hidden">
               Menu
@@ -355,7 +356,7 @@ function AppNavHeaderInner({
                     className={mobileNavLinkClass(planningActive)}
                     aria-current={planningActive ? "page" : undefined}
                   >
-                    Planning
+                    Organise
                   </Link>
                 </li>
                 <li>
@@ -402,7 +403,7 @@ function AppNavHeaderInner({
             {linkOrCurrent(
               "planning",
               planningHref,
-              "Planning",
+              "Organise",
               planningActive,
             )}
             {passportActive ? (
