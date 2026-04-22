@@ -57,7 +57,7 @@ const anthropic = new Anthropic({
 
 const SMART_PLAN_MODEL = "claude-haiku-4-5-20251001";
 /** Paid tiers — use a stronger model for per-park must-dos. */
-const SMART_PLAN_PREMIUM_MODEL = "claude-sonnet-4-5-20250929";
+const SMART_PLAN_PREMIUM_MODEL = "claude-sonnet-4-6";
 
 function smartPlanModelForProfileTier(
   tier: string | null | undefined,
