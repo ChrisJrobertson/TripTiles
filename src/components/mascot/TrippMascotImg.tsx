@@ -7,7 +7,7 @@ type Props = {
 };
 
 /**
- * Tripp mascot (transparent PNG). Prefer `object-cover` for small circular crops;
+ * Tripp mascot. Prefer `object-cover` for small circular crops;
  * use `object-contain` for larger marketing-style blocks.
  */
 export function TrippMascotImg({

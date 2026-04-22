@@ -2,8 +2,7 @@
 
 const SIZE_PX = { sm: 24, md: 48, lg: 80 } as const;
 
-/** Tripp explorer mascot — swap path if the asset is replaced with a true transparent PNG. */
-const MARK_SRC = "/images/tripp-spinner-mascot.jpg";
+const MARK_SRC = "/images/tripp-mascot.png";
 
 type Size = keyof typeof SIZE_PX;
 
