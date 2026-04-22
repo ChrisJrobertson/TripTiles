@@ -117,9 +117,9 @@ function AppNavHeaderFallback({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <TripTilesLogoLink
             href="/planner"
-            height={48}
-            imgClassName="h-12 w-auto max-h-[48px]"
-            className="inline-flex shrink-0 items-center transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream rounded-sm"
+            height={64}
+            imgClassName="h-14 w-auto max-h-14 sm:h-16 sm:max-h-16"
+            className="inline-flex shrink-0 items-center transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream rounded-sm"
           />
           <details className="relative sm:hidden">
             <summary className="list-none cursor-pointer rounded-full border border-royal/20 bg-white/90 px-3 py-1.5 font-sans text-sm font-semibold text-royal shadow-sm [&::-webkit-details-marker]:hidden">
@@ -328,9 +328,9 @@ function AppNavHeaderInner({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <TripTilesLogoLink
             href="/planner"
-            height={48}
-            imgClassName="h-12 w-auto max-h-[48px]"
-            className="inline-flex shrink-0 items-center transition hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream rounded-sm"
+            height={64}
+            imgClassName="h-14 w-auto max-h-14 sm:h-16 sm:max-h-16"
+            className="inline-flex shrink-0 items-center transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream rounded-sm"
           />
           <details className="relative sm:hidden">
             <summary className="list-none cursor-pointer rounded-full border border-royal/20 bg-white/90 px-3 py-1.5 font-sans text-sm font-semibold text-royal shadow-sm [&::-webkit-details-marker]:hidden">

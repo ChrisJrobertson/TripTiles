@@ -16,8 +16,8 @@ export function MarketingFooter() {
         <div>
           <TripTilesLogoLink
             href="/"
-            height={32}
-            imgClassName="h-8 w-auto max-h-[32px]"
+            height={36}
+            imgClassName="h-9 w-auto max-h-9"
             className="inline-flex shrink-0 items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream rounded-sm"
           />
           <p className="mt-2 font-sans text-sm text-royal/70">

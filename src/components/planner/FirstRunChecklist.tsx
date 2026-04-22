@@ -90,7 +90,7 @@ export function FirstRunChecklist({
         }
       >
         <summary className="flex cursor-pointer list-none items-center gap-2 font-sans text-sm font-medium text-royal [&::-webkit-details-marker]:hidden">
-          <span className="min-w-0 flex-1">Planning checklist</span>
+          <span className="min-w-0 flex-1">Organise checklist</span>
           <span className="text-royal/35 transition group-open:rotate-180">
             ▾
           </span>

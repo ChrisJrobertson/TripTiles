@@ -7,8 +7,8 @@ export function MarketingHeader() {
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
         <TripTilesLogoLink
           href="/"
-          height={48}
-          imgClassName="h-12 w-auto max-h-[48px]"
+          height={64}
+          imgClassName="h-14 w-auto max-h-14 sm:h-16 sm:max-h-16"
         />
         <nav className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 font-sans text-sm md:gap-x-5">
           <Link href="/plans" className="text-royal/80 hover:text-royal">
