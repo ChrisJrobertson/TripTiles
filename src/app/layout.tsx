@@ -21,8 +21,16 @@ const siteBase = getPublicSiteUrl() || "https://www.triptiles.app";
 export const metadata: Metadata = {
   metadataBase: new URL(siteBase),
   icons: {
-    icon: [{ url: "/favicon.png", type: "image/png" }],
+    icon: [
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-48x48.png", sizes: "48x48", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
   },
+  manifest: "/site.webmanifest",
   title: {
     default: "TripTiles — Plan your theme park trips in minutes",
     template: "%s · TripTiles",

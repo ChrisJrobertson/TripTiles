@@ -403,8 +403,7 @@ export function Calendar({
                 }
               };
 
-              const isPopoverThisDay =
-                notePopover?.dateKey === key && hasInsight;
+              const notePopoverOpenThisDay = notePopover?.dateKey === key;
 
               const dc = dayConditionRow(
                 regionForConditions,
@@ -558,14 +557,27 @@ export function Calendar({
                         ) : null}
                       </div>
                     )}
-                    {hasInsight ? (
+                    {!readOnly ? (
                       <button
                         type="button"
                         data-day-interactive
                         data-day-note-toggle
-                        className="shrink-0 rounded p-0.5 text-base leading-none text-royal/70 transition hover:bg-cream hover:text-royal focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
-                        aria-label={`Day notes for ${headingDate}`}
-                        aria-expanded={isPopoverThisDay}
+                        title={
+                          hasInsight
+                            ? "View tips, crowd note, and timeline for this day"
+                            : "Tips, notes, and timeline for this day"
+                        }
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-lg leading-none shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${
+                          hasInsight
+                            ? "border-amber-500/90 bg-amber-50 text-amber-950 hover:bg-amber-100"
+                            : "border-royal/25 bg-cream text-amber-900 hover:border-amber-400/70 hover:bg-amber-50/90"
+                        }`}
+                        aria-label={
+                          hasInsight
+                            ? `Day tips and notes for ${headingDate}`
+                            : `Day tips and timeline for ${headingDate}`
+                        }
+                        aria-expanded={notePopoverOpenThisDay}
                         aria-controls={`${popoverId}-note-panel`}
                         onClick={(e) => {
                           e.stopPropagation();
@@ -579,10 +591,18 @@ export function Calendar({
                           }
                         }}
                       >
-                        💡
+                        <span aria-hidden>💡</span>
                       </button>
+                    ) : hasInsight ? (
+                      <span
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/50 bg-amber-50/90 text-lg leading-none text-amber-950"
+                        title="Tips for this day"
+                        aria-hidden
+                      >
+                        💡
+                      </span>
                     ) : (
-                      <span className="w-6 shrink-0" aria-hidden />
+                      <span className="w-9 shrink-0" aria-hidden />
                     )}
                   </div>
                   <div
@@ -919,6 +939,15 @@ export function Calendar({
                   <p className="font-sans text-xs leading-relaxed text-royal/85">
                     <span className="font-semibold text-royal">Your note: </span>
                     {notePopover.dayNote}
+                  </p>
+                ) : null}
+                {!notePopover.crowdLine && !notePopover.dayNote ? (
+                  <p className="mb-1 font-sans text-xs leading-relaxed text-royal/70">
+                    No crowd tips or notes for this day yet. Use{" "}
+                    <span className="font-semibold text-royal">Add note…</span>{" "}
+                    on the day card, or open the{" "}
+                    <span className="font-semibold text-royal">Timeline</span>{" "}
+                    tab when available.
                   </p>
                 ) : null}
               </>
