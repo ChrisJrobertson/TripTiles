@@ -21,7 +21,7 @@ import {
   updateTripPreferencesPatchAction,
 } from "@/actions/trips";
 import { AppNavHeader } from "@/components/app/AppNavHeader";
-import { TripTilesLoadingOverlay } from "@/components/brand/TripTilesLoadingOverlay";
+import { InlineLoadingOverlay } from "@/components/ui/InlineLoadingOverlay";
 import { AchievementToast } from "@/components/gamification/AchievementToast";
 import { deleteCustomTileAction } from "@/actions/custom-tiles";
 import {
@@ -1709,6 +1709,10 @@ export function PlannerClient({
   }, [plannerTab, router, tripRouteBase]);
 
   return (
+    <InlineLoadingOverlay
+      isLoading={fullPageAiBusy}
+      label="Smart Plan is building your itinerary"
+    >
     <div
       className="min-h-screen bg-transparent pb-28 pt-2 lg:pb-16"
       style={shellThemeStyle}
@@ -2434,13 +2438,6 @@ export function PlannerClient({
         }}
       />
 
-      <TripTilesLoadingOverlay
-        open={fullPageAiBusy}
-        tone="dark"
-        title="Smart Plan is building your itinerary…"
-        caption="This usually takes a few seconds. Your calendar will fill in automatically."
-      />
-
       {activeTrip ? (
         <CustomTileModal
           isOpen={customTileModalOpen}
@@ -2586,5 +2583,6 @@ export function PlannerClient({
       </div>
 
     </div>
+    </InlineLoadingOverlay>
   );
 }

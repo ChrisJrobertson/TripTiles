@@ -4,7 +4,7 @@ import {
   awardFirstPdfExportAction,
   getPdfExportContextAction,
 } from "@/actions/pdf";
-import { useGlobalLoading } from "@/components/app/GlobalLoadingContext";
+import { LogoSpinner } from "@/components/ui/LogoSpinner";
 import { TripPDF } from "@/components/pdf/TripPDF";
 import { pdf } from "@react-pdf/renderer";
 import { useCallback, useState } from "react";
@@ -29,7 +29,6 @@ export function PdfExportButton({
   buttonLabel = "📄 Export to PDF",
   defaultModeOnOpen = "with_notes",
 }: Props) {
-  const { withLoading } = useGlobalLoading();
   const [pdfBusy, setPdfBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -40,68 +39,66 @@ export function PdfExportButton({
       setError(null);
       setPdfBusy(true);
       try {
-        await withLoading("Building your PDF…", async () => {
-          const result = await getPdfExportContextAction(tripId);
-          if (!result.ok) {
-            setError(
-              result.error === "PROFILE_TIER_UNAVAILABLE"
-                ? "Could not load your plan. Refresh the page or sign in again."
-                : result.error,
-            );
-            return;
-          }
+        const result = await getPdfExportContextAction(tripId);
+        if (!result.ok) {
+          setError(
+            result.error === "PROFILE_TIER_UNAVAILABLE"
+              ? "Could not load your plan. Refresh the page or sign in again."
+              : result.error,
+          );
+          return;
+        }
 
-          const blob = await pdf(
-            <TripPDF
-              trip={result.trip}
-              parks={result.parks}
-              customTiles={result.customTiles}
-              watermark={result.watermark}
-              familyName={result.familyName}
-              bookingAffiliateLinks={
-                mode === "with_notes" ? result.bookingLinks : undefined
-              }
-              includeNotes={mode === "with_notes"}
-              exportMode={mode}
-              budgetItems={result.budgetItems}
-              checklistItems={result.checklistItems}
-              tripPayments={result.tripPayments}
-              temperatureUnit={result.temperatureUnit}
-            />,
-          ).toBlob();
+        const blob = await pdf(
+          <TripPDF
+            trip={result.trip}
+            parks={result.parks}
+            customTiles={result.customTiles}
+            watermark={result.watermark}
+            familyName={result.familyName}
+            bookingAffiliateLinks={
+              mode === "with_notes" ? result.bookingLinks : undefined
+            }
+            includeNotes={mode === "with_notes"}
+            exportMode={mode}
+            budgetItems={result.budgetItems}
+            checklistItems={result.checklistItems}
+            tripPayments={result.tripPayments}
+            temperatureUnit={result.temperatureUnit}
+          />,
+        ).toBlob();
 
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          const safeTripName = result.trip.adventure_name.replace(/[^a-z0-9]/gi, "_");
-          if (mode === "payments_schedule") {
-            const dateStamp = new Date()
-              .toISOString()
-              .slice(0, 10)
-              .replace(/-/g, "");
-            link.download = `${safeTripName}-payments-${dateStamp}.pdf`;
-          } else {
-            link.download = `${safeTripName}_triptiles.pdf`;
-          }
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        const safeTripName = result.trip.adventure_name.replace(/[^a-z0-9]/gi, "_");
+        if (mode === "payments_schedule") {
+          const dateStamp = new Date()
+            .toISOString()
+            .slice(0, 10)
+            .replace(/-/g, "");
+          link.download = `${safeTripName}-payments-${dateStamp}.pdf`;
+        } else {
+          link.download = `${safeTripName}_triptiles.pdf`;
+        }
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
 
-          const ach = await awardFirstPdfExportAction();
-          if (ach.ok && ach.justEarned) {
-            onAchievementKeys?.(["first_pdf_export"]);
-          }
+        const ach = await awardFirstPdfExportAction();
+        if (ach.ok && ach.justEarned) {
+          onAchievementKeys?.(["first_pdf_export"]);
+        }
 
-          setModalOpen(false);
-        });
+        setModalOpen(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
       } finally {
         setPdfBusy(false);
       }
     },
-    [tripId, onAchievementKeys, withLoading],
+    [tripId, onAchievementKeys],
   );
 
   return (
@@ -116,7 +113,14 @@ export function PdfExportButton({
         disabled={disabled || pdfBusy}
         className="rounded-lg bg-royal px-4 py-2.5 font-serif text-sm font-bold text-gold shadow-sm transition hover:bg-royal/90 disabled:opacity-50"
       >
-        {pdfBusy ? "Generating PDF…" : buttonLabel}
+        {pdfBusy ? (
+          <span className="inline-flex items-center justify-center gap-2">
+            <LogoSpinner size="sm" className="shrink-0" decorative />
+            {buttonLabel}
+          </span>
+        ) : (
+          buttonLabel
+        )}
       </button>
       {error ? (
         <p className="mt-2 max-w-xs font-sans text-sm text-red-600">{error}</p>
@@ -124,12 +128,22 @@ export function PdfExportButton({
 
       {modalOpen ? (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-royal/40 p-4 backdrop-blur-sm"
+          className="pointer-events-auto fixed inset-0 z-[100] flex items-center justify-center bg-royal/40 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-labelledby="pdf-export-title"
         >
-          <div className="w-full max-w-md rounded-2xl border border-royal/15 bg-cream p-6 shadow-xl">
+          <div className="relative w-full max-w-md rounded-2xl border border-royal/15 bg-cream p-6 shadow-xl">
+            {pdfBusy ? (
+              <div className="absolute inset-0 z-10 min-h-0">
+                <LogoSpinner
+                  fullscreen
+                  size="lg"
+                  label="Building your PDF"
+                  fullscreenClassName="z-20"
+                />
+              </div>
+            ) : null}
             <h2
               id="pdf-export-title"
               className="font-serif text-xl font-semibold text-royal"
@@ -204,7 +218,14 @@ export function PdfExportButton({
                 disabled={pdfBusy}
                 className="rounded-lg bg-gold px-5 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition hover:bg-gold/90 disabled:opacity-50"
               >
-                {pdfBusy ? "Exporting…" : "Export"}
+                {pdfBusy ? (
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <LogoSpinner size="sm" className="shrink-0" decorative />
+                    Exporting
+                  </span>
+                ) : (
+                  "Export"
+                )}
               </button>
             </div>
           </div>

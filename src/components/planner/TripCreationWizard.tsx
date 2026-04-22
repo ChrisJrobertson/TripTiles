@@ -2,6 +2,8 @@
 
 import { createTripAction, touchTripAction } from "@/actions/trips";
 import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
+import { InlineLoadingOverlay } from "@/components/ui/InlineLoadingOverlay";
+import { LogoSpinner } from "@/components/ui/LogoSpinner";
 import { TrippMascotImg } from "@/components/mascot/TrippMascotImg";
 import { TrippSpeechBubble } from "@/components/mascot/TrippSpeechBubble";
 import { parkMatchesPlannerRegion } from "@/lib/park-matches-planner-region";
@@ -202,7 +204,8 @@ export function TripCreationWizard({
       await touchTripAction(res.tripId);
       onTripCreated?.();
       if (planPath === "ai") {
-        window.location.assign("/planner?autoGenerate=true");
+        router.replace("/planner?autoGenerate=true");
+        router.refresh();
         return;
       }
       router.replace("/planner");
@@ -245,7 +248,11 @@ export function TripCreationWizard({
       : "min-h-screen bg-transparent px-4 py-10";
 
   return (
-    <div className={shell}>
+    <InlineLoadingOverlay
+      isLoading={busy}
+      label="Creating your trip"
+      className={shell}
+    >
       <div
         className={
           variant === "modal"
@@ -701,7 +708,14 @@ export function TripCreationWizard({
               onClick={() => void submit()}
               className="min-h-[44px] flex-1 rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 py-2 font-serif text-sm font-semibold text-royal disabled:opacity-60"
             >
-              {busy ? "Creating…" : "Finish"}
+              {busy ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <LogoSpinner size="sm" decorative className="shrink-0" />
+                  <span>Creating your trip</span>
+                </span>
+              ) : (
+                "Finish"
+              )}
             </button>
           )}
         </div>
@@ -712,6 +726,6 @@ export function TripCreationWizard({
           </Link>
         </p>
       </div>
-    </div>
+    </InlineLoadingOverlay>
   );
 }

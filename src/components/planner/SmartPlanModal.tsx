@@ -25,6 +25,7 @@ import type {
   TripPlanningPreferences,
 } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
+import { LogoSpinner } from "@/components/ui/LogoSpinner";
 import { SequenceTimeline } from "@/components/planner/SequenceTimeline";
 import {
   useCallback,
@@ -973,10 +974,7 @@ export function SmartPlanModal({
           {sequencerBusy ? (
             <div className="rounded-lg border border-royal/20 bg-white/85 px-3 py-2">
               <span className="inline-flex items-center gap-2 font-sans text-sm text-royal/85">
-                <span
-                  className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-royal/25 border-t-royal"
-                  aria-hidden
-                />
+                <LogoSpinner size="sm" className="shrink-0" decorative />
                 {SEQUENCER_STATUS_LINES[sequencerStatusIdx]}
               </span>
             </div>
@@ -985,10 +983,7 @@ export function SmartPlanModal({
           {isGenerating ? (
             <div className="rounded-lg border border-royal/20 bg-white/85 px-3 py-2">
               <span className="inline-flex items-center gap-2 font-sans text-sm text-royal/85">
-                <span
-                  className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-royal/25 border-t-royal"
-                  aria-hidden
-                />
+                <LogoSpinner size="sm" className="shrink-0" decorative />
                 Smart Plan is thinking — this usually takes 5-10 seconds.
               </span>
             </div>
@@ -1019,18 +1014,12 @@ export function SmartPlanModal({
             >
               {isGenerating ? (
                 <span className="inline-flex items-center justify-center gap-2">
-                  <span
-                    className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white"
-                    aria-hidden
-                  />
+                  <LogoSpinner size="sm" className="shrink-0" variant="onDark" decorative />
                   Generating your plan…
                 </span>
               ) : sequencerBusy ? (
                 <span className="inline-flex items-center justify-center gap-2">
-                  <span
-                    className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/35 border-t-white"
-                    aria-hidden
-                  />
+                  <LogoSpinner size="sm" className="shrink-0" variant="onDark" decorative />
                   {SEQUENCER_STATUS_LINES[sequencerStatusIdx]}
                 </span>
               ) : touringSubmitReady ? (

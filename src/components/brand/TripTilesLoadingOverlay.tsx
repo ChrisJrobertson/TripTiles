@@ -1,6 +1,6 @@
 "use client";
 
-import { TripTilesSpinningMark } from "@/components/brand/TripTilesSpinningMark";
+import { LogoSpinner } from "@/components/ui/LogoSpinner";
 
 type Tone = "light" | "dark";
 
@@ -20,7 +20,7 @@ const toneSurfaces: Record<Tone, string> = {
 };
 
 /**
- * Full-viewport branded loading — Tripp 12-frame sprite on a static frame.
+ * Full-viewport branded loading (logo mark).
  */
 export function TripTilesLoadingOverlay({
   open,
@@ -37,7 +37,7 @@ export function TripTilesLoadingOverlay({
       aria-live="polite"
       aria-busy="true"
     >
-      <TripTilesSpinningMark size="lg" surface={tone} announceViaParent />
+      <LogoSpinner size="lg" decorative />
       <p className="title max-w-sm text-center font-serif text-lg font-semibold tracking-tight">
         {title}
       </p>
