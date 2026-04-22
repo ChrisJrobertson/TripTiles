@@ -6,6 +6,7 @@ import {
 } from "@/lib/assignment-slots";
 import {
   generateAIPlanAction,
+  generateMustDosForPark,
   type GenerateAIPlanInput,
   type GenerateAIPlanResult,
 } from "@/actions/ai";
@@ -17,6 +18,7 @@ import {
   updateTripColourThemeAction,
   updateTripFromWizardAction,
   updateTripMetadataAction,
+  updateParkMustDoDoneAction,
   updateTripPlanningPreferencesAction,
   updateTripPreferencesPatchAction,
 } from "@/actions/trips";
@@ -394,6 +396,11 @@ export function PlannerClient({
   const [smartCanRetryPartial, setSmartCanRetryPartial] = useState(false);
   const [smartRetryPayload, setSmartRetryPayload] =
     useState<SmartPlanGeneratePayload | null>(null);
+  /** Per-park must-do generation (mobile + day panel). */
+  const [mustDosGenLoading, setMustDosGenLoading] = useState<{
+    dateKey: string;
+    parkId: string;
+  } | null>(null);
   const [aiGenByTrip, setAiGenByTrip] = useState(initialAiCounts);
   const [achievementToasts, setAchievementToasts] = useState<
     AchievementToastItem[]
@@ -976,6 +983,67 @@ export function PlannerClient({
     );
   }, []);
 
+  const runMustDosGen = useCallback(
+    async (dateKey: string, parkId: string) => {
+      if (!activeTripId) return;
+      setMustDosGenLoading({ dateKey, parkId });
+      try {
+        const res = await generateMustDosForPark({
+          tripId: activeTripId,
+          dateISO: dateKey,
+          parkId,
+        });
+        if (!res.ok) {
+          if (res.code === "TIER_LIMIT" || res.code === "TIER_AI_DISABLED") {
+            setTierLimitVariant("ai");
+            setTierLimitReason(
+              res.error ||
+                (res.code === "TIER_LIMIT"
+                  ? "You have used your Smart Plan allowance on the Free plan."
+                  : "Smart Plan is not available on your current plan."),
+            );
+            setTierLimitOpen(true);
+          } else {
+            showToast(res.error);
+          }
+          return;
+        }
+        applyLocalPatch(activeTripId, {
+          preferences: res.nextPreferences,
+        });
+      } finally {
+        setMustDosGenLoading(null);
+      }
+    },
+    [activeTripId, applyLocalPatch],
+  );
+
+  const handleToggleMustDoDone = useCallback(
+    async (
+      dateKey: string,
+      parkId: string,
+      mustDoId: string,
+      nextDone: boolean,
+    ) => {
+      if (!activeTripId) return;
+      const res = await updateParkMustDoDoneAction({
+        tripId: activeTripId,
+        dateISO: dateKey,
+        parkId,
+        mustDoId,
+        done: nextDone,
+      });
+      if (!res.ok) {
+        showToast(res.error);
+        return;
+      }
+      applyLocalPatch(activeTripId, {
+        preferences: res.nextPreferences,
+      });
+    },
+    [activeTripId, applyLocalPatch],
+  );
+
   const handleColourThemeChange = useCallback(
     async (key: ThemeKey) => {
       if (!activeTripId) return;
@@ -1103,6 +1171,9 @@ export function PlannerClient({
         if (res.dayCrowdNotes != null) {
           prefPatch.ai_day_crowd_notes = res.dayCrowdNotes;
         }
+        if (res.mustDos != null && Object.keys(res.mustDos).length > 0) {
+          prefPatch.must_dos = res.mustDos;
+        }
         applyLocalPatch(activeTripId, {
           assignments: res.assignments,
           preferences: prefPatch,
@@ -1210,6 +1281,9 @@ export function PlannerClient({
         }
         if (res.dayCrowdNotes != null) {
           prefPatch.ai_day_crowd_notes = res.dayCrowdNotes;
+        }
+        if (res.mustDos != null && Object.keys(res.mustDos).length > 0) {
+          prefPatch.must_dos = res.mustDos;
         }
         applyLocalPatch(activeTripId, {
           assignments: res.assignments,
@@ -2212,6 +2286,9 @@ export function PlannerClient({
                       onOpenDayDetail={
                         tripRouteBase ? openDayDetail : undefined
                       }
+                      onGenerateMustDosForPark={runMustDosGen}
+                      mustDosGenLoading={mustDosGenLoading}
+                      onToggleMustDoDone={handleToggleMustDoDone}
                       onSelectPark={setSelectedParkId}
                       onMenuExportPdf={() =>
                         document.getElementById("planner-pdf-export-btn")?.click()
@@ -2545,6 +2622,22 @@ export function PlannerClient({
           }
           onSaveDayNote={onSaveDayNote}
           onOpenSmartPlan={() => setSmartOpen(true)}
+          onGenerateMustDosForPark={(parkId) => {
+            void runMustDosGen(dayCanonicalForDetail, parkId);
+          }}
+          generatingMustDosParkId={
+            mustDosGenLoading?.dateKey === dayCanonicalForDetail
+              ? mustDosGenLoading.parkId
+              : null
+          }
+          onToggleMustDoDone={(parkId, mustDoId, next) => {
+            void handleToggleMustDoDone(
+              dayCanonicalForDetail,
+              parkId,
+              mustDoId,
+              next,
+            );
+          }}
           rideCountsForDay={
             dayCanonicalForDetail
               ? (rideCountsByDayForActiveTrip[dayCanonicalForDetail] ?? null)

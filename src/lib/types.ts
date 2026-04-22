@@ -134,6 +134,8 @@ export interface Park {
   sort_order: number;
   /** Optional table booking deep link (named restaurant tiles). */
   affiliate_ticket_url?: string | null;
+  /** Park operating hours / closure information (verification). */
+  official_url?: string | null;
 }
 
 /** User-created palette tile (`custom_tiles` table). */
@@ -207,6 +209,7 @@ export function customTileToPark(tile: CustomTile): Park {
     is_custom: true,
     sort_order: 10000,
     affiliate_ticket_url: null,
+    official_url: tile.url == null || tile.url === "" ? null : String(tile.url),
   };
 }
 

@@ -3,6 +3,7 @@ import {
   getSlotTimeFromValue,
   timeToMinutes,
 } from "@/lib/assignment-slots";
+import { getMustDosForDayPark, readMustDosMap } from "@/lib/must-dos";
 import type { Assignment, Park, SlotType, Trip } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
 
@@ -162,8 +163,12 @@ export function computeDayConflicts(
     if (id) parkIdsInSlots.add(id);
   }
 
+  const mustMap = readMustDosMap(trip.preferences);
   if (parkIdsInSlots.size > 0 && effectiveMust === 0) {
     for (const parkId of parkIdsInSlots) {
+      const hasAiMustDos =
+        getMustDosForDayPark(mustMap, dateKey, parkId).length > 0;
+      if (hasAiMustDos) continue;
       const name = parkById.get(parkId)?.name?.trim() || "this park";
       out.push({
         type: "empty_must_do",

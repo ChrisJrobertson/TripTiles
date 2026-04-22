@@ -27,6 +27,10 @@ function mapPark(row: Record<string, unknown>): Park {
     sort_order: Number(row.sort_order ?? 100),
     affiliate_ticket_url:
       aff == null || aff === "" ? null : String(aff),
+    official_url:
+      row.official_url == null || row.official_url === ""
+        ? null
+        : String(row.official_url),
   };
 }
 

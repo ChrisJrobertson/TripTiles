@@ -42,6 +42,7 @@ import {
 import { MobileBottomBar } from "./MobileBottomBar";
 import { MobileParksDrawer } from "./MobileParksDrawer";
 import { DayTimelinePanel } from "@/components/planner/DayTimelinePanel";
+import { DayParkMustDosSection } from "@/components/planner/DayParkMustDosSection";
 
 const SWIPE_THRESHOLD = 50;
 
@@ -163,6 +164,15 @@ export type MobileDayViewProps = {
   onOpenDayDetail?: (
     dateKey: string,
     options?: { focusNotes?: boolean },
+  ) => void;
+  /** Per-park AI must-dos (same server flow as day detail). */
+  onGenerateMustDosForPark?: (dateKey: string, parkId: string) => void;
+  mustDosGenLoading?: { dateKey: string; parkId: string } | null;
+  onToggleMustDoDone?: (
+    dateKey: string,
+    parkId: string,
+    mustDoId: string,
+    nextDone: boolean,
   ) => void;
 };
 
@@ -371,9 +381,13 @@ export function MobileDayView({
   rideCountsByDay,
   onRideDayPrioritiesUpdated,
   onOpenDayDetail,
+  onGenerateMustDosForPark,
+  mustDosGenLoading = null,
+  onToggleMustDoDone,
 }: MobileDayViewProps) {
   void _crowdSummary;
   const notesPanelId = useId();
+  const mustDosPanelId = useId();
   const regionForConditions = plannerRegionId ?? trip.region_id;
   const [mobileNotesHidden, setMobileNotesHidden] = useState(false);
   const [mobileNoteDraft, setMobileNoteDraft] = useState("");
@@ -409,6 +423,7 @@ export function MobileDayView({
   const [parksDrawerOpen, setParksDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [dayNotesOpen, setDayNotesOpen] = useState(false);
+  const [mustDosSheetOpen, setMustDosSheetOpen] = useState(false);
   const [ridesSheetOpen, setRidesSheetOpen] = useState(false);
   const [mobileDayLayout, setMobileDayLayout] = useState<"grid" | "timeline">(
     "grid",
@@ -497,6 +512,7 @@ export function MobileDayView({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (ridesSheetOpen) setRidesSheetOpen(false);
+        else if (mustDosSheetOpen) setMustDosSheetOpen(false);
         else if (dayNotesOpen) setDayNotesOpen(false);
         else if (menuOpen) setMenuOpen(false);
         else if (parksDrawerOpen) {
@@ -511,7 +527,8 @@ export function MobileDayView({
         parksDrawerOpen ||
         menuOpen ||
         dayNotesOpen ||
-        ridesSheetOpen
+        ridesSheetOpen ||
+        mustDosSheetOpen
       )
         return;
       if (e.key === "ArrowRight") {
@@ -525,7 +542,14 @@ export function MobileDayView({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [days.length, parksDrawerOpen, menuOpen, dayNotesOpen, ridesSheetOpen]);
+  }, [
+    days.length,
+    parksDrawerOpen,
+    menuOpen,
+    dayNotesOpen,
+    ridesSheetOpen,
+    mustDosSheetOpen,
+  ]);
 
   const openParksForSlot = useCallback((dateKey: string, slot: SlotType) => {
     if (readOnly) return;
@@ -801,6 +825,17 @@ export function MobileDayView({
             </button>
           ) : null}
 
+          {onGenerateMustDosForPark && onToggleMustDoDone ? (
+            <button
+              type="button"
+              onClick={() => setMustDosSheetOpen(true)}
+              className="mt-4 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg border border-royal/15 bg-white py-3 font-sans text-sm font-medium text-royal shadow-sm transition active:bg-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+            >
+              <span aria-hidden>🎯</span>
+              Ride must-dos (AI)
+            </button>
+          ) : null}
+
           <div className="mt-6 flex items-center justify-between px-2">
             {safeIndex > 0 ? (
               <button
@@ -1024,6 +1059,75 @@ export function MobileDayView({
           </div>
         </div>
       </div>
+
+      {onGenerateMustDosForPark && onToggleMustDoDone ? (
+        <div
+          className={`fixed inset-0 z-[41] md:hidden ${mustDosSheetOpen ? "" : "pointer-events-none"}`}
+          aria-hidden={!mustDosSheetOpen}
+        >
+          <div
+            role="presentation"
+            style={{ touchAction: "none" }}
+            className={`absolute inset-0 bg-royal/50 transition-opacity duration-300 ${
+              mustDosSheetOpen ? "opacity-100" : "opacity-0"
+            }`}
+            onClick={() => setMustDosSheetOpen(false)}
+          />
+          <div
+            id={mustDosPanelId}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Ride must-dos for this day"
+            className={`absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-2xl border border-royal bg-cream shadow-2xl transition-transform duration-300 ease-out safe-area-inset-bottom ${
+              mustDosSheetOpen ? "translate-y-0" : "translate-y-full"
+            }`}
+          >
+            <div className="flex justify-center pb-1 pt-3">
+              <div className="h-1 w-10 rounded-full bg-royal/20" aria-hidden />
+            </div>
+            <div className="flex items-start justify-between gap-2 border-b border-gold/20 px-4 py-2">
+              <h3 className="font-serif text-lg font-bold text-royal">
+                Ride must-dos
+              </h3>
+              <button
+                type="button"
+                className="flex h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-xl text-royal/50 active:bg-white"
+                aria-label="Close"
+                onClick={() => setMustDosSheetOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <p className="px-4 pb-2 font-sans text-xs text-royal/60">
+              Suggested order and timing — verify on the day.
+            </p>
+            <div className="px-2 pb-6 pt-1">
+              <DayParkMustDosSection
+                hideSectionTitle
+                trip={trip}
+                dateKey={activeDay.dateKey}
+                parks={parks}
+                generatingParkId={
+                  mustDosGenLoading?.dateKey === activeDay.dateKey
+                    ? mustDosGenLoading.parkId
+                    : null
+                }
+                onGenerateMustDos={(parkId) =>
+                  onGenerateMustDosForPark(activeDay.dateKey, parkId)
+                }
+                onToggleMustDoDone={(parkId, mustDoId, nextDone) =>
+                  onToggleMustDoDone(
+                    activeDay.dateKey,
+                    parkId,
+                    mustDoId,
+                    nextDone,
+                  )
+                }
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { ExpandedDayPanel } from "@/components/planner/ExpandedDayPanel";
 import { SkipLineLegend } from "@/components/planner/SkipLineLegend";
 import { CrowdLevelIndicator } from "@/components/planner/CrowdLevelIndicator";
 import { DayConflictBanners } from "@/components/planner/DayConflictBanners";
+import { DayParkMustDosSection } from "@/components/planner/DayParkMustDosSection";
 import {
   ApplyTemplateDialog,
   SaveTemplateDialog,
@@ -96,6 +97,13 @@ export type DayDetailLayerProps = {
   onPrioritiesUpdated: (items: TripRidePriority[]) => void;
   onSaveDayNote: (dateKey: string, text: string) => void;
   onOpenSmartPlan: () => void;
+  onGenerateMustDosForPark: (parkId: string) => void;
+  generatingMustDosParkId: string | null;
+  onToggleMustDoDone: (
+    parkId: string,
+    mustDoId: string,
+    nextDone: boolean,
+  ) => void;
   /** Ride counts for this day when full priorities are not loaded (overview fetch). */
   rideCountsForDay?: { total: number; mustDo: number } | null;
   /** Update trip in parent after planning_preferences change (e.g. skip-line toggles). */
@@ -115,6 +123,9 @@ export function DayDetailLayer({
   onPrioritiesUpdated,
   onSaveDayNote,
   onOpenSmartPlan,
+  onGenerateMustDosForPark,
+  generatingMustDosParkId,
+  onToggleMustDoDone,
   rideCountsForDay = null,
   onTripPatch,
 }: DayDetailLayerProps) {
@@ -608,6 +619,8 @@ export function DayDetailLayer({
             dayDate={dayDate}
             conflicts={dayConflicts}
             onOpenSmartPlan={onOpenSmartPlan}
+            onGenerateMustDosForPark={onGenerateMustDosForPark}
+            generatingMustDosParkId={generatingMustDosParkId}
           />
           <section className="mb-4 rounded-lg border border-royal/10 bg-white/90 p-3">
             <p className="font-sans text-[11px] font-semibold uppercase tracking-wide text-royal/60">
@@ -703,6 +716,15 @@ export function DayDetailLayer({
             includeUniversalSkipTips={
               trip.planning_preferences?.includeUniversalSkipTips !== false
             }
+          />
+
+          <DayParkMustDosSection
+            trip={trip}
+            dateKey={dayDate}
+            parks={parks}
+            generatingParkId={generatingMustDosParkId}
+            onGenerateMustDos={onGenerateMustDosForPark}
+            onToggleMustDoDone={onToggleMustDoDone}
           />
 
           <section className="mt-6 border-t border-royal/10 pt-4">

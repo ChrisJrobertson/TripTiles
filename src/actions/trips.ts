@@ -20,6 +20,7 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { normaliseThemeKey, type ThemeKey } from "@/lib/themes";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
+import { readMustDosMap } from "@/lib/must-dos";
 import type {
   Assignments,
   Assignment,
@@ -27,6 +28,7 @@ import type {
   SlotAssignmentValue,
   TripPlanningPreferences,
 } from "@/lib/types";
+import type { TripMustDosMap } from "@/types/must-dos";
 import { revalidatePath } from "next/cache";
 import { seedTripChecklistIfEmptyAction } from "@/actions/checklist";
 import { syncTripReminderRows } from "@/lib/trip-reminder-seed";
@@ -1016,6 +1018,76 @@ export async function updateTripPreferencesPatchAction(input: {
     revalidatePlanner();
     revalidatePath("/plans");
     return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
+  }
+}
+
+export async function updateParkMustDoDoneAction({
+  tripId,
+  dateISO,
+  parkId,
+  mustDoId,
+  done,
+}: {
+  tripId: string;
+  dateISO: string;
+  parkId: string;
+  mustDoId: string;
+  done: boolean;
+}): Promise<
+  | { ok: true; nextPreferences: Record<string, unknown> }
+  | { ok: false; error: string }
+> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { ok: false, error: "Not signed in." };
+
+    const supabase = await createClient();
+    const { data: row, error: fetchErr } = await supabase
+      .from("trips")
+      .select("preferences")
+      .eq("id", tripId)
+      .eq("owner_id", user.id)
+      .maybeSingle();
+
+    if (fetchErr) return { ok: false, error: fetchErr.message };
+    if (!row) return { ok: false, error: "Trip not found." };
+
+    const prev =
+      row.preferences &&
+      typeof row.preferences === "object" &&
+      !Array.isArray(row.preferences)
+        ? (row.preferences as Record<string, unknown>)
+        : {};
+    const map: TripMustDosMap = readMustDosMap(prev);
+    const forDay = { ...(map[dateISO] ?? {}) };
+    const list = (forDay[parkId] ?? []).map((m) => ({ ...m }));
+    const idx = list.findIndex((m) => m.id === mustDoId);
+    if (idx < 0) return { ok: false, error: "Must-do not found." };
+    list[idx] = { ...list[idx]!, done };
+    forDay[parkId] = list;
+    const next = {
+      ...prev,
+      must_dos: { ...map, [dateISO]: forDay },
+    };
+
+    const { error } = await supabase
+      .from("trips")
+      .update({
+        preferences: next,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", tripId)
+      .eq("owner_id", user.id);
+
+    if (error) return { ok: false, error: error.message };
+    revalidatePlanner();
+    revalidatePath("/plans");
+    return { ok: true, nextPreferences: next as Record<string, unknown> };
   } catch (e) {
     return {
       ok: false,

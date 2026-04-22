@@ -43,11 +43,37 @@ import { isNamedRestaurantPark } from "@/lib/named-restaurant-tiles";
 import { getRidePrioritiesForDay } from "@/actions/ride-priorities";
 import { assertTierAllows, tierErrorToClientPayload } from "@/lib/tier";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import {
+  filterMustDosToAssignedParks,
+  mergeMustDosMap,
+  normaliseMustDoItems,
+  parseMustDosMapFromAI,
+  readMustDosMap,
+} from "@/lib/must-dos";
+import type { ParkMustDo, TripMustDosMap } from "@/types/must-dos";
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY ?? "",
 });
 
 const SMART_PLAN_MODEL = "claude-haiku-4-5-20251001";
+/** Paid tiers — use a stronger model for per-park must-dos. */
+const SMART_PLAN_PREMIUM_MODEL = "claude-sonnet-4-5-20250929";
+
+function smartPlanModelForProfileTier(
+  tier: string | null | undefined,
+): string {
+  if (
+    tier === "pro" ||
+    tier === "family" ||
+    tier === "premium" ||
+    tier === "concierge" ||
+    tier === "agent_admin" ||
+    tier === "agent_staff"
+  ) {
+    return SMART_PLAN_PREMIUM_MODEL;
+  }
+  return SMART_PLAN_MODEL;
+}
 const AI_GEN_DEBUG =
   process.env.AI_GEN_DEBUG === "1" || process.env.NODE_ENV !== "production";
 
@@ -140,7 +166,15 @@ async function reportAiGenAutoError(params: {
 const SYSTEM_PROMPT = `You are Smart Plan, TripTiles' warm and practical theme park planner. Output ONLY valid JSON — no markdown, no preamble, no text outside the JSON object.
 
 Shape:
-{ "assignments": { "2026-07-09": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-07-14": "…" }, "planner_day_notes": { "2026-07-09": "…" } }
+{ "assignments": { "2026-07-09": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-07-14": "…" }, "planner_day_notes": { "2026-07-09": "…" }, "must_dos": { "2026-07-09": { "orlando_mk": [ { "id": "any-uuid", "title": "Seven Dwarfs Mine Train", "timing": "morning", "why": "Shorter queues before 11:00 on lighter crowd days.", "done": false } ] } } }
+
+MUST_DOS (full-trip mode):
+- For each date key under "must_dos", include an entry ONLY for each park id you place in that day's am/pm/lunch/dinner slots (the same id strings as in "assignments").
+- Each park: 4–6 objects in rough chronological order (rope drop → morning → … → evening). "timing" must be one of: rope_drop, morning, midday, afternoon, evening.
+- "title": a real, specific attraction or show name at that park. Do not invent attractions that are not in that park.
+- "why": one short UK-English sentence (≤120 chars) on crowd or timing; no score arithmetic.
+- "id": a unique string per row; "done": always false in your output.
+- If you cannot name concrete attractions, omit that park from must_dos.
 
 Limits: crowd_reasoning ≤400 chars, one paragraph. Each day_crowd_notes value ≤150 chars, one sentence.
 Each planner_day_notes value ≤350 chars: practical tips for THAT day only (hours, virtual queues, rest-day ideas). Omit keys with no specific tip.
@@ -334,6 +368,8 @@ export type GenerateAIPlanResult =
       generationsUsedForTrip: number;
       /** Same as DB `previous_assignments_snapshot_at` for optimistic UI. */
       undoSnapshotAt: string;
+      /** Merged \`preferences.must_dos\` after this run (ride-level suggestions). */
+      mustDos: TripMustDosMap | null;
     }
   | {
       ok: false;
@@ -438,7 +474,7 @@ function buildPlannerUserMessage(params: {
   const namedRestBlock = namedRest ? `\n${namedRest}\n` : "";
   const dayScopeBlock =
     dateKey && dateKey.trim().length > 0
-      ? `\nDAY-SCOPED MODE: Plan ONLY for calendar date ${dateKey}. Your JSON MUST have a top-level "assignments" object (same shape as full-trip Smart Plan). Under "assignments" include exactly ONE date entry: the key must be "${dateKey}" character-for-character (YYYY-MM-DD, zero-padded). The value is that day's slots object using lowercase keys only: am, pm, lunch, dinner — each a park ID from the list or omit empty slots. Do NOT return a bare slots object at the root; do NOT use other date keys under "assignments".\n`
+      ? `\nDAY-SCOPED MODE: Plan ONLY for calendar date ${dateKey}. Your JSON MUST have a top-level "assignments" object (same shape as full-trip Smart Plan). Under "assignments" include exactly ONE date entry: the key must be "${dateKey}" character-for-character (YYYY-MM-DD, zero-padded). The value is that day's slots object using lowercase keys only: am, pm, lunch, dinner — each a park ID from the list or omit empty slots. Do NOT return a bare slots object at the root; do NOT use other date keys under "assignments".\n\nUnder "must_dos", include at most ONE date key ("${dateKey}") with 4–6 specific attractions per park you assign in that day's slots (same shape as the system prompt). Omit must_dos if you cannot name real attractions.\n`
       : "";
   const calendarAlreadyBlock =
     dateKey &&
@@ -843,7 +879,7 @@ export async function runGenerateAIPlan(
       });
       const stream = await anthropic.messages.create({
         model,
-        max_tokens: 3000,
+        max_tokens: 8192,
         stream: true,
         system: [
           {
@@ -1094,6 +1130,21 @@ export async function runGenerateAIPlan(
           sortedDateKeys,
           parksById,
         );
+
+    const rawMustTop = (parsed as Record<string, unknown>).must_dos;
+    const parsedMust = parseMustDosMapFromAI(
+      rawMustTop,
+      dateAllow,
+      allowedParkIds,
+    );
+    const filteredMust = filterMustDosToAssignedParks(
+      parsedMust,
+      merged,
+      dateAllow,
+    );
+    const existingMust = readMustDosMap(trip.preferences);
+    const nextMustMap = mergeMustDosMap(existingMust, filteredMust);
+
     const now = new Date().toISOString();
 
     const nextPrefs: Record<string, unknown> = {
@@ -1109,6 +1160,9 @@ export async function runGenerateAIPlan(
           ? { ...(prevDn as Record<string, string>) }
           : {};
       nextPrefs.day_notes = { ...baseDn, ...meta.planner_day_notes };
+    }
+    if (Object.keys(nextMustMap).length > 0) {
+      nextPrefs.must_dos = nextMustMap;
     }
 
     logAiGen({
@@ -1221,6 +1275,7 @@ export async function runGenerateAIPlan(
       dayCrowdNotes: meta.day_crowd_notes ?? null,
       generationsUsedForTrip,
       undoSnapshotAt: now,
+      mustDos: Object.keys(nextMustMap).length > 0 ? nextMustMap : null,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
@@ -1262,4 +1317,290 @@ export async function generateAIPlanAction(
   input: GenerateAIPlanInput,
 ): Promise<GenerateAIPlanResult> {
   return runGenerateAIPlan(input);
+}
+
+const MUST_DOS_PARK_SYSTEM = `You are a theme park touring expert for TripTiles. Output ONLY valid JSON — no markdown, no preamble.
+
+Shape: { "must_dos": [ { "id": "string", "title": "string", "timing": "rope_drop" | "morning" | "midday" | "afternoon" | "evening", "why": "string", "done": false } ] }
+
+Rules:
+- 4 to 6 items in rough chronological order (rope drop through evening).
+- Only name real attractions, rides, or shows that exist at this park. Do not invent.
+- "why": one short UK-English sentence (≤120 characters) on crowds or timing. No score arithmetic.
+- "done" must be false. "id" must be unique per row.`;
+
+export type GenerateMustDosForParkResult =
+  | {
+      ok: true;
+      mustDos: ParkMustDo[];
+      /** Full `trips.preferences` after save (for optimistic client patch). */
+      nextPreferences: Record<string, unknown>;
+    }
+  | {
+      ok: false;
+      error: string;
+      code?:
+        | "NOT_AUTHED"
+        | "TRIP_NOT_FOUND"
+        | "TIER_LIMIT"
+        | "TIER_AI_DISABLED"
+        | "AI_ERROR";
+    };
+
+export async function generateMustDosForPark(input: {
+  tripId: string;
+  dateISO: string;
+  parkId: string;
+}): Promise<GenerateMustDosForParkResult> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { ok: false, error: "Not signed in.", code: "NOT_AUTHED" };
+  }
+
+  try {
+    await assertTierAllows(user.id, "ai");
+  } catch (e) {
+    const mapped = tierErrorToClientPayload(e);
+    if (mapped?.code === "TIER_AI_DISABLED") {
+      return {
+        ok: false,
+        error:
+          "Smart Plan is not available on your current plan. Upgrade on Pricing.",
+        code: "TIER_AI_DISABLED",
+      };
+    }
+    throw e;
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return {
+      ok: false,
+      error: "ANTHROPIC_API_KEY is not configured.",
+      code: "AI_ERROR",
+    };
+  }
+
+  let canGenerateAi: boolean;
+  try {
+    canGenerateAi = await currentUserCanGenerateAI();
+  } catch (e) {
+    if (isTierLoadFailure(e)) {
+      return { ok: false, error: tierLoadFailureUserMessage(), code: "AI_ERROR" };
+    }
+    throw e;
+  }
+  if (!canGenerateAi) {
+    return {
+      ok: false,
+      error: "You have used your Smart Plan allowance on the Free plan.",
+      code: "TIER_LIMIT",
+    };
+  }
+
+  const trip = await getTripById(input.tripId);
+  if (!trip || trip.owner_id !== user.id) {
+    return { ok: false, error: "Trip not found.", code: "TRIP_NOT_FOUND" };
+  }
+
+  const rid = trip.region_id ?? (trip.destination !== "custom" ? trip.destination : null);
+  if (!rid) {
+    return {
+      ok: false,
+      error: "This trip needs a destination region.",
+      code: "AI_ERROR",
+    };
+  }
+
+  const region = await getRegionById(rid);
+  if (!region) {
+    return { ok: false, error: "Could not load region.", code: "AI_ERROR" };
+  }
+
+  const dateKey = formatDateKey(parseDate(`${input.dateISO}T12:00:00`));
+  const allowed = allowedDateKeys(trip.start_date, trip.end_date);
+  if (!allowed.has(dateKey)) {
+    return { ok: false, error: "That date is outside this trip.", code: "AI_ERROR" };
+  }
+
+  const builtInParks = await getParksForRegion(rid);
+  const customTileRows = await getCustomTilesForRegion(user.id, rid);
+  const customAsParks = customTileRows.map(customTileToPark);
+  const parksForPrompt = [
+    ...builtInParks.filter((p) =>
+      trip.has_cruise ? true : !requiresCruiseSegment(p),
+    ),
+    ...customAsParks.filter((p) =>
+      trip.has_cruise ? true : !requiresCruiseSegment(p),
+    ),
+  ];
+  const park = parksForPrompt.find((p) => p.id === input.parkId);
+  if (!park) {
+    return { ok: false, error: "Park not found for this trip.", code: "AI_ERROR" };
+  }
+
+  const childAges = trip.child_ages?.length
+    ? `ages ${trip.child_ages.join(", ")}`
+    : "not specified";
+  const d = parseDate(`${dateKey}T12:00:00`);
+  const weekday = d.toLocaleDateString("en-GB", { weekday: "long" });
+  const month = d.toLocaleDateString("en-GB", { month: "long" });
+
+  const wizardContext =
+    trip.planning_preferences != null
+      ? formatPlanningPreferencesForPrompt(
+          trip.planning_preferences,
+          new Map(parksForPrompt.map((p) => [p.id, p.name])),
+        )
+      : null;
+
+  const userBlock = `Park: ${park.name} (${region.country}).
+Resort/region: ${region.name}.
+Calendar date: ${dateKey} (${weekday}, ${month}).
+Family: ${trip.adults} adults, ${trip.children} children (${childAges}).
+${wizardContext ? `Planning notes:\n${wizardContext}\n` : ""}
+Produce 4–6 specific named attractions in rough chronological order for a full day at this park. Return JSON only.`;
+
+  const supabase = await createClient();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("ai_generations_lifetime, tier")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const model = smartPlanModelForProfileTier(
+    (profile as { tier?: string } | null)?.tier,
+  );
+  let rawText = "";
+  try {
+    const msg = await anthropic.messages.create({
+      model,
+      max_tokens: 2500,
+      system: [
+        {
+          type: "text",
+          text: MUST_DOS_PARK_SYSTEM,
+          cache_control: { type: "ephemeral" },
+        },
+        {
+          type: "text",
+          text: `Park name for grounding: ${park.name}. ID: ${park.id}.`,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: userBlock }],
+    });
+    const block = msg.content[0];
+    if (block?.type === "text") {
+      rawText = block.text;
+    }
+    const usage = msg.usage as AnthropicMessageUsage | undefined;
+    const inputTokens = inputTokensFromUsage(usage);
+    const outputTokens = usage?.output_tokens ?? 0;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(stripCodeFences(rawText));
+    } catch {
+      await supabase.from("ai_generations").insert({
+        user_id: user.id,
+        trip_id: input.tripId,
+        prompt: `must_dos:${input.parkId}\n${userBlock}`,
+        model,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_gbp_pence: null,
+        success: false,
+        error: "Invalid JSON (must_dos single park)",
+      });
+      return {
+        ok: false,
+        error: "We could not read the AI response. Please try again.",
+        code: "AI_ERROR",
+      };
+    }
+    const root = parsed as Record<string, unknown>;
+    const items = normaliseMustDoItems(root.must_dos);
+    if (items.length === 0) {
+      await supabase.from("ai_generations").insert({
+        user_id: user.id,
+        trip_id: input.tripId,
+        prompt: `must_dos:${input.parkId}\n${userBlock}`,
+        model,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_gbp_pence: null,
+        success: false,
+        error: "empty must_dos",
+      });
+      return {
+        ok: false,
+        error: "No attractions were returned. Try again.",
+        code: "AI_ERROR",
+      };
+    }
+
+    const prevPrefs = trip.preferences ?? {};
+    const mustMap = readMustDosMap(prevPrefs);
+    const snap = JSON.parse(JSON.stringify(mustMap)) as TripMustDosMap;
+    const nextMap: TripMustDosMap = {
+      ...mustMap,
+      [dateKey]: { ...(mustMap[dateKey] ?? {}), [input.parkId]: items },
+    };
+    const nextPreferences: Record<string, unknown> = {
+      ...prevPrefs,
+      must_dos: nextMap,
+      must_dos_snapshot: snap,
+    };
+
+    const { error: upErr } = await supabase
+      .from("trips")
+      .update({
+        preferences: nextPreferences,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.tripId)
+      .eq("owner_id", user.id);
+
+    if (upErr) {
+      return { ok: false, error: upErr.message, code: "AI_ERROR" };
+    }
+
+    const { error: genInsertErr } = await supabase.from("ai_generations").insert({
+      user_id: user.id,
+      trip_id: input.tripId,
+      prompt: `must_dos:${input.parkId}\n${userBlock}`,
+      model,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      cost_gbp_pence: null,
+      success: true,
+      error: null,
+    });
+    if (genInsertErr) {
+      return {
+        ok: false,
+        error: `Could not log usage: ${genInsertErr.message}`,
+        code: "AI_ERROR",
+      };
+    }
+
+    const prevLifetime = Number(
+      (profile as { ai_generations_lifetime?: number } | null)
+        ?.ai_generations_lifetime ?? 0,
+    );
+    await supabase
+      .from("profiles")
+      .update({ ai_generations_lifetime: prevLifetime + 1 })
+      .eq("id", user.id);
+
+    revalidatePath("/planner");
+    return {
+      ok: true,
+      mustDos: items,
+      nextPreferences: nextPreferences as Record<string, unknown>,
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    return { ok: false, error: msg, code: "AI_ERROR" };
+  }
 }

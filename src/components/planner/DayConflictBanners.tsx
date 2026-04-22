@@ -4,6 +4,7 @@ import {
   dayConflictDismissKey,
   type DayConflict,
 } from "@/lib/planner-day-conflicts";
+import { LogoSpinner } from "@/components/ui/LogoSpinner";
 import { useCallback, useEffect, useId, useState } from "react";
 
 type Props = {
@@ -11,6 +12,10 @@ type Props = {
   dayDate: string;
   conflicts: DayConflict[];
   onOpenSmartPlan: () => void;
+  /** When set, "Smart Plan →" on empty must-do rows calls this with the park id. */
+  onGenerateMustDosForPark?: (parkId: string) => void;
+  /** Shows spinner on the matching park row. */
+  generatingMustDosParkId?: string | null;
 };
 
 function bannerMessage(c: DayConflict): string {
@@ -33,6 +38,8 @@ export function DayConflictBanners({
   dayDate,
   conflicts,
   onOpenSmartPlan,
+  onGenerateMustDosForPark,
+  generatingMustDosParkId = null,
 }: Props) {
   const statusId = useId();
   const [expanded, setExpanded] = useState(false);
@@ -102,9 +109,17 @@ export function DayConflictBanners({
           {c.type === "empty_must_do" ? (
             <button
               type="button"
-              className="mt-2 min-h-11 rounded-lg border border-royal/20 bg-white px-3 font-sans text-xs font-semibold text-royal"
-              onClick={onOpenSmartPlan}
+              className="mt-2 inline-flex min-h-11 min-w-[7.5rem] items-center justify-center gap-2 rounded-lg border border-royal/20 bg-white px-3 font-sans text-xs font-semibold text-royal disabled:opacity-60"
+              disabled={generatingMustDosParkId === c.parkId}
+              onClick={() =>
+                onGenerateMustDosForPark
+                  ? onGenerateMustDosForPark(c.parkId)
+                  : onOpenSmartPlan()
+              }
             >
+              {generatingMustDosParkId === c.parkId ? (
+                <LogoSpinner size="sm" className="shrink-0" decorative />
+              ) : null}
               Smart Plan →
             </button>
           ) : null}
