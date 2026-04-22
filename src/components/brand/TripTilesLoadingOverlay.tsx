@@ -20,7 +20,7 @@ const toneSurfaces: Record<Tone, string> = {
 };
 
 /**
- * Full-viewport branded loading — spinning TripTiles mark (no generic dot spinner).
+ * Full-viewport branded loading — Tripp 12-frame sprite on a static frame.
  */
 export function TripTilesLoadingOverlay({
   open,
