@@ -1,3 +1,5 @@
+"use client";
+
 import { TripTilesSpinningMark } from "@/components/brand/TripTilesSpinningMark";
 
 export default function AppSegmentLoading() {

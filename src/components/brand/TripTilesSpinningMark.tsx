@@ -5,58 +5,67 @@ import { useId, useMemo } from "react";
 /** 12-frame Tripp rotation sprite (3×4 grid), keyed for transparent backdrop. */
 export const TRIPP_LOADING_SPRITE_SRC = "/images/tripp-loading-sprite.png";
 
+const FRAMES = 12;
+const COLS = 3;
+const ROWS = 4;
+
 const SPRITE_INTRINSIC_W = 1024;
 const SPRITE_INTRINSIC_H = 819;
-const SPRITE_COLS = 3;
-const SPRITE_ROWS = 4;
-const FRAME_COUNT = SPRITE_COLS * SPRITE_ROWS;
 
-const CELL_INTRINSIC_W = SPRITE_INTRINSIC_W / SPRITE_COLS;
-const CELL_INTRINSIC_H = SPRITE_INTRINSIC_H / SPRITE_ROWS;
+const CELL_INTRINSIC_W = SPRITE_INTRINSIC_W / COLS;
+const CELL_INTRINSIC_H = SPRITE_INTRINSIC_H / ROWS;
 const CELL_ASPECT = CELL_INTRINSIC_W / CELL_INTRINSIC_H;
 
 const displayWidthPx = { md: 92, lg: 116 } as const;
 
-/** ms per frame — total loop = FRAME_COUNT * FRAME_MS */
+/** ms per frame — full loop = FRAMES × this value. */
 const FRAME_MS = 72;
+const DURATION_MS = FRAME_MS * FRAMES;
 
 function displayHeightForWidth(dw: number) {
   return dw / CELL_ASPECT;
 }
 
 /**
- * Hold-style keyframes so `linear` animation stays crisp (no tween between frames).
- * CSS-only: required for `loading.tsx` where React may skip hydrating fallbacks, so
- * `useEffect` never runs (see Next.js #41972).
+ * Hold keyframes: each position is held for 1/FRAMES of the cycle, no tween.
+ * `linear` timing is correct here — the curve does not add interpolation within
+ * each [start%, end%] block. (`steps(1)` on the whole run would be a single jump.)
  */
-function spriteAnimationCss(animName: string, dw: number, dh: number): string {
-  const segs: string[] = [];
-  const step = 100 / FRAME_COUNT;
-  for (let f = 0; f < FRAME_COUNT; f++) {
-    const startPct = f * step;
-    const endPct = f === FRAME_COUNT - 1 ? 100 : (f + 1) * step - 1e-4;
-    const col = f % SPRITE_COLS;
-    const row = Math.floor(f / SPRITE_COLS);
-    const x = (-col * dw).toFixed(3);
-    const y = (-row * dh).toFixed(3);
-    segs.push(
-      `${startPct.toFixed(4)}%, ${endPct.toFixed(4)}% { background-position: ${x}px ${y}px; }`,
-    );
-  }
-
-  const durationMs = FRAME_MS * FRAME_COUNT;
+function spriteStyleBlock(
+  className: string,
+  dw: number,
+  dh: number,
+  spriteUrl: string,
+): string {
+  const keyframes = Array.from({ length: FRAMES }, (_, f) => {
+    const col = f % COLS;
+    const row = Math.floor(f / COLS);
+    const x = Math.round(-col * dw);
+    const y = Math.round(-row * dh);
+    const start = ((f / FRAMES) * 100).toFixed(4);
+    const end = (((f + 1) / FRAMES) * 100 - 0.0001).toFixed(4);
+    return `${start}%, ${end}% { background-position: ${x}px ${y}px; }`;
+  }).join("\n          ");
 
   return `
-@keyframes ${animName} {
-${segs.join("\n")}
-}
-.${animName} {
-  animation: ${animName} ${durationMs}ms linear infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .${animName} { animation: none !important; }
-}
-`;
+        @keyframes ${className} {
+          ${keyframes}
+        }
+        .${className} {
+          width: ${dw}px;
+          height: ${dh}px;
+          background-image: url("${spriteUrl}");
+          background-size: ${dw * COLS}px ${dh * ROWS}px;
+          background-repeat: no-repeat;
+          background-position: 0 0;
+          animation: ${className} ${DURATION_MS}ms linear infinite;
+          will-change: background-position;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .${className} {
+            animation-duration: ${DURATION_MS * 3}ms;
+          }
+        }`;
 }
 
 type Props = {
@@ -68,6 +77,11 @@ type Props = {
    * (cream vs royal).
    */
   surface?: "light" | "dark";
+  /**
+   * If the mark sits in an existing `role=status` region, avoid a nested status
+   * (invalid pattern) and hide the sprite from screen readers; copy still announces.
+   */
+  announceViaParent?: boolean;
 };
 
 const staticFrame: Record<NonNullable<Props["surface"]>, string> = {
@@ -79,23 +93,23 @@ const staticFrame: Record<NonNullable<Props["surface"]>, string> = {
 
 /**
  * Loading mark: **Tripp** 12-frame sprite (row-major 3×4 sheet) on a static frame.
- * Uses **CSS keyframe animation** (not `useEffect`) so it plays in App Router
- * `loading.tsx` fallbacks, which are often not hydrated.
+ * Pure CSS (no rAF) so the animation runs in the App Router loading segment.
  */
 export function TripTilesSpinningMark({
   size = "md",
   className = "",
   surface = "light",
+  announceViaParent = false,
 }: Props) {
-  const uid = useId().replace(/:/g, "_");
-  const animName = `tripp-sprite-${uid}`;
+  const rawId = useId();
+  const id = `tripp-${rawId.replace(/[:]/g, "")}`;
   const dw = displayWidthPx[size];
   const dh = displayHeightForWidth(dw);
   const pad = 6;
 
   const spriteCss = useMemo(
-    () => spriteAnimationCss(animName, dw, dh),
-    [animName, dw, dh],
+    () => spriteStyleBlock(id, dw, dh, TRIPP_LOADING_SPRITE_SRC),
+    [id, dw, dh],
   );
 
   return (
@@ -113,17 +127,10 @@ export function TripTilesSpinningMark({
           aria-hidden
         />
         <div
-          className={`relative z-[1] shrink-0 drop-shadow-md ${animName}`}
-          style={{
-            width: dw,
-            height: dh,
-            backgroundImage: `url(${TRIPP_LOADING_SPRITE_SRC})`,
-            backgroundRepeat: "no-repeat",
-            backgroundSize: `${dw * SPRITE_COLS}px ${dh * SPRITE_ROWS}px`,
-            backgroundPosition: "0 0",
-          }}
-          role="img"
-          aria-label="TripTiles loading"
+          className={`relative z-[1] shrink-0 drop-shadow-md ${id}`}
+          {...(announceViaParent
+            ? { "aria-hidden": true as const }
+            : { role: "status" as const, "aria-label": "TripTiles loading" })}
         />
       </div>
     </>
