@@ -37,7 +37,7 @@ export function TripTilesLoadingOverlay({
       aria-live="polite"
       aria-busy="true"
     >
-      <TripTilesSpinningMark size="lg" />
+      <TripTilesSpinningMark size="lg" surface={tone} />
       <p className="title max-w-sm text-center font-serif text-lg font-semibold tracking-tight">
         {title}
       </p>
