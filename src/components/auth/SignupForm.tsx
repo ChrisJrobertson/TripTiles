@@ -1,6 +1,7 @@
 "use client";
 
 import { signUpWithPasswordAction } from "@/actions/auth";
+import { TripTilesAuthSpinner } from "@/components/auth/TripTilesAuthSpinner";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
 import { createClient } from "@/lib/supabase/client";
 import { PasswordField } from "@/components/auth/PasswordField";
@@ -130,6 +131,10 @@ export function SignupForm({ next }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+      <TripTilesAuthSpinner
+        visible={loading}
+        message="Creating your account…"
+      />
       <div>
         <label
           htmlFor="signup-email"

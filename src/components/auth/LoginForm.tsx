@@ -1,6 +1,7 @@
 "use client";
 
 import { signInWithPasswordAction } from "@/actions/auth";
+import { TripTilesAuthSpinner } from "@/components/auth/TripTilesAuthSpinner";
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -105,8 +106,16 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
     await handleMagicLink();
   }
 
+  const busy = magicLoading || passwordLoading;
+  const spinnerMessage = passwordLoading
+    ? "Signing you in…"
+    : magicLoading
+      ? "Sending your magic link…"
+      : "";
+
   return (
     <form onSubmit={(e) => void handleSubmit(e)} className="mt-8 space-y-5">
+      <TripTilesAuthSpinner visible={busy} message={spinnerMessage} />
       <div aria-live="polite" role="status">
         {error ? (
           <p
@@ -152,14 +161,14 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
         <button
           type="submit"
-          disabled={magicLoading || passwordLoading}
+          disabled={busy}
           className="flex min-h-12 flex-1 items-center justify-center rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {magicLoading ? "Sending…" : "Send magic link"}
         </button>
         <button
           type="button"
-          disabled={magicLoading || passwordLoading}
+          disabled={busy}
           onClick={() => void handlePasswordSignIn()}
           className="flex min-h-12 flex-1 items-center justify-center rounded-lg border-2 border-royal/25 bg-white px-4 font-sans text-sm font-semibold text-royal transition hover:border-royal/40 hover:bg-cream disabled:cursor-not-allowed disabled:opacity-60"
         >

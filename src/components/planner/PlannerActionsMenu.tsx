@@ -8,6 +8,8 @@ type Props = {
   onResetCruise: () => void;
   onClearAll: () => void;
   onPrint: () => void;
+  /** Side-by-side day comparison (planner calendar tab). */
+  onCompareDays?: () => void;
   onExportPdf?: () => void;
   /** Optional cruise toggle shown below standard actions. */
   cruiseSection?: ReactNode;
@@ -23,6 +25,7 @@ function MenuBlock({
   onResetCruise,
   onClearAll,
   onPrint,
+  onCompareDays,
   onExportPdf,
   cruiseSection,
   colourSection,
@@ -34,6 +37,19 @@ function MenuBlock({
     <>
       {adminSection ? (
         <div className="border-b border-royal/10 pb-1">{adminSection(close)}</div>
+      ) : null}
+      {onCompareDays ? (
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => {
+            onCompareDays();
+            close();
+          }}
+          className="block w-full px-4 py-2.5 text-left font-sans text-sm text-royal transition hover:bg-cream"
+        >
+          Compare days
+        </button>
       ) : null}
       <button
         type="button"
@@ -101,6 +117,7 @@ export function PlannerActionsMenu({
   onResetCruise,
   onClearAll,
   onPrint,
+  onCompareDays,
   onExportPdf,
   cruiseSection,
   colourSection,
@@ -120,6 +137,7 @@ export function PlannerActionsMenu({
     onResetCruise,
     onClearAll,
     onPrint,
+    onCompareDays,
     onExportPdf,
     cruiseSection,
     colourSection,

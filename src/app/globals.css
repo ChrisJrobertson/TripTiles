@@ -2,15 +2,18 @@
 @config "../../tailwind.config.ts";
 
 :root {
-  /* Align with TripTiles cream + logo rainbow accents (very soft mesh on html). */
+  /* TripTiles cream + logo “fireworks” mesh — richer than a flat wash. */
   --background: #faf8f3;
   --foreground: #171717;
-  --tt-mesh-coral: rgb(232 93 76 / 0.13);
-  --tt-mesh-amber: rgb(240 176 66 / 0.12);
-  --tt-mesh-mint: rgb(52 143 110 / 0.1);
-  --tt-mesh-sky: rgb(37 99 235 / 0.09);
-  --tt-mesh-violet: rgb(109 40 217 / 0.08);
-  --tt-mesh-rose: rgb(236 72 153 / 0.06);
+  --tt-mesh-coral: rgb(232 93 76 / 0.22);
+  --tt-mesh-amber: rgb(240 176 66 / 0.24);
+  --tt-mesh-mint: rgb(52 143 110 / 0.18);
+  --tt-mesh-sky: rgb(37 99 235 / 0.2);
+  --tt-mesh-violet: rgb(109 40 217 / 0.16);
+  --tt-mesh-rose: rgb(236 72 153 / 0.14);
+  --tt-mesh-gold: rgb(201 169 97 / 0.32);
+  --tt-mesh-royal: rgb(11 30 92 / 0.12);
+  --tt-sparkle: rgb(255 255 255 / 0.55);
 }
 
 @theme inline {
@@ -27,7 +30,15 @@
 html {
   min-height: 100%;
   background-color: #faf8f3;
+  /* Layer order: first = top — keep gold “burst” and sparkles readable. */
   background-image:
+    radial-gradient(circle 1.25px at 18% 42%, var(--tt-sparkle), transparent 1.6px),
+    radial-gradient(circle 1px at 84% 28%, var(--tt-sparkle), transparent 1.3px),
+    radial-gradient(circle 1.1px at 62% 78%, var(--tt-sparkle), transparent 1.4px),
+    radial-gradient(circle 1px at 31% 88%, var(--tt-sparkle), transparent 1.2px),
+    radial-gradient(circle 1.2px at 91% 62%, var(--tt-sparkle), transparent 1.5px),
+    radial-gradient(ellipse 72% 48% at 50% -5%, var(--tt-mesh-gold), transparent 58%),
+    radial-gradient(ellipse 55% 42% at 8% 92%, var(--tt-mesh-royal), transparent 62%),
     radial-gradient(ellipse 130% 95% at 0% -15%, var(--tt-mesh-coral), transparent 58%),
     radial-gradient(ellipse 115% 85% at 100% -8%, var(--tt-mesh-sky), transparent 52%),
     radial-gradient(ellipse 120% 90% at 100% 108%, var(--tt-mesh-violet), transparent 58%),

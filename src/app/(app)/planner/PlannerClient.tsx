@@ -1698,6 +1698,15 @@ export function PlannerClient({
   const savingVisible = isSaving || isPending;
   const showPlannerShell = plannerTab === "planner";
 
+  const openCompareDays = useCallback(() => {
+    setCompareMode(true);
+    if (plannerTab !== "planner") {
+      startTransition(() => {
+        router.replace(tripRouteBase ?? "/planner");
+      });
+    }
+  }, [plannerTab, router, tripRouteBase]);
+
   return (
     <div
       className="min-h-screen bg-transparent pb-28 pt-2 lg:pb-16"
@@ -1881,7 +1890,7 @@ export function PlannerClient({
           ) : null}
 
           <section
-            className="mt-5 flex flex-wrap items-center gap-2"
+            className="mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-royal/15 bg-gradient-to-br from-cream via-white to-[color-mix(in_srgb,var(--tt-ring)_7%,#faf8f3)] px-3 py-3 shadow-sm ring-1 ring-gold/20"
             aria-label="Trip actions"
           >
             <button
@@ -1913,8 +1922,8 @@ export function PlannerClient({
             />
             <button
               type="button"
-              className="hidden rounded-lg border border-royal/20 bg-white px-4 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition hover:bg-cream md:inline-flex"
-              onClick={() => setCompareMode(true)}
+              className="inline-flex cursor-pointer select-none rounded-lg border border-royal/20 bg-white px-4 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition hover:border-gold/35 hover:bg-cream"
+              onClick={openCompareDays}
             >
               Compare days
             </button>
@@ -1931,6 +1940,7 @@ export function PlannerClient({
               </button>
             ) : null}
             <PlannerActionsMenu
+              onCompareDays={openCompareDays}
               onResetCruise={() => {
                 if (!activeTripId) return;
                 applyLocalPatch(activeTripId, {
