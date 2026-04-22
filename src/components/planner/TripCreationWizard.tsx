@@ -242,7 +242,7 @@ export function TripCreationWizard({
   const shell =
     variant === "modal"
       ? "px-2 py-4 sm:px-4"
-      : "min-h-screen bg-cream px-4 py-10";
+      : "min-h-screen bg-transparent px-4 py-10";
 
   return (
     <div className={shell}>

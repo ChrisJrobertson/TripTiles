@@ -2,8 +2,15 @@
 @config "../../tailwind.config.ts";
 
 :root {
-  --background: #ffffff;
+  /* Align with TripTiles cream + logo rainbow accents (very soft mesh on html). */
+  --background: #faf8f3;
   --foreground: #171717;
+  --tt-mesh-coral: rgb(232 93 76 / 0.13);
+  --tt-mesh-amber: rgb(240 176 66 / 0.12);
+  --tt-mesh-mint: rgb(52 143 110 / 0.1);
+  --tt-mesh-sky: rgb(37 99 235 / 0.09);
+  --tt-mesh-violet: rgb(109 40 217 / 0.08);
+  --tt-mesh-rose: rgb(236 72 153 / 0.06);
 }
 
 @theme inline {
@@ -17,17 +24,43 @@
   --color-magic: #2e3192;
 }
 
+html {
+  min-height: 100%;
+  background-color: #faf8f3;
+  background-image:
+    radial-gradient(ellipse 130% 95% at 0% -15%, var(--tt-mesh-coral), transparent 58%),
+    radial-gradient(ellipse 115% 85% at 100% -8%, var(--tt-mesh-sky), transparent 52%),
+    radial-gradient(ellipse 120% 90% at 100% 108%, var(--tt-mesh-violet), transparent 58%),
+    radial-gradient(ellipse 100% 75% at 0% 102%, var(--tt-mesh-amber), transparent 52%),
+    radial-gradient(ellipse 85% 55% at 50% 100%, var(--tt-mesh-mint), transparent 48%),
+    radial-gradient(ellipse 70% 45% at 72% 18%, var(--tt-mesh-rose), transparent 42%);
+  background-attachment: fixed;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
   }
+
+  html {
+    background-color: #0a0a0a;
+    background-image: none;
+    background-attachment: scroll;
+  }
 }
 
 body {
-  background: var(--background);
+  min-height: 100dvh;
+  background: transparent;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: var(--background);
+  }
 }
 
 @keyframes achievement-card-in {

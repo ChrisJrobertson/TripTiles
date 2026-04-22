@@ -22,7 +22,7 @@ export default function AppError({
   }, [error]);
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-cream px-6 py-16">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-transparent px-6 py-16">
       <div className="w-full max-w-md rounded-2xl border border-royal/15 bg-white p-8 text-center shadow-lg shadow-royal/5">
         <h1 className="font-serif text-2xl font-semibold text-royal">
           Something went wrong

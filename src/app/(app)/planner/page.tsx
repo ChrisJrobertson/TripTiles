@@ -19,7 +19,7 @@ export default async function PlannerPage({
 }) {
   if (!getSupabaseUrl() || !getSupabaseAnonKey()) {
     return (
-      <main className="min-h-screen bg-cream px-6 py-12">
+      <main className="min-h-screen bg-transparent px-6 py-12">
         <div className="mx-auto max-w-lg rounded-2xl border border-royal/10 bg-white p-8">
           <h1 className="font-serif text-xl font-semibold text-royal">
             Configuration needed

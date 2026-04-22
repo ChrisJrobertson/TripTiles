@@ -1700,7 +1700,7 @@ export function PlannerClient({
 
   return (
     <div
-      className="min-h-screen bg-cream pb-28 pt-2 lg:pb-16"
+      className="min-h-screen bg-transparent pb-28 pt-2 lg:pb-16"
       style={shellThemeStyle}
     >
       <AppNavHeader

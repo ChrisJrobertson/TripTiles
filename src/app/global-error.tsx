@@ -17,7 +17,7 @@ export default function GlobalError({
 
   return (
     <html lang="en-GB">
-      <body className="bg-cream px-6 py-16 font-sans text-royal">
+      <body className="bg-transparent px-6 py-16 font-sans text-royal">
         <h1 className="font-serif text-xl font-semibold">Something went wrong</h1>
         <p className="mt-3 text-sm text-royal/80">
           Please refresh the page. If the problem continues, contact support.

@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export function MarketingHeader() {
   return (
-    <header className="sticky top-0 z-20 border-b border-royal/10 bg-cream/95 px-6 py-4 backdrop-blur-sm">
+    <header className="sticky top-0 z-20 border-b border-royal/[0.12] bg-white/70 px-6 py-4 shadow-[0_1px_0_rgb(201_169_97_/_0.12)] backdrop-blur-xl backdrop-saturate-150">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
         <TripTilesLogoLink
           href="/"

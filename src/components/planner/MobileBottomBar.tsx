@@ -13,7 +13,7 @@ export function MobileBottomBar({
 }: Props) {
   return (
     <div
-      className="safe-area-inset-bottom fixed bottom-0 inset-x-0 z-20 flex items-center justify-between border-t border-gold/30 bg-cream px-4 py-3 md:hidden"
+      className="safe-area-inset-bottom fixed bottom-0 inset-x-0 z-20 flex items-center justify-between border-t border-gold/35 bg-white/85 px-4 py-3 backdrop-blur-xl md:hidden"
       role="toolbar"
       aria-label="Planner tools"
     >

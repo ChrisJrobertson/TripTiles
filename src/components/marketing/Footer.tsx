@@ -11,7 +11,7 @@ const DEST_LINKS: { label: string; href: string }[] = [
 
 export function MarketingFooter() {
   return (
-    <footer className="mt-auto border-t border-royal/10 bg-cream px-6 py-12">
+    <footer className="mt-auto border-t border-gold/30 bg-white/55 px-6 py-12 backdrop-blur-md backdrop-saturate-150">
       <div className="mx-auto grid max-w-5xl gap-10 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <TripTilesLogoLink

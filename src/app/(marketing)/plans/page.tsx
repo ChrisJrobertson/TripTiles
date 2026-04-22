@@ -62,7 +62,7 @@ export default async function PlansGalleryPage({
   const lengthBucket = normaliseLength(firstParam(sp.length));
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-transparent">
       <main className="mx-auto max-w-6xl px-4 py-12">
         <h1 className="font-serif text-3xl font-semibold text-royal md:text-4xl">
           Trip plans from the TripTiles community

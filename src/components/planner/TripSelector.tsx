@@ -25,7 +25,7 @@ export function TripSelector({
 
   return (
     <div
-      className={`flex flex-col gap-3 rounded-xl border border-royal/10 bg-white px-4 py-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5 sm:py-4 ${className}`}
+      className={`flex flex-col gap-3 rounded-xl border border-royal/12 bg-white/90 px-4 py-3 shadow-md shadow-royal/[0.06] ring-1 ring-gold/15 backdrop-blur-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5 sm:py-4 ${className}`}
     >
       <label className="flex flex-wrap items-center gap-3 font-sans text-base text-royal">
         <span

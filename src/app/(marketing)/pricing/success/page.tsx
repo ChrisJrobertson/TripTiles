@@ -30,7 +30,7 @@ export default async function PricingSuccessPage({
   const name = getTierConfig(tierKey).name;
 
   return (
-    <div className="flex min-h-screen flex-col bg-cream px-6 py-16">
+    <div className="flex min-h-screen flex-col bg-transparent px-6 py-16">
       <div className="mx-auto max-w-lg text-center">
         <p className="text-5xl" aria-hidden>
           🎉

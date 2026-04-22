@@ -19,7 +19,7 @@ export default async function ResetPasswordPage() {
   } = await supabase.auth.getUser();
 
   return (
-    <main className="min-h-screen bg-cream px-4 py-12">
+    <main className="min-h-screen bg-transparent px-4 py-12">
       <div className="mx-auto w-full max-w-md rounded-2xl border border-royal/10 bg-white/80 p-8 shadow-lg shadow-royal/5 backdrop-blur-sm md:p-10">
         <div className="flex justify-center">
           <TripTilesLogoLink

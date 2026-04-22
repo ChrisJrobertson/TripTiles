@@ -10,7 +10,7 @@ export default async function InvitePage({ params }: Props) {
   const preview = await getInvitePreviewByToken(token);
   if (!preview) {
     return (
-      <div className="min-h-screen bg-cream px-4 py-20 text-center">
+      <div className="min-h-screen bg-transparent px-4 py-20 text-center">
         <h1 className="font-serif text-2xl font-semibold text-royal">
           This invite link is invalid or has expired
         </h1>
@@ -29,7 +29,7 @@ export default async function InvitePage({ params }: Props) {
 
   if (preview.status === "revoked" || preview.status === "declined") {
     return (
-      <div className="min-h-screen bg-cream px-4 py-20 text-center">
+      <div className="min-h-screen bg-transparent px-4 py-20 text-center">
         <h1 className="font-serif text-2xl font-semibold text-royal">
           This invite is no longer active
         </h1>
@@ -47,7 +47,7 @@ export default async function InvitePage({ params }: Props) {
   const isAuthed = Boolean(user);
 
   return (
-    <div className="min-h-screen bg-cream px-4 py-16">
+    <div className="min-h-screen bg-transparent px-4 py-16">
       <div className="mx-auto max-w-lg rounded-2xl border border-royal/10 bg-white p-8 text-center shadow-sm">
         <p className="font-sans text-xs font-semibold uppercase tracking-wide text-gold">
           TripTiles invite

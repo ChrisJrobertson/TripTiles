@@ -108,7 +108,7 @@ export default async function PublicPlanPage({ params }: Props) {
   const crowd = crowdRaw ? sanitizeDayNote(crowdRaw) : null;
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-transparent">
       <div className="border-b border-royal/10 bg-gold/15 px-4 py-3 text-center font-sans text-sm text-royal">
         <Link
           href="/signup?next=/planner"

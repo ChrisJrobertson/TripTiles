@@ -7,7 +7,7 @@ type Props = {
 
 export function LegalArticle({ title, children }: Props) {
   return (
-    <main className="bg-cream px-4 py-12 pb-24">
+    <main className="bg-transparent px-4 py-12 pb-24">
       <article className="mx-auto max-w-[760px]">
         <Link
           href="/"

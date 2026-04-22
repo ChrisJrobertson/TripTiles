@@ -48,7 +48,7 @@ export default async function DayTemplatesSettingsPage() {
     .order("created_at", { ascending: false });
 
   return (
-    <div className="min-h-screen bg-cream pb-24">
+    <div className="min-h-screen bg-transparent pb-24">
       <AppNavHeader
         userEmail={user.email ?? ""}
         userTier={legacyTier}

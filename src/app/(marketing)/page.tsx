@@ -218,7 +218,7 @@ export default async function MarketingHomePage() {
         </div>
       </section>
 
-      <section className="border-t border-royal/10 bg-cream px-6 py-16">
+      <section className="border-t border-royal/10 bg-white/50 px-6 py-16 backdrop-blur-sm">
         <div className="mx-auto max-w-5xl">
           <h2 className="text-center font-serif text-2xl font-semibold text-royal md:text-3xl">
             Everything you need
@@ -281,7 +281,7 @@ export default async function MarketingHomePage() {
         </section>
       ) : null}
 
-      <section className="border-t border-royal/10 bg-cream px-6 py-16">
+      <section className="border-t border-royal/10 bg-white/50 px-6 py-16 backdrop-blur-sm">
         <div className="mx-auto max-w-5xl">
           <p className="text-center font-sans text-xs font-semibold uppercase tracking-widest text-gold">
             Beta tester feedback
@@ -391,7 +391,7 @@ export default async function MarketingHomePage() {
         </div>
       </section>
 
-      <section className="border-t border-royal/10 bg-cream px-6 py-16">
+      <section className="border-t border-royal/10 bg-white/50 px-6 py-16 backdrop-blur-sm">
         <div className="mx-auto max-w-3xl">
           <h2 className="text-center font-serif text-2xl font-semibold text-royal md:text-3xl">
             FAQ

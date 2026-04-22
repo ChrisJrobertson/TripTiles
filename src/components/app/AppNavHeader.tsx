@@ -112,7 +112,7 @@ function AppNavHeaderFallback({
   const showTripRatio = typeof cap === "number";
   const upgradeNav = showUpgradeNavCta ?? isLegacyFreeNav;
   return (
-    <header className="sticky top-0 z-30 border-b border-royal/10 bg-cream/95 px-4 py-3 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-royal/[0.12] bg-white/70 px-4 py-3 shadow-[0_1px_0_rgb(201_169_97_/_0.12)] backdrop-blur-xl backdrop-saturate-150">
       <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <TripTilesLogoLink
@@ -126,7 +126,7 @@ function AppNavHeaderFallback({
               Menu
             </summary>
             <nav
-              className="absolute right-0 z-50 mt-2 w-56 rounded-2xl border border-royal/15 bg-cream p-2 shadow-xl"
+              className="absolute right-0 z-50 mt-2 w-56 rounded-2xl border border-royal/15 bg-white/95 p-2 shadow-xl backdrop-blur-xl"
               aria-label="Main mobile"
             >
               <ul className="flex flex-col gap-0.5">
@@ -323,7 +323,7 @@ function AppNavHeaderInner({
     );
 
   return (
-    <header className="sticky top-0 z-30 border-b border-royal/10 bg-cream/95 px-4 py-3 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-royal/[0.12] bg-white/70 px-4 py-3 shadow-[0_1px_0_rgb(201_169_97_/_0.12)] backdrop-blur-xl backdrop-saturate-150">
       <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <TripTilesLogoLink
@@ -337,7 +337,7 @@ function AppNavHeaderInner({
               Menu
             </summary>
             <nav
-              className="absolute right-0 z-50 mt-2 w-56 rounded-2xl border border-royal/15 bg-cream p-2 shadow-xl"
+              className="absolute right-0 z-50 mt-2 w-56 rounded-2xl border border-royal/15 bg-white/95 p-2 shadow-xl backdrop-blur-xl"
               aria-label="Main mobile"
             >
               <ul className="flex flex-col gap-0.5">

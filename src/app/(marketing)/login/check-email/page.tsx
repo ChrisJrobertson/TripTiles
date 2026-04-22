@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function CheckEmailPage() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-cream px-6">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-transparent px-6">
       <div className="max-w-md rounded-2xl border border-royal/10 bg-white/90 p-8 text-center shadow-lg shadow-royal/5 md:p-10">
         <div
           className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border-2 border-gold/50 bg-royal/[0.04] text-4xl leading-none"

@@ -11,7 +11,7 @@ export function ProfileLoadErrorPanel({
   detail,
 }: Props) {
   return (
-    <main className="min-h-screen bg-cream px-6 py-12">
+    <main className="min-h-screen bg-transparent px-6 py-12">
       <div className="mx-auto max-w-lg rounded-2xl border border-royal/10 bg-white p-8 shadow-sm">
         <h1 className="font-serif text-xl font-semibold text-royal">{title}</h1>
         <p className="mt-3 font-sans text-sm text-royal/70">{detail}</p>
