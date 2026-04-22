@@ -1,6 +1,7 @@
 "use client";
 
 import { resetPasswordAction } from "@/actions/auth";
+import { TripTilesAuthSpinner } from "@/components/auth/TripTilesAuthSpinner";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -52,6 +53,10 @@ export function ForgotPasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+      <TripTilesAuthSpinner
+        visible={loading}
+        message="Sending your reset link…"
+      />
       <div>
         <label
           htmlFor="forgot-email"

@@ -1,6 +1,7 @@
 "use client";
 
 import { updatePasswordAction } from "@/actions/auth";
+import { TripTilesAuthSpinner } from "@/components/auth/TripTilesAuthSpinner";
 import { PasswordField } from "@/components/auth/PasswordField";
 import { showToast } from "@/lib/toast";
 import { useRouter } from "next/navigation";
@@ -43,6 +44,10 @@ export function ResetPasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+      <TripTilesAuthSpinner
+        visible={loading}
+        message="Updating your password…"
+      />
       <h2 className="font-serif text-lg font-semibold text-royal">
         Set a new password
       </h2>
