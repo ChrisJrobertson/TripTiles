@@ -1,7 +1,7 @@
 "use client";
 
 import { resetPasswordAction } from "@/actions/auth";
-import { TripTilesAuthSpinner } from "@/components/auth/TripTilesAuthSpinner";
+import { useGlobalLoading } from "@/components/app/GlobalLoadingContext";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -11,8 +11,8 @@ const inputClass =
 
 export function ForgotPasswordForm() {
   const searchParams = useSearchParams();
+  const { withLoading, busy } = useGlobalLoading();
   const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
 
@@ -24,9 +24,13 @@ export function ForgotPasswordForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = email.trim();
-    setLoading(true);
-    await resetPasswordAction({ email: trimmed });
-    setLoading(false);
+    try {
+      await withLoading("Sending your reset link…", async () => {
+        await resetPasswordAction({ email: trimmed });
+      });
+    } catch {
+      // Still confirm — avoids revealing whether the email exists.
+    }
     setSentTo(trimmed || "that address");
     setDone(true);
   }
@@ -53,10 +57,6 @@ export function ForgotPasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-      <TripTilesAuthSpinner
-        visible={loading}
-        message="Sending your reset link…"
-      />
       <div>
         <label
           htmlFor="forgot-email"
@@ -77,10 +77,10 @@ export function ForgotPasswordForm() {
       </div>
       <button
         type="submit"
-        disabled={loading}
+        disabled={busy}
         className="flex min-h-12 w-full items-center justify-center rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 disabled:opacity-60"
       >
-        {loading ? "Sending…" : "Send reset link"}
+        {busy ? "Sending…" : "Send reset link"}
       </button>
     </form>
   );

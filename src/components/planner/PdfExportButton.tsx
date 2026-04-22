@@ -4,6 +4,7 @@ import {
   awardFirstPdfExportAction,
   getPdfExportContextAction,
 } from "@/actions/pdf";
+import { useGlobalLoading } from "@/components/app/GlobalLoadingContext";
 import { TripPDF } from "@/components/pdf/TripPDF";
 import { pdf } from "@react-pdf/renderer";
 import { useCallback, useState } from "react";
@@ -28,74 +29,79 @@ export function PdfExportButton({
   buttonLabel = "📄 Export to PDF",
   defaultModeOnOpen = "with_notes",
 }: Props) {
-  const [isGenerating, setIsGenerating] = useState(false);
+  const { withLoading } = useGlobalLoading();
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [exportMode, setExportMode] = useState<PdfExportMode>(defaultModeOnOpen);
 
   const runExport = useCallback(
     async (mode: PdfExportMode) => {
-      setIsGenerating(true);
       setError(null);
+      setPdfBusy(true);
       try {
-        const result = await getPdfExportContextAction(tripId);
-        if (!result.ok) {
-          setError(
-            result.error === "PROFILE_TIER_UNAVAILABLE"
-              ? "Could not load your plan. Refresh the page or sign in again."
-              : result.error,
-          );
-          setIsGenerating(false);
-          return;
-        }
+        await withLoading("Building your PDF…", async () => {
+          const result = await getPdfExportContextAction(tripId);
+          if (!result.ok) {
+            setError(
+              result.error === "PROFILE_TIER_UNAVAILABLE"
+                ? "Could not load your plan. Refresh the page or sign in again."
+                : result.error,
+            );
+            return;
+          }
 
-        const blob = await pdf(
-          <TripPDF
-            trip={result.trip}
-            parks={result.parks}
-            customTiles={result.customTiles}
-            watermark={result.watermark}
-            familyName={result.familyName}
-            bookingAffiliateLinks={
-              mode === "with_notes" ? result.bookingLinks : undefined
-            }
-            includeNotes={mode === "with_notes"}
-            exportMode={mode}
-            budgetItems={result.budgetItems}
-            checklistItems={result.checklistItems}
-            tripPayments={result.tripPayments}
-            temperatureUnit={result.temperatureUnit}
-          />,
-        ).toBlob();
+          const blob = await pdf(
+            <TripPDF
+              trip={result.trip}
+              parks={result.parks}
+              customTiles={result.customTiles}
+              watermark={result.watermark}
+              familyName={result.familyName}
+              bookingAffiliateLinks={
+                mode === "with_notes" ? result.bookingLinks : undefined
+              }
+              includeNotes={mode === "with_notes"}
+              exportMode={mode}
+              budgetItems={result.budgetItems}
+              checklistItems={result.checklistItems}
+              tripPayments={result.tripPayments}
+              temperatureUnit={result.temperatureUnit}
+            />,
+          ).toBlob();
 
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        const safeTripName = result.trip.adventure_name.replace(/[^a-z0-9]/gi, "_");
-        if (mode === "payments_schedule") {
-          const dateStamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-          link.download = `${safeTripName}-payments-${dateStamp}.pdf`;
-        } else {
-          link.download = `${safeTripName}_triptiles.pdf`;
-        }
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          const safeTripName = result.trip.adventure_name.replace(/[^a-z0-9]/gi, "_");
+          if (mode === "payments_schedule") {
+            const dateStamp = new Date()
+              .toISOString()
+              .slice(0, 10)
+              .replace(/-/g, "");
+            link.download = `${safeTripName}-payments-${dateStamp}.pdf`;
+          } else {
+            link.download = `${safeTripName}_triptiles.pdf`;
+          }
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
 
-        const ach = await awardFirstPdfExportAction();
-        if (ach.ok && ach.justEarned) {
-          onAchievementKeys?.(["first_pdf_export"]);
-        }
+          const ach = await awardFirstPdfExportAction();
+          if (ach.ok && ach.justEarned) {
+            onAchievementKeys?.(["first_pdf_export"]);
+          }
 
-        setModalOpen(false);
-        setIsGenerating(false);
+          setModalOpen(false);
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
-        setIsGenerating(false);
+      } finally {
+        setPdfBusy(false);
       }
     },
-    [tripId, onAchievementKeys],
+    [tripId, onAchievementKeys, withLoading],
   );
 
   return (
@@ -107,10 +113,10 @@ export function PdfExportButton({
           setExportMode(defaultModeOnOpen);
           setModalOpen(true);
         }}
-        disabled={disabled || isGenerating}
+        disabled={disabled || pdfBusy}
         className="rounded-lg bg-royal px-4 py-2.5 font-serif text-sm font-bold text-gold shadow-sm transition hover:bg-royal/90 disabled:opacity-50"
       >
-        {isGenerating ? "Generating PDF…" : buttonLabel}
+        {pdfBusy ? "Generating PDF…" : buttonLabel}
       </button>
       {error ? (
         <p className="mt-2 max-w-xs font-sans text-sm text-red-600">{error}</p>
@@ -187,7 +193,7 @@ export function PdfExportButton({
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                disabled={isGenerating}
+                disabled={pdfBusy}
                 className="font-sans text-sm font-medium text-royal/80 hover:text-royal disabled:opacity-50"
               >
                 Cancel
@@ -195,10 +201,10 @@ export function PdfExportButton({
               <button
                 type="button"
                 onClick={() => void runExport(exportMode)}
-                disabled={isGenerating}
+                disabled={pdfBusy}
                 className="rounded-lg bg-gold px-5 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition hover:bg-gold/90 disabled:opacity-50"
               >
-                {isGenerating ? "Exporting…" : "Export"}
+                {pdfBusy ? "Exporting…" : "Export"}
               </button>
             </div>
           </div>

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { ToastViewport } from "@/components/app/ToastViewport";
+import { AppProviders } from "@/app/providers";
 import { getPublicSiteUrl } from "@/lib/site";
 import "./globals.css";
 
@@ -72,7 +73,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <AppProviders>{children}</AppProviders>
         <ToastViewport />
         <Analytics />
         <SpeedInsights />

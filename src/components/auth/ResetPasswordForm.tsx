@@ -1,7 +1,7 @@
 "use client";
 
 import { updatePasswordAction } from "@/actions/auth";
-import { TripTilesAuthSpinner } from "@/components/auth/TripTilesAuthSpinner";
+import { useGlobalLoading } from "@/components/app/GlobalLoadingContext";
 import { PasswordField } from "@/components/auth/PasswordField";
 import { showToast } from "@/lib/toast";
 import { useRouter } from "next/navigation";
@@ -9,9 +9,9 @@ import { useState } from "react";
 
 export function ResetPasswordForm() {
   const router = useRouter();
+  const { withLoading, busy } = useGlobalLoading();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -25,29 +25,24 @@ export function ResetPasswordForm() {
       setError("Passwords do not match.");
       return;
     }
-    setLoading(true);
     try {
-      const r = await updatePasswordAction({ newPassword: password });
-      if (!r.ok) {
-        setError(r.error);
-        setLoading(false);
-        return;
-      }
-      showToast("Password updated. You're signed in.", { type: "success" });
-      router.push("/planner");
-      router.refresh();
+      await withLoading("Updating your password…", async () => {
+        const r = await updatePasswordAction({ newPassword: password });
+        if (!r.ok) {
+          setError(r.error);
+          return;
+        }
+        showToast("Password updated. You're signed in.", { type: "success" });
+        router.push("/planner");
+        router.refresh();
+      });
     } catch {
       setError("Something went wrong. Try again.");
-      setLoading(false);
     }
   }
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-      <TripTilesAuthSpinner
-        visible={loading}
-        message="Updating your password…"
-      />
       <h2 className="font-serif text-lg font-semibold text-royal">
         Set a new password
       </h2>
@@ -76,10 +71,10 @@ export function ResetPasswordForm() {
       ) : null}
       <button
         type="submit"
-        disabled={loading}
+        disabled={busy}
         className="flex min-h-12 w-full items-center justify-center rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 disabled:opacity-60"
       >
-        {loading ? "Updating…" : "Update password"}
+        {busy ? "Updating…" : "Update password"}
       </button>
     </form>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { signUpWithPasswordAction } from "@/actions/auth";
-import { TripTilesAuthSpinner } from "@/components/auth/TripTilesAuthSpinner";
+import { useGlobalLoading } from "@/components/app/GlobalLoadingContext";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
 import { createClient } from "@/lib/supabase/client";
 import { PasswordField } from "@/components/auth/PasswordField";
@@ -33,10 +33,10 @@ type Props = {
 
 export function SignupForm({ next }: Props) {
   const router = useRouter();
+  const { withLoading, busy } = useGlobalLoading();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [successEmail, setSuccessEmail] = useState("");
@@ -74,36 +74,33 @@ export function SignupForm({ next }: Props) {
       return;
     }
 
-    setLoading(true);
     try {
-      const r = await signUpWithPasswordAction({
-        email: trimmedEmail,
-        password,
+      await withLoading("Creating your account…", async () => {
+        const r = await signUpWithPasswordAction({
+          email: trimmedEmail,
+          password,
+        });
+        if (!r.ok) {
+          setError(r.error);
+          return;
+        }
+
+        const supabase = createClient();
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          router.push(safeNextPath(next));
+          router.refresh();
+          return;
+        }
+
+        setSuccessEmail(trimmedEmail);
+        setEmail("");
+        setPassword("");
+        setConfirm("");
+        setSuccess(true);
       });
-      if (!r.ok) {
-        setLoading(false);
-        setError(r.error);
-        return;
-      }
-
-      const supabase = createClient();
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        setLoading(false);
-        router.push(safeNextPath(next));
-        router.refresh();
-        return;
-      }
-
-      setSuccessEmail(trimmedEmail);
-      setEmail("");
-      setPassword("");
-      setConfirm("");
-      setSuccess(true);
-      setLoading(false);
     } catch {
       setError("Something went wrong. Please try again.");
-      setLoading(false);
     }
   }
 
@@ -131,10 +128,6 @@ export function SignupForm({ next }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-      <TripTilesAuthSpinner
-        visible={loading}
-        message="Creating your account…"
-      />
       <div>
         <label
           htmlFor="signup-email"
@@ -229,10 +222,10 @@ export function SignupForm({ next }: Props) {
 
       <button
         type="submit"
-        disabled={loading}
+        disabled={busy}
         className="flex min-h-12 w-full items-center justify-center rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 disabled:opacity-60"
       >
-        {loading ? "Creating…" : "Create account"}
+        {busy ? "Creating…" : "Create account"}
       </button>
 
       <p className="text-center font-sans text-xs text-royal/55">

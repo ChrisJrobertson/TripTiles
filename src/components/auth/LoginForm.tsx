@@ -1,7 +1,7 @@
 "use client";
 
 import { signInWithPasswordAction } from "@/actions/auth";
-import { TripTilesAuthSpinner } from "@/components/auth/TripTilesAuthSpinner";
+import { useGlobalLoading } from "@/components/app/GlobalLoadingContext";
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -25,12 +25,14 @@ type Props = {
   initialEmail?: string;
 };
 
+type LoadPhase = "idle" | "magic" | "password";
+
 export function LoginForm({ next, initialEmail = "" }: Props) {
   const router = useRouter();
+  const { begin, end, busy } = useGlobalLoading();
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
-  const [magicLoading, setMagicLoading] = useState(false);
-  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [phase, setPhase] = useState<LoadPhase>("idle");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,8 +41,8 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
 
   async function handleMagicLink() {
     setError(null);
-    setMagicLoading(true);
-
+    setPhase("magic");
+    begin("Sending your magic link…");
     try {
       const supabase = createClient();
       const origin = callbackOrigin();
@@ -60,14 +62,15 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
         } else {
           setError("Something went wrong. Please try again.");
         }
-        setMagicLoading(false);
         return;
       }
 
       router.push("/login/check-email");
     } catch {
       setError("Something went wrong. Please try again.");
-      setMagicLoading(false);
+    } finally {
+      end();
+      setPhase("idle");
     }
   }
 
@@ -77,7 +80,8 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
       setError("Email and password are required");
       return;
     }
-    setPasswordLoading(true);
+    setPhase("password");
+    begin("Signing you in…");
     try {
       const result = await signInWithPasswordAction({
         email: email.trim(),
@@ -86,14 +90,15 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
       });
       if (!result.ok) {
         setError(result.error);
-        setPasswordLoading(false);
         return;
       }
       router.push(result.redirectTo);
       router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
-      setPasswordLoading(false);
+    } finally {
+      end();
+      setPhase("idle");
     }
   }
 
@@ -106,16 +111,8 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
     await handleMagicLink();
   }
 
-  const busy = magicLoading || passwordLoading;
-  const spinnerMessage = passwordLoading
-    ? "Signing you in…"
-    : magicLoading
-      ? "Sending your magic link…"
-      : "";
-
   return (
     <form onSubmit={(e) => void handleSubmit(e)} className="mt-8 space-y-5">
-      <TripTilesAuthSpinner visible={busy} message={spinnerMessage} />
       <div aria-live="polite" role="status">
         {error ? (
           <p
@@ -164,7 +161,7 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
           disabled={busy}
           className="flex min-h-12 flex-1 items-center justify-center rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {magicLoading ? "Sending…" : "Send magic link"}
+          {phase === "magic" ? "Sending…" : "Send magic link"}
         </button>
         <button
           type="button"
@@ -172,7 +169,7 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
           onClick={() => void handlePasswordSignIn()}
           className="flex min-h-12 flex-1 items-center justify-center rounded-lg border-2 border-royal/25 bg-white px-4 font-sans text-sm font-semibold text-royal transition hover:border-royal/40 hover:bg-cream disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {passwordLoading ? "Signing in…" : "Sign in with password"}
+          {phase === "password" ? "Signing in…" : "Sign in with password"}
         </button>
       </div>
 
