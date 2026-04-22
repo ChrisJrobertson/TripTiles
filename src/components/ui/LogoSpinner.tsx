@@ -2,6 +2,9 @@
 
 const SIZE_PX = { sm: 24, md: 48, lg: 80 } as const;
 
+/** Tripp explorer mascot — swap path if the asset is replaced with a true transparent PNG. */
+const MARK_SRC = "/images/tripp-spinner-mascot.jpg";
+
 type Size = keyof typeof SIZE_PX;
 
 type Props = {
@@ -10,7 +13,7 @@ type Props = {
   label?: string;
   /** Fills a positioned parent with a cream blur layer and centres the mark. */
   fullscreen?: boolean;
-  /** Light arc for the royal primary CTA. */
+  /** Lighter ring for use on the royal primary CTA. */
   variant?: "default" | "onDark";
   /** Merged into the fullscreen layer (e.g. z-index). */
   fullscreenClassName?: string;
@@ -19,8 +22,7 @@ type Props = {
 };
 
 /**
- * Branded loading mark: gold arc on a royal disc (no separate asset).
- * If you add a true brand mark, swap the SVG in here.
+ * Branded loading mark: Tripp mascot image with spin (or pulse when reduced motion).
  */
 export function LogoSpinner({
   size = "md",
@@ -33,34 +35,26 @@ export function LogoSpinner({
 }: Props) {
   const dim = SIZE_PX[size];
   const isOnDark = variant === "onDark";
-  const vb = 48;
-  const r = 20;
-  const c = vb / 2;
-  const pad = 2;
 
-  const disc = isOnDark ? null : (
-    <circle key="bg" cx={c} cy={c} r={r} fill="#0B1E5C" />
-  );
-  const arcStroke = isOnDark ? "#FAF8F3" : "#C9A961";
-
-  const svg = (
-    <svg
-      width={dim}
-      height={dim}
-      viewBox={`0 0 ${vb} ${vb}`}
-      className="not-motion-reduce:animate-[spin_1.2s_linear_infinite] motion-reduce:animate-pulse"
-      style={{ willChange: "transform" }}
-      aria-hidden
+  const mark = (
+    <span
+      className={`inline-flex shrink-0 overflow-hidden rounded-full bg-cream not-motion-reduce:animate-[spin_1.2s_linear_infinite] motion-reduce:animate-pulse ${
+        isOnDark
+          ? "ring-2 ring-cream/95 ring-offset-0"
+          : "ring-1 ring-royal/20 shadow-sm"
+      }`.trim()}
+      style={{ width: dim, height: dim, willChange: "transform" }}
     >
-      {disc}
-      <path
-        d={`M ${c} ${pad} A ${r} ${r} 0 0 1 ${vb - pad} ${c}`}
-        fill="none"
-        stroke={arcStroke}
-        strokeWidth={2}
-        strokeLinecap="round"
+      {/* eslint-disable-next-line @next/next/no-img-element -- small fixed spinner asset */}
+      <img
+        src={MARK_SRC}
+        alt=""
+        width={dim}
+        height={dim}
+        className="h-full w-full object-cover"
+        draggable={false}
       />
-    </svg>
+    </span>
   );
 
   const content = (
@@ -68,7 +62,7 @@ export function LogoSpinner({
       className={`inline-flex flex-col items-center justify-center ${className}`.trim()}
     >
       {decorative ? null : <span className="sr-only">Loading</span>}
-      {svg}
+      {mark}
       {label ? (
         <span className="mt-2 max-w-xs text-center font-sans text-sm text-[#0B1E5C]/70">
           {label}
