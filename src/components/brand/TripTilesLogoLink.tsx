@@ -17,8 +17,8 @@ type Props = {
 /** Full TripTiles logo (`/images/logo-full.png`, RGBA). */
 export function TripTilesLogoLink({
   href,
-  imgClassName = "h-10 w-auto",
-  height = 40,
+  imgClassName = "h-12 w-auto",
+  height = 48,
   className = "inline-flex shrink-0 items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream rounded-sm",
   framed = false,
 }: Props) {

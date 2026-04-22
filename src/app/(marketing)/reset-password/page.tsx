@@ -24,8 +24,8 @@ export default async function ResetPasswordPage() {
         <div className="flex justify-center">
           <TripTilesLogoLink
             href="/"
-            height={56}
-            imgClassName="h-14 w-auto max-h-[56px]"
+            height={72}
+            imgClassName="h-[4.5rem] w-auto max-h-[4.5rem] sm:h-20 sm:max-h-20"
             className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-sm"
           />
         </div>

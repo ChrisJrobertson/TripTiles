@@ -117,8 +117,8 @@ function AppNavHeaderFallback({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <TripTilesLogoLink
             href="/planner"
-            height={64}
-            imgClassName="h-14 w-auto max-h-14 sm:h-16 sm:max-h-16"
+            height={80}
+            imgClassName="h-16 w-auto max-h-16 sm:h-20 sm:max-h-20"
             className="inline-flex shrink-0 items-center transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream rounded-sm"
           />
           <details className="relative sm:hidden">
@@ -328,8 +328,8 @@ function AppNavHeaderInner({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <TripTilesLogoLink
             href="/planner"
-            height={64}
-            imgClassName="h-14 w-auto max-h-14 sm:h-16 sm:max-h-16"
+            height={80}
+            imgClassName="h-16 w-auto max-h-16 sm:h-20 sm:max-h-20"
             className="inline-flex shrink-0 items-center transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream rounded-sm"
           />
           <details className="relative sm:hidden">
