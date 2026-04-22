@@ -1,10 +1,11 @@
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { isThemePark } from "@/lib/park-categories";
 import type {
   ParkMustDo,
   ParkMustDoTiming,
   TripMustDosMap,
 } from "@/types/must-dos";
-import type { Assignments } from "@/lib/types";
+import type { Assignments, Park } from "@/lib/types";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import type { SlotType } from "@/lib/types";
 
@@ -126,6 +127,30 @@ export function getParkIdsForDay(
     if (id) ids.push(id);
   }
   return [...new Set(ids)];
+}
+
+/**
+ * Theme-park tiles assigned on this day with no in-app `attractions` catalogue,
+ * and where we are allowed to show the AI must-do UI (official URL or already
+ * generated must-dos). Excludes any park that appears in `cataloguedParkIds`
+ * (catalogue and AI never both show for the same park).
+ */
+export function listThemeParksForAiMustDosFallback(
+  ass: Assignments,
+  dateKey: string,
+  parkById: Map<string, Park | undefined>,
+  cataloguedParkIds: ReadonlySet<string>,
+  mustMap: TripMustDosMap,
+): string[] {
+  return getParkIdsForDay(ass, dateKey)
+    .filter((id) => isThemePark(parkById.get(id)?.park_group))
+    .filter((id) => !cataloguedParkIds.has(id))
+    .filter((id) => {
+      const p = parkById.get(id);
+      const items = mustMap[dateKey]?.[id] ?? [];
+      const url = p?.official_url?.trim();
+      return (url && url.length > 0) || items.length > 0;
+    });
 }
 
 export function readMustDosMap(

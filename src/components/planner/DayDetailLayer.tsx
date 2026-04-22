@@ -28,6 +28,7 @@ import {
 } from "@/lib/planner-crowd-level-meta";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { plannerUserDayNotes } from "@/lib/planner-note-maps";
+import { isThemePark } from "@/lib/park-categories";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import type { Tier } from "@/lib/tier";
 import type { Park, TemperatureUnit, Trip, TripPlanningPreferences } from "@/lib/types";
@@ -108,6 +109,8 @@ export type DayDetailLayerProps = {
   rideCountsForDay?: { total: number; mustDo: number } | null;
   /** Update trip in parent after planning_preferences change (e.g. skip-line toggles). */
   onTripPatch?: (patch: Partial<Trip>) => void;
+  /** Parks with a catalogue: never show AI and catalogue for the same `park_id`. */
+  cataloguedParkIdSet: ReadonlySet<string>;
 };
 
 export function DayDetailLayer({
@@ -115,6 +118,7 @@ export function DayDetailLayer({
   dayDate,
   tripBasePath,
   parks,
+  cataloguedParkIdSet,
   ridePriorities,
   productTier,
   plannerRegionId,
@@ -233,6 +237,22 @@ export function DayDetailLayer({
   );
 
   const parkById = useMemo(() => new Map(parks.map((p) => [p.id, p])), [parks]);
+
+  const amPmThemeIdsForRides = useMemo(() => {
+    const ids = parkIdsAmPmForDay(trip, dayDate);
+    return ids.filter((id) => isThemePark(parkById.get(id)?.park_group));
+  }, [trip, dayDate, parkById]);
+
+  const expandedPanelParkIds = useMemo(
+    () => amPmThemeIdsForRides.filter((id) => cataloguedParkIdSet.has(id)),
+    [amPmThemeIdsForRides, cataloguedParkIdSet],
+  );
+
+  const showExpandedDayPanel = useMemo(
+    () =>
+      amPmThemeIdsForRides.length === 0 || expandedPanelParkIds.length > 0,
+    [amPmThemeIdsForRides.length, expandedPanelParkIds.length],
+  );
 
   const dayConflicts = useMemo(
     () =>
@@ -700,28 +720,35 @@ export function DayDetailLayer({
             <SkipLineLegend />
           </div>
 
-          <ExpandedDayPanel
-            embedded
-            tripId={trip.id}
-            dayDate={dayDate}
-            parkIds={parkIdsAmPmForDay(trip, dayDate)}
-            childAges={trip.child_ages ?? []}
-            ridePriorities={ridePriorities}
-            parks={parks}
-            onClose={closeLayer}
-            onPrioritiesUpdated={onPrioritiesUpdated}
-            includeDisneySkipTips={
-              trip.planning_preferences?.includeDisneySkipTips !== false
-            }
-            includeUniversalSkipTips={
-              trip.planning_preferences?.includeUniversalSkipTips !== false
-            }
-          />
+          {showExpandedDayPanel ? (
+            <ExpandedDayPanel
+              embedded
+              tripId={trip.id}
+              dayDate={dayDate}
+              parkIds={
+                amPmThemeIdsForRides.length === 0
+                  ? []
+                  : expandedPanelParkIds
+              }
+              childAges={trip.child_ages ?? []}
+              ridePriorities={ridePriorities}
+              parks={parks}
+              onClose={closeLayer}
+              onPrioritiesUpdated={onPrioritiesUpdated}
+              includeDisneySkipTips={
+                trip.planning_preferences?.includeDisneySkipTips !== false
+              }
+              includeUniversalSkipTips={
+                trip.planning_preferences?.includeUniversalSkipTips !== false
+              }
+            />
+          ) : null}
 
           <DayParkMustDosSection
             trip={trip}
             dateKey={dayDate}
             parks={parks}
+            cataloguedParkIdSet={cataloguedParkIdSet}
             generatingParkId={generatingMustDosParkId}
             onGenerateMustDos={onGenerateMustDosForPark}
             onToggleMustDoDone={onToggleMustDoDone}

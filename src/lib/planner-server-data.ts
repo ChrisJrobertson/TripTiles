@@ -1,5 +1,6 @@
 import { getPaymentsForTripIds } from "@/actions/payments";
 import {
+  getCataloguedParkIds,
   getRidePrioritiesForTrip,
   getRidePriorityCountsForTripIds,
 } from "@/actions/ride-priorities";
@@ -73,6 +74,8 @@ export type PlannerClientServerProps = {
   initialPaymentsByTripId: Record<string, TripPayment[]>;
   initialOpenSmartPlan: boolean;
   initialAutoGenerate: boolean;
+  /** Park ids with at least one `attractions` row — client builds a Set once. */
+  cataloguedParkIds: string[];
 };
 
 function firstParam(
@@ -115,12 +118,17 @@ export async function loadPlannerClientServerData(input: {
 
   const trips = await getUserTrips(userId);
   if (trips.length === 0) {
+    const [parks, regions, cataloguedParkIds] = await Promise.all([
+      getAllParks(),
+      getAllRegions(),
+      getCataloguedParkIds(),
+    ]);
     return {
       ok: true,
       props: {
         initialTrips: [],
-        parks: await getAllParks(),
-        regions: await getAllRegions(),
+        parks,
+        regions,
         initialActiveTripId: null,
         userEmail,
         profileTier: "free",
@@ -143,6 +151,7 @@ export async function loadPlannerClientServerData(input: {
         initialPaymentsByTripId: {},
         initialOpenSmartPlan: false,
         initialAutoGenerate: false,
+        cataloguedParkIds,
       },
     };
   }
@@ -198,6 +207,7 @@ export async function loadPlannerClientServerData(input: {
     achievementDefs,
     customTiles,
     customTileLimit,
+    cataloguedParkIds,
   ] = await Promise.all([
     getAllParks(),
     getAllRegions(),
@@ -205,6 +215,7 @@ export async function loadPlannerClientServerData(input: {
     getAchievementDefinitions(),
     getUserCustomTiles(userId),
     getCustomTileLimit(userId),
+    getCataloguedParkIds(),
   ]);
 
   const tripIds = trips.map((t) => t.id);
@@ -301,6 +312,7 @@ export async function loadPlannerClientServerData(input: {
       initialPaymentsByTripId,
       initialOpenSmartPlan,
       initialAutoGenerate,
+      cataloguedParkIds,
     },
   };
 }

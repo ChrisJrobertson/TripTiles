@@ -1,7 +1,11 @@
 "use client";
 
 import { LogoSpinner } from "@/components/ui/LogoSpinner";
-import { getParkIdsForDay, readMustDosMap, timingPillLabel } from "@/lib/must-dos";
+import {
+  listThemeParksForAiMustDosFallback,
+  readMustDosMap,
+  timingPillLabel,
+} from "@/lib/must-dos";
 import type { Park, Trip } from "@/lib/types";
 import type { ParkMustDo } from "@/types/must-dos";
 import { useMemo } from "react";
@@ -10,6 +14,7 @@ type Props = {
   trip: Trip;
   dateKey: string;
   parks: Park[];
+  cataloguedParkIdSet: ReadonlySet<string>;
   generatingParkId: string | null;
   onGenerateMustDos: (parkId: string) => void;
   onToggleMustDoDone: (
@@ -21,10 +26,17 @@ type Props = {
   hideSectionTitle?: boolean;
 };
 
+/**
+ * AI ride suggestions for theme-park days where the `attractions` catalogue has
+ * no rows for that park. Never shown for the same `park_id` as the in-app
+ * catalogue (Must-do / Available from `ExpandedDayPanel`). Non-theme slots are
+ * not listed.
+ */
 export function DayParkMustDosSection({
   trip,
   dateKey,
   parks,
+  cataloguedParkIdSet,
   generatingParkId,
   onGenerateMustDos,
   onToggleMustDoDone,
@@ -36,35 +48,44 @@ export function DayParkMustDosSection({
   );
 
   const mustMap = readMustDosMap(trip.preferences);
-  const parkIds = useMemo(
-    () => getParkIdsForDay(trip.assignments, dateKey),
-    [trip.assignments, dateKey],
+  const visibleFallbackIds = useMemo(
+    () =>
+      listThemeParksForAiMustDosFallback(
+        trip.assignments,
+        dateKey,
+        parkById,
+        cataloguedParkIdSet,
+        mustMap,
+      ),
+    [trip.assignments, dateKey, parkById, cataloguedParkIdSet, mustMap],
   );
 
-  if (parkIds.length === 0) return null;
+  if (visibleFallbackIds.length === 0) return null;
 
   return (
     <section
       className={
-        hideSectionTitle ? "mt-0 border-0 pt-0" : "mt-6 border-t border-royal/10 pt-4"
+        hideSectionTitle
+          ? "mt-0 border-0 pt-0"
+          : "mt-6 border-t border-royal/10 pt-4"
       }
     >
       {hideSectionTitle ? null : (
         <>
           <h2 className="font-sans text-xs font-semibold uppercase tracking-wide text-royal/70">
-            Ride must-dos (AI)
+            Suggested rides (AI)
           </h2>
           <p className="mt-1 font-sans text-xs leading-relaxed text-royal/60">
-            Suggested order and timing — verify on the day.
+            For parks we don’t list in Must-do/Available — AI name suggestions
+            only; check the website before you go.
           </p>
         </>
       )}
       <div className={hideSectionTitle ? "mt-0 space-y-5" : "mt-3 space-y-5"}>
-        {parkIds.map((parkId) => {
+        {visibleFallbackIds.map((parkId) => {
           const park = parkById.get(parkId);
           const name = park?.name?.trim() || "Park";
-          const items: ParkMustDo[] =
-            mustMap[dateKey]?.[parkId] ?? [];
+          const items: ParkMustDo[] = mustMap[dateKey]?.[parkId] ?? [];
           const url = park?.official_url?.trim();
           const pending = generatingParkId === parkId;
 
@@ -73,6 +94,11 @@ export function DayParkMustDosSection({
               key={parkId}
               className="rounded-xl border border-royal/12 bg-white/90 p-3"
             >
+              <div className="mb-3 rounded-r-md border-l-[3px] border-l-[#C9A961] bg-[#FAF8F3] p-3 text-sm text-royal/85">
+                AI suggestions for {name}. We don&apos;t have detailed ride data
+                for this park yet — verify times, heights, and closures on the
+                official site before you go.
+              </div>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <p className="font-sans text-sm font-semibold text-royal">
                   {name}
@@ -82,7 +108,7 @@ export function DayParkMustDosSection({
                     <button
                       type="button"
                       className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-royal/15 text-base text-royal transition hover:bg-cream"
-                      aria-label={`Regenerate must-dos for ${name}`}
+                      aria-label={`Regenerate suggestions for ${name}`}
                       title="Regenerate"
                       disabled={pending}
                       onClick={() => onGenerateMustDos(parkId)}
@@ -99,7 +125,7 @@ export function DayParkMustDosSection({
                     {pending ? (
                       <LogoSpinner size="sm" className="shrink-0" decorative />
                     ) : null}
-                    {items.length > 0 ? "Smart Plan again" : "Smart Plan →"}
+                    {items.length > 0 ? "Regenerate" : "Smart Plan →"}
                   </button>
                 </div>
               </div>
@@ -152,9 +178,9 @@ export function DayParkMustDosSection({
                 </ul>
               ) : !pending ? (
                 <p className="mt-2 font-sans text-sm text-royal/55">
-                  No must-dos yet — tap{" "}
-                  <span className="font-semibold">Smart Plan →</span> for
-                  ride-level ideas.
+                  No in-app ride list for this park — tap{" "}
+                  <span className="font-semibold">Smart Plan →</span> for AI name
+                  ideas (names may be wrong; verify on the day).
                 </p>
               ) : null}
 
@@ -170,12 +196,12 @@ export function DayParkMustDosSection({
                   </a>{" "}
                   →
                 </p>
-              ) : (
+              ) : items.length > 0 ? (
                 <p className="mt-3 font-sans text-xs text-royal/50">
                   Check the official park site for hours and ride closures before
                   you travel.
                 </p>
-              )}
+              ) : null}
             </div>
           );
         })}

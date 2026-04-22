@@ -4,6 +4,7 @@ import {
   timeToMinutes,
 } from "@/lib/assignment-slots";
 import { getMustDosForDayPark, readMustDosMap } from "@/lib/must-dos";
+import { isThemePark } from "@/lib/park-categories";
 import type { Assignment, Park, SlotType, Trip } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
 
@@ -166,6 +167,8 @@ export function computeDayConflicts(
   const mustMap = readMustDosMap(trip.preferences);
   if (parkIdsInSlots.size > 0 && effectiveMust === 0) {
     for (const parkId of parkIdsInSlots) {
+      const group = parkById.get(parkId)?.park_group;
+      if (!isThemePark(group)) continue;
       const hasAiMustDos =
         getMustDosForDayPark(mustMap, dateKey, parkId).length > 0;
       if (hasAiMustDos) continue;

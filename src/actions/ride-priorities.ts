@@ -35,6 +35,33 @@ function createPublicCatalogClient() {
   });
 }
 
+/**
+ * All `parks.id` values that have at least one `attractions` row (any row).
+ * Cached 24h with the per-park attraction lists — used to gate catalogue vs AI
+ * must-do UI without an extra server round-trip per park on the client.
+ */
+export async function getCataloguedParkIds(): Promise<string[]> {
+  return unstable_cache(
+    async () => {
+      const supabase = createPublicCatalogClient();
+      const { data, error } = await supabase
+        .from("attractions")
+        .select("park_id")
+        .not("park_id", "is", null)
+        .limit(100000);
+      if (error) throw new Error(error.message);
+      const set = new Set<string>();
+      for (const row of data ?? []) {
+        const id = (row as { park_id?: string | null }).park_id;
+        if (typeof id === "string" && id.length > 0) set.add(id);
+      }
+      return [...set].sort();
+    },
+    ["catalogued-park-ids-v1"],
+    { revalidate: 86400 },
+  )();
+}
+
 export async function getAttractionsForPark(
   parkId: string,
 ): Promise<Attraction[]> {

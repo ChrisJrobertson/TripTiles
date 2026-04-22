@@ -107,6 +107,7 @@ export default async function TripPlannerPage({
       initialRidePrioritiesByTripId={p.initialRidePrioritiesByTripId}
       ridePriorityCountByTripAndDay={p.ridePriorityCountByTripAndDay}
       initialPaymentsByTripId={p.initialPaymentsByTripId}
+      cataloguedParkIds={p.cataloguedParkIds}
       tripRouteBase={`/trip/${tripId}`}
     />
   );

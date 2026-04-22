@@ -12,7 +12,12 @@ import { MobileRidesSheet } from "@/components/planner/MobileRidesSheet";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
 import { parkChromaTileStyle } from "@/lib/theme-colours";
+import { isThemePark } from "@/lib/park-categories";
 import { dayConditionRow } from "@/lib/planner-day-conditions";
+import {
+  listThemeParksForAiMustDosFallback,
+  readMustDosMap,
+} from "@/lib/must-dos";
 import {
   normaliseThemeKey,
   themedEmptySlotSurfaceStyle,
@@ -45,6 +50,8 @@ import { DayTimelinePanel } from "@/components/planner/DayTimelinePanel";
 import { DayParkMustDosSection } from "@/components/planner/DayParkMustDosSection";
 
 const SWIPE_THRESHOLD = 50;
+
+const EMPTY_CATALOGUED_PARK_ID_SET: ReadonlySet<string> = new Set();
 
 const CROWD_DOT: Record<"quiet" | "moderate" | "busy", string> = {
   quiet: "#22C55E",
@@ -174,6 +181,8 @@ export type MobileDayViewProps = {
     mustDoId: string,
     nextDone: boolean,
   ) => void;
+  /** Set of `parks.id` with catalogue data — for catalogue vs AI must-do gating. */
+  cataloguedParkIdSet?: ReadonlySet<string>;
 };
 
 function buildTripDays(
@@ -384,6 +393,7 @@ export function MobileDayView({
   onGenerateMustDosForPark,
   mustDosGenLoading = null,
   onToggleMustDoDone,
+  cataloguedParkIdSet: cataloguedParkIdSetProp = EMPTY_CATALOGUED_PARK_ID_SET,
 }: MobileDayViewProps) {
   void _crowdSummary;
   const notesPanelId = useId();
@@ -453,6 +463,43 @@ export function MobileDayView({
   const rideDisplayCount =
     rideCountsByDay?.[activeDay.dateKey]?.total ??
     ridePrioritiesForActiveDay.length;
+
+  const themeParkIdsAmPm = useMemo(
+    () =>
+      parkIdsAmPmForDay(assignments, activeDay.dateKey).filter((id) =>
+        isThemePark(parkById.get(id)?.park_group),
+      ),
+    [assignments, activeDay.dateKey, parkById],
+  );
+
+  const themeParkIdsForCatalogueSheet = useMemo(
+    () =>
+      themeParkIdsAmPm.filter((id) => cataloguedParkIdSetProp.has(id)),
+    [themeParkIdsAmPm, cataloguedParkIdSetProp],
+  );
+
+  const hasAiMustDosForActiveDay = useMemo(
+    () =>
+      listThemeParksForAiMustDosFallback(
+        assignments,
+        activeDay.dateKey,
+        parkById,
+        cataloguedParkIdSetProp,
+        readMustDosMap(trip.preferences),
+      ).length > 0,
+    [
+      assignments,
+      activeDay.dateKey,
+      parkById,
+      cataloguedParkIdSetProp,
+      trip.preferences,
+    ],
+  );
+
+  const showRidesSheetButton =
+    onOpenDayDetail != null ||
+    themeParkIdsAmPm.length === 0 ||
+    themeParkIdsForCatalogueSheet.length > 0;
 
   useEffect(() => {
     setMobileNoteDraft(activeDay.userNote);
@@ -721,7 +768,7 @@ export function MobileDayView({
             />
           ) : null}
 
-          {!readOnly && onRideDayPrioritiesUpdated ? (
+          {!readOnly && onRideDayPrioritiesUpdated && showRidesSheetButton ? (
             <button
               type="button"
               onClick={() => {
@@ -825,14 +872,16 @@ export function MobileDayView({
             </button>
           ) : null}
 
-          {onGenerateMustDosForPark && onToggleMustDoDone ? (
+          {onGenerateMustDosForPark &&
+          onToggleMustDoDone &&
+          hasAiMustDosForActiveDay ? (
             <button
               type="button"
               onClick={() => setMustDosSheetOpen(true)}
               className="mt-4 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg border border-royal/15 bg-white py-3 font-sans text-sm font-medium text-royal shadow-sm transition active:bg-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
             >
               <span aria-hidden>🎯</span>
-              Ride must-dos (AI)
+              Suggested rides (AI)
             </button>
           ) : null}
 
@@ -989,7 +1038,7 @@ export function MobileDayView({
           onClose={() => setRidesSheetOpen(false)}
           tripId={trip.id}
           dayDate={activeDay.dateKey}
-          parkIds={parkIdsAmPmForDay(assignments, activeDay.dateKey)}
+          parkIds={themeParkIdsForCatalogueSheet}
           childAges={trip.child_ages ?? []}
           ridePriorities={ridePrioritiesForActiveDay}
           parks={parks}
@@ -1060,7 +1109,9 @@ export function MobileDayView({
         </div>
       </div>
 
-      {onGenerateMustDosForPark && onToggleMustDoDone ? (
+      {onGenerateMustDosForPark &&
+      onToggleMustDoDone &&
+      hasAiMustDosForActiveDay ? (
         <div
           className={`fixed inset-0 z-[41] md:hidden ${mustDosSheetOpen ? "" : "pointer-events-none"}`}
           aria-hidden={!mustDosSheetOpen}
@@ -1077,7 +1128,7 @@ export function MobileDayView({
             id={mustDosPanelId}
             role="dialog"
             aria-modal="true"
-            aria-label="Ride must-dos for this day"
+            aria-label="Suggested AI rides for this day"
             className={`absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-2xl border border-royal bg-cream shadow-2xl transition-transform duration-300 ease-out safe-area-inset-bottom ${
               mustDosSheetOpen ? "translate-y-0" : "translate-y-full"
             }`}
@@ -1087,7 +1138,7 @@ export function MobileDayView({
             </div>
             <div className="flex items-start justify-between gap-2 border-b border-gold/20 px-4 py-2">
               <h3 className="font-serif text-lg font-bold text-royal">
-                Ride must-dos
+                Suggested rides (AI)
               </h3>
               <button
                 type="button"
@@ -1107,6 +1158,7 @@ export function MobileDayView({
                 trip={trip}
                 dateKey={activeDay.dateKey}
                 parks={parks}
+                cataloguedParkIdSet={cataloguedParkIdSetProp}
                 generatingParkId={
                   mustDosGenLoading?.dateKey === activeDay.dateKey
                     ? mustDosGenLoading.parkId

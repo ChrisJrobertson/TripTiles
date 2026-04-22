@@ -1,15 +1,10 @@
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { isNamedRestaurantPark } from "@/lib/named-restaurant-tiles";
+import { THEME_PARK_GROUP_SET } from "@/lib/park-categories";
 import type { Park, SlotType, Trip } from "@/lib/types";
 import { addDays, formatDateKey, parseDate } from "@/lib/date-helpers";
 
-const THEME_GROUPS = new Set([
-  "disney",
-  "disneyextra",
-  "universal",
-  "seaworld",
-  "attractions",
-]);
+const THEME_GROUPS = THEME_PARK_GROUP_SET;
 
 function tripDateKeys(trip: Trip): string[] {
   const keys: string[] = [];

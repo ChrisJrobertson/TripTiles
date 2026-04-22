@@ -177,6 +177,8 @@ type Props = {
   initialPaymentsByTripId: Record<string, TripPayment[]>;
   /** Base path `/trip/{id}` for day detail routes; omit on legacy shells only. */
   tripRouteBase?: string;
+  /** Distinct `parks.id` with ≥1 `attractions` row — for catalogue vs AI gating. */
+  cataloguedParkIds?: string[];
 };
 
 const ASSIGN_DEBOUNCE_MS = 450;
@@ -356,6 +358,7 @@ export function PlannerClient({
   ridePriorityCountByTripAndDay,
   initialPaymentsByTripId,
   tripRouteBase,
+  cataloguedParkIds: cataloguedParkIdsProp,
 }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -457,6 +460,11 @@ export function PlannerClient({
   const [calendarConflictDotSummary, setCalendarConflictDotSummary] =
     useState<DayConflictDotSummary>({});
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
+
+  const cataloguedParkIdSet = useMemo(
+    () => new Set(cataloguedParkIdsProp ?? []),
+    [cataloguedParkIdsProp],
+  );
 
   const pathTripIdFromUrl = pathname.match(/^\/trip\/([^/]+)/)?.[1] ?? null;
   const dayDateFromUrl =
@@ -2286,6 +2294,7 @@ export function PlannerClient({
                       onOpenDayDetail={
                         tripRouteBase ? openDayDetail : undefined
                       }
+                      cataloguedParkIdSet={cataloguedParkIdSet}
                       onGenerateMustDosForPark={runMustDosGen}
                       mustDosGenLoading={mustDosGenLoading}
                       onToggleMustDoDone={handleToggleMustDoDone}
@@ -2610,6 +2619,7 @@ export function PlannerClient({
           dayDate={dayCanonicalForDetail}
           tripBasePath={tripRouteBase}
           parks={calendarParks}
+          cataloguedParkIdSet={cataloguedParkIdSet}
           ridePriorities={
             ridePrioritiesByDayForActiveTrip[dayCanonicalForDetail] ?? []
           }

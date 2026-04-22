@@ -1,19 +1,14 @@
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { formatDateKey, parseDate } from "@/lib/date-helpers";
 import { isCruisePaletteTileName } from "@/lib/cruise-tiles";
+import { THEME_PARK_GROUP_SET } from "@/lib/park-categories";
 import type { Assignment, Assignments, Park, Trip } from "@/lib/types";
 
 const DINING_IDS = new Set(["owl", "tsr", "char", "specd", "villa"]);
 const FLYOUT_IDS = new Set(["flyout"]);
 const FLYHOME_IDS = new Set(["flyhome"]);
 
-const MAIN_PARK_GROUPS = new Set([
-  "disney",
-  "disneyextra",
-  "universal",
-  "seaworld",
-  "attractions",
-]);
+const MAIN_PARK_GROUPS = THEME_PARK_GROUP_SET;
 
 /** Tiles that only make sense when the trip includes a cruise segment. */
 export function requiresCruiseSegment(p: Park): boolean {
