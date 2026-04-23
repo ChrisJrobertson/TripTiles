@@ -88,22 +88,40 @@ export async function upsertPurchaseFromStripeSubscription(
   });
   if (error) throw new Error(error.message);
 
+  console.log("[stripe webhook] purchase recorded", {
+    userId: input.userId,
+    product: mapped.tier,
+    amount_gbp_pence: row.amount_gbp_pence,
+  });
+
   if (
     sub.status === "active" ||
     sub.status === "trialing" ||
     sub.status === "past_due"
   ) {
     const atPeriodEnd = Boolean(sub.cancel_at_period_end) && cpe;
+    const { data: beforeRow, error: beforeErr } = await admin
+      .from("profiles")
+      .select("tier")
+      .eq("id", input.userId)
+      .maybeSingle();
+    if (beforeErr) throw new Error(beforeErr.message);
+    const newTier = userTierFromPaid(mapped.tier);
     const { error: pErr } = await admin
       .from("profiles")
       .update({
-        tier: userTierFromPaid(mapped.tier),
+        tier: newTier,
         tier_expires_at: atPeriodEnd ? cpe : null,
         stripe_customer_id: input.stripeCustomerId,
         updated_at: new Date().toISOString(),
       })
       .eq("id", input.userId);
     if (pErr) throw new Error(pErr.message);
+    console.log("[stripe webhook] tier updated", {
+      userId: input.userId,
+      oldTier: beforeRow?.tier ?? null,
+      newTier,
+    });
   } else if (sub.status === "canceled") {
     const end = cpe ?? new Date().toISOString();
     const endMs = new Date(end).getTime();

@@ -65,17 +65,31 @@ export async function POST(req: Request) {
   const { error: insErr } = await admin
     .from("stripe_webhook_events")
     .insert({ id: event.id });
+  if (insErr?.code === "23505") {
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+  // If dedupe cannot be recorded (e.g. schema drift), we still return 200 after processing
+  // so Stripe does not keep retrying. The handler may run twice for the same event id; DB
+  // upserts in purchase flow reduce harm relative to an endless retry loop.
   if (insErr) {
-    if (insErr.code === "23505") {
-      return NextResponse.json({ received: true, duplicate: true });
-    }
-    console.error("[stripe webhook] idempotency insert", insErr);
-    return NextResponse.json({ error: "Dedupe failed." }, { status: 500 });
+    console.error(
+      "[stripe webhook] idempotency insert (continuing to process)",
+      {
+        eventId: event.id,
+        type: event.type,
+        code: insErr.code,
+        message: insErr.message,
+      },
+    );
   }
 
   const stripe = getStripeClient();
 
   try {
+    console.log("[stripe webhook] handling", {
+      eventId: event.id,
+      type: event.type,
+    });
     switch (event.type) {
       case "checkout.session.completed": {
         const sess = event.data.object as Stripe.Checkout.Session;
@@ -174,15 +188,19 @@ export async function POST(req: Request) {
         if (userId) {
           await enqueueSubscriptionPaymentFailedEmail(admin, userId);
         }
-        console.error("[stripe webhook] invoice.payment_failed", inv.id);
         break;
       }
       default:
         break;
     }
   } catch (e) {
-    console.error("[stripe webhook] handler error", e);
-    return NextResponse.json({ error: "Handler failed." }, { status: 500 });
+    const err = e instanceof Error ? e : new Error(String(e));
+    console.error("[stripe webhook] failed", {
+      eventId: event.id,
+      type: event.type,
+      error: err.message,
+    });
+    return NextResponse.json({ received: true, error: true });
   }
 
   return NextResponse.json({ received: true });
