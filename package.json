@@ -11,6 +11,7 @@
     "smoke": "node --env-file=.env.local --import tsx scripts/smoke-test-supabase.ts",
     "preflight": "node --env-file=.env.local --import tsx scripts/preflight-launch-check.ts",
     "verify:profiles-schema": "node scripts/verify-profiles-columns.mjs",
+    "verify:smart-plan-cruise": "npx tsx scripts/verify-smart-plan-cruise-filter.ts",
     "deploy:vercel": "vercel --prod --yes"
   },
   "dependencies": {

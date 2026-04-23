@@ -83,6 +83,8 @@ export function parseMustDosMapFromAI(
   raw: unknown,
   allowedDateKeys: Set<string>,
   allowedParkIds: Set<string>,
+  /** When set, maps model keys (e.g. display names) to catalogue id; must return ids in allowedParkIds. */
+  resolveParkId?: (raw: string) => string | null,
 ): TripMustDosMap {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const top = raw as Record<string, unknown>;
@@ -96,9 +98,14 @@ export function parseMustDosMapFromAI(
     for (const [parkId, items] of Object.entries(
       byPark as Record<string, unknown>,
     )) {
-      if (!allowedParkIds.has(parkId)) continue;
+      const canon = resolveParkId
+        ? resolveParkId(parkId)
+        : allowedParkIds.has(parkId)
+          ? parkId
+          : null;
+      if (!canon || !allowedParkIds.has(canon)) continue;
       const list = normaliseMustDoItems(items);
-      if (list.length > 0) parkMap[parkId] = list;
+      if (list.length > 0) parkMap[canon] = list;
     }
     if (Object.keys(parkMap).length > 0) out[dateKey] = parkMap;
   }

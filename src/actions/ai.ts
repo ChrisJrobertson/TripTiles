@@ -51,6 +51,7 @@ import {
   readMustDosMap,
 } from "@/lib/must-dos";
 import type { ParkMustDo, TripMustDosMap } from "@/types/must-dos";
+import { buildAiParkIdResolver, type AiParkIdResolver } from "@/lib/ai-park-id-coerce";
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY ?? "",
 });
@@ -166,7 +167,7 @@ async function reportAiGenAutoError(params: {
 const SYSTEM_PROMPT = `You are Smart Plan, TripTiles' warm and practical theme park planner. Output ONLY valid JSON — no markdown, no preamble, no text outside the JSON object.
 
 Shape:
-{ "assignments": { "2026-07-09": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-07-14": "…" }, "planner_day_notes": { "2026-07-09": "…" }, "must_dos": { "2026-07-09": { "orlando_mk": [ { "id": "any-uuid", "title": "Seven Dwarfs Mine Train", "timing": "morning", "why": "Shorter queues before 11:00 on lighter crowd days.", "done": false } ] } } }
+{ "assignments": { "2026-07-09": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-07-14": "…" }, "planner_day_notes": { "2026-07-09": "…" }, "must_dos": { "2026-07-09": { "mk": [ { "id": "any-uuid", "title": "Seven Dwarfs Mine Train", "timing": "morning", "why": "Shorter queues before 11:00 on lighter crowd days.", "done": false } ] } } }
 
 MUST_DOS (full-trip mode):
 - For each date key under "must_dos", include an entry ONLY for each park id you place in that day's am/pm/lunch/dinner slots (the same id strings as in "assignments").
@@ -186,7 +187,7 @@ DAY NOTES RULES (CRITICAL):
 CROWD_PATTERNS (when in user message): 0–10 heuristics per park/weekday/month — use internally only. Never put numeric score workings in user-facing strings. Never claim live waits or exact attendance.
 
 Rules:
-- Date keys in assignments, day_crowd_notes, and planner_day_notes MUST be YYYY-MM-DD with zero-padded month and day (e.g. 2026-07-19), matching the trip dates in the user message. Park IDs only from the cached list in the system message.
+- Date keys in assignments, day_crowd_notes, and planner_day_notes MUST be YYYY-MM-DD with zero-padded month and day (e.g. 2026-07-19), matching the trip dates in the user message. Park IDs must be the exact "id" strings in the second system message (numbered list). Do not use display names, natural language, or invent IDs. Do not use IDs for other regions.
 - Slots: am, pm, lunch, dinner optional; rest days OK. Rest every 3–4 park days with young children.
 - Day 1 arrival: no theme/water parks in AM/PM (resort/flyout/dining only; slots may be empty). day_crowd_notes must not contradict day-1 assignments.
 - flyout: day 1 only, one AM or PM. flyhome: last day only, one slot — not both same calendar day unless trip is one day.
@@ -265,10 +266,13 @@ function allowedDateKeys(startIso: string, endIso: string): Set<string> {
   return keys;
 }
 
+/**
+ * Resolves each slot to a canonical catalogue id. Unknown strings are dropped.
+ */
 function sanitizeAssignments(
   raw: unknown,
   allowedDates: Set<string>,
-  allowedParks: Set<string>,
+  resolver: AiParkIdResolver,
 ): Assignments | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const obj = raw as Record<string, unknown>;
@@ -283,12 +287,62 @@ function sanitizeAssignments(
     for (const [slot, pid] of Object.entries(slots)) {
       if (!SLOT_SET.has(slot as SlotType)) continue;
       if (typeof pid !== "string") continue;
-      if (!allowedParks.has(pid)) continue;
-      dayOut[slot as SlotType] = pid;
+      const canon = resolver.resolve(pid);
+      if (canon == null) continue;
+      dayOut[slot as SlotType] = canon;
     }
     if (Object.keys(dayOut).length > 0) out[day] = dayOut;
   }
   return out;
+}
+
+/** Unique raw model strings in assignments for allowed dates that did not resolve. */
+function collectUnresolvedAssignmentPids(
+  raw: unknown,
+  allowedDates: Set<string>,
+  resolver: AiParkIdResolver,
+): string[] {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+  const obj = raw as Record<string, unknown>;
+  const inner = obj.assignments;
+  if (!inner || typeof inner !== "object" || Array.isArray(inner)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const [day, slots] of Object.entries(inner as Record<string, unknown>)) {
+    if (!allowedDates.has(day)) continue;
+    if (!slots || typeof slots !== "object" || Array.isArray(slots)) continue;
+    for (const [slot, pid] of Object.entries(slots)) {
+      if (!SLOT_SET.has(slot as SlotType)) continue;
+      if (typeof pid !== "string" || pid.length === 0) continue;
+      if (resolver.resolve(pid) != null) continue;
+      if (seen.has(pid)) continue;
+      seen.add(pid);
+      out.push(pid);
+    }
+  }
+  return out;
+}
+
+const MAX_RETRY_INVALID_IDS = 25;
+
+function buildSmartPlanValidationRetryUserSuffix(
+  parseDetail: string,
+  invalidRawIds: string[],
+): string {
+  const list =
+    invalidRawIds.length > 0
+      ? invalidRawIds
+          .slice(0, MAX_RETRY_INVALID_IDS)
+          .map((s) => JSON.stringify(s))
+          .join(", ")
+      : "(none after coercion — check assignments shape and YYYY-MM-DD date keys; see detail below.)";
+  return `
+
+RETRY: Your last JSON was rejected. Fix it and return ONLY valid JSON.
+
+Detail: ${parseDetail}
+
+These park_id values in assignments did not match our catalogue for this trip: ${list}. You MUST use only the id strings in the numbered list in the system message (e.g. mk, ep, not "Magic Kingdom" or magic_kingdom). Do not invent ids or use other regions' ids.`;
 }
 
 function parseCrowdMetadata(
@@ -397,23 +451,33 @@ function inputTokensFromUsage(usage: AnthropicMessageUsage | undefined): number 
   );
 }
 
-/** Cached with the system prompt — park IDs the model may use (built-in + custom). */
+/** Cached with the system prompt — exact park ids the model may use (built-in + custom). */
 function buildParksListSystemText(
   regionName: string,
   parksForPrompt: Park[],
   customTiles: CustomTile[],
+  hasCruise: boolean,
 ): string {
-  const parkLines = parksForPrompt.map((p) => `${p.id}: ${p.name}`).join("\n");
-  const customLines =
+  const numbered = parksForPrompt
+    .map((p, i) => `${i + 1}. ${p.id} — ${p.name}`)
+    .join("\n");
+  const customBlock =
     customTiles.length > 0
-      ? `\n\nThe user has also added these custom tiles you can use:\n${customTiles
+      ? `\n\nCustom tiles (use these id strings in JSON, same as built-in tiles):\n${customTiles
           .map(
-            (t) =>
-              `${t.id}: ${t.name}${t.notes ? ` (${t.notes})` : ""}`,
+            (t, j) =>
+              `${parksForPrompt.length + j + 1}. ${t.id} — ${t.name}${t.notes ? ` (${t.notes})` : ""}`,
           )
           .join("\n")}`
       : "";
-  return `Available parks for ${regionName}:\n${parkLines}${customLines}`;
+  const cruiseLine = hasCruise
+    ? "\nCruise/ship and shore tiles appear only in this list when allowed for the trip: use their ids; do not invent cruise tiles."
+    : "\nThis trip is not a cruise. Do not place cruise-ship, at-sea, or shore-only tile ids — they are not in this list.";
+
+  return `Allowed park_id values for ${regionName} (you MUST use only these id strings in JSON slots am, pm, lunch, and dinner, exactly as shown — not display names, not underscores, not ids from other regions):
+
+${numbered}${customBlock}
+${cruiseLine}`;
 }
 
 function buildPlannerUserMessage(params: {
@@ -762,7 +826,8 @@ export async function runGenerateAIPlan(
     };
   }
 
-  const allowedParkIds = new Set(parksForPrompt.map((p) => p.id));
+  const parkResolver = buildAiParkIdResolver(parksForPrompt, input.tripId);
+  const allowedParkIds = parkResolver.allowedSet;
   const fullDateAllow = allowedDateKeys(trip.start_date, trip.end_date);
   const dateAllow = normalizedDateKey
     ? new Set(fullDateAllow.has(normalizedDateKey) ? [normalizedDateKey] : [])
@@ -794,6 +859,7 @@ export async function runGenerateAIPlan(
     `${region.name} (${region.country})`,
     parksForPrompt,
     customTileRows,
+    trip.has_cruise,
   );
 
   const parkIdToName = new Map(parksForPrompt.map((p) => [p.id, p.name]));
@@ -864,151 +930,139 @@ export async function runGenerateAIPlan(
   let outputTokens = 0;
 
   try {
-    const t0 = Date.now();
-    let rawText = "";
-    let streamStoppedEarly = false;
+    type MetaShape = ReturnType<typeof parseCrowdMetadata>;
+    let currentUserMessage = composedUserMessage;
+    let lastMeta: MetaShape = {};
+    let finalParsed: unknown;
+    let finalSanitized: Assignments | null = null;
+    let lastRawText = "";
 
-    try {
-      logAiGen({
-        step: "anthropic_call_start",
-        tripId: input.tripId,
-        userId: user.id,
-        regionId: rid,
-        mode: input.mode,
-        parksCount: parksForPrompt.length,
-      });
-      const stream = await anthropic.messages.create({
-        model,
-        max_tokens: 8192,
-        stream: true,
-        system: [
-          {
-            type: "text",
-            text: SYSTEM_PROMPT,
-            cache_control: { type: "ephemeral" },
-          },
-          {
-            type: "text",
-            text: parksSystemText,
-            cache_control: { type: "ephemeral" },
-          },
-        ],
-        messages: [{ role: "user", content: composedUserMessage }],
-      });
+    planAttempts: for (let planAttempt = 0; planAttempt < 2; planAttempt++) {
+      const t0 = Date.now();
+      let rawText = "";
+      let localInputTokens = 0;
+      let localOutputTokens = 0;
+      let streamStoppedEarly = false;
 
-      for await (const event of stream) {
-        if (event.type === "message_start") {
-          const usage = event.message.usage as AnthropicMessageUsage | undefined;
-          inputTokens = inputTokensFromUsage(usage);
-          outputTokens = usage?.output_tokens ?? outputTokens;
-          continue;
-        }
-        if (event.type === "message_delta") {
-          const usage = event.usage as AnthropicMessageUsage | undefined;
-          outputTokens = usage?.output_tokens ?? outputTokens;
-          continue;
-        }
-        if (
-          event.type === "content_block_delta" &&
-          event.delta.type === "text_delta"
-        ) {
-          const delta = event.delta.text;
-          if (!delta) continue;
-          rawText += delta;
-          if (options.onTextDelta) {
-            await options.onTextDelta(delta);
+      try {
+        logAiGen({
+          step: "anthropic_call_start",
+          tripId: input.tripId,
+          userId: user.id,
+          regionId: rid,
+          mode: input.mode,
+          parksCount: parksForPrompt.length,
+          details: { planAttempt },
+        });
+        const stream = await anthropic.messages.create({
+          model,
+          max_tokens: 8192,
+          stream: true,
+          system: [
+            {
+              type: "text",
+              text: SYSTEM_PROMPT,
+              cache_control: { type: "ephemeral" },
+            },
+            {
+              type: "text",
+              text: parksSystemText,
+              cache_control: { type: "ephemeral" },
+            },
+          ],
+          messages: [{ role: "user", content: currentUserMessage }],
+        });
+
+        for await (const event of stream) {
+          if (event.type === "message_start") {
+            const usage = event.message.usage as
+              | AnthropicMessageUsage
+              | undefined;
+            localInputTokens = inputTokensFromUsage(usage);
+            localOutputTokens = usage?.output_tokens ?? localOutputTokens;
+            continue;
+          }
+          if (event.type === "message_delta") {
+            const usage = event.usage as AnthropicMessageUsage | undefined;
+            localOutputTokens = usage?.output_tokens ?? localOutputTokens;
+            continue;
+          }
+          if (
+            event.type === "content_block_delta" &&
+            event.delta.type === "text_delta"
+          ) {
+            const delta = event.delta.text;
+            if (!delta) continue;
+            rawText += delta;
+            if (options.onTextDelta) {
+              await options.onTextDelta(delta);
+            }
           }
         }
-      }
-      logAiGen({
-        step: "anthropic_call_success",
-        tripId: input.tripId,
-        userId: user.id,
-        details: {
-          inputTokens,
-          outputTokens,
-          latencyMs: Date.now() - t0,
-        },
-      });
-    } catch (streamError) {
-      streamStoppedEarly = rawText.trim().length > 0;
-      logAiGen({
-        step: "anthropic_call_fail",
-        tripId: input.tripId,
-        userId: user.id,
-        details: {
-          streamStoppedEarly,
-          partialChars: rawText.trim().length,
-          message:
-            streamError instanceof Error ? streamError.message : "unknown_stream_error",
-        },
-      });
-      await reportAiGenAutoError({
-        message: `${
-          normalizedDateKey ? "[day-smart-plan] " : ""
-        }${
-          streamError instanceof Error
-            ? streamError.message
-            : "Unknown error while streaming Anthropic response"
-        }`,
-        stack: streamError instanceof Error ? streamError.stack : undefined,
-        context: {
+        logAiGen({
+          step: "anthropic_call_success",
           tripId: input.tripId,
-          mode: input.mode,
-          phase: "anthropic_stream",
-          streamStoppedEarly,
-          partialChars: rawText.trim().length,
-        },
-      });
-      if (!streamStoppedEarly) throw new Error("AI stream failed before output");
-    }
+          userId: user.id,
+          details: {
+            inputTokens: localInputTokens,
+            outputTokens: localOutputTokens,
+            latencyMs: Date.now() - t0,
+            planAttempt,
+          },
+        });
+      } catch (streamError) {
+        streamStoppedEarly = rawText.trim().length > 0;
+        logAiGen({
+          step: "anthropic_call_fail",
+          tripId: input.tripId,
+          userId: user.id,
+          details: {
+            streamStoppedEarly,
+            partialChars: rawText.trim().length,
+            message:
+              streamError instanceof Error
+                ? streamError.message
+                : "unknown_stream_error",
+            planAttempt,
+          },
+        });
+        await reportAiGenAutoError({
+          message: `${normalizedDateKey ? "[day-smart-plan] " : ""}${
+            streamError instanceof Error
+              ? streamError.message
+              : "Unknown error while streaming Anthropic response"
+          }`,
+          stack: streamError instanceof Error ? streamError.stack : undefined,
+          context: {
+            tripId: input.tripId,
+            mode: input.mode,
+            phase: "anthropic_stream",
+            streamStoppedEarly,
+            partialChars: rawText.trim().length,
+            planAttempt,
+          },
+        });
+        if (!streamStoppedEarly) {
+          throw new Error("AI stream failed before output");
+        }
+      }
 
-    if (streamStoppedEarly) {
-      await supabase.from("ai_generations").insert({
-        user_id: user.id,
-        trip_id: input.tripId,
-        prompt: composedUserMessage,
-        model,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_gbp_pence: null,
-        success: false,
-        error: "AI stream stopped early",
-      });
-
-      return {
-        ok: false,
-        error: "AI_ERROR",
-        message: "Stopped early — retry?",
-        partialResponse: rawText,
-        stoppedEarly: true,
-      };
-    }
-
-    if (process.env.NODE_ENV === "development") {
-      console.info("[ai] anthropic usage", {
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        latency_ms: Date.now() - t0,
-      });
-    }
-
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(stripCodeFences(rawText));
-    } catch {
-      if (rawText.trim().length > 0) {
+      if (streamStoppedEarly) {
+        inputTokens = localInputTokens;
+        outputTokens = localOutputTokens;
         await supabase.from("ai_generations").insert({
           user_id: user.id,
           trip_id: input.tripId,
-          prompt: composedUserMessage,
+          prompt: currentUserMessage,
           model,
-          input_tokens: inputTokens,
-          output_tokens: outputTokens,
+          input_tokens: localInputTokens,
+          output_tokens: localOutputTokens,
           cost_gbp_pence: null,
           success: false,
-          error: "AI stream incomplete (invalid JSON)",
+          status: "failed",
+          error: "AI stream stopped early",
         });
+
         return {
           ok: false,
           error: "AI_ERROR",
@@ -1017,51 +1071,128 @@ export async function runGenerateAIPlan(
           stoppedEarly: true,
         };
       }
-      await supabase.from("ai_generations").insert({
-        user_id: user.id,
-        trip_id: input.tripId,
-        prompt: composedUserMessage,
-        model,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_gbp_pence: null,
-        success: false,
-        error: "Invalid JSON from model",
-      });
 
-      return {
-        ok: false,
-        error: "AI_ERROR",
-        message: "Smart Plan returned something we couldn't read. Try again.",
-      };
-    }
+      if (process.env.NODE_ENV === "development") {
+        console.info("[ai] anthropic usage", {
+          input_tokens: localInputTokens,
+          output_tokens: localOutputTokens,
+          latency_ms: Date.now() - t0,
+          planAttempt,
+        });
+      }
 
-    if (normalizedDateKey && AI_GEN_DEBUG) {
-      console.log("[ai-gen][day] raw response preview", {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(stripCodeFences(rawText));
+      } catch {
+        inputTokens = localInputTokens;
+        outputTokens = localOutputTokens;
+        if (rawText.trim().length > 0) {
+          await supabase.from("ai_generations").insert({
+            user_id: user.id,
+            trip_id: input.tripId,
+            prompt: currentUserMessage,
+            model,
+            input_tokens: localInputTokens,
+            output_tokens: localOutputTokens,
+            cost_gbp_pence: null,
+            success: false,
+            status: "failed",
+            error: "AI stream incomplete (invalid JSON)",
+          });
+          return {
+            ok: false,
+            error: "AI_ERROR",
+            message: "Stopped early — retry?",
+            partialResponse: rawText,
+            stoppedEarly: true,
+          };
+        }
+        await supabase.from("ai_generations").insert({
+          user_id: user.id,
+          trip_id: input.tripId,
+          prompt: currentUserMessage,
+          model,
+          input_tokens: localInputTokens,
+          output_tokens: localOutputTokens,
+          cost_gbp_pence: null,
+          success: false,
+          status: "failed",
+          error: "Invalid JSON from model",
+        });
+
+        return {
+          ok: false,
+          error: "AI_ERROR",
+          message: "Smart Plan returned something we couldn't read. Try again.",
+        };
+      }
+
+      if (normalizedDateKey && AI_GEN_DEBUG) {
+        console.log("[ai-gen][day] raw response preview", {
+          tripId: input.tripId,
+          dateKey: normalizedDateKey,
+          planAttempt,
+          preview: String(rawText).slice(0, 2000),
+          length: String(rawText).length,
+        });
+      }
+
+      const meta = parseCrowdMetadata(parsed, dateAllow);
+      const sanitized = sanitizeAssignments(parsed, dateAllow, parkResolver);
+      logAiGen({
+        step: "assignment_parse_result",
         tripId: input.tripId,
-        dateKey: normalizedDateKey,
-        preview: String(rawText).slice(0, 2000),
-        length: String(rawText).length,
+        userId: user.id,
+        details: {
+          parsed: Boolean(parsed),
+          assignmentDays: sanitized ? Object.keys(sanitized).length : 0,
+          planAttempt,
+        },
       });
-    }
 
-    const meta = parseCrowdMetadata(parsed, dateAllow);
+      if (sanitized && Object.keys(sanitized).length > 0) {
+        lastMeta = meta;
+        finalParsed = parsed;
+        finalSanitized = sanitized;
+        lastRawText = rawText;
+        inputTokens = localInputTokens;
+        outputTokens = localOutputTokens;
+        break planAttempts;
+      }
 
-    const sanitized = sanitizeAssignments(parsed, dateAllow, allowedParkIds);
-    logAiGen({
-      step: "assignment_parse_result",
-      tripId: input.tripId,
-      userId: user.id,
-      details: {
-        parsed: Boolean(parsed),
-        assignmentDays: sanitized ? Object.keys(sanitized).length : 0,
-      },
-    });
-    if (!sanitized || Object.keys(sanitized).length === 0) {
       const parseDetail = describeAssignmentsParseFailure(parsed, dateAllow);
+      const invalidIds = collectUnresolvedAssignmentPids(
+        parsed,
+        dateAllow,
+        parkResolver,
+      );
+      const errDetail =
+        planAttempt === 0
+          ? `No valid assignments after validation (pre-retry: ${parseDetail})`
+          : `No valid assignments after validation (after retry: ${parseDetail})`;
+      if (planAttempt === 0) {
+        await supabase.from("ai_generations").insert({
+          user_id: user.id,
+          trip_id: input.tripId,
+          prompt: currentUserMessage,
+          model,
+          input_tokens: localInputTokens,
+          output_tokens: localOutputTokens,
+          cost_gbp_pence: null,
+          success: false,
+          status: "failed",
+          error: errDetail,
+        });
+        currentUserMessage =
+          composedUserMessage +
+          buildSmartPlanValidationRetryUserSuffix(parseDetail, invalidIds);
+        continue;
+      }
+
       if (normalizedDateKey) {
         await reportDaySmartPlanParseError({
-          message: `No valid assignments after validation: ${parseDetail}`,
+          message: `${errDetail}; invalid_raw=${JSON.stringify(invalidIds)}`,
           context: {
             tripId: input.tripId,
             dateKey: normalizedDateKey,
@@ -1070,25 +1201,61 @@ export async function runGenerateAIPlan(
             responsePreview: String(rawText).slice(0, 1500),
           },
         });
+      } else {
+        await reportAiGenAutoError({
+          message: `No valid assignments (full trip): ${errDetail}; invalid_raw=${JSON.stringify(
+            invalidIds,
+          )}`,
+          context: {
+            tripId: input.tripId,
+            mode: input.mode,
+            parseDetail,
+            responsePreview: String(rawText).slice(0, 1500),
+          },
+        });
       }
+      inputTokens = localInputTokens;
+      outputTokens = localOutputTokens;
       await supabase.from("ai_generations").insert({
         user_id: user.id,
         trip_id: input.tripId,
-        prompt: composedUserMessage,
+        prompt: currentUserMessage,
         model,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
+        input_tokens: localInputTokens,
+        output_tokens: localOutputTokens,
         cost_gbp_pence: null,
         success: false,
-        error: "No valid assignments after validation",
+        status: "failed",
+        error: errDetail,
       });
 
       return {
         ok: false,
         error: "AI_ERROR",
         message:
-          "Smart Plan couldn't generate a plan right now. Please try again in a moment — if it keeps failing, let us know via feedback.",
+          "Smart Plan didn't quite work this time — try again, or build the plan manually.",
       };
+    }
+
+    if (!finalSanitized || Object.keys(finalSanitized).length === 0) {
+      return {
+        ok: false,
+        error: "AI_ERROR",
+        message:
+          "Smart Plan didn't quite work this time — try again, or build the plan manually.",
+      };
+    }
+
+    const meta = lastMeta;
+    const parsed = finalParsed;
+    const sanitized = finalSanitized;
+    if (AI_GEN_DEBUG && lastRawText.length > 0) {
+      logAiGen({
+        step: "plan_validate_success",
+        tripId: input.tripId,
+        userId: user.id,
+        details: { outputChars: lastRawText.length },
+      });
     }
 
     const guarded = enforceAiPlanGuardrails(sanitized, {
@@ -1100,12 +1267,13 @@ export async function runGenerateAIPlan(
       await supabase.from("ai_generations").insert({
         user_id: user.id,
         trip_id: input.tripId,
-        prompt: composedUserMessage,
+        prompt: currentUserMessage,
         model,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
         cost_gbp_pence: null,
         success: false,
+        status: "failed",
         error: "Plan failed guardrail validation (empty after cleanup)",
       });
 
@@ -1136,6 +1304,7 @@ export async function runGenerateAIPlan(
       rawMustTop,
       dateAllow,
       allowedParkIds,
+      parkResolver.resolve,
     );
     const filteredMust = filterMustDosToAssignedParks(
       parsedMust,
@@ -1201,12 +1370,13 @@ export async function runGenerateAIPlan(
       await supabase.from("ai_generations").insert({
         user_id: user.id,
         trip_id: input.tripId,
-        prompt: composedUserMessage,
+        prompt: currentUserMessage,
         model,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
         cost_gbp_pence: null,
         success: false,
+        status: "failed",
         error: upErr.message,
       });
 
@@ -1216,12 +1386,13 @@ export async function runGenerateAIPlan(
     const { error: genInsertErr } = await supabase.from("ai_generations").insert({
       user_id: user.id,
       trip_id: input.tripId,
-      prompt: composedUserMessage,
+      prompt: currentUserMessage,
       model,
       input_tokens: inputTokens,
       output_tokens: outputTokens,
       cost_gbp_pence: null,
       success: true,
+      status: "success",
       error: null,
     });
 
@@ -1306,6 +1477,7 @@ export async function runGenerateAIPlan(
       output_tokens: outputTokens,
       cost_gbp_pence: null,
       success: false,
+      status: "failed",
       error: msg,
     });
 
@@ -1510,6 +1682,7 @@ Produce 4–6 specific named attractions in rough chronological order for a full
         output_tokens: outputTokens,
         cost_gbp_pence: null,
         success: false,
+        status: "failed",
         error: "Invalid JSON (must_dos single park)",
       });
       return {
@@ -1530,6 +1703,7 @@ Produce 4–6 specific named attractions in rough chronological order for a full
         output_tokens: outputTokens,
         cost_gbp_pence: null,
         success: false,
+        status: "failed",
         error: "empty must_dos",
       });
       return {
@@ -1574,6 +1748,7 @@ Produce 4–6 specific named attractions in rough chronological order for a full
       output_tokens: outputTokens,
       cost_gbp_pence: null,
       success: true,
+      status: "success",
       error: null,
     });
     if (genInsertErr) {
