@@ -1,51 +1,27 @@
-import { upsertPurchaseFromStripeSubscription } from "@/lib/stripe/purchase-sync";
 import { enqueueSubscriptionPaymentFailedEmail } from "@/lib/stripe/enqueue-payment-failed-email";
 import { getStripeClient } from "@/lib/stripe/client";
+import {
+  setPurchasePastDueBySubscriptionId,
+  upsertPurchaseFromStripeSubscription,
+} from "@/lib/stripe/purchase-sync";
+import {
+  resolveUserIdByStripeCustomerId,
+  resolveUserIdForCheckoutSession,
+  resolveUserIdForSubscription,
+} from "@/lib/stripe/resolve-stripe-user";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
 
-async function resolveUserIdFromSubscription(
-  admin: ReturnType<typeof createServiceRoleClient>,
-  sub: Stripe.Subscription,
-): Promise<string | null> {
-  const meta =
-    sub.metadata?.user_id?.trim() ||
-    sub.metadata?.supabase_user_id?.trim() ||
-    "";
-  if (meta) return meta;
-  const cust =
-    typeof sub.customer === "string"
-      ? sub.customer
-      : sub.customer?.id ?? null;
-  if (!cust) return null;
-  const { data } = await admin
-    .from("profiles")
-    .select("id")
-    .eq("stripe_customer_id", cust)
-    .maybeSingle();
-  return data?.id ? String(data.id) : null;
-}
-
-async function resolveUserIdFromStripeCustomerId(
-  admin: ReturnType<typeof createServiceRoleClient>,
-  customerId: string | null,
-): Promise<string | null> {
-  if (!customerId?.trim()) return null;
-  const { data } = await admin
-    .from("profiles")
-    .select("id")
-    .eq("stripe_customer_id", customerId.trim())
-    .maybeSingle();
-  return data?.id ? String(data.id) : null;
-}
-
 export async function POST(req: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
   if (!secret) {
-    return NextResponse.json({ error: "Webhook not configured." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Webhook not configured." },
+      { status: 500 },
+    );
   }
 
   const sig = req.headers.get("stripe-signature");
@@ -61,32 +37,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid signature." }, { status: 400 });
   }
 
-  const admin = createServiceRoleClient();
-  const { error: insErr } = await admin
+  const supabaseAdmin = createServiceRoleClient();
+  const { error: dedupErr } = await supabaseAdmin
     .from("stripe_webhook_events")
     .insert({ id: event.id });
-  if (insErr?.code === "23505") {
-    return NextResponse.json({ received: true, duplicate: true });
-  }
-  // If dedupe cannot be recorded (e.g. schema drift), we still return 200 after processing
-  // so Stripe does not keep retrying. The handler may run twice for the same event id; DB
-  // upserts in purchase flow reduce harm relative to an endless retry loop.
-  if (insErr) {
-    console.error(
-      "[stripe webhook] idempotency insert (continuing to process)",
-      {
-        eventId: event.id,
-        type: event.type,
-        code: insErr.code,
-        message: insErr.message,
-      },
-    );
+
+  if (dedupErr) {
+    if (dedupErr.code === "23505") {
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+    console.error("[stripe webhook] dedup insert failed", dedupErr);
+    return NextResponse.json({ error: "dedup failed" }, { status: 500 });
   }
 
   const stripe = getStripeClient();
+  const ctx = { eventId: event.id, eventType: event.type };
 
   try {
-    console.log("[stripe webhook] handling", {
+    console.info("[stripe webhook] handling", {
       eventId: event.id,
       type: event.type,
     });
@@ -98,95 +66,93 @@ export async function POST(req: Request) {
           typeof sess.subscription === "string"
             ? sess.subscription
             : sess.subscription?.id;
-        const userId =
-          sess.client_reference_id?.trim() ||
-          sess.metadata?.user_id?.trim() ||
-          "";
-        if (!subId || !userId) break;
+        if (!subId) break;
+
+        const userId = await resolveUserIdForCheckoutSession(
+          supabaseAdmin,
+          stripe,
+          sess,
+          ctx,
+        );
+        if (!userId) {
+          return NextResponse.json({ received: true });
+        }
+
         const sub = await stripe.subscriptions.retrieve(subId);
         const custRaw = sess.customer;
         const cust =
           typeof custRaw === "string" ? custRaw : custRaw?.id ?? null;
         if (cust) {
-          await admin
+          const { error: pErr } = await supabaseAdmin
             .from("profiles")
             .update({
               stripe_customer_id: cust,
               updated_at: new Date().toISOString(),
             })
             .eq("id", userId);
+          if (pErr) throw new Error(pErr.message);
         }
         if (cust) {
-          await upsertPurchaseFromStripeSubscription(admin, {
+          await upsertPurchaseFromStripeSubscription(supabaseAdmin, {
             userId,
             stripeCustomerId: cust,
             subscription: sub,
           });
+        } else {
+          console.error(
+            "[stripe webhook] checkout session missing customer id",
+            ctx,
+          );
         }
         break;
       }
       case "customer.subscription.created":
-      case "customer.subscription.updated": {
+      case "customer.subscription.updated":
+      case "customer.subscription.deleted": {
         const sub = event.data.object as Stripe.Subscription;
-        const userId = await resolveUserIdFromSubscription(admin, sub);
-        if (!userId) break;
+        const userId = await resolveUserIdForSubscription(
+          supabaseAdmin,
+          stripe,
+          sub,
+          ctx,
+        );
+        if (!userId) {
+          return NextResponse.json({ received: true });
+        }
         const cust =
           typeof sub.customer === "string"
             ? sub.customer
             : sub.customer?.id ?? "";
         if (!cust) break;
-        await upsertPurchaseFromStripeSubscription(admin, {
+        await upsertPurchaseFromStripeSubscription(supabaseAdmin, {
           userId,
           stripeCustomerId: cust,
           subscription: sub,
         });
         break;
       }
-      case "customer.subscription.deleted": {
-        const sub = event.data.object as Stripe.Subscription;
-        const userId = await resolveUserIdFromSubscription(admin, sub);
-        const cust =
-          typeof sub.customer === "string"
-            ? sub.customer
-            : sub.customer?.id ?? "";
-        if (userId && cust) {
-          await upsertPurchaseFromStripeSubscription(admin, {
-            userId,
-            stripeCustomerId: cust,
-            subscription: sub,
-          });
-        }
-        break;
-      }
-      case "invoice.paid": {
+      case "invoice.payment_failed": {
         const inv = event.data.object as Stripe.Invoice;
         const subRaw = inv.subscription;
         const subId =
           typeof subRaw === "string" ? subRaw : subRaw?.id ?? null;
-        if (!subId) break;
-        const sub = await stripe.subscriptions.retrieve(subId);
-        const userId = await resolveUserIdFromSubscription(admin, sub);
-        const cust =
-          typeof sub.customer === "string"
-            ? sub.customer
-            : sub.customer?.id ?? "";
-        if (userId && cust) {
-          await upsertPurchaseFromStripeSubscription(admin, {
-            userId,
-            stripeCustomerId: cust,
-            subscription: sub,
-          });
+        if (subId) {
+          await setPurchasePastDueBySubscriptionId(supabaseAdmin, subId);
         }
-        break;
-      }
-      case "invoice.payment_failed": {
-        const inv = event.data.object as Stripe.Invoice;
         const custRaw = inv.customer;
         const custId =
           typeof custRaw === "string" ? custRaw : custRaw?.id ?? null;
-        const userId = await resolveUserIdFromStripeCustomerId(admin, custId);
+        const userId = await resolveUserIdByStripeCustomerId(
+          supabaseAdmin,
+          stripe,
+          custId,
+          ctx,
+        );
         if (userId) {
-          await enqueueSubscriptionPaymentFailedEmail(admin, userId);
+          await enqueueSubscriptionPaymentFailedEmail(
+            supabaseAdmin,
+            userId,
+          );
         }
         break;
       }
@@ -200,7 +166,10 @@ export async function POST(req: Request) {
       type: event.type,
       error: err.message,
     });
-    return NextResponse.json({ received: true, error: true });
+    return NextResponse.json(
+      { error: "handler failed" },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ received: true });

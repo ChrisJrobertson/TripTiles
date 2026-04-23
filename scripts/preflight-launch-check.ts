@@ -117,9 +117,6 @@ async function main(): Promise<void> {
     "ANTHROPIC_API_KEY",
     "RESEND_API_KEY",
     "CRON_SECRET",
-    "NEXT_PUBLIC_PAYHIP_PRO_URL",
-    "NEXT_PUBLIC_PAYHIP_FAMILY_URL",
-    "NEXT_PUBLIC_PAYHIP_PREMIUM_URL",
     "NEXT_PUBLIC_BOOKING_AFFILIATE_ID",
     "NEXT_PUBLIC_GYG_PARTNER_ID",
   ] as const;
@@ -153,15 +150,10 @@ async function main(): Promise<void> {
     }
   }
 
-  if (envVarPresent(process.env.PAYHIP_WEBHOOK_SECRET) === "PASS") {
-    out.push(line("PASS", "PAYHIP_WEBHOOK_SECRET: present (legacy; Stripe is primary)"));
+  if (envVarPresent(process.env.STRIPE_WEBHOOK_SECRET) === "PASS") {
+    out.push(line("PASS", "STRIPE_WEBHOOK_SECRET: present"));
   } else {
-    out.push(
-      line(
-        "WARN",
-        "PAYHIP_WEBHOOK_SECRET: missing — OK if you only use Stripe; set in Vercel if Payhip webhooks are still wired",
-      ),
-    );
+    out.push(line("FAIL", "STRIPE_WEBHOOK_SECRET: missing (required for subscription webhooks)"));
   }
   out.push("");
 
@@ -208,19 +200,15 @@ async function main(): Promise<void> {
     out.push(line("FAIL", "purchases: could not count"));
   }
 
-  const { error: pheErr } = await admin.from("payhip_webhook_events").select("id").limit(1);
-  if (pheErr && (pheErr.message.includes("does not exist") || pheErr.code === "PGRST205")) {
-    out.push(
-      line(
-        "WARN",
-        "payhip_webhook_events: table not found (Payhip dropped in favour of Stripe — expected)",
-      ),
-    );
-  } else if (pheErr) {
-    out.push(line("FAIL", `payhip_webhook_events: ${pheErr.message}`));
+  const { error: steErr } = await admin
+    .from("stripe_webhook_events")
+    .select("id")
+    .limit(1);
+  if (steErr) {
+    out.push(line("FAIL", `stripe_webhook_events: ${steErr.message}`));
   } else {
-    const n = await count("payhip_webhook_events");
-    out.push(`- payhip_webhook_events: ${n ?? "?"} rows`);
+    const n = await count("stripe_webhook_events");
+    out.push(`- stripe_webhook_events: ${n ?? "?"} rows`);
   }
 
   const collabN = await count("trip_collaborators");
@@ -381,12 +369,7 @@ async function main(): Promise<void> {
   const base = "https://www.triptiles.app";
   const urlChecks: { label: string; path: string; good: (n: number) => boolean }[] = [
     {
-      label: "/api/webhooks/payhip",
-      path: "/api/webhooks/payhip",
-      good: (n) => n === 405 || n === 404,
-    },
-    {
-      label: "/api/webhooks/stripe (Stripe; Payhip removed)",
+      label: "/api/webhooks/stripe",
       path: "/api/webhooks/stripe",
       good: (n) => n === 405 || n === 400,
     },

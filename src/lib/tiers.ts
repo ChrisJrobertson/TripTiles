@@ -162,7 +162,7 @@ export function normalizeToRetailTier(tier: string | null | undefined): RetailTi
   ) {
     return "family";
   }
-  if (t === "day_tripper" || t === "free") return "free";
+  if (t === "free") return "free";
   return "free";
 }
 

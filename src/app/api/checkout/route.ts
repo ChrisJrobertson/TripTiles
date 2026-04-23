@@ -29,9 +29,14 @@ export async function POST(req: Request) {
       line_items: [{ price: priceId, quantity: 1 }],
       customer_email: user.email,
       client_reference_id: user.id,
+      metadata: {
+        supabase_user_id: user.id,
+      },
       allow_promotion_codes: true,
       subscription_data: {
-        metadata: { user_id: user.id },
+        metadata: {
+          supabase_user_id: user.id,
+        },
       },
       success_url: `${siteUrl}/pricing/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl}/pricing`,
