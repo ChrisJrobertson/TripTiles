@@ -1,5 +1,6 @@
 import { EmailOtpVerifyForm } from "@/components/auth/EmailOtpVerifyForm";
 import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
+import { TRIP_TILES_LOGO_INLINE_IMG_CLASS } from "@/components/brand/triptiles-logo-sizes";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
 import { redirect } from "next/navigation";
 
@@ -25,8 +26,8 @@ export default async function CheckEmailPage({ searchParams }: Props) {
         <div className="flex justify-center">
           <TripTilesLogoLink
             href="/"
-            height={56}
-            imgClassName="h-14 w-auto sm:h-16"
+            height={120}
+            imgClassName={TRIP_TILES_LOGO_INLINE_IMG_CLASS}
             className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-sm"
           />
         </div>

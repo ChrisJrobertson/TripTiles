@@ -1,4 +1,5 @@
 import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
+import { TRIP_TILES_LOGO_AUTH_IMG_CLASS } from "@/components/brand/triptiles-logo-sizes";
 import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
 import { createClient } from "@/lib/supabase/server";
 import type { Metadata } from "next";
@@ -24,8 +25,8 @@ export default async function ResetPasswordPage() {
         <div className="flex justify-center">
           <TripTilesLogoLink
             href="/"
-            height={72}
-            imgClassName="h-[4.5rem] w-auto max-h-[4.5rem] sm:h-20 sm:max-h-20"
+            height={200}
+            imgClassName={TRIP_TILES_LOGO_AUTH_IMG_CLASS}
             className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-sm"
           />
         </div>

@@ -1,4 +1,5 @@
 import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
+import { TRIP_TILES_LOGO_COMPACT_IMG_CLASS } from "@/components/brand/triptiles-logo-sizes";
 import Link from "next/link";
 
 const DEST_LINKS: { label: string; href: string }[] = [
@@ -16,8 +17,8 @@ export function MarketingFooter() {
         <div>
           <TripTilesLogoLink
             href="/"
-            height={44}
-            imgClassName="h-11 w-auto max-h-11"
+            height={80}
+            imgClassName={TRIP_TILES_LOGO_COMPACT_IMG_CLASS}
             className="inline-flex shrink-0 items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream rounded-sm"
           />
           <p className="mt-2 font-sans text-sm text-royal/70">

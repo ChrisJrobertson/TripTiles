@@ -112,13 +112,11 @@ function AppNavHeaderFallback({
   const showTripRatio = typeof cap === "number";
   const upgradeNav = showUpgradeNavCta ?? isLegacyFreeNav;
   return (
-    <header className="sticky top-0 z-30 border-b border-royal/[0.12] bg-white/70 px-4 py-3 shadow-[0_1px_0_rgb(201_169_97_/_0.12)] backdrop-blur-xl backdrop-saturate-150">
+    <header className="sticky top-0 z-30 border-b border-royal/[0.12] bg-white/70 px-4 py-2 sm:py-3 shadow-[0_1px_0_rgb(201_169_97_/_0.12)] backdrop-blur-xl backdrop-saturate-150">
       <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <TripTilesLogoLink
             href="/planner"
-            height={96}
-            imgClassName="h-20 w-auto max-h-20 sm:h-24 sm:max-h-24"
             className="inline-flex shrink-0 items-center transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream rounded-sm"
           />
           <details className="relative sm:hidden">
@@ -323,13 +321,11 @@ function AppNavHeaderInner({
     );
 
   return (
-    <header className="sticky top-0 z-30 border-b border-royal/[0.12] bg-white/70 px-4 py-3 shadow-[0_1px_0_rgb(201_169_97_/_0.12)] backdrop-blur-xl backdrop-saturate-150">
+    <header className="sticky top-0 z-30 border-b border-royal/[0.12] bg-white/70 px-4 py-2 sm:py-3 shadow-[0_1px_0_rgb(201_169_97_/_0.12)] backdrop-blur-xl backdrop-saturate-150">
       <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <TripTilesLogoLink
             href="/planner"
-            height={96}
-            imgClassName="h-20 w-auto max-h-20 sm:h-24 sm:max-h-24"
             className="inline-flex shrink-0 items-center transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream rounded-sm"
           />
           <details className="relative sm:hidden">
