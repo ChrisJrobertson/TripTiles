@@ -4,6 +4,8 @@ import { ExpandedDayPanel } from "@/components/planner/ExpandedDayPanel";
 import { SkipLineLegend } from "@/components/planner/SkipLineLegend";
 import { CrowdLevelIndicator } from "@/components/planner/CrowdLevelIndicator";
 import { DayConflictBanners } from "@/components/planner/DayConflictBanners";
+import { DayHeatSidecar } from "@/components/planner/DayHeatSidecar";
+import { DayTimeline } from "@/components/planner/DayTimeline";
 import { DayParkMustDosSection } from "@/components/planner/DayParkMustDosSection";
 import {
   ApplyTemplateDialog,
@@ -25,6 +27,7 @@ import { dayConditionRow } from "@/lib/planner-day-conditions";
 import {
   crowdLevelFromHeuristicTone,
   heuristicCrowdToneFromNoteText,
+  type CrowdLevel,
 } from "@/lib/planner-crowd-level-meta";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { plannerUserDayNotes } from "@/lib/planner-note-maps";
@@ -295,6 +298,27 @@ export function DayDetailLayer({
     : null;
   const crowdLevel = tone ? crowdLevelFromHeuristicTone(tone) : null;
 
+  const parksById = useMemo(
+    () => Object.fromEntries(parks.map((p) => [p.id, p])) as Record<
+      string,
+      (typeof parks)[0]
+    >,
+    [parks],
+  );
+
+  const hasDayAssignments = useMemo(() => {
+    const a = trip.assignments[dayDate] ?? {};
+    return (
+      Boolean(getParkIdFromSlotValue(a.am)) ||
+      Boolean(getParkIdFromSlotValue(a.pm)) ||
+      Boolean(getParkIdFromSlotValue(a.lunch)) ||
+      Boolean(getParkIdFromSlotValue(a.dinner))
+    );
+  }, [trip.assignments, dayDate]);
+
+  const heatTempC = dc ? Math.round(dc.conditions.tempHighC) : 22;
+  const heatCrowd: CrowdLevel = crowdLevel ?? dc?.crowd ?? "moderate";
+
   const smartPlanPreviewLine =
     aiNoteForDay && aiNoteForDay.length > 0
       ? aiNoteForDay.split(/\n+/)[0]!.slice(0, 220)
@@ -465,6 +489,76 @@ export function DayDetailLayer({
   const refreshTrip = () => {
     startTransition(() => router.refresh());
   };
+
+  const renderSmartPlanBody = () => (
+    <>
+      <p className="font-sans text-[11px] font-semibold uppercase tracking-wide text-royal/60">
+        Smart Plan
+      </p>
+      {smartPlanPreviewLine ? (
+        <p className="mt-1 font-sans text-sm leading-relaxed text-royal/85">
+          {smartPlanPreviewLine}
+        </p>
+      ) : (
+        <p className="mt-1 font-sans text-sm italic text-royal/55">
+          No crowd tip for this day yet — run Smart Plan for the trip.
+        </p>
+      )}
+      <div className="mt-3 rounded-lg border border-gold/30 bg-white px-3 py-2.5">
+        <p className="font-sans text-[11px] font-semibold uppercase tracking-wide text-royal/60">
+          Skip-the-line passes
+        </p>
+        <p className="mt-1 font-sans text-xs leading-relaxed text-royal/65">
+          Choose before you generate — Smart Plan uses these for this trip.
+        </p>
+        <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-md border border-royal/10 bg-cream/40 px-2 py-2">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+            checked={trip.planning_preferences?.includeDisneySkipTips !== false}
+            disabled={prefsSaving}
+            onChange={(e) =>
+              void persistSkipLinePrefs(
+                e.target.checked,
+                trip.planning_preferences?.includeUniversalSkipTips !== false,
+              )
+            }
+          />
+          <span className="min-w-0 font-sans text-xs leading-snug text-royal/85">
+            <span className="font-semibold text-royal">
+              Disney Lightning Lane / Genie+ tips
+            </span>
+          </span>
+        </label>
+        <label className="mt-1.5 flex cursor-pointer items-start gap-2.5 rounded-md border border-royal/10 bg-cream/40 px-2 py-2">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+            checked={trip.planning_preferences?.includeUniversalSkipTips !== false}
+            disabled={prefsSaving}
+            onChange={(e) =>
+              void persistSkipLinePrefs(
+                trip.planning_preferences?.includeDisneySkipTips !== false,
+                e.target.checked,
+              )
+            }
+          />
+          <span className="min-w-0 font-sans text-xs leading-snug text-royal/85">
+            <span className="font-semibold text-royal">
+              Universal Express-style tips
+            </span>
+          </span>
+        </label>
+      </div>
+      <button
+        type="button"
+        className="mt-3 min-h-11 w-full rounded-lg bg-royal px-4 py-2.5 font-sans text-sm font-semibold text-cream shadow-sm transition hover:bg-royal/90"
+        onClick={handlePlanMyDay}
+      >
+        Plan my day ✨
+      </button>
+    </>
+  );
 
   return (
     <>
@@ -642,79 +736,33 @@ export function DayDetailLayer({
             onGenerateMustDosForPark={onGenerateMustDosForPark}
             generatingMustDosParkId={generatingMustDosParkId}
           />
-          <section className="mb-4 rounded-lg border border-royal/10 bg-white/90 p-3">
-            <p className="font-sans text-[11px] font-semibold uppercase tracking-wide text-royal/60">
-              Smart Plan
-            </p>
-            {smartPlanPreviewLine ? (
-              <p className="mt-1 font-sans text-sm leading-relaxed text-royal/85">
-                {smartPlanPreviewLine}
-              </p>
-            ) : (
-              <p className="mt-1 font-sans text-sm italic text-royal/55">
-                No crowd tip for this day yet — run Smart Plan for the trip.
-              </p>
-            )}
-            <div className="mt-3 rounded-lg border border-gold/30 bg-white px-3 py-2.5">
-              <p className="font-sans text-[11px] font-semibold uppercase tracking-wide text-royal/60">
-                Skip-the-line passes
-              </p>
-              <p className="mt-1 font-sans text-xs leading-relaxed text-royal/65">
-                Choose before you generate — Smart Plan uses these for this trip.
-              </p>
-              <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-md border border-royal/10 bg-cream/40 px-2 py-2">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
-                  checked={
-                    trip.planning_preferences?.includeDisneySkipTips !== false
-                  }
-                  disabled={prefsSaving}
-                  onChange={(e) =>
-                    void persistSkipLinePrefs(
-                      e.target.checked,
-                      trip.planning_preferences?.includeUniversalSkipTips !==
-                        false,
-                    )
-                  }
-                />
-                <span className="min-w-0 font-sans text-xs leading-snug text-royal/85">
-                  <span className="font-semibold text-royal">
-                    Disney Lightning Lane / Genie+ tips
-                  </span>
-                </span>
-              </label>
-              <label className="mt-1.5 flex cursor-pointer items-start gap-2.5 rounded-md border border-royal/10 bg-cream/40 px-2 py-2">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
-                  checked={
-                    trip.planning_preferences?.includeUniversalSkipTips !==
-                    false
-                  }
-                  disabled={prefsSaving}
-                  onChange={(e) =>
-                    void persistSkipLinePrefs(
-                      trip.planning_preferences?.includeDisneySkipTips !== false,
-                      e.target.checked,
-                    )
-                  }
-                />
-                <span className="min-w-0 font-sans text-xs leading-snug text-royal/85">
-                  <span className="font-semibold text-royal">
-                    Universal Express-style tips
-                  </span>
-                </span>
-              </label>
-            </div>
-            <button
-              type="button"
-              className="mt-3 min-h-11 w-full rounded-lg bg-royal px-4 py-2.5 font-sans text-sm font-semibold text-cream shadow-sm transition hover:bg-royal/90"
-              onClick={handlePlanMyDay}
-            >
-              Plan my day ✨
-            </button>
-          </section>
+          {hasDayAssignments ? (
+            <>
+              <DayTimeline
+                date={dayDate}
+                assignments={ass}
+                parks={parksById}
+                dayNotes={aiNoteForDay ?? undefined}
+              />
+              <div className="mt-3">
+                <DayHeatSidecar tempC={heatTempC} crowdLevel={heatCrowd} />
+              </div>
+            </>
+          ) : null}
+          {hasDayAssignments ? (
+            <details className="mb-4 mt-3 rounded-lg border border-royal/10 bg-white/90 open:border-royal/20 dark:border-white/10 dark:bg-neutral-900/20">
+              <summary className="cursor-pointer list-none p-3 font-sans text-sm font-semibold text-royal marker:hidden [&::-webkit-details-marker]:hidden dark:text-neutral-200">
+                Regenerate with different options
+              </summary>
+              <div className="border-t border-royal/10 px-3 pb-3 pt-0 dark:border-white/10">
+                {renderSmartPlanBody()}
+              </div>
+            </details>
+          ) : (
+            <section className="mb-4 mt-0 rounded-lg border border-royal/10 bg-white/90 p-3 dark:border-white/10 dark:bg-neutral-900/20">
+              {renderSmartPlanBody()}
+            </section>
+          )}
 
           <div className="mb-3">
             <SkipLineLegend />
