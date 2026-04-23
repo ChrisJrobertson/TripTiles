@@ -118,11 +118,54 @@ export async function loadPlannerClientServerData(input: {
 
   const trips = await getUserTrips(userId);
   if (trips.length === 0) {
-    const [parks, regions, cataloguedParkIds] = await Promise.all([
-      getAllParks(),
-      getAllRegions(),
-      getCataloguedParkIds(),
-    ]);
+    type PlannerProfileRow = {
+      tier: string;
+      temperature_unit?: string | null;
+      email_marketing_opt_out?: boolean | null;
+      stripe_customer_id?: string | null;
+    };
+    const profileRead = await readProfileRow<PlannerProfileRow>(
+      supabase,
+      userId,
+      "tier, temperature_unit, email_marketing_opt_out, stripe_customer_id",
+    );
+    if (!profileRead.ok) {
+      return { ok: false, error: "profile", message: profileRead.message };
+    }
+    const pr = profileRead.data;
+    const profileBundle: PlannerProfileBundle = {
+      tier: tierFromProfileRow(pr),
+      temperatureUnit: pr.temperature_unit === "f" ? "f" : "c",
+      emailMarketingOptOut: pr.email_marketing_opt_out === true,
+      stripeCustomerId: pr.stripe_customer_id?.trim() || null,
+    };
+
+    const [parks, regions, cataloguedParkIds, achievementDefs, customTiles, customTileLimit] =
+      await Promise.all([
+        getAllParks(),
+        getAllRegions(),
+        getCataloguedParkIds(),
+        getAchievementDefinitions(),
+        getUserCustomTiles(userId),
+        getCustomTileLimit(userId),
+      ]);
+
+    let productTier: Tier = "free";
+    let maxActiveTripCap: number | "unlimited" = 1;
+    try {
+      productTier = await getUserTier(userId);
+      maxActiveTripCap = await maxActiveTripsForUser(userId);
+    } catch (e) {
+      if (isTierLoadFailure(e)) {
+        return {
+          ok: false,
+          error: "tier",
+          message: tierLoadFailureUserMessage(),
+        };
+      }
+      throw e;
+    }
+
     return {
       ok: true,
       props: {
@@ -131,21 +174,21 @@ export async function loadPlannerClientServerData(input: {
         regions,
         initialActiveTripId: null,
         userEmail,
-        profileTier: "free",
-        productTier: "free",
-        productPlanLabel: formatProductTierName("free"),
-        maxActiveTripCap: 1,
-        stripeCustomerId: null,
-        achievementDefs: await getAchievementDefinitions(),
+        profileTier: profileBundle.tier,
+        productTier,
+        productPlanLabel: formatProductTierName(productTier),
+        maxActiveTripCap,
+        stripeCustomerId: profileBundle.stripeCustomerId,
+        achievementDefs,
         aiGenerationCountsByTrip: {},
         siteUrl,
         initialTileScrubNotice: null,
-        initialCustomTiles: [],
-        customTileLimit: 0,
+        initialCustomTiles: customTiles,
+        customTileLimit,
         plannerTab: "planner",
         initialPlanningSection: null,
-        initialTemperatureUnit: "c",
-        emailMarketingOptOut: false,
+        initialTemperatureUnit: profileBundle.temperatureUnit,
+        emailMarketingOptOut: profileBundle.emailMarketingOptOut,
         initialRidePrioritiesByTripId: {},
         ridePriorityCountByTripAndDay: {},
         initialPaymentsByTripId: {},

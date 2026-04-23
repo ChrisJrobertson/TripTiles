@@ -51,11 +51,43 @@ function randomSlugSuffix(): string {
 
 const SLOT_TYPES = ["am", "pm", "lunch", "dinner"] as const;
 
-// ---- Create ----
-export async function createTripAction(input: {
+function localDateYmd(base: Date, addDays: number): string {
+  const d = new Date(
+    base.getFullYear(),
+    base.getMonth(),
+    base.getDate() + addDays,
+  );
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Minimal trip for users who want to fill in region and details later. */
+export async function createBlankTripAction(): Promise<
+  | { ok: true; tripId: string; newAchievements: string[] }
+  | { ok: false; error: string; code?: "TIER_LIMIT_TRIPS" }
+> {
+  const today = new Date();
+  return createTripActionWithRegion({
+    familyName: "My family",
+    adventureName: "My first TripTiles",
+    regionId: null,
+    startDate: localDateYmd(today, 14),
+    endDate: localDateYmd(today, 21),
+    hasCruise: false,
+    adults: 2,
+    children: 0,
+    childAges: [],
+    planningPreferences: null,
+    colourTheme: undefined,
+  });
+}
+
+type CreateTripInput = {
   familyName: string;
   adventureName: string;
-  regionId: string;
+  regionId: string | null;
   startDate: string;
   endDate: string;
   hasCruise: boolean;
@@ -66,13 +98,21 @@ export async function createTripAction(input: {
   childAges?: number[];
   planningPreferences?: TripPlanningPreferences | null;
   colourTheme?: ThemeKey;
-}): Promise<
+};
+
+async function createTripActionWithRegion(
+  input: CreateTripInput,
+): Promise<
   | { ok: true; tripId: string; newAchievements: string[] }
   | { ok: false; error: string; code?: "TIER_LIMIT_TRIPS" }
 > {
+  const logTag =
+    input.regionId == null ? "[createBlankTripAction]" : "[createTripAction]";
+  let sessionUser: { id: string } | null = null;
   try {
     const user = await getCurrentUser();
     if (!user) return { ok: false, error: "Not signed in." };
+    sessionUser = user;
 
     try {
       await assertTierAllows(user.id, "trips");
@@ -100,7 +140,9 @@ export async function createTripAction(input: {
       };
     }
 
-    const legacyDestination = legacyDestinationFromRegionId(input.regionId);
+    const legacyDestination: Destination = input.regionId
+      ? legacyDestinationFromRegionId(input.regionId)
+      : "custom";
 
     const supabase = await createClient();
     const hasCruise = input.hasCruise;
@@ -142,13 +184,20 @@ export async function createTripAction(input: {
       is_archived: false,
     };
 
+    console.log(
+      `${logTag} insert payload:`,
+      JSON.stringify(row, null, 2),
+    );
+
     const { data: inserted, error } = await supabase
       .from("trips")
       .insert(row)
       .select("id")
       .single();
 
-    if (error) return { ok: false, error: error.message };
+    if (error) {
+      return { ok: false, error: `Insert failed: ${error.message}` };
+    }
     if (!inserted?.id) return { ok: false, error: "Insert failed." };
 
     const newAchievements: string[] = [];
@@ -156,16 +205,18 @@ export async function createTripAction(input: {
     const first = await awardAchievementAction("first_trip");
     if (first.ok && first.justEarned) newAchievements.push("first_trip");
 
-    const destKey = `dest_${input.regionId}`;
-    const { data: destDef } = await supabase
-      .from("achievement_definitions")
-      .select("key")
-      .eq("key", destKey)
-      .maybeSingle();
+    if (input.regionId) {
+      const destKey = `dest_${input.regionId}`;
+      const { data: destDef } = await supabase
+        .from("achievement_definitions")
+        .select("key")
+        .eq("key", destKey)
+        .maybeSingle();
 
-    if (destDef) {
-      const destAward = await awardAchievementAction(destKey);
-      if (destAward.ok && destAward.justEarned) newAchievements.push(destKey);
+      if (destDef) {
+        const destAward = await awardAchievementAction(destKey);
+        if (destAward.ok && destAward.justEarned) newAchievements.push(destKey);
+      }
     }
 
     const milestoneKeys = await checkAndAwardMilestonesAction();
@@ -179,15 +230,17 @@ export async function createTripAction(input: {
       endDate: input.endDate,
     });
 
-    const seed = await seedTripChecklistIfEmptyAction({
-      tripId: String(inserted.id),
-      regionId: input.regionId,
-      startDate: input.startDate,
-      children,
-      hasCruise,
-    });
-    if (!seed.ok) {
-      console.warn("Checklist seed skipped:", seed.error);
+    if (input.regionId) {
+      const seed = await seedTripChecklistIfEmptyAction({
+        tripId: String(inserted.id),
+        regionId: input.regionId,
+        startDate: input.startDate,
+        children,
+        hasCruise,
+      });
+      if (!seed.ok) {
+        console.warn("Checklist seed skipped:", seed.error);
+      }
     }
 
     await syncTripReminderRows(supabase, String(inserted.id), input.startDate);
@@ -196,6 +249,10 @@ export async function createTripAction(input: {
     return { ok: true, tripId: String(inserted.id), newAchievements };
   } catch (e) {
     if (isTierLoadFailure(e)) {
+      console.error(`${logTag} tier load failed`, {
+        userId: sessionUser?.id,
+        cause: e,
+      });
       return { ok: false, error: tierLoadFailureUserMessage() };
     }
     return {
@@ -203,6 +260,27 @@ export async function createTripAction(input: {
       error: e instanceof Error ? e.message : "Unknown error",
     };
   }
+}
+
+export async function createTripAction(input: {
+  familyName: string;
+  adventureName: string;
+  regionId: string;
+  startDate: string;
+  endDate: string;
+  hasCruise: boolean;
+  cruiseEmbark?: string | null;
+  cruiseDisembark?: string | null;
+  adults?: number;
+  children?: number;
+  childAges?: number[];
+  planningPreferences?: TripPlanningPreferences | null;
+  colourTheme?: ThemeKey;
+}): Promise<
+  | { ok: true; tripId: string; newAchievements: string[] }
+  | { ok: false; error: string; code?: "TIER_LIMIT_TRIPS" }
+> {
+  return createTripActionWithRegion(input);
 }
 
 // ---- Update trip metadata ----

@@ -1,6 +1,10 @@
-import { getActiveTripForUser, getUserTrips } from "@/lib/db/trips";
+import { PlannerClient } from "@/app/(app)/planner/PlannerClient";
+import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
+import { getActiveTripForUser } from "@/lib/db/trips";
+import { loadPlannerClientServerData } from "@/lib/planner-server-data";
+import { getPublicSiteUrl } from "@/lib/site";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
-import { getCurrentUser } from "@/lib/supabase/server";
+import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -37,20 +41,71 @@ export default async function PlannerPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/planner");
 
-  const trips = await getUserTrips(user.id);
-  if (trips.length === 0) {
-    redirect("/onboarding");
-  }
-
-  const active = await getActiveTripForUser(user.id);
-  const tripId = active?.id ?? trips[0]!.id;
-
   const sp = await searchParams;
-  const qs = new URLSearchParams();
-  for (const [k, raw] of Object.entries(sp)) {
-    const v = firstParam(raw);
-    if (v != null && v !== "") qs.set(k, v);
+  const supabase = await createClient();
+  const siteUrl = getPublicSiteUrl() || "https://www.triptiles.app";
+  const loaded = await loadPlannerClientServerData({
+    supabase,
+    userId: user.id,
+    userEmail: user.email ?? "",
+    siteUrl,
+    searchParams: sp,
+    forcedTripId: null,
+  });
+
+  if (!loaded.ok) {
+    if (loaded.error === "tier") {
+      return <ProfileLoadErrorPanel detail={loaded.message} />;
+    }
+    if (loaded.error === "profile") {
+      return <ProfileLoadErrorPanel detail={loaded.message} />;
+    }
+    return <ProfileLoadErrorPanel detail={loaded.message} />;
   }
-  const q = qs.toString();
-  redirect(q ? `/trip/${tripId}?${q}` : `/trip/${tripId}`);
+
+  const trips = loaded.props.initialTrips;
+  if (trips.length > 0) {
+    const active = await getActiveTripForUser(user.id);
+    const tripId = active?.id ?? trips[0]!.id;
+
+    const qs = new URLSearchParams();
+    for (const [k, raw] of Object.entries(sp)) {
+      const v = firstParam(raw);
+      if (v != null && v !== "") qs.set(k, v);
+    }
+    const q = qs.toString();
+    redirect(q ? `/trip/${tripId}?${q}` : `/trip/${tripId}`);
+  }
+
+  const p = loaded.props;
+  return (
+    <PlannerClient
+      initialTrips={p.initialTrips}
+      parks={p.parks}
+      regions={p.regions}
+      initialOpenSmartPlan={p.initialOpenSmartPlan}
+      initialAutoGenerate={p.initialAutoGenerate}
+      initialActiveTripId={p.initialActiveTripId}
+      userEmail={p.userEmail}
+      userTier={p.profileTier}
+      productTier={p.productTier}
+      productPlanLabel={p.productPlanLabel}
+      maxActiveTripCap={p.maxActiveTripCap}
+      stripeCustomerId={p.stripeCustomerId}
+      achievementDefs={p.achievementDefs}
+      aiGenerationCountsByTrip={p.aiGenerationCountsByTrip}
+      siteUrl={p.siteUrl}
+      initialTileScrubNotice={p.initialTileScrubNotice}
+      initialCustomTiles={p.initialCustomTiles}
+      customTileLimit={p.customTileLimit}
+      plannerTab={p.plannerTab}
+      initialPlanningSection={p.initialPlanningSection}
+      temperatureUnit={p.initialTemperatureUnit}
+      emailMarketingOptOut={p.emailMarketingOptOut}
+      initialRidePrioritiesByTripId={p.initialRidePrioritiesByTripId}
+      ridePriorityCountByTripAndDay={p.ridePriorityCountByTripAndDay}
+      initialPaymentsByTripId={p.initialPaymentsByTripId}
+      cataloguedParkIds={p.cataloguedParkIds}
+    />
+  );
 }

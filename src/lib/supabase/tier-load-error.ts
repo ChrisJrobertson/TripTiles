@@ -6,5 +6,5 @@ export function isTierLoadFailure(e: unknown): boolean {
 }
 
 export function tierLoadFailureUserMessage(): string {
-  return "Could not load your plan. Refresh the page or sign in again.";
+  return "We couldn't load your account details. Try signing out and back in. If it keeps happening, let us know at hello@triptiles.app.";
 }

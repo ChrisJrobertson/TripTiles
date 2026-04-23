@@ -6,6 +6,7 @@ import {
 } from "@/actions/pdf";
 import { LogoSpinner } from "@/components/ui/LogoSpinner";
 import { TripPDF } from "@/components/pdf/TripPDF";
+import { tierLoadFailureUserMessage } from "@/lib/supabase/tier-load-error";
 import { pdf } from "@react-pdf/renderer";
 import { useCallback, useState } from "react";
 
@@ -43,7 +44,7 @@ export function PdfExportButton({
         if (!result.ok) {
           setError(
             result.error === "PROFILE_TIER_UNAVAILABLE"
-              ? "Could not load your plan. Refresh the page or sign in again."
+              ? tierLoadFailureUserMessage()
               : result.error,
           );
           return;

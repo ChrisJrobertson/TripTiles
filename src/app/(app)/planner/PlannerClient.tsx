@@ -11,6 +11,7 @@ import {
   type GenerateAIPlanResult,
 } from "@/actions/ai";
 import {
+  createBlankTripAction,
   deleteTripAction,
   touchTripAction,
   undoSmartPlanAction,
@@ -119,6 +120,7 @@ import type {
 import type { TripRidePriority } from "@/types/attractions";
 import type { TripPayment } from "@/types/payments";
 import { customTileToPark } from "@/lib/types";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   useCallback,
@@ -387,10 +389,9 @@ export function PlannerClient({
   const [isSaving, setIsSaving] = useState(false);
   const [tierLimitOpen, setTierLimitOpen] = useState(false);
 
-  const [wizardOpen, setWizardOpen] = useState(() => initialTrips.length === 0);
-  const [wizardFirstRun, setWizardFirstRun] = useState(
-    () => initialTrips.length === 0,
-  );
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardFirstRun, setWizardFirstRun] = useState(true);
+  const [blankTripBusy, setBlankTripBusy] = useState(false);
   const [wizardEditId, setWizardEditId] = useState<string | null>(null);
   const [smartOpen, setSmartOpen] = useState(false);
   const [smartError, setSmartError] = useState<string | null>(null);
@@ -849,6 +850,33 @@ export function PlannerClient({
     [beginSaving, endSaving],
   );
 
+  const startBlankTrip = useCallback(async () => {
+    if (shouldBlockNewTripWizard(trips.length, maxActiveTripCap)) {
+      setTierLimitVariant("trips");
+      setTierLimitReason(
+        maxActiveTripCap === 1
+          ? "Free includes one active trip. Upgrade to Pro or Family on Pricing for more."
+          : `Your plan allows ${maxActiveTripCap} active trips. Archive one or upgrade on Pricing.`,
+      );
+      setTierLimitOpen(true);
+      return;
+    }
+    setBlankTripBusy(true);
+    try {
+      const r = await createBlankTripAction();
+      if (!r.ok) {
+        showToast(r.error, { type: "error" });
+        return;
+      }
+      startTransition(() => {
+        router.push(`/trip/${r.tripId}`);
+        router.refresh();
+      });
+    } finally {
+      setBlankTripBusy(false);
+    }
+  }, [trips.length, maxActiveTripCap, router]);
+
   useEffect(() => {
     setCustomTiles(initialCustomTiles);
   }, [initialCustomTiles]);
@@ -862,15 +890,13 @@ export function PlannerClient({
         : initialTrips[0]?.id ?? "";
     setActiveTripId(valid);
     if (initialTrips.length === 0) {
-      if (!initialAutoGenerate) {
-        setWizardFirstRun(true);
-        setWizardOpen(true);
-      }
+      setWizardFirstRun(true);
+      setWizardOpen(false);
     } else {
       setWizardOpen(false);
       setWizardEditId(null);
     }
-  }, [initialTrips, initialActiveTripId, initialAutoGenerate]);
+  }, [initialTrips, initialActiveTripId]);
 
   const showHint = useCallback((msg: string) => {
     setHint(msg);
@@ -2322,7 +2348,7 @@ export function PlannerClient({
           )}
         </main>
       ) : (
-        <main className="mx-auto max-w-lg px-4 py-16 text-center">
+        <main className="mx-auto w-full max-w-2xl px-4 py-12 text-center sm:px-6 sm:py-16">
           <div className="mx-auto flex max-w-md flex-col items-center">
             <TrippMascotImg
               width={80}
@@ -2330,49 +2356,47 @@ export function PlannerClient({
               className="h-20 w-20 object-contain"
             />
             <TrippSpeechBubble maxWidthClass="max-w-md">
-              Ready to plan something amazing? Let&apos;s get started! 🗺️
+              Ready when you are — no pressure, just possibilities. 🗺️
             </TrippSpeechBubble>
           </div>
-          <p className="mt-10 font-serif text-2xl font-semibold text-royal">
-            Let&apos;s plan your adventure
+          <h2 className="mt-8 font-serif text-2xl font-semibold tracking-tight text-royal sm:text-3xl">
+            Your planner is ready
+          </h2>
+          <p className="mx-auto mt-4 max-w-lg font-sans text-sm leading-relaxed text-royal/80 sm:text-base">
+            Start your first TripTiles adventure. We&apos;ll help you plan a
+            theme park trip your family will actually follow.
           </p>
-          <p className="mt-3 font-sans text-sm leading-relaxed text-royal/75">
-            Add dates and destination in the wizard, then drag parks onto your
-            calendar. Your plan saves automatically — open Trip Passport anytime
-            to see stamps you&apos;ve earned.
-          </p>
-          <ul className="mx-auto mt-6 max-w-sm space-y-2 text-left font-sans text-sm text-royal/80">
-            <li className="flex gap-2">
-              <span className="text-gold" aria-hidden>
-                ✓
-              </span>
-              <span>One free trip to try everything</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="text-gold" aria-hidden>
-                ✓
-              </span>
-              <span>Smart Plan with Trip suggests a draft itinerary (optional)</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="text-gold" aria-hidden>
-                ✓
-              </span>
-              <span>Print or tweak days whenever you like</span>
-            </li>
-          </ul>
-          {!wizardOpen ? (
+          <div className="mx-auto mt-8 flex w-full max-w-md flex-col gap-3 sm:flex-row sm:justify-center">
             <button
               type="button"
               onClick={() => {
                 setWizardFirstRun(true);
                 setWizardOpen(true);
               }}
-              className="mt-8 rounded-lg bg-royal px-8 py-3 font-serif text-base font-semibold text-cream shadow-md transition hover:bg-royal/90"
+              className="min-h-11 w-full min-w-0 flex-1 rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-5 py-2.5 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 sm:min-h-[44px] sm:max-w-xs"
             >
-              Open trip wizard
+              Plan my trip in minutes
             </button>
-          ) : null}
+            <button
+              type="button"
+              disabled={blankTripBusy}
+              onClick={() => void startBlankTrip()}
+              className="min-h-11 w-full min-w-0 flex-1 rounded-lg border-2 border-royal/25 bg-white px-5 py-2.5 font-sans text-base font-semibold text-royal transition hover:border-royal/40 hover:bg-cream disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[44px] sm:max-w-xs"
+            >
+              {blankTripBusy ? "Starting…" : "Start from scratch"}
+            </button>
+          </div>
+          <p className="mt-8 font-sans text-sm text-royal/65">
+            Or browse plans from other families to get inspired.
+          </p>
+          <p className="mt-2">
+            <Link
+              href="/plans"
+              className="inline-flex min-h-11 min-w-[44px] items-center justify-center font-sans text-sm font-semibold text-royal underline decoration-gold/50 underline-offset-2 transition hover:text-gold"
+            >
+              Browse plans
+            </Link>
+          </p>
         </main>
       )}
 
