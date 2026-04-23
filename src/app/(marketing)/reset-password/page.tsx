@@ -33,7 +33,8 @@ export default async function ResetPasswordPage() {
         {!user ? (
           <div className="mt-8 space-y-4 font-sans text-sm text-royal/80">
             <p>
-              This reset link is invalid or has expired. Request a new one.
+              This session is invalid or has expired. Request a new reset code
+              from the forgot password page.
             </p>
             <p>
               <Link

@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 
   const loginInvalid = () =>
     NextResponse.redirect(
-      `${origin}/login?error=invalid_link&next=${encodeURIComponent(next)}`,
+      `${origin}/login?notice=old_callback&next=${encodeURIComponent(next)}`,
     );
 
   const loginAuthFailed = (message: string) =>
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 2) Magic link / email confirmation — ?token_hash=...&type=...
+  // 2) Legacy email link (token_hash) / confirmation — ?token_hash=...&type=...
   if (tokenHash && typeRaw) {
     const otpType = parseEmailOtpType(typeRaw);
     if (!otpType) {

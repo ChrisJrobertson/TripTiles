@@ -1,22 +1,20 @@
 import { EmailOtpVerifyForm } from "@/components/auth/EmailOtpVerifyForm";
 import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
-import { safeNextPath } from "@/lib/auth/safe-next-path";
 import { redirect } from "next/navigation";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type Props = {
-  searchParams: Promise<{ email?: string; next?: string }>;
+  searchParams: Promise<{ email?: string }>;
 };
 
-export default async function CheckEmailPage({ searchParams }: Props) {
+export default async function ResetPasswordVerifyPage({ searchParams }: Props) {
   const p = await searchParams;
-  const next = safeNextPath(p.next);
   const raw =
     typeof p.email === "string" ? decodeURIComponent(p.email) : "";
   const email = raw.trim();
   if (!email || !EMAIL_RE.test(email)) {
-    redirect(`/login?next=${encodeURIComponent(next)}`);
+    redirect("/forgot-password");
   }
 
   return (
@@ -40,7 +38,7 @@ export default async function CheckEmailPage({ searchParams }: Props) {
           Check your email
         </h1>
         <div className="mt-8">
-          <EmailOtpVerifyForm mode="signin" email={email} next={next} />
+          <EmailOtpVerifyForm mode="recovery" email={email} />
         </div>
       </div>
     </main>

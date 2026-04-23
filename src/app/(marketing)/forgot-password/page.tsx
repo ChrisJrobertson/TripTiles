@@ -6,7 +6,7 @@ import { Suspense } from "react";
 
 export const metadata: Metadata = {
   title: "Forgot password · TripTiles",
-  description: "Reset your TripTiles password.",
+  description: "Request an 8-digit code to reset your TripTiles password.",
 };
 
 export default function ForgotPasswordPage() {
@@ -25,7 +25,7 @@ export default function ForgotPasswordPage() {
           Reset your password
         </h1>
         <p className="mt-3 text-center font-sans text-sm text-royal/70">
-          We&apos;ll email you a link to set a new one.
+          We&apos;ll email you an 8-digit code to continue.
         </p>
         <Suspense fallback={<div className="mt-8 h-32 animate-pulse rounded-lg bg-royal/10" />}>
           <ForgotPasswordForm />

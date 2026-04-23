@@ -3,7 +3,6 @@
 import { signUpWithPasswordAction } from "@/actions/auth";
 import { useGlobalLoading } from "@/components/app/GlobalLoadingContext";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
-import { createClient } from "@/lib/supabase/client";
 import { PasswordField } from "@/components/auth/PasswordField";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -38,8 +37,6 @@ export function SignupForm({ next }: Props) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  const [successEmail, setSuccessEmail] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
@@ -85,6 +82,7 @@ export function SignupForm({ next }: Props) {
           return;
         }
 
+        const { createClient } = await import("@/lib/supabase/client");
         const supabase = createClient();
         const { data } = await supabase.auth.getSession();
         if (data.session) {
@@ -93,37 +91,13 @@ export function SignupForm({ next }: Props) {
           return;
         }
 
-        setSuccessEmail(trimmedEmail);
-        setEmail("");
-        setPassword("");
-        setConfirm("");
-        setSuccess(true);
+        router.push(
+          `/signup/verify?email=${encodeURIComponent(trimmedEmail)}`,
+        );
       });
     } catch {
       setError("Something went wrong. Please try again.");
     }
-  }
-
-  if (success) {
-    return (
-      <div
-        className="mt-8 rounded-lg border border-gold/40 bg-white px-4 py-5 font-sans text-sm text-royal shadow-sm"
-        role="status"
-      >
-        <p className="leading-relaxed text-royal/90">
-          Check your email - we&apos;ve sent a confirmation link to{" "}
-          <span className="break-all font-semibold text-royal">
-            {successEmail}
-          </span>
-          . Click it to activate your account and get planning.
-        </p>
-        <p className="mt-4">
-          <Link href="/login" className="font-semibold text-gold underline">
-            Back to sign in
-          </Link>
-        </p>
-      </div>
-    );
   }
 
   return (
@@ -223,13 +197,13 @@ export function SignupForm({ next }: Props) {
       <button
         type="submit"
         disabled={busy}
-        className="flex min-h-12 w-full items-center justify-center rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 disabled:opacity-60"
+        className="flex min-h-12 min-w-[44px] w-full items-center justify-center rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 disabled:opacity-60"
       >
         {busy ? "Creating…" : "Create account"}
       </button>
 
       <p className="text-center font-sans text-xs text-royal/55">
-        We&apos;ll send you a confirmation email to activate your account.
+        We&apos;ll email you an 8-digit code to confirm your account.
       </p>
 
       <div className="flex items-center gap-3 pt-2">
@@ -242,9 +216,9 @@ export function SignupForm({ next }: Props) {
 
       <Link
         href={`/login?next=${encodeURIComponent(next)}${email.trim() ? `&email=${encodeURIComponent(email.trim())}` : ""}`}
-        className="flex min-h-11 w-full items-center justify-center rounded-lg border-2 border-gold/70 bg-transparent px-4 font-serif text-sm font-semibold text-royal transition hover:bg-gold/10"
+        className="flex min-h-11 w-full min-w-[44px] items-center justify-center rounded-lg border-2 border-gold/70 bg-transparent px-4 font-serif text-sm font-semibold text-royal transition hover:bg-gold/10"
       >
-        Use a magic link instead
+        Sign in with a code instead
       </Link>
     </form>
   );

@@ -1,8 +1,7 @@
 "use client";
 
-import { signInWithPasswordAction } from "@/actions/auth";
+import { sendSignInOtpAction, signInWithPasswordAction } from "@/actions/auth";
 import { useGlobalLoading } from "@/components/app/GlobalLoadingContext";
-import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -11,21 +10,12 @@ import { PasswordField } from "@/components/auth/PasswordField";
 const inputClass =
   "min-h-12 w-full rounded-lg border-2 border-royal/25 bg-white px-4 text-base text-royal outline-none transition focus:border-gold focus:ring-2 focus:ring-gold/40";
 
-/** Prefer `NEXT_PUBLIC_SITE_URL` so magic links match Supabase redirect allowlist in production. */
-function callbackOrigin(): string {
-  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (raw && /^https?:\/\//i.test(raw)) {
-    return raw.replace(/\/$/, "");
-  }
-  return typeof window !== "undefined" ? window.location.origin : "";
-}
-
 type Props = {
   next: string;
   initialEmail?: string;
 };
 
-type LoadPhase = "idle" | "magic" | "password";
+type LoadPhase = "idle" | "code" | "password";
 
 export function LoginForm({ next, initialEmail = "" }: Props) {
   const router = useRouter();
@@ -39,33 +29,24 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
     if (initialEmail) setEmail(initialEmail);
   }, [initialEmail]);
 
-  async function handleMagicLink() {
+  async function handleSendCode() {
     setError(null);
-    setPhase("magic");
-    begin("Sending your magic link…");
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setError("Enter your email address first.");
+      return;
+    }
+    setPhase("code");
+    begin("Sending your sign-in code…");
     try {
-      const supabase = createClient();
-      const origin = callbackOrigin();
-      const callbackUrl = `${origin}/auth/callback?next=${encodeURIComponent(next)}`;
-
-      const { error: signError } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: {
-          emailRedirectTo: callbackUrl,
-        },
-      });
-
-      if (signError) {
-        const m = signError.message.toLowerCase();
-        if (m.includes("rate limit") || m.includes("too many")) {
-          setError("Too many attempts. Try again in a few minutes.");
-        } else {
-          setError("Something went wrong. Please try again.");
-        }
+      const result = await sendSignInOtpAction({ email: trimmed });
+      if (!result.ok) {
+        setError(result.error);
         return;
       }
-
-      router.push("/login/check-email");
+      router.push(
+        `/login/check-email?email=${encodeURIComponent(trimmed)}&next=${encodeURIComponent(next)}`,
+      );
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -108,7 +89,7 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
       await handlePasswordSignIn();
       return;
     }
-    await handleMagicLink();
+    await handleSendCode();
   }
 
   return (
@@ -147,8 +128,8 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
       </div>
 
       <PasswordField
-        label="Password (optional for magic link)"
-        helperText="Leave blank to sign in with a magic link"
+        label="Password (optional if using a sign-in code)"
+        helperText="Leave blank to receive an 8-digit sign-in code by email"
         value={password}
         onChange={setPassword}
         autoComplete="current-password"
@@ -159,15 +140,15 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
         <button
           type="submit"
           disabled={busy}
-          className="flex min-h-12 flex-1 items-center justify-center rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex min-h-12 min-w-[44px] flex-1 items-center justify-center rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {phase === "magic" ? "Sending…" : "Send magic link"}
+          {phase === "code" ? "Sending…" : "Send sign-in code"}
         </button>
         <button
           type="button"
           disabled={busy}
           onClick={() => void handlePasswordSignIn()}
-          className="flex min-h-12 flex-1 items-center justify-center rounded-lg border-2 border-royal/25 bg-white px-4 font-sans text-sm font-semibold text-royal transition hover:border-royal/40 hover:bg-cream disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex min-h-12 min-w-[44px] flex-1 items-center justify-center rounded-lg border-2 border-royal/25 bg-white px-4 font-sans text-sm font-semibold text-royal transition hover:border-royal/40 hover:bg-cream disabled:cursor-not-allowed disabled:opacity-60"
         >
           {phase === "password" ? "Signing in…" : "Sign in with password"}
         </button>

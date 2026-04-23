@@ -2,8 +2,7 @@
 
 import { resetPasswordAction } from "@/actions/auth";
 import { useGlobalLoading } from "@/components/app/GlobalLoadingContext";
-import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const inputClass =
@@ -11,10 +10,9 @@ const inputClass =
 
 export function ForgotPasswordForm() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { withLoading, busy } = useGlobalLoading();
   const [email, setEmail] = useState("");
-  const [done, setDone] = useState(false);
-  const [sentTo, setSentTo] = useState<string | null>(null);
 
   useEffect(() => {
     const q = searchParams.get("email");
@@ -25,38 +23,23 @@ export function ForgotPasswordForm() {
     e.preventDefault();
     const trimmed = email.trim();
     try {
-      await withLoading("Sending your reset link…", async () => {
+      await withLoading("Sending your reset code…", async () => {
         await resetPasswordAction({ email: trimmed });
       });
     } catch {
-      // Still confirm — avoids revealing whether the email exists.
+      // Still continue — avoid revealing whether the email exists.
     }
-    setSentTo(trimmed || "that address");
-    setDone(true);
-  }
-
-  if (done) {
-    return (
-      <div
-        className="mt-8 rounded-lg border border-gold/40 bg-white px-4 py-5 font-sans text-sm text-royal shadow-sm"
-        role="status"
-      >
-        <p className="font-semibold leading-relaxed text-royal">
-          Check your email. If an account exists for{" "}
-          <span className="break-all text-royal/90">{sentTo}</span>, we&apos;ve
-          sent a reset link. It&apos;ll arrive in a few seconds.
-        </p>
-        <p className="mt-4">
-          <Link href="/login" className="font-semibold text-gold underline">
-            Back to sign in
-          </Link>
-        </p>
-      </div>
+    router.push(
+      `/reset-password/verify?email=${encodeURIComponent(trimmed)}`,
     );
   }
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+      <p className="font-sans text-sm leading-relaxed text-royal/75">
+        Enter your email and we&apos;ll send an 8-digit code you can use on the
+        next step.
+      </p>
       <div>
         <label
           htmlFor="forgot-email"
@@ -78,9 +61,9 @@ export function ForgotPasswordForm() {
       <button
         type="submit"
         disabled={busy}
-        className="flex min-h-12 w-full items-center justify-center rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 disabled:opacity-60"
+        className="flex min-h-12 min-w-[44px] w-full items-center justify-center rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 disabled:opacity-60"
       >
-        {busy ? "Sending…" : "Send reset link"}
+        {busy ? "Sending…" : "Send reset code"}
       </button>
     </form>
   );
