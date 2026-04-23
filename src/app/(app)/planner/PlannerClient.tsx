@@ -6,6 +6,7 @@ import {
 } from "@/lib/assignment-slots";
 import {
   generateAIPlanAction,
+  generateDayTimeline,
   generateMustDosForPark,
   type GenerateAIPlanInput,
   type GenerateAIPlanResult,
@@ -1140,6 +1141,52 @@ export function PlannerClient({
           });
         }
         const tripBefore = trips.find((x) => x.id === activeTripId);
+        if (payload.dateKey) {
+          const dayRes = await generateDayTimeline(
+            activeTripId,
+            payload.dateKey,
+          );
+          if (!dayRes.ok) {
+            if (dayRes.code === "tier_limit") {
+              setTierLimitVariant("ai");
+              setTierLimitReason(dayRes.error);
+              setTierLimitOpen(true);
+            } else if (dayRes.code === "rate_limit") {
+              showToast(
+                "Too many generations in a row. Try again in a minute.",
+              );
+            } else if (dayRes.code === "invalid_day") {
+              showToast("This date is outside your trip dates.");
+            } else {
+              showToast(
+                "Couldn't build the plan. Give it another go in a moment.",
+              );
+            }
+            return;
+          }
+          const t = tripBefore;
+          const prevPrefs = (t?.preferences ?? {}) as Record<string, unknown>;
+          const existing = prevPrefs.ai_day_timeline;
+          const dayMap =
+            existing && typeof existing === "object" && !Array.isArray(existing)
+              ? { ...(existing as Record<string, unknown>) }
+              : {};
+          dayMap[payload.dateKey] = dayRes.timeline;
+          applyLocalPatch(activeTripId, {
+            preferences: { ...prevPrefs, ai_day_timeline: dayMap },
+          });
+          showToast("✨ Day plan ready!");
+          trackEvent("day_timeline_success", { dateKey: payload.dateKey });
+          setSmartOpen(false);
+          startTransition(() => router.refresh());
+          window.setTimeout(() => {
+            document.getElementById("tt-day-timeline")?.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          }, 200);
+          return;
+        }
         const snapAssignments = tripBefore?.assignments
           ? (JSON.parse(
               JSON.stringify(tripBefore.assignments),
@@ -2531,6 +2578,20 @@ export function PlannerClient({
         submitError={smartError}
         scope={dayDetailOpen && dayCanonicalForDetail ? "day" : "trip"}
         dayDateKey={dayDetailOpen ? dayCanonicalForDetail : null}
+        dayHasAiTimeline={Boolean(
+          dayDetailOpen &&
+            dayCanonicalForDetail &&
+            activeTrip &&
+            (() => {
+              const m = activeTrip.preferences?.ai_day_timeline;
+              if (!m || typeof m !== "object" || Array.isArray(m)) {
+                return false;
+              }
+              return Boolean(
+                (m as Record<string, unknown>)[dayCanonicalForDetail!],
+              );
+            })(),
+        )}
         ridePrioritiesForDay={
           dayDetailOpen && dayCanonicalForDetail
             ? (ridePrioritiesByDayForActiveTrip[dayCanonicalForDetail] ?? [])

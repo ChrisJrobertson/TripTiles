@@ -5,6 +5,7 @@ import { SkipLineLegend } from "@/components/planner/SkipLineLegend";
 import { CrowdLevelIndicator } from "@/components/planner/CrowdLevelIndicator";
 import { DayConflictBanners } from "@/components/planner/DayConflictBanners";
 import { DayHeatSidecar } from "@/components/planner/DayHeatSidecar";
+import { DayMustDoChecklist } from "@/components/planner/DayMustDoChecklist";
 import { DayTimeline } from "@/components/planner/DayTimeline";
 import { DayParkMustDosSection } from "@/components/planner/DayParkMustDosSection";
 import {
@@ -31,6 +32,7 @@ import {
 } from "@/lib/planner-crowd-level-meta";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { plannerUserDayNotes } from "@/lib/planner-note-maps";
+import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
 import { isThemePark } from "@/lib/park-categories";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import type { Tier } from "@/lib/tier";
@@ -315,6 +317,12 @@ export function DayDetailLayer({
       Boolean(getParkIdFromSlotValue(a.dinner))
     );
   }, [trip.assignments, dayDate]);
+
+  const richTimeline = useMemo(
+    () => getAiDayTimelineForDate(trip.preferences, dayDate),
+    [trip.preferences, dayDate],
+  );
+  const showDayPlannerBlock = hasDayAssignments || Boolean(richTimeline);
 
   const heatTempC = dc ? Math.round(dc.conditions.tempHighC) : 22;
   const heatCrowd: CrowdLevel = crowdLevel ?? dc?.crowd ?? "moderate";
@@ -736,20 +744,51 @@ export function DayDetailLayer({
             onGenerateMustDosForPark={onGenerateMustDosForPark}
             generatingMustDosParkId={generatingMustDosParkId}
           />
-          {hasDayAssignments ? (
+          {showDayPlannerBlock ? (
             <>
               <DayTimeline
                 date={dayDate}
                 assignments={ass}
                 parks={parksById}
-                dayNotes={aiNoteForDay ?? undefined}
+                dayNotes={
+                  richTimeline ? undefined : (aiNoteForDay ?? undefined)
+                }
+                richTimeline={richTimeline}
               />
               <div className="mt-3">
-                <DayHeatSidecar tempC={heatTempC} crowdLevel={heatCrowd} />
+                <DayHeatSidecar
+                  tempC={heatTempC}
+                  crowdLevel={heatCrowd}
+                  heatPlanOverride={richTimeline?.heat_plan}
+                />
               </div>
+              {richTimeline?.transport ? (
+                <div className="mt-3">
+                  <aside
+                    className="rounded-lg border-[0.5px] border-royal/15 bg-white/95 p-3.5 shadow-sm dark:border-white/10 dark:bg-neutral-900/30"
+                    aria-label="Transport"
+                  >
+                    <p className="font-sans text-[11px] font-semibold uppercase tracking-[0.5px] text-royal/60 dark:text-neutral-200/80">
+                      Transport
+                    </p>
+                    <p className="mt-1.5 font-sans text-sm leading-snug text-royal/85 dark:text-neutral-200">
+                      {richTimeline.transport}
+                    </p>
+                  </aside>
+                </div>
+              ) : null}
+              {richTimeline && richTimeline.must_do.length > 0 ? (
+                <div className="mt-3">
+                  <DayMustDoChecklist
+                    tripId={trip.id}
+                    dateKey={dayDate}
+                    items={richTimeline.must_do}
+                  />
+                </div>
+              ) : null}
             </>
           ) : null}
-          {hasDayAssignments ? (
+          {showDayPlannerBlock ? (
             <details className="mb-4 mt-3 rounded-lg border border-royal/10 bg-white/90 open:border-royal/20 dark:border-white/10 dark:bg-neutral-900/20">
               <summary className="cursor-pointer list-none p-3 font-sans text-sm font-semibold text-royal marker:hidden [&::-webkit-details-marker]:hidden dark:text-neutral-200">
                 Regenerate with different options

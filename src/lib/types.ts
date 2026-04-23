@@ -107,6 +107,51 @@ export interface TripPlanningPreferences {
   includeUniversalSkipTips?: boolean;
 }
 
+/** Per-day AI hour-by-hour plan (stored under `trips.preferences.ai_day_timeline[dateKey]`). */
+export type AiDayTimelineModelId = "haiku-4.5" | "sonnet-4.6";
+export type AiDayTimelineBlock =
+  | "morning"
+  | "lunch"
+  | "afternoon"
+  | "dinner"
+  | "evening";
+export type AiDayTimelineRowTag =
+  | "priority"
+  | "show"
+  | "adr"
+  | "break"
+  | "transport";
+
+export type AiDayTimeline = {
+  generated_at: string;
+  model: AiDayTimelineModelId;
+  park_hours: { open: string; close: string };
+  timeline: Array<{
+    time: string;
+    block: AiDayTimelineBlock;
+    title: string;
+    subtitle?: string;
+    tag?: AiDayTimelineRowTag;
+  }>;
+  heat_plan?: string;
+  transport?: string;
+  must_do: string[];
+};
+
+/**
+ * Documented shape for `trips.preferences` (JSONB). The `Trip` type still uses
+ * `Record<string, unknown>` for forward compatibility.
+ */
+export type TripPreferences = {
+  ai_crowd_summary?: string;
+  ai_crowd_updated_at?: string;
+  ai_day_crowd_notes?: Record<string, string>;
+  ai_day_timeline?: Record<string, AiDayTimeline>;
+  day_notes?: Record<string, string>;
+  must_dos?: unknown;
+  must_dos_snapshot?: unknown;
+};
+
 export interface Region {
   id: string;
   name: string;

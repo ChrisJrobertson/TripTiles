@@ -90,6 +90,8 @@ type Props = {
   submitError: string | null;
   scope?: "trip" | "day";
   dayDateKey?: string | null;
+  /** When the day already has a saved `ai_day_timeline`, show Regenerate. */
+  dayHasAiTimeline?: boolean;
   canRetryPartial?: boolean;
   onRetryPartial?: () => void;
   onGenerate: (payload: SmartPlanGeneratePayload) => Promise<void>;
@@ -112,6 +114,7 @@ export function SmartPlanModal({
   submitError,
   scope = "trip",
   dayDateKey = null,
+  dayHasAiTimeline = false,
   canRetryPartial = false,
   onRetryPartial,
   onGenerate,
@@ -1024,6 +1027,8 @@ export function SmartPlanModal({
                 </span>
               ) : touringSubmitReady ? (
                 "Generate touring plan ✨"
+              ) : isDayScope && dayHasAiTimeline ? (
+                "Regenerate ✨"
               ) : (
                 "Generate plan ✨"
               )}

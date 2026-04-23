@@ -2,7 +2,14 @@
 
 import type { ReactNode } from "react";
 import { getSlotTimeFromValue, getParkIdFromSlotValue } from "@/lib/assignment-slots";
-import type { Assignment, Park, SlotType } from "@/lib/types";
+import type {
+  AiDayTimeline,
+  AiDayTimelineBlock,
+  AiDayTimelineRowTag,
+  Assignment,
+  Park,
+  SlotType,
+} from "@/lib/types";
 
 function parseHhmmToMin(hhmm: string): number {
   const [h, m] = hhmm.split(":").map((x) => parseInt(x, 10) || 0);
@@ -52,6 +59,45 @@ function isoLocalDateTime(dateKey: string, hhmm: string): string {
   return `${dateKey}T${hhmm}:00`;
 }
 
+const RICH_BLOCK_SECTIONS: {
+  key: AiDayTimelineBlock;
+  label: string;
+  edge: "royal" | "gold";
+}[] = [
+  { key: "morning", label: "Morning", edge: "royal" },
+  { key: "lunch", label: "Lunch", edge: "gold" },
+  { key: "afternoon", label: "Afternoon", edge: "royal" },
+  { key: "dinner", label: "Dinner", edge: "gold" },
+  { key: "evening", label: "Evening", edge: "royal" },
+];
+
+function tagPillClass(tag: AiDayTimelineRowTag): string {
+  switch (tag) {
+    case "priority":
+      return "bg-[#F5C4B3] text-[#712B13]";
+    case "show":
+      return "bg-[#CECBF6] text-[#3C3489]";
+    case "adr":
+      return "bg-[#FAC775] text-[#633806]";
+    case "break":
+    case "transport":
+    default:
+      return "bg-[#D3D1C7] text-[#444441]";
+  }
+}
+
+function TagPill({ tag }: { tag: AiDayTimelineRowTag }) {
+  return (
+    <span
+      className={`ml-2 inline align-middle rounded-md px-2 py-0.5 font-sans text-[11px] font-medium capitalize ${tagPillClass(
+        tag,
+      )}`}
+    >
+      {tag}
+    </span>
+  );
+}
+
 export type DayTimelineProps = {
   date: string;
   assignments: Assignment;
@@ -59,6 +105,8 @@ export type DayTimelineProps = {
   dayNotes?: string;
   parkHoursOpen?: string;
   parkHoursClose?: string;
+  /** AI hour-by-hour plan; when set, drives the timeline instead of slot defaults. */
+  richTimeline?: AiDayTimeline | null;
 };
 
 export function DayTimeline({
@@ -68,7 +116,77 @@ export function DayTimeline({
   dayNotes,
   parkHoursOpen = "09:00",
   parkHoursClose = "22:00",
+  richTimeline,
 }: DayTimelineProps) {
+  if (richTimeline && richTimeline.timeline.length > 0) {
+    const border = { royal: "border-royal", gold: "border-gold" } as const;
+    function Row({
+      time,
+      children,
+    }: {
+      time: string;
+      children: ReactNode;
+    }) {
+      return (
+        <div className="grid grid-cols-[54px_1fr] items-start gap-3">
+          <time
+            className="pt-0.5 font-sans text-xs font-medium tabular-nums text-royal/70 dark:text-neutral-300/90"
+            dateTime={isoLocalDateTime(date, time)}
+          >
+            {time}
+          </time>
+          <div className="min-w-0 text-sm leading-snug text-royal dark:text-neutral-100">
+            {children}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <section
+        id="tt-day-timeline"
+        className="rounded-lg border border-royal/10 bg-white/95 p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900/30"
+        aria-label="Planned day timeline"
+      >
+        <div className="space-y-5">
+          {RICH_BLOCK_SECTIONS.map((sec) => {
+            const rows = richTimeline.timeline
+              .filter((r) => r.block === sec.key)
+              .sort(
+                (a, b) => parseHhmmToMin(a.time) - parseHhmmToMin(b.time),
+              );
+            if (rows.length === 0) return null;
+            return (
+              <div
+                key={sec.key}
+                className={`border-l-2 ${border[sec.edge]} pl-3`}
+                style={{ borderRadius: 0 }}
+              >
+                <h3 className="font-serif text-[11px] font-semibold uppercase tracking-[0.5px] text-royal/80 dark:text-neutral-200/90">
+                  {sec.label}
+                </h3>
+                <div className="mt-2 space-y-3">
+                  {rows.map((r, i) => (
+                    <Row key={`${r.time}-${i}`} time={r.time}>
+                      <p className="font-sans font-medium">
+                        {r.title}
+                        {r.tag ? <TagPill tag={r.tag} /> : null}
+                      </p>
+                      {r.subtitle ? (
+                        <p className="mt-0.5 font-sans text-xs text-royal/60 dark:text-neutral-300/80">
+                          {r.subtitle}
+                        </p>
+                      ) : null}
+                    </Row>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    );
+  }
+
   const hasAny = (
     [
       getParkIdFromSlotValue(ass.am),
@@ -129,6 +247,7 @@ export function DayTimeline({
 
   return (
     <section
+      id="tt-day-timeline"
       className="rounded-lg border border-royal/10 bg-white/95 p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900/30"
       aria-label="Planned day timeline"
     >

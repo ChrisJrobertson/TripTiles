@@ -21,6 +21,10 @@ import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import type {
   Assignment,
   Assignments,
+  AiDayTimeline,
+  AiDayTimelineBlock,
+  AiDayTimelineModelId,
+  AiDayTimelineRowTag,
   CustomTile,
   Park,
   SlotType,
@@ -36,6 +40,7 @@ import {
 } from "@/lib/supabase/tier-load-error";
 import { getSuccessfulAiGenerationCountForTrip } from "@/lib/db/ai-generations";
 import { getCrowdPatternsForParkIds } from "@/lib/data/crowd-patterns";
+import { getMonthlyConditions } from "@/data/destination-conditions";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { formatRegionalDiningForPrompt } from "@/data/regional-dining";
 import { formatPlanningPreferencesForPrompt } from "@/lib/planning-preferences-prompt";
@@ -1777,5 +1782,572 @@ Produce 4–6 specific named attractions in rough chronological order for a full
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return { ok: false, error: msg, code: "AI_ERROR" };
+  }
+}
+
+const DAY_TIMELINE_SYSTEM = `You are a theme-park day planner for TripTiles. You produce realistic, time-accurate day itineraries for UK and US families on holiday.
+
+Rules:
+- Use UK English spelling throughout (colour, favourite, organise).
+- Use 24-hour times in "HH:MM" format.
+- Never include scoring logic, point tallies, or reasoning artefacts in user-facing text.
+- Keep subtitles to one short sentence with a concrete, useful tip. No fluff.
+- Priorities: mark the single most wait-sensitive attraction of the day with tag "priority". Mark live shows with "show". Mark reserved meals with "adr". Mark long walks or transit with "transport" if notable. Mark scheduled rest with "break".
+- Respect park operating hours. Rope drop arrival is 30 min before open.
+- Families with young children need rest breaks in peak heat (>= 30°C) and shorter evenings.
+- Do not invent attractions. Only use the park names provided in the context.
+
+Output format: a single JSON object, no markdown fences, no prose outside the JSON, matching this TypeScript type:
+
+{
+  "park_hours": { "open": "HH:MM", "close": "HH:MM" },
+  "timeline": [{ "time": "HH:MM", "block": "morning"|"lunch"|"afternoon"|"dinner"|"evening", "title": "...", "subtitle": "..."?, "tag": "priority"|"show"|"adr"|"break"|"transport"? }],
+  "heat_plan": "one sentence" | null,
+  "transport": "one sentence" | null,
+  "must_do": ["...", "...", "..."]
+}`;
+
+const AI_DAY_TIMELINE_BLOCKS: ReadonlySet<string> = new Set([
+  "morning",
+  "lunch",
+  "afternoon",
+  "dinner",
+  "evening",
+]);
+
+const AI_DAY_TIMELINE_TAGS: ReadonlySet<string> = new Set([
+  "priority",
+  "show",
+  "adr",
+  "break",
+  "transport",
+]);
+
+function buildTripMetadataForDayTimelineCache(trip: Trip, regionName: string): string {
+  const childAges =
+    trip.child_ages.length > 0
+      ? trip.child_ages.join(", ")
+      : "not specified";
+  const cruise = trip.has_cruise
+    ? `Cruise: yes. Embark ${trip.cruise_embark ?? "—"}, disembark ${trip.cruise_disembark ?? "—"}.`
+    : "Cruise: no.";
+  return `Trip metadata (read-only; do not output this block):
+- Adventure name: ${trip.adventure_name}
+- Destination: ${trip.destination}
+- Region label: ${regionName}
+- region_id: ${trip.region_id ?? "null"}
+- Dates: ${trip.start_date} to ${trip.end_date}
+- Party: ${trip.adults} adults, ${trip.children} children; ages: ${childAges}
+- ${cruise}`;
+}
+
+function buildDayTimelineUserMessage(params: {
+  trip: Trip;
+  dateKey: string;
+  amName: string;
+  lunchName: string;
+  pmName: string;
+  dinnerName: string;
+  crowdLevel: string;
+  tempC: number;
+  weatherSummary: string;
+  skipLineOn: boolean;
+}): string {
+  const d = parseDate(`${params.dateKey}T12:00:00`);
+  const w = d.toLocaleDateString("en-GB", { weekday: "long" });
+  const childAges =
+    params.trip.child_ages.length > 0
+      ? params.trip.child_ages.join(", ")
+      : "n/a";
+  return `Trip: ${params.trip.adventure_name} — ${params.trip.destination} — ${params.trip.adults} adults, ${params.trip.children} children (ages ${childAges}).
+Date: ${params.dateKey} (${w}).
+Weather: ${params.tempC}°C, ${params.weatherSummary}.
+Crowd level for this day: ${params.crowdLevel}.
+Skip-the-line passes: ${params.skipLineOn ? "on" : "off"}.
+
+Parks assigned to slots today (user may have set these):
+- AM: ${params.amName || ""}
+- Lunch: ${params.lunchName || ""}
+- PM: ${params.pmName || ""}
+- Dinner: ${params.dinnerName || ""}
+
+If a slot is empty, you may recommend a park from the region's catalogue. Otherwise respect the user's choice.
+
+Return the JSON only.`;
+}
+
+function mapApiModelToAiDayModelId(anthropicModel: string): AiDayTimelineModelId {
+  return anthropicModel.includes("sonnet") ? "sonnet-4.6" : "haiku-4.5";
+}
+
+function parseAndValidateDayTimelineJson(
+  raw: unknown,
+): { ok: true; value: AiDayTimeline } | { ok: false; reason: string } {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, reason: "root_not_object" };
+  }
+  const o = raw as Record<string, unknown>;
+  const ph = o.park_hours;
+  if (!ph || typeof ph !== "object" || Array.isArray(ph)) {
+    return { ok: false, reason: "invalid_park_hours" };
+  }
+  const op = (ph as { open?: unknown }).open;
+  const cl = (ph as { close?: unknown }).close;
+  if (typeof op !== "string" || typeof cl !== "string") {
+    return { ok: false, reason: "park_hours_not_strings" };
+  }
+  if (!/^\d{2}:\d{2}$/.test(op) || !/^\d{2}:\d{2}$/.test(cl)) {
+    return { ok: false, reason: "park_hours_hhmm" };
+  }
+  if (!Array.isArray(o.timeline)) {
+    return { ok: false, reason: "timeline_not_array" };
+  }
+  if (o.timeline.length < 3) {
+    return { ok: false, reason: "timeline_too_short" };
+  }
+  const timeline: AiDayTimeline["timeline"] = [];
+  for (const row of o.timeline) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) {
+      return { ok: false, reason: "bad_timeline_row" };
+    }
+    const r = row as Record<string, unknown>;
+    if (typeof r.time !== "string" || !/^\d{2}:\d{2}$/.test(r.time)) {
+      return { ok: false, reason: "bad_time" };
+    }
+    if (typeof r.block !== "string" || !AI_DAY_TIMELINE_BLOCKS.has(r.block)) {
+      return { ok: false, reason: "bad_block" };
+    }
+    if (typeof r.title !== "string" || !r.title.trim()) {
+      return { ok: false, reason: "bad_title" };
+    }
+    let subtitle: string | undefined;
+    if (r.subtitle != null) {
+      if (typeof r.subtitle !== "string") return { ok: false, reason: "bad_subtitle" };
+      const s = r.subtitle.trim();
+      if (s) subtitle = sanitizeDayNote(s);
+    }
+    let tag: AiDayTimelineRowTag | undefined;
+    if (r.tag != null) {
+      if (typeof r.tag !== "string" || !AI_DAY_TIMELINE_TAGS.has(r.tag)) {
+        return { ok: false, reason: "bad_tag" };
+      }
+      tag = r.tag as AiDayTimelineRowTag;
+    }
+    timeline.push({
+      time: r.time,
+      block: r.block as AiDayTimelineBlock,
+      title: r.title.trim(),
+      subtitle,
+      tag,
+    });
+  }
+  let heat: string | undefined;
+  if (o.heat_plan != null) {
+    if (typeof o.heat_plan !== "string") return { ok: false, reason: "bad_heat" };
+    const h = o.heat_plan.trim();
+    if (h) heat = sanitizeDayNote(h);
+  }
+  let transport: string | undefined;
+  if (o.transport != null) {
+    if (typeof o.transport !== "string") return { ok: false, reason: "bad_transport" };
+    const t = o.transport.trim();
+    if (t) transport = sanitizeDayNote(t);
+  }
+  if (!Array.isArray(o.must_do)) {
+    return { ok: false, reason: "must_do_not_array" };
+  }
+  if (o.must_do.length < 3 || o.must_do.length > 5) {
+    return { ok: false, reason: "must_do_count" };
+  }
+  const must_do: string[] = [];
+  for (const m of o.must_do) {
+    if (typeof m !== "string" || !m.trim()) {
+      return { ok: false, reason: "bad_must_do" };
+    }
+    must_do.push(sanitizeDayNote(m.trim()));
+  }
+  const value: AiDayTimeline = {
+    generated_at: "",
+    model: "haiku-4.5",
+    park_hours: { open: op, close: cl },
+    timeline,
+    heat_plan: heat,
+    transport,
+    must_do,
+  };
+  return { ok: true, value };
+}
+
+export type GenerateDayTimelineResult =
+  | { ok: true; timeline: AiDayTimeline }
+  | {
+      ok: false;
+      error: string;
+      code: "rate_limit" | "tier_limit" | "invalid_day" | "ai_failure";
+    };
+
+export async function generateDayTimeline(
+  tripId: string,
+  date: string, // ISO yyyy-mm-dd
+): Promise<GenerateDayTimelineResult> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { ok: false, error: "Not signed in.", code: "ai_failure" };
+  }
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return {
+      ok: false,
+      error: "AI is not configured.",
+      code: "ai_failure",
+    };
+  }
+
+  let dateKey: string;
+  try {
+    dateKey = formatDateKey(parseDate(`${date}T12:00:00`));
+  } catch {
+    return { ok: false, error: "Invalid date.", code: "invalid_day" };
+  }
+
+  try {
+    await assertTierAllows(user.id, "ai");
+  } catch (e) {
+    const mapped = tierErrorToClientPayload(e);
+    if (mapped?.code === "TIER_AI_DISABLED") {
+      return {
+        ok: false,
+        error:
+          mapped.error ||
+          "Smart Plan is not available on your current plan. Upgrade on Pricing.",
+        code: "tier_limit",
+      };
+    }
+    if (isTierLoadFailure(e)) {
+      return {
+        ok: false,
+        error: tierLoadFailureUserMessage(),
+        code: "ai_failure",
+      };
+    }
+    throw e;
+  }
+
+  let canGenerateAi: boolean;
+  try {
+    canGenerateAi = await currentUserCanGenerateAI();
+  } catch (e) {
+    if (isTierLoadFailure(e)) {
+      return {
+        ok: false,
+        error: tierLoadFailureUserMessage(),
+        code: "ai_failure",
+      };
+    }
+    throw e;
+  }
+  if (!canGenerateAi) {
+    return {
+      ok: false,
+      error: "You have used your Smart Plan allowance on the Free plan.",
+      code: "tier_limit",
+    };
+  }
+
+  const trip = await getTripById(tripId);
+  if (!trip || trip.owner_id !== user.id) {
+    return { ok: false, error: "Trip not found.", code: "invalid_day" };
+  }
+
+  const rid =
+    trip.region_id ??
+    (trip.destination !== "custom" ? trip.destination : null);
+  if (!rid) {
+    return {
+      ok: false,
+      error: "This trip needs a destination region.",
+      code: "ai_failure",
+    };
+  }
+
+  const region = await getRegionById(rid);
+  if (!region) {
+    return { ok: false, error: "Could not load region.", code: "ai_failure" };
+  }
+
+  const allowed = allowedDateKeys(trip.start_date, trip.end_date);
+  if (!allowed.has(dateKey)) {
+    return {
+      ok: false,
+      error: "This date is outside your trip dates.",
+      code: "invalid_day",
+    };
+  }
+
+  const dayDate = parseDate(`${dateKey}T12:00:00`);
+  const month = dayDate.getMonth() + 1;
+  const mc = getMonthlyConditions(rid, month);
+  const tempC = mc ? Math.round(mc.tempHighC) : 22;
+  const weatherSummary = mc
+    ? `${mc.weatherEmoji} typical monthly high, ${mc.rainChance} chance of rain`
+    : "seasonal average";
+
+  const builtInParks = await getParksForRegion(rid);
+  const customTileRows = await getCustomTilesForRegion(user.id, rid);
+  const customAsParks = customTileRows.map(customTileToPark);
+  const builtFiltered = trip.has_cruise
+    ? builtInParks
+    : builtInParks.filter((p) => !requiresCruiseSegment(p));
+  const customFiltered = trip.has_cruise
+    ? customAsParks
+    : customAsParks.filter((p) => !requiresCruiseSegment(p));
+  const parksForPrompt = [...builtFiltered, ...customFiltered];
+
+  if (parksForPrompt.length === 0) {
+    return {
+      ok: false,
+      error: "No parks are available for this region.",
+      code: "ai_failure",
+    };
+  }
+
+  const parkIdToName = new Map(
+    parksForPrompt.map((p) => [p.id, p.name] as const),
+  );
+  const ass = trip.assignments[dateKey] ?? {};
+  const amName = (() => {
+    const id = getParkIdFromSlotValue(ass.am);
+    return id ? (parkIdToName.get(id) ?? "") : "";
+  })();
+  const lunchName = (() => {
+    const id = getParkIdFromSlotValue(ass.lunch);
+    return id ? (parkIdToName.get(id) ?? "") : "";
+  })();
+  const pmName = (() => {
+    const id = getParkIdFromSlotValue(ass.pm);
+    return id ? (parkIdToName.get(id) ?? "") : "";
+  })();
+  const dinnerName = (() => {
+    const id = getParkIdFromSlotValue(ass.dinner);
+    return id ? (parkIdToName.get(id) ?? "") : "";
+  })();
+
+  const rawCrowd = (() => {
+    const m = trip.preferences?.ai_day_crowd_notes;
+    if (
+      m &&
+      typeof m === "object" &&
+      !Array.isArray(m) &&
+      typeof (m as Record<string, unknown>)[dateKey] === "string"
+    ) {
+      return sanitizeDayNote(
+        String((m as Record<string, string>)[dateKey]).trim(),
+      );
+    }
+    return "";
+  })();
+  const crowdLevel =
+    rawCrowd.length > 0 ? rawCrowd : mc?.crowdLevel ?? "moderate";
+
+  const skipDisney = trip.planning_preferences?.includeDisneySkipTips !== false;
+  const skipUniversal =
+    trip.planning_preferences?.includeUniversalSkipTips !== false;
+  const skipLineOn = skipDisney || skipUniversal;
+
+  const userBlock = buildDayTimelineUserMessage({
+    trip,
+    dateKey,
+    amName,
+    lunchName,
+    pmName,
+    dinnerName,
+    crowdLevel,
+    tempC,
+    weatherSummary,
+    skipLineOn,
+  });
+
+  const parksSystemText = buildParksListSystemText(
+    `${region.name} (${region.country})`,
+    parksForPrompt,
+    customTileRows,
+    trip.has_cruise,
+  );
+  const tripMetaCache = buildTripMetadataForDayTimelineCache(
+    trip,
+    `${region.name} (${region.country})`,
+  );
+
+  const supabase = await createClient();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("ai_generations_lifetime, tier")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const model = smartPlanModelForProfileTier(
+    (profile as { tier?: string } | null)?.tier,
+  );
+
+  let inputTokens = 0;
+  let outputTokens = 0;
+
+  try {
+    const msg = await anthropic.messages.create({
+      model,
+      max_tokens: 8192,
+      system: [
+        {
+          type: "text",
+          text: DAY_TIMELINE_SYSTEM,
+          cache_control: { type: "ephemeral" },
+        },
+        {
+          type: "text",
+          text: tripMetaCache,
+          cache_control: { type: "ephemeral" },
+        },
+        {
+          type: "text",
+          text: parksSystemText,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: userBlock }],
+    });
+    const block0 = msg.content[0];
+    const rawText = block0?.type === "text" ? block0.text : "";
+    const usage = msg.usage as AnthropicMessageUsage | undefined;
+    inputTokens = inputTokensFromUsage(usage);
+    outputTokens = usage?.output_tokens ?? 0;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(stripCodeFences(rawText));
+    } catch {
+      console.warn("[ai] day_timeline json_parse_failed", { tripId, dateKey });
+      await supabase.from("ai_generations").insert({
+        user_id: user.id,
+        trip_id: tripId,
+        prompt: `day_timeline:${dateKey}\n${userBlock}`,
+        model,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_gbp_pence: null,
+        success: false,
+        status: "failed",
+        error: "Invalid JSON (day_timeline)",
+      });
+      return {
+        ok: false,
+        error: "The plan could not be read. Try again.",
+        code: "ai_failure",
+      };
+    }
+
+    const validated = parseAndValidateDayTimelineJson(parsed);
+    if (!validated.ok) {
+      console.warn("[ai] day_timeline validate_failed", {
+        tripId,
+        dateKey,
+        reason: validated.reason,
+      });
+      await supabase.from("ai_generations").insert({
+        user_id: user.id,
+        trip_id: tripId,
+        prompt: `day_timeline:${dateKey}\n${userBlock}`,
+        model,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_gbp_pence: null,
+        success: false,
+        status: "failed",
+        error: `day_timeline validation: ${validated.reason}`,
+      });
+      return {
+        ok: false,
+        error: "The plan was incomplete. Try again.",
+        code: "ai_failure",
+      };
+    }
+
+    const { value: v } = validated;
+    const value: AiDayTimeline = {
+      ...v,
+      generated_at: new Date().toISOString(),
+      model: mapApiModelToAiDayModelId(model),
+    };
+
+    const prevPrefs =
+      trip.preferences && typeof trip.preferences === "object"
+        ? { ...trip.preferences }
+        : ({} as Record<string, unknown>);
+    const existingDayMap = prevPrefs.ai_day_timeline;
+    const dayMap: Record<string, AiDayTimeline> =
+      existingDayMap &&
+      typeof existingDayMap === "object" &&
+      !Array.isArray(existingDayMap)
+        ? { ...(existingDayMap as Record<string, AiDayTimeline>) }
+        : {};
+    dayMap[dateKey] = value;
+
+    const { error: upErr } = await supabase
+      .from("trips")
+      .update({
+        preferences: { ...prevPrefs, ai_day_timeline: dayMap },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", tripId)
+      .eq("owner_id", user.id);
+
+    if (upErr) {
+      return { ok: false, error: upErr.message, code: "ai_failure" };
+    }
+
+    const { error: genInsertErr } = await supabase.from("ai_generations").insert(
+      {
+        user_id: user.id,
+        trip_id: tripId,
+        prompt: `day_timeline:${dateKey}\n${userBlock}`,
+        model,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_gbp_pence: null,
+        success: true,
+        status: "success",
+        error: null,
+      },
+    );
+    if (genInsertErr) {
+      return {
+        ok: false,
+        error: `Could not log usage: ${genInsertErr.message}`,
+        code: "ai_failure",
+      };
+    }
+
+    const prevLifetime = Number(
+      (profile as { ai_generations_lifetime?: number } | null)
+        ?.ai_generations_lifetime ?? 0,
+    );
+    await supabase
+      .from("profiles")
+      .update({ ai_generations_lifetime: prevLifetime + 1 })
+      .eq("id", user.id);
+
+    revalidatePath("/planner");
+    return { ok: true, timeline: value };
+  } catch (e: unknown) {
+    const status = (e as { status?: number })?.status;
+    if (status === 429) {
+      return {
+        ok: false,
+        error: "Rate limited. Try again shortly.",
+        code: "rate_limit",
+      };
+    }
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    console.warn("[ai] day_timeline request_failed", { tripId, dateKey, msg });
+    return { ok: false, error: msg, code: "ai_failure" };
   }
 }

@@ -8,12 +8,18 @@ import {
 export type DayHeatSidecarProps = {
   tempC: number;
   crowdLevel: CrowdLevel;
+  /** When set (e.g. from AI day plan), overrides template heat copy. */
+  heatPlanOverride?: string;
 };
 
 /**
  * Simple heat advice from temperature; crowd label for context (no AI). UK copy.
  */
-export function DayHeatSidecar({ tempC, crowdLevel }: DayHeatSidecarProps) {
+export function DayHeatSidecar({
+  tempC,
+  crowdLevel,
+  heatPlanOverride,
+}: DayHeatSidecarProps) {
   const n = Math.round(tempC);
   const advice =
     n >= 30
@@ -31,7 +37,9 @@ export function DayHeatSidecar({ tempC, crowdLevel }: DayHeatSidecarProps) {
         Heat plan
       </p>
       <p className="mt-1.5 font-sans text-sm leading-snug text-royal/85 dark:text-neutral-200">
-        {advice}
+        {heatPlanOverride && heatPlanOverride.trim().length > 0
+          ? heatPlanOverride
+          : advice}
       </p>
       <p className="mt-2 font-sans text-xs text-royal/55 dark:text-neutral-300/80">
         Typical day: {CROWD_LEVEL_META[crowdLevel].label.toLowerCase()} crowds.
