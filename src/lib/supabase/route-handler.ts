@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import type { NextRequest, NextResponse } from "next/server";
+import { supabaseAuthClientOptions } from "@/lib/supabase/auth-options";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 
 /**
@@ -21,6 +22,7 @@ export function createRouteHandlerSupabaseClient(
   }
 
   return createServerClient(url, anonKey, {
+    auth: supabaseAuthClientOptions,
     cookies: {
       getAll() {
         return request.cookies.getAll();

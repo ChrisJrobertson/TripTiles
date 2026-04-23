@@ -1,4 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
+import { supabaseAuthClientOptions } from "@/lib/supabase/auth-options";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 
 export function createClient() {
@@ -11,5 +12,7 @@ export function createClient() {
     );
   }
 
-  return createBrowserClient(url, anonKey);
+  return createBrowserClient(url, anonKey, {
+    auth: supabaseAuthClientOptions,
+  });
 }
