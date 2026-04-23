@@ -8,13 +8,13 @@ type Props = {
   height?: number;
   className?: string;
   /**
-   * Pads the mark in solid white with a light ring (use for opaque marks on cream).
-   * Default off: `logo-full.png` is RGBA with transparent edges.
+   * Pads the mark in solid white with a light ring (for contrast on light backgrounds).
+   * Default off: mascot PNG is RGBA with transparent edges.
    */
   framed?: boolean;
 };
 
-/** Full TripTiles logo (`/images/logo-full.png`, RGBA). */
+/** Brand mark: Tripp mascot (`/images/tripp-mascot.png`, transparent RGBA). */
 export function TripTilesLogoLink({
   href,
   imgClassName = "h-12 w-auto",
@@ -25,7 +25,7 @@ export function TripTilesLogoLink({
   const img = (
     // eslint-disable-next-line @next/next/no-img-element -- static brand asset; avoid next/image (no new deps / config).
     <img
-      src="/images/logo-full.png"
+      src="/images/tripp-mascot.png"
       alt="TripTiles"
       height={height}
       className={imgClassName}

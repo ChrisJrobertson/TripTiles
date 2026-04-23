@@ -1,7 +1,10 @@
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { getTrippMascotDataUrl } from "@/lib/og/tripp-mascot-data-url";
 import { ImageResponse } from "next/og";
 
-/** Royal blue OG canvas — text wordmark only (logo PNG is white-backed). */
+export const runtime = "nodejs";
+
+/** Royal blue OG canvas with transparent Tripp mascot. */
 export const alt = "TripTiles plan";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -12,6 +15,7 @@ export default async function Image({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  const tripp = getTrippMascotDataUrl();
   const trimmed = slug.trim();
   if (!trimmed) {
     return new ImageResponse(
@@ -20,14 +24,16 @@ export default async function Image({
           width: "100%",
           height: "100%",
           display: "flex",
+          flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
+          gap: 32,
           background: "#0B1E5C",
           color: "#FAF8F3",
-          fontSize: 48,
         }}
       >
-        TripTiles
+        <img src={tripp} width={160} height={160} alt="" style={{ objectFit: "contain" }} />
+        <div style={{ fontSize: 48, fontWeight: 600 }}>TripTiles</div>
       </div>,
       size,
     );
@@ -110,8 +116,10 @@ export default async function Image({
         <div
           style={{
             display: "flex",
+            flexDirection: "row",
             justifyContent: "space-between",
-            alignItems: "flex-start",
+            alignItems: "center",
+            gap: 24,
           }}
         >
           <span
@@ -124,6 +132,13 @@ export default async function Image({
           >
             TripTiles
           </span>
+          <img
+            src={tripp}
+            width={120}
+            height={120}
+            alt=""
+            style={{ objectFit: "contain" }}
+          />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <span style={{ fontSize: 56 }}>🎢</span>
