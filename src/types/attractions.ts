@@ -48,6 +48,10 @@ export interface TripRidePriority {
   priority: RidePriority;
   sort_order: number;
   notes: string | null;
+  /** 24h Lightning Lane / Express return or booking time, e.g. "14:15". */
+  skip_line_return_hhmm: string | null;
+  /** Guest-pasted queue wait in minutes (board/app snapshot, not live). */
+  pasted_queue_minutes: number | null;
   created_at: string;
   attraction?: Attraction;
 }

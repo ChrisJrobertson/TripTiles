@@ -59,6 +59,16 @@ export function mapPriorityRow(
     priority: (r.priority as RidePriority) ?? "must_do",
     sort_order: Number(r.sort_order ?? 0),
     notes: r.notes == null ? null : String(r.notes),
+    skip_line_return_hhmm:
+      r.skip_line_return_hhmm == null
+        ? null
+        : String(r.skip_line_return_hhmm),
+    pasted_queue_minutes:
+      r.pasted_queue_minutes == null
+        ? null
+        : Number.isFinite(Number(r.pasted_queue_minutes))
+          ? Math.min(600, Math.max(0, Number(r.pasted_queue_minutes)))
+          : null,
     created_at: String(r.created_at ?? ""),
     attraction,
   };

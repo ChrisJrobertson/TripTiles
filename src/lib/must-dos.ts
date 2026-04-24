@@ -1,4 +1,5 @@
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { softTruncateToMax } from "@/lib/truncate-text";
 import { isThemePark } from "@/lib/park-categories";
 import type {
   ParkMustDo,
@@ -50,8 +51,8 @@ export function timingPillLabel(t: ParkMustDoTiming): string {
 }
 
 export function sanitizeWhyLine(raw: string): string {
-  const t = sanitizeDayNote(raw.trim().slice(0, 200));
-  return t.length > 120 ? t.slice(0, 120).trim() : t;
+  const t = sanitizeDayNote(softTruncateToMax(raw.trim(), 200));
+  return softTruncateToMax(t, 120);
 }
 
 /**

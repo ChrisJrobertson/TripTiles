@@ -59,7 +59,14 @@ export function formatDayRidePicksForPrompt(rows: TripRidePriority[]): string | 
       const n = r.attraction!.name;
       const park = r.attraction!.park_id;
       const note = r.notes?.trim() ? ` — guest note: ${r.notes.trim()}` : "";
-      return `  - [${tag}] ${n} (park id ${park})${note}`;
+      const ret = r.skip_line_return_hhmm?.trim()
+        ? ` — BOOKED skip-line return ${r.skip_line_return_hhmm.trim()} (honour in pacing; do not plan conflicting heavy experiences here)`
+        : "";
+      const wait =
+        r.pasted_queue_minutes != null && r.pasted_queue_minutes > 0
+          ? ` — guest pasted wait ~${r.pasted_queue_minutes} min (snapshot, not live; use as a soft hint only)`
+          : "";
+      return `  - [${tag}] ${n} (park id ${park})${ret}${wait}${note}`;
     })
     .join("\n");
 }

@@ -6,8 +6,10 @@ import {
   removeRidePriority,
   reorderRidePriorities,
   toggleRidePriority,
+  updateRidePriorityMeta,
 } from "@/actions/ride-priorities";
 import { SkipLineLegend } from "@/components/planner/SkipLineLegend";
+import { RidePriorityGuestStack } from "@/components/planner/RidePriorityGuestStack";
 import {
   buildLightningLaneStrategyBlurb,
   heightCheckLines,
@@ -18,8 +20,14 @@ import {
   waitMinutesColourClass,
 } from "@/lib/ride-plan-display";
 import type { Park } from "@/lib/types";
+import { buildBookFirstSkipNudges } from "@/lib/book-first-skip-nudges";
+import { showToast } from "@/lib/toast";
 import type { Attraction, TripRidePriority } from "@/types/attractions";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
+
+function attractionHasSkipLine(a: Attraction): boolean {
+  return a.skip_line_tier != null || a.skip_line_system != null;
+}
 
 type Props = {
   open: boolean;
@@ -114,6 +122,11 @@ export function MobileRidesSheet({
     ],
   );
 
+  const bookFirstNudges = useMemo(
+    () => buildBookFirstSkipNudges(ridePriorities),
+    [ridePriorities],
+  );
+
   useEffect(() => {
     if (!open) {
       setSearch("");
@@ -177,6 +190,11 @@ export function MobileRidesSheet({
           await fn();
           const next = await refreshDayPriorities(tripId, dayDate);
           onPrioritiesUpdated(next);
+        } catch (e) {
+          showToast(
+            e instanceof Error ? e.message : "Could not update. Try again.",
+            { type: "error" },
+          );
         } finally {
           setPending(false);
         }
@@ -285,6 +303,18 @@ export function MobileRidesSheet({
                   <p className="mt-1 font-sans text-sm leading-relaxed text-royal/85">
                     {strategy}
                   </p>
+                  {bookFirstNudges.length > 0 ? (
+                    <div className="mt-2 border-t border-gold/20 pt-2">
+                      <p className="font-sans text-[10px] font-semibold uppercase tracking-wide text-royal/70">
+                        What to book / stack first
+                      </p>
+                      <ul className="mt-1.5 list-inside list-disc space-y-1 font-sans text-[11px] leading-relaxed text-royal/80">
+                        {bookFirstNudges.map((line, idx) => (
+                          <li key={idx}>{line}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
 
                 <p className="mb-1 font-sans text-xs font-semibold uppercase tracking-wide text-royal">
@@ -332,6 +362,41 @@ export function MobileRidesSheet({
                             <span aria-hidden>{thrillEmoji(a.thrill_level)}</span>
                             <span className="capitalize">{a.thrill_level}</span>
                           </p>
+                          <RidePriorityGuestStack
+                            row={row}
+                            hasSkipLine={attractionHasSkipLine(a)}
+                            disabled={pending}
+                            onSaveReturn={(next) =>
+                              runMutation(() =>
+                                updateRidePriorityMeta(
+                                  tripId,
+                                  row.attraction_id,
+                                  dayDate,
+                                  { skipLineReturnHhmm: next },
+                                ),
+                              )
+                            }
+                            onSaveNote={(next) =>
+                              runMutation(() =>
+                                updateRidePriorityMeta(
+                                  tripId,
+                                  row.attraction_id,
+                                  dayDate,
+                                  { notes: next },
+                                ),
+                              )
+                            }
+                            onSavePasted={(next) =>
+                              runMutation(() =>
+                                updateRidePriorityMeta(
+                                  tripId,
+                                  row.attraction_id,
+                                  dayDate,
+                                  { pastedQueueMinutes: next },
+                                ),
+                              )
+                            }
+                          />
                         </div>
                         <div className="flex shrink-0 gap-1">
                           <button
@@ -407,6 +472,41 @@ export function MobileRidesSheet({
                             ) : null}
                             <span aria-hidden>{thrillEmoji(a.thrill_level)}</span>
                           </p>
+                          <RidePriorityGuestStack
+                            row={row}
+                            hasSkipLine={attractionHasSkipLine(a)}
+                            disabled={pending}
+                            onSaveReturn={(next) =>
+                              runMutation(() =>
+                                updateRidePriorityMeta(
+                                  tripId,
+                                  row.attraction_id,
+                                  dayDate,
+                                  { skipLineReturnHhmm: next },
+                                ),
+                              )
+                            }
+                            onSaveNote={(next) =>
+                              runMutation(() =>
+                                updateRidePriorityMeta(
+                                  tripId,
+                                  row.attraction_id,
+                                  dayDate,
+                                  { notes: next },
+                                ),
+                              )
+                            }
+                            onSavePasted={(next) =>
+                              runMutation(() =>
+                                updateRidePriorityMeta(
+                                  tripId,
+                                  row.attraction_id,
+                                  dayDate,
+                                  { pastedQueueMinutes: next },
+                                ),
+                              )
+                            }
+                          />
                         </div>
                         <div className="flex shrink-0 gap-1">
                           <button

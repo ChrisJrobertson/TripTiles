@@ -63,6 +63,8 @@ export function SaveTemplateDialog({
           priority: p.priority,
           sortOrder: i,
           notes: p.notes ?? null,
+          skipLineReturnHhmm: p.skip_line_return_hhmm ?? null,
+          pastedQueueMinutes: p.pasted_queue_minutes ?? null,
         }));
       const payload: DayTemplatePayload = {
         version: 1,

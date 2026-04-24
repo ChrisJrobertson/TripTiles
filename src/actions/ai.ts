@@ -43,6 +43,7 @@ import { getSuccessfulAiGenerationCountForTrip } from "@/lib/db/ai-generations";
 import { getCrowdPatternsForParkIds } from "@/lib/data/crowd-patterns";
 import { getMonthlyConditions } from "@/data/destination-conditions";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { softTruncateToMax } from "@/lib/truncate-text";
 import { formatRegionalDiningForPrompt } from "@/data/regional-dining";
 import { formatPlanningPreferencesForPrompt } from "@/lib/planning-preferences-prompt";
 import { isNamedRestaurantPark } from "@/lib/named-restaurant-tiles";
@@ -173,7 +174,9 @@ async function reportAiGenAutoError(params: {
 const SYSTEM_PROMPT = `You are Smart Plan, TripTiles' warm and practical theme park planner. Output ONLY valid JSON — no markdown, no preamble, no text outside the JSON object.
 
 Shape:
-{ "assignments": { "2026-07-09": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-07-14": "…" }, "planner_day_notes": { "2026-07-09": "…" }, "must_dos": { "2026-07-09": { "mk": [ { "id": "any-uuid", "title": "Seven Dwarfs Mine Train", "timing": "morning", "why": "Shorter queues before 11:00 on lighter crowd days.", "done": false } ] } } }
+{ "assignments": { "2026-07-09": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-07-14": "…" }, "planner_day_notes": { "2026-07-09": "…" }, "skip_line_return_echo": { "2026-07-09": [ { "attraction_id": "id_from_ride_list", "hhmm": "14:15" } ] }, "must_dos": { "2026-07-09": { "mk": [ { "id": "any-uuid", "title": "Seven Dwarfs Mine Train", "timing": "morning", "why": "Shorter queues before 11:00 on lighter crowd days.", "done": false } ] } } }
+
+Optional skip_line_return_echo: ONLY if the user message already lists guest BOOKED return times. Repeat those times here as structured { attraction_id, hhmm } for the correct trip date. Use the exact attraction_id strings from the ride list in the user message. Never invent return times, attraction ids, or hhmm values that the guest did not supply.
 
 MUST_DOS (full-trip mode):
 - For each date key under "must_dos", include an entry ONLY for each park id you place in that day's am/pm/lunch/dinner slots (the same id strings as in "assignments").
@@ -351,6 +354,8 @@ Detail: ${parseDetail}
 These park_id values in assignments did not match our catalogue for this trip: ${list}. You MUST use only the id strings in the numbered list in the system message (e.g. mk, ep, not "Magic Kingdom" or magic_kingdom). Do not invent ids or use other regions' ids.`;
 }
 
+const HHMM_ECHO = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+
 function parseCrowdMetadata(
   raw: unknown,
   allowedDates: Set<string>,
@@ -358,13 +363,18 @@ function parseCrowdMetadata(
   crowd_reasoning?: string;
   day_crowd_notes?: Record<string, string>;
   planner_day_notes?: Record<string, string>;
+  /** Echo only — validated structured returns from the model. */
+  skip_line_return_echo?: Record<
+    string,
+    Array<{ attraction_id: string; hhmm: string }>
+  >;
 } {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const obj = raw as Record<string, unknown>;
   let crowd_reasoning: string | undefined;
   if (typeof obj.crowd_reasoning === "string") {
     const t = obj.crowd_reasoning.trim();
-    if (t) crowd_reasoning = sanitizeDayNote(t.slice(0, 400));
+    if (t) crowd_reasoning = sanitizeDayNote(softTruncateToMax(t, 400));
   }
   const day_crowd_notes: Record<string, string> = {};
   const notes = obj.day_crowd_notes;
@@ -373,7 +383,7 @@ function parseCrowdMetadata(
       if (!allowedDates.has(k)) continue;
       if (typeof v !== "string") continue;
       const s = v.trim();
-      if (s) day_crowd_notes[k] = sanitizeDayNote(s.slice(0, 150));
+      if (s) day_crowd_notes[k] = sanitizeDayNote(softTruncateToMax(s, 150));
     }
   }
   const planner_day_notes: Record<string, string> = {};
@@ -383,7 +393,32 @@ function parseCrowdMetadata(
       if (!allowedDates.has(k)) continue;
       if (typeof v !== "string") continue;
       const s = v.trim();
-      if (s) planner_day_notes[k] = sanitizeDayNote(s.slice(0, 350));
+      if (s) planner_day_notes[k] = sanitizeDayNote(softTruncateToMax(s, 350));
+    }
+  }
+  const skip_line_return_echo: Record<
+    string,
+    Array<{ attraction_id: string; hhmm: string }>
+  > = {};
+  const echoTop = obj.skip_line_return_echo;
+  if (echoTop && typeof echoTop === "object" && !Array.isArray(echoTop)) {
+    for (const [k, val] of Object.entries(echoTop as Record<string, unknown>)) {
+      if (!allowedDates.has(k)) continue;
+      if (!Array.isArray(val)) continue;
+      const rows: { attraction_id: string; hhmm: string }[] = [];
+      for (const item of val) {
+        if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+        const rec = item as Record<string, unknown>;
+        if (typeof rec.attraction_id !== "string" || !rec.attraction_id.trim())
+          continue;
+        if (typeof rec.hhmm !== "string" || !HHMM_ECHO.test(rec.hhmm.trim()))
+          continue;
+        rows.push({
+          attraction_id: rec.attraction_id.trim().slice(0, 200),
+          hhmm: rec.hhmm.trim(),
+        });
+      }
+      if (rows.length > 0) skip_line_return_echo[k] = rows;
     }
   }
   return {
@@ -392,6 +427,10 @@ function parseCrowdMetadata(
       Object.keys(day_crowd_notes).length > 0 ? day_crowd_notes : undefined,
     planner_day_notes:
       Object.keys(planner_day_notes).length > 0 ? planner_day_notes : undefined,
+    skip_line_return_echo:
+      Object.keys(skip_line_return_echo).length > 0
+        ? skip_line_return_echo
+        : undefined,
   };
 }
 
@@ -1335,6 +1374,10 @@ export async function runGenerateAIPlan(
           ? { ...(prevDn as Record<string, string>) }
           : {};
       nextPrefs.day_notes = { ...baseDn, ...meta.planner_day_notes };
+    }
+    if (meta.skip_line_return_echo) {
+      (nextPrefs as Record<string, unknown>).ai_skip_line_return_echo =
+        meta.skip_line_return_echo;
     }
     if (Object.keys(nextMustMap).length > 0) {
       nextPrefs.must_dos = nextMustMap;

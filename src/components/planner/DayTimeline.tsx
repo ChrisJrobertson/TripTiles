@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { getSlotTimeFromValue, getParkIdFromSlotValue } from "@/lib/assignment-slots";
+import type { SkipLineDayTimelineRow } from "@/lib/skip-line-day-timeline";
 import type {
   AiDayTimeline,
   AiDayTimelineBlock,
@@ -107,7 +108,52 @@ export type DayTimelineProps = {
   parkHoursClose?: string;
   /** AI hour-by-hour plan; when set, drives the timeline instead of slot defaults. */
   richTimeline?: AiDayTimeline | null;
+  /** Guest skip-line return rows (from ride priorities) with optional clash hints. */
+  skipLineReturnRows?: SkipLineDayTimelineRow[] | null;
 };
+
+function SkipLineReturnSection({
+  date,
+  rows,
+}: {
+  date: string;
+  rows: SkipLineDayTimelineRow[];
+}) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="mb-4 border-l-2 border-amber-400/90 pl-3">
+      <h3 className="font-serif text-[11px] font-semibold uppercase tracking-[0.5px] text-amber-900/90 dark:text-amber-200/90">
+        Skip-the-line (guest)
+      </h3>
+      <div className="mt-2 space-y-3">
+        {rows.map((r, i) => (
+          <div key={`${r.time}-${i}`} className="grid grid-cols-[54px_1fr] items-start gap-3">
+            <time
+              className="pt-0.5 font-sans text-xs font-medium tabular-nums text-royal/70 dark:text-neutral-300/90"
+              dateTime={isoLocalDateTime(date, r.time)}
+            >
+              {r.time}
+            </time>
+            <div>
+              <p
+                className={`font-sans text-sm font-medium ${
+                  r.warn ? "text-amber-900 dark:text-amber-200" : "text-royal dark:text-neutral-100"
+                }`}
+              >
+                {r.title}
+              </p>
+              {r.subtitle ? (
+                <p className="mt-0.5 font-sans text-xs text-royal/65 dark:text-neutral-300/80">
+                  {r.subtitle}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function DayTimeline({
   date,
@@ -117,6 +163,7 @@ export function DayTimeline({
   parkHoursOpen = "09:00",
   parkHoursClose = "22:00",
   richTimeline,
+  skipLineReturnRows = null,
 }: DayTimelineProps) {
   if (richTimeline && richTimeline.timeline.length > 0) {
     const border = { royal: "border-royal", gold: "border-gold" } as const;
@@ -147,6 +194,9 @@ export function DayTimeline({
         className="rounded-lg border border-royal/10 bg-white/95 p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900/30"
         aria-label="Planned day timeline"
       >
+        {skipLineReturnRows && skipLineReturnRows.length > 0 ? (
+          <SkipLineReturnSection date={date} rows={skipLineReturnRows} />
+        ) : null}
         <div className="space-y-5">
           {RICH_BLOCK_SECTIONS.map((sec) => {
             const rows = richTimeline.timeline
@@ -255,6 +305,10 @@ export function DayTimeline({
         <p className="mb-4 font-sans text-sm leading-relaxed text-royal/75 dark:text-neutral-200/90">
           {dayNotes}
         </p>
+      ) : null}
+
+      {skipLineReturnRows && skipLineReturnRows.length > 0 ? (
+        <SkipLineReturnSection date={date} rows={skipLineReturnRows} />
       ) : null}
 
       <div className="space-y-5">

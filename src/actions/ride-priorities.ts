@@ -16,6 +16,8 @@ import {
   type DayConflict,
 } from "@/lib/planner-day-conflicts";
 import { mapAttractionRow, mapPriorityRow } from "@/lib/ride-priority-rows";
+import { normalizePastedQueueMinutes } from "@/lib/pasted-queue-minutes";
+import { normalizeSkipLineReturnHhmm } from "@/lib/skip-line-return-hhmm";
 import { currentUserCanCreateRidePriority } from "@/lib/entitlements";
 import { revalidatePath } from "next/cache";
 import { unstable_cache } from "next/cache";
@@ -315,23 +317,63 @@ export async function removeRidePriority(
   revalidatePlanner();
 }
 
+export type RidePriorityMetaPatch = {
+  notes?: string | null;
+  /** Set to a 24h `HH:mm` string, or `null` to clear the return window. */
+  skipLineReturnHhmm?: string | null;
+  /** 1–600 or null to clear; from boards/apps, not live waits. */
+  pastedQueueMinutes?: number | null;
+};
+
+/**
+ * Update optional notes and/or skip-line (LL/Express) return time for a ride row.
+ */
+export async function updateRidePriorityMeta(
+  tripId: string,
+  attractionId: string,
+  dayDate: string,
+  patch: RidePriorityMetaPatch,
+): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Not signed in.");
+  const update: Record<string, string | number | null> = {};
+  if ("notes" in patch) {
+    const n = patch.notes;
+    if (n == null || n === "") {
+      update.notes = null;
+    } else {
+      update.notes = String(n).slice(0, 500);
+    }
+  }
+  if ("skipLineReturnHhmm" in patch) {
+    update.skip_line_return_hhmm = normalizeSkipLineReturnHhmm(
+      patch.skipLineReturnHhmm,
+    );
+  }
+  if ("pastedQueueMinutes" in patch) {
+    update.pasted_queue_minutes = normalizePastedQueueMinutes(
+      patch.pastedQueueMinutes,
+    );
+  }
+  if (Object.keys(update).length === 0) return;
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("trip_ride_priorities")
+    .update(update)
+    .eq("trip_id", tripId)
+    .eq("attraction_id", attractionId)
+    .eq("day_date", dayDate);
+  if (error) throw new Error(error.message);
+  revalidatePlanner();
+}
+
 export async function updateRidePriorityNote(
   tripId: string,
   attractionId: string,
   dayDate: string,
   note: string,
 ): Promise<void> {
-  const user = await getCurrentUser();
-  if (!user) throw new Error("Not signed in.");
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("trip_ride_priorities")
-    .update({ notes: note.slice(0, 500) })
-    .eq("trip_id", tripId)
-    .eq("attraction_id", attractionId)
-    .eq("day_date", dayDate);
-  if (error) throw new Error(error.message);
-  revalidatePlanner();
+  await updateRidePriorityMeta(tripId, attractionId, dayDate, { notes: note });
 }
 
 export async function reorderRidePriorities(

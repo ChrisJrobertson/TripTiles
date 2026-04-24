@@ -29,6 +29,17 @@ export function parseDayTemplatePayload(raw: unknown): DayTemplatePayload | null
     if (r.attractionId != null && typeof r.attractionId !== "string") return null;
     if (r.priority !== "must_do" && r.priority !== "if_time") return null;
     if (typeof r.sortOrder !== "number" || !Number.isFinite(r.sortOrder)) return null;
+    if (
+      r.skipLineReturnHhmm != null &&
+      typeof r.skipLineReturnHhmm !== "string"
+    ) {
+      return null;
+    }
+    if (r.pastedQueueMinutes != null) {
+      if (typeof r.pastedQueueMinutes !== "number" || !Number.isFinite(r.pastedQueueMinutes)) {
+        return null;
+      }
+    }
   }
   const dayNote = o.dayNote;
   if (dayNote != null && typeof dayNote !== "string") return null;

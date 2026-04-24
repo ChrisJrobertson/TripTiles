@@ -146,6 +146,11 @@ export type TripPreferences = {
   ai_crowd_summary?: string;
   ai_crowd_updated_at?: string;
   ai_day_crowd_notes?: Record<string, string>;
+  /** Model echo of guest skip-line return times (structured contract); never invent. */
+  ai_skip_line_return_echo?: Record<
+    string,
+    Array<{ attraction_id: string; hhmm: string }>
+  >;
   ai_day_timeline?: Record<string, AiDayTimeline>;
   day_notes?: Record<string, string>;
   must_dos?: unknown;

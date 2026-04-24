@@ -31,8 +31,10 @@ import {
   type CrowdLevel,
 } from "@/lib/planner-crowd-level-meta";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { truncateForPreview } from "@/lib/truncate-text";
 import { plannerUserDayNotes } from "@/lib/planner-note-maps";
 import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
+import { buildSkipLineDayTimelineRows } from "@/lib/skip-line-day-timeline";
 import { isThemePark } from "@/lib/park-categories";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import type { Tier } from "@/lib/tier";
@@ -324,12 +326,38 @@ export function DayDetailLayer({
   );
   const showDayPlannerBlock = hasDayAssignments || Boolean(richTimeline);
 
+  const parkOpenForTimeline = richTimeline?.park_hours.open ?? "09:00";
+  const skipLineReturnRows = useMemo(
+    () =>
+      buildSkipLineDayTimelineRows(ass, ridePriorities, parkOpenForTimeline),
+    [ass, ridePriorities, parkOpenForTimeline],
+  );
+
+  const smartPlanReturnEcho = useMemo(() => {
+    const raw = (trip.preferences as { ai_skip_line_return_echo?: unknown } | null)
+      ?.ai_skip_line_return_echo;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const day = (raw as Record<string, unknown>)[dayDate];
+    if (!Array.isArray(day) || day.length === 0) return null;
+    const out: { attraction_id: string; hhmm: string }[] = [];
+    for (const r of day) {
+      if (!r || typeof r !== "object" || Array.isArray(r)) continue;
+      const o = r as Record<string, unknown>;
+      if (typeof o.attraction_id === "string" && typeof o.hhmm === "string")
+        out.push({ attraction_id: o.attraction_id, hhmm: o.hhmm });
+    }
+    return out.length > 0 ? out : null;
+  }, [trip.preferences, dayDate]);
+
   const heatTempC = dc ? Math.round(dc.conditions.tempHighC) : 22;
   const heatCrowd: CrowdLevel = crowdLevel ?? dc?.crowd ?? "moderate";
 
   const smartPlanPreviewLine =
     aiNoteForDay && aiNoteForDay.length > 0
-      ? aiNoteForDay.split(/\n+/)[0]!.slice(0, 220)
+      ? truncateForPreview(
+          sanitizeDayNote(aiNoteForDay.split(/\n+/)[0]!.trim()),
+          220,
+        )
       : null;
 
   const todayK = todayKey();
@@ -754,7 +782,18 @@ export function DayDetailLayer({
                   richTimeline ? undefined : (aiNoteForDay ?? undefined)
                 }
                 richTimeline={richTimeline}
+                skipLineReturnRows={
+                  skipLineReturnRows.length > 0 ? skipLineReturnRows : null
+                }
               />
+              {smartPlanReturnEcho && smartPlanReturnEcho.length > 0 ? (
+                <p className="mb-2 mt-2 font-sans text-xs leading-relaxed text-royal/60 dark:text-neutral-300/90">
+                  Last Smart Plan structured echo:{" "}
+                  {smartPlanReturnEcho
+                    .map((e) => `${e.attraction_id} @ ${e.hhmm}`)
+                    .join(" · ")}
+                </p>
+              ) : null}
               <div className="mt-3">
                 <DayHeatSidecar
                   tempC={heatTempC}

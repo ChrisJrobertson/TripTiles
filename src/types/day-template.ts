@@ -12,6 +12,10 @@ export type DayTemplatePayload = {
     priority: "must_do" | "if_time";
     sortOrder: number;
     notes?: string | null;
+    /** 24h HH:mm, same as `trip_ride_priorities.skip_line_return_hhmm`. */
+    skipLineReturnHhmm?: string | null;
+    /** Pasted wait minutes; same as `trip_ride_priorities.pasted_queue_minutes`. */
+    pastedQueueMinutes?: number | null;
   }>;
   dayNote?: string | null;
 };

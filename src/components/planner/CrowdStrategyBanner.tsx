@@ -1,6 +1,7 @@
 "use client";
 
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { truncateForPreview } from "@/lib/truncate-text";
 import { useCallback, useId, useState } from "react";
 import { CrowdLevelIndicator } from "./CrowdLevelIndicator";
 
@@ -14,10 +15,7 @@ export function CrowdStrategyBanner({ text }: Props) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const cleaned = sanitizeDayNote(text.trim());
-  const preview =
-    cleaned.length <= PREVIEW_LEN
-      ? cleaned
-      : `${cleaned.slice(0, PREVIEW_LEN).trimEnd()}…`;
+  const preview = truncateForPreview(cleaned, PREVIEW_LEN);
 
   const toggle = useCallback(() => setOpen((o) => !o), []);
 
@@ -34,7 +32,7 @@ export function CrowdStrategyBanner({ text }: Props) {
         </span>
         {isLong ? (
           <>
-            <span className="min-w-0 flex-1 text-royal/85 md:truncate">
+            <span className="min-w-0 flex-1 text-royal/85">
               {preview}
             </span>
             <button

@@ -12,6 +12,7 @@ import {
 import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
 import { displayDayForTimelinePanel } from "@/lib/ai-timeline-to-slot-times";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
+import { truncateForPreview } from "@/lib/truncate-text";
 import { DayTimelinePanel } from "@/components/planner/DayTimelinePanel";
 import { ExpandedDayPanel } from "@/components/planner/ExpandedDayPanel";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
@@ -803,7 +804,7 @@ export function Calendar({
                           <>
                             <span aria-hidden>📝 </span>
                             <span className="line-clamp-1">
-                              {dayUserNote(trip, key).slice(0, 60)}
+                              {truncateForPreview(dayUserNote(trip, key), 60)}
                               {dayUserNote(trip, key).length > 60 ? "…" : ""}
                             </span>
                           </>
@@ -859,7 +860,7 @@ export function Calendar({
                             <>
                               <span aria-hidden>📝 </span>
                               <span className="line-clamp-1">
-                                {dayUserNote(trip, key).slice(0, 60)}
+                                {truncateForPreview(dayUserNote(trip, key), 60)}
                                 {dayUserNote(trip, key).length > 60
                                   ? "…"
                                   : ""}

@@ -6,6 +6,7 @@ import {
   removeRidePriority,
   reorderRidePriorities,
   toggleRidePriority,
+  updateRidePriorityMeta,
 } from "@/actions/ride-priorities";
 import {
   closestCenter,
@@ -26,6 +27,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { SkipLineLegend } from "@/components/planner/SkipLineLegend";
+import { RidePriorityGuestStack } from "@/components/planner/RidePriorityGuestStack";
 import { parseDate } from "@/lib/date-helpers";
 import type { Park } from "@/lib/types";
 import {
@@ -38,6 +40,7 @@ import {
   waitMinutesColourClass,
 } from "@/lib/ride-plan-display";
 import type { Attraction, TripRidePriority } from "@/types/attractions";
+import { buildBookFirstSkipNudges } from "@/lib/book-first-skip-nudges";
 import { showToast } from "@/lib/toast";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -82,6 +85,10 @@ async function refreshDayPriorities(
   return getRidePrioritiesForDay(tripId, dayDate);
 }
 
+function attractionHasSkipLine(a: Attraction): boolean {
+  return a.skip_line_tier != null || a.skip_line_system != null;
+}
+
 function RideRow({
   row,
   canUp,
@@ -89,6 +96,9 @@ function RideRow({
   onMoveUp,
   onMoveDown,
   onToggleIcon,
+  onSaveReturn,
+  onSaveNote,
+  onSavePasted,
   pending,
 }: {
   row: TripRidePriority;
@@ -97,6 +107,9 @@ function RideRow({
   onMoveUp: () => void;
   onMoveDown: () => void;
   onToggleIcon: () => void;
+  onSaveReturn: (next: string | null) => void;
+  onSaveNote: (next: string | null) => void;
+  onSavePasted: (next: number | null) => void;
   pending: boolean;
 }) {
   const a = row.attraction;
@@ -119,7 +132,18 @@ function RideRow({
       >
         {row.priority === "must_do" ? "★" : "○"}
       </button>
-      <span className="min-w-0 flex-1 font-medium leading-snug">{a.name}</span>
+      <div className="min-w-0 flex-1">
+        <p className="font-medium leading-snug">{a.name}</p>
+        <RidePriorityGuestStack
+          compact
+          row={row}
+          hasSkipLine={attractionHasSkipLine(a)}
+          disabled={pending}
+          onSaveReturn={onSaveReturn}
+          onSaveNote={onSaveNote}
+          onSavePasted={onSavePasted}
+        />
+      </div>
       <span className="flex shrink-0 gap-0.5">
         <button
           type="button"
@@ -170,10 +194,16 @@ function RideRow({
 function SortableRideRow({
   row,
   onToggleIcon,
+  onSaveReturn,
+  onSaveNote,
+  onSavePasted,
   pending,
 }: {
   row: TripRidePriority;
   onToggleIcon: () => void;
+  onSaveReturn: (next: string | null) => void;
+  onSaveNote: (next: string | null) => void;
+  onSavePasted: (next: number | null) => void;
   pending: boolean;
 }) {
   const {
@@ -227,7 +257,18 @@ function SortableRideRow({
       >
         {row.priority === "must_do" ? "★" : "○"}
       </button>
-      <span className="min-w-0 flex-1 font-medium leading-snug">{a.name}</span>
+      <div className="min-w-0 flex-1">
+        <p className="font-medium leading-snug">{a.name}</p>
+        <RidePriorityGuestStack
+          compact
+          row={row}
+          hasSkipLine={attractionHasSkipLine(a)}
+          disabled={pending}
+          onSaveReturn={onSaveReturn}
+          onSaveNote={onSaveNote}
+          onSavePasted={onSavePasted}
+        />
+      </div>
       {badge ? (
         <span
           className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase"
@@ -369,6 +410,11 @@ export function ExpandedDayPanel({
     ],
   );
 
+  const bookFirstNudges = useMemo(
+    () => buildBookFirstSkipNudges(ridePriorities),
+    [ridePriorities],
+  );
+
   const selectedAttractionsForHeight = useMemo(() => {
     const out: Attraction[] = [];
     for (const r of sorted) {
@@ -390,6 +436,11 @@ export function ExpandedDayPanel({
           await fn();
           const next = await refreshDayPriorities(tripId, dayDate);
           onPrioritiesUpdated(next);
+        } catch (e) {
+          showToast(
+            e instanceof Error ? e.message : "Could not update. Try again.",
+            { type: "error" },
+          );
         } finally {
           setPending(false);
         }
@@ -594,6 +645,18 @@ export function ExpandedDayPanel({
         <p className="mt-1 font-sans text-xs leading-relaxed text-royal/85">
           {strategy}
         </p>
+        {bookFirstNudges.length > 0 ? (
+          <div className="mt-2 border-t border-gold/20 pt-2">
+            <p className="font-sans text-[10px] font-semibold uppercase tracking-wide text-royal/70">
+              What to book / stack first
+            </p>
+            <ul className="mt-1.5 list-inside list-disc space-y-1 font-sans text-[11px] leading-relaxed text-royal/80">
+              {bookFirstNudges.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
 
       {embedded ? (
@@ -622,6 +685,33 @@ export function ExpandedDayPanel({
                     key={row.id}
                     row={row}
                     onToggleIcon={() => handleTogglePriorityIcon(row)}
+                    onSaveReturn={(next) =>
+                      runMutation(() =>
+                        updateRidePriorityMeta(
+                          tripId,
+                          row.attraction_id,
+                          dayDate,
+                          { skipLineReturnHhmm: next },
+                        ),
+                      )
+                    }
+                    onSaveNote={(next) =>
+                      runMutation(() =>
+                        updateRidePriorityMeta(tripId, row.attraction_id, dayDate, {
+                          notes: next,
+                        }),
+                      )
+                    }
+                    onSavePasted={(next) =>
+                      runMutation(() =>
+                        updateRidePriorityMeta(
+                          tripId,
+                          row.attraction_id,
+                          dayDate,
+                          { pastedQueueMinutes: next },
+                        ),
+                      )
+                    }
                     pending={pending}
                   />
                 ))}
@@ -647,6 +737,33 @@ export function ExpandedDayPanel({
                     key={row.id}
                     row={row}
                     onToggleIcon={() => handleTogglePriorityIcon(row)}
+                    onSaveReturn={(next) =>
+                      runMutation(() =>
+                        updateRidePriorityMeta(
+                          tripId,
+                          row.attraction_id,
+                          dayDate,
+                          { skipLineReturnHhmm: next },
+                        ),
+                      )
+                    }
+                    onSaveNote={(next) =>
+                      runMutation(() =>
+                        updateRidePriorityMeta(tripId, row.attraction_id, dayDate, {
+                          notes: next,
+                        }),
+                      )
+                    }
+                    onSavePasted={(next) =>
+                      runMutation(() =>
+                        updateRidePriorityMeta(
+                          tripId,
+                          row.attraction_id,
+                          dayDate,
+                          { pastedQueueMinutes: next },
+                        ),
+                      )
+                    }
                     pending={pending}
                   />
                 ))}
@@ -676,6 +793,33 @@ export function ExpandedDayPanel({
                   onMoveUp={() => moveWithinSection("must_do", i, -1)}
                   onMoveDown={() => moveWithinSection("must_do", i, 1)}
                   onToggleIcon={() => handleTogglePriorityIcon(row)}
+                  onSaveReturn={(next) =>
+                    runMutation(() =>
+                      updateRidePriorityMeta(
+                        tripId,
+                        row.attraction_id,
+                        dayDate,
+                        { skipLineReturnHhmm: next },
+                      ),
+                    )
+                  }
+                  onSaveNote={(next) =>
+                    runMutation(() =>
+                      updateRidePriorityMeta(tripId, row.attraction_id, dayDate, {
+                        notes: next,
+                      }),
+                    )
+                  }
+                  onSavePasted={(next) =>
+                    runMutation(() =>
+                      updateRidePriorityMeta(
+                        tripId,
+                        row.attraction_id,
+                        dayDate,
+                        { pastedQueueMinutes: next },
+                      ),
+                    )
+                  }
                   pending={pending}
                 />
               ))
@@ -700,6 +844,33 @@ export function ExpandedDayPanel({
                   onMoveUp={() => moveWithinSection("if_time", i, -1)}
                   onMoveDown={() => moveWithinSection("if_time", i, 1)}
                   onToggleIcon={() => handleTogglePriorityIcon(row)}
+                  onSaveReturn={(next) =>
+                    runMutation(() =>
+                      updateRidePriorityMeta(
+                        tripId,
+                        row.attraction_id,
+                        dayDate,
+                        { skipLineReturnHhmm: next },
+                      ),
+                    )
+                  }
+                  onSaveNote={(next) =>
+                    runMutation(() =>
+                      updateRidePriorityMeta(tripId, row.attraction_id, dayDate, {
+                        notes: next,
+                      }),
+                    )
+                  }
+                  onSavePasted={(next) =>
+                    runMutation(() =>
+                      updateRidePriorityMeta(
+                        tripId,
+                        row.attraction_id,
+                        dayDate,
+                        { pastedQueueMinutes: next },
+                      ),
+                    )
+                  }
                   pending={pending}
                 />
               ))
