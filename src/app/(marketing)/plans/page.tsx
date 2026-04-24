@@ -1,3 +1,4 @@
+import { PlannerValueHighlights } from "@/components/marketing/PlannerValueHighlights";
 import { PublicTripsGallery } from "@/components/marketing/PublicTripsGallery";
 import type {
   PublicTripLengthBucket,
@@ -13,10 +14,11 @@ const site = getPublicSiteUrl() || "https://www.triptiles.app";
 export const metadata: Metadata = {
   title: "Community trip plans",
   description:
-    "Browse real family itineraries from the TripTiles community. Clone any plan to start yours.",
+    "Browse real family itineraries, preview them in the planner, then clone — your copy includes Smart Plan, clash checks, and nudges on the day timeline.",
   openGraph: {
     title: "Community trip plans · TripTiles",
-    description: "Clone crowd-aware itineraries from the TripTiles community.",
+    description:
+      "Open full previews. Clone a plan to edit with the same day timeline, nudges, and Smart Plan tools as any trip you build yourself.",
     url: `${site}/plans`,
     siteName: "TripTiles",
     locale: "en_GB",
@@ -65,11 +67,17 @@ export default async function PlansGalleryPage({
     <div className="min-h-screen bg-transparent">
       <main className="mx-auto max-w-6xl px-4 py-12">
         <h1 className="font-serif text-3xl font-semibold text-royal md:text-4xl">
-          Trip plans from the TripTiles community
+          Community plans — see the real planner before you sign up
         </h1>
         <p className="mt-3 max-w-2xl font-sans text-base text-royal/75">
-          Browse real family itineraries. Clone any plan to start yours.
+          Every listing opens as a read-only view of the same calendar, day
+          timeline, and nudges you get after you start a trip. Clone to edit in
+          your account — with clash checks, Smart Plan, and ride- or day-level
+          detail.
         </p>
+        <div className="mt-8 max-w-3xl">
+          <PlannerValueHighlights variant="compact" />
+        </div>
 
         <PublicTripsGallery
           basePath="/plans"

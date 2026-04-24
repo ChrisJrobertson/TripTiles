@@ -17,6 +17,11 @@ import { getCurrentUser } from "@/lib/supabase/server";
 
 type Props = { params: Promise<{ slug: string }> };
 
+type PublicPlanPageProps = {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -36,7 +41,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const days = Math.max(1, Math.floor(dayMs / 86400000) + 1);
 
   const title = `${trip.adventure_name} · TripTiles`;
-  const description = `A ${days}-day ${dest} plan from the TripTiles community — open, clone, and make it yours.`;
+  const description = `A ${days}-day ${dest} community plan — full calendar and day-timeline preview with the same nudges and clash checks as a live trip. Clone to edit in your account.`;
 
   const base =
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
@@ -71,8 +76,20 @@ function shareUrl(site: string, slug: string) {
   return `${site.replace(/\/$/, "")}/plans/${slug}`;
 }
 
-export default async function PublicPlanPage({ params }: Props) {
+function firstSearchParam(
+  v: string | string[] | undefined,
+): string | undefined {
+  if (Array.isArray(v)) return v[0];
+  return v;
+}
+
+export default async function PublicPlanPage({
+  params,
+  searchParams,
+}: PublicPlanPageProps) {
   const { slug } = await params;
+  const sp = await searchParams;
+  const wantsClone = firstSearchParam(sp.clone) === "1";
   const trip = await getTripByPublicSlug(slug);
   if (!trip) notFound();
 
@@ -117,6 +134,25 @@ export default async function PublicPlanPage({ params }: Props) {
           Start planning your own trip for free
         </Link>
         <span className="text-royal/70"> — no credit card.</span>
+      </div>
+
+      <div className="border-b border-royal/10 bg-cream/90 px-4 py-3">
+        <div className="mx-auto max-w-6xl font-sans text-sm leading-relaxed text-royal/85">
+          <p>
+            <span className="font-semibold text-royal">What you’re viewing — </span>
+            A live read-only trip: the same grid, day timeline, nudges, and
+            clash checks as a plan in your account — not a static screenshot.
+            Use <span className="font-semibold text-royal">Clone this plan</span>{" "}
+            to make an editable copy with Smart Plan, conflict surfacing, and
+            per-day ride detail.
+          </p>
+          {wantsClone && !isAuthed ? (
+            <p className="mt-2 text-royal/75">
+              We&apos;ll ask you to sign in next — you&apos;ll return here to
+              finish the clone, or use Clone this plan on any visit.
+            </p>
+          ) : null}
+        </div>
       </div>
 
       <header className="border-b border-royal/10 bg-white/90 px-4 py-5">

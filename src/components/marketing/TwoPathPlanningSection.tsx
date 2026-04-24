@@ -86,7 +86,8 @@ export function TwoPathPlanningSection({
               Ask Trip for a first draft ✨
             </h3>
             <p className="mt-2 flex-1 font-sans text-sm leading-relaxed text-royal/80">
-              Tell Trip your priorities and get a full itinerary in seconds.
+              Set anchors and priorities — get a first draft in seconds, then
+              use nudges and the day timeline to refine.
             </p>
           </button>
         </div>
@@ -130,9 +131,9 @@ export function TwoPathPlanningSection({
             Let Trip plan it
           </h3>
           <p className="mt-3 flex-1 font-sans text-sm leading-relaxed text-royal/80">
-            Describe your trip — family size, priorities, must-do parks — and
-            Trip builds a complete day-by-day itinerary in seconds. Then tweak
-            anything you like.
+            Set must-dos, dining anchors, and who&apos;s traveling — Trip drafts
+            a day-by-day itinerary in seconds, then the timeline and nudges help
+            you harden the plan. Tweak anything you like.
           </p>
         </article>
       </div>

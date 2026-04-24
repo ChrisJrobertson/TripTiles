@@ -1,3 +1,4 @@
+import { PlannerValueHighlights } from "@/components/marketing/PlannerValueHighlights";
 import { TwoPathPlanningSection } from "@/components/marketing/TwoPathPlanningSection";
 import { getFeaturedRegions } from "@/lib/db/regions";
 import { getFeaturedPublicTrips } from "@/lib/db/trips";
@@ -15,11 +16,11 @@ const site = getPublicSiteUrl() || "https://www.triptiles.app";
 export const metadata: Metadata = {
   title: "TripTiles — Plan your theme park trips in minutes",
   description:
-    "Smart Plan itineraries for Disney, Universal, and 300+ parks worldwide. Beautiful PDFs. Family-friendly pricing.",
+    "Day timelines with clash checks, Smart Plan drafts with your must-dos and dining anchors, and plain-English nudges. PDFs, family sharing, 300+ parks.",
   openGraph: {
     title: "TripTiles — Plan your theme park trips in minutes",
     description:
-      "Smart Plan itineraries, crowd-aware scheduling, and print-ready PDFs for theme park holidays.",
+      "Visual day planning with clash detection, Smart Plan, nudges, and print-ready PDFs for Disney, Universal, and more.",
     url: site,
     siteName: "TripTiles",
     locale: "en_GB",
@@ -30,20 +31,15 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "TripTiles",
     description:
-      "Plan theme park trips on one visual calendar — Smart Plan, PDFs, Trip Passport.",
+      "One calendar for your trip: Smart Plan, clash-aware timelines, nudges, and PDFs.",
   },
 };
 
 const FEATURES_STATIC = [
   {
-    icon: "🤖",
-    title: "Smart Plan",
-    body: "Smart Plan drafts a day-by-day itinerary using crowd patterns and your group.",
-  },
-  {
     icon: "📅",
-    title: "Crowd-aware scheduling",
-    body: "Lean towards quieter days for headline parks when your dates allow.",
+    title: "Crowd-aware tips",
+    body: "Heuristic crowd guidance helps you lean towards quieter days when your date window allows.",
   },
   {
     icon: "📄",
@@ -51,14 +47,19 @@ const FEATURES_STATIC = [
     body: "Export full detail or a clean fridge calendar — your choice.",
   },
   {
+    icon: "🌐",
+    title: "Community plans",
+    body: "Browse public itineraries, open a read-only preview, and clone a copy to edit with the same nudges and checks.",
+  },
+  {
     icon: "👨‍👩‍👧‍👦",
     title: "Family sharing",
-    body: "Invite editors on the Family plan — plan together in one place.",
+    body: "Invite editors on the Family plan — one shared calendar, everyone aligned.",
   },
   {
     icon: "🌍",
     title: "300+ parks",
-    body: "Disney, Universal, Legoland, SeaWorld, and regional favourites.",
+    body: "Disney, Universal, Legoland, SeaWorld, and regional favourites — same tools everywhere.",
   },
 ] as const;
 
@@ -77,7 +78,11 @@ const FAQ = [
   },
   {
     q: "How accurate are Smart Plan drafts?",
-    a: "Smart Plan uses heuristic crowd data — always verify park hours and tickets before you travel.",
+    a: "Smart Plan uses heuristics and your stated preferences — the timeline also surfaces clashes and nudges so you can correct course. Always verify park hours and tickets before you travel.",
+  },
+  {
+    q: "What does the planner check for?",
+    a: "The day view flags common problems like overlapping major blocks, back-to-back rope drops, and return-time conflicts when you’ve stacked skip-the-line windows — with short explanations and suggestions.",
   },
   {
     q: "Can I share with my family?",
@@ -123,11 +128,13 @@ export default async function MarketingHomePage() {
               Theme park trips, visually planned
             </p>
             <h1 className="mt-4 font-serif text-4xl font-semibold leading-tight tracking-tight text-royal md:text-5xl md:leading-tight">
-              Plan your theme park trip in minutes, not hours
+              A theme park calendar that flags problems before you land
             </h1>
             <p className="mt-6 max-w-xl font-sans text-lg leading-relaxed text-royal/80">
-              Replace 10 hours of planning with one beautiful PDF. Free to try,
-              from £{tierPro.monthlyGbp.toFixed(2)}/month when you&apos;re ready.
+              Smart Plan drafts from your must-dos and dining anchors, a
+              day-by-day timeline with clash checks, and plain-English nudges
+              when something won&apos;t work. Free to try, from £
+              {tierPro.monthlyGbp.toFixed(2)}/month when you&apos;re ready —
               Disney, Universal, and 300+ parks worldwide.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
@@ -141,11 +148,12 @@ export default async function MarketingHomePage() {
                 href="/plans"
                 className="inline-flex min-h-12 items-center justify-center rounded-lg border-2 border-royal/25 bg-white px-6 py-3 font-sans text-sm font-semibold text-royal transition hover:bg-cream"
               >
-                See example plans
+                Community plans
               </Link>
             </div>
             <p className="mt-6 font-sans text-xs text-royal/55">
-              Free forever plan · No credit card · 45 destinations
+              Free forever plan · No credit card · 45 destinations · Clone any
+              public itinerary into your own planner
             </p>
           </div>
           <figure className="overflow-hidden rounded-2xl border border-royal/15 bg-white shadow-lg">
@@ -163,8 +171,8 @@ export default async function MarketingHomePage() {
                 Planner preview
               </span>
               <p className="mt-2 font-sans text-sm text-royal/60">
-                Drag everything yourself, or tap Smart Plan for a first draft —
-                then tweak.
+                Grid and timeline: drag it yourself, or run Smart Plan — clashes
+                and nudges update as you go.
               </p>
             </figcaption>
           </figure>
@@ -204,9 +212,9 @@ export default async function MarketingHomePage() {
                 Fill your calendar
               </h3>
               <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
-                Drag tiles on yourself, or run Smart Plan and let Trip draft
-                days from crowd patterns, your dates, and group size — then edit
-                freely.
+                Drag tiles, or run Smart Plan from crowd patterns, dates, and
+                group size — the timeline and nudges help you catch overloaded
+                days before you go.
               </p>
             </div>
             <div className="text-center">
@@ -222,6 +230,19 @@ export default async function MarketingHomePage() {
               </p>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="border-t border-royal/10 bg-cream/40 px-6 py-16">
+        <div className="mx-auto max-w-5xl">
+          <h2 className="text-center font-serif text-2xl font-semibold text-royal md:text-3xl">
+            The planner, not just a pretty PDF
+          </h2>
+          <p className="mx-auto mt-3 max-w-2xl text-center font-sans text-sm leading-relaxed text-royal/70 md:text-base">
+            Everything below is in the app today — the same experience whether
+            you start from scratch, use Smart Plan, or clone a community trip.
+          </p>
+          <PlannerValueHighlights />
         </div>
       </section>
 
@@ -425,7 +446,8 @@ export default async function MarketingHomePage() {
               From the community
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-center font-sans text-sm text-royal/75">
-              Real itineraries you can open or clone into your account.
+              Open a read-only preview, then clone — your copy runs on the same
+              timeline, nudges, and Smart Plan tools as every other trip.
             </p>
             <ul className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {featuredTrips.map((trip) => {
