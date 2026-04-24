@@ -113,7 +113,7 @@ function AppNavHeaderFallback({
   const upgradeNav = showUpgradeNavCta ?? isLegacyFreeNav;
   return (
     <header className="sticky top-0 z-30">
-      <div className="border-b border-royal/10 bg-white/60 backdrop-blur-xl">
+      <div className="border-b border-white/15 bg-white/[0.08] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12)] backdrop-blur-2xl backdrop-saturate-150">
         <div className="mx-auto flex max-w-screen-2xl justify-center px-4 py-3 sm:justify-start sm:px-6 lg:px-8">
           <TripTilesLogoLink
             href="/planner"
@@ -122,7 +122,7 @@ function AppNavHeaderFallback({
           />
         </div>
       </div>
-      <div className="border-b border-royal/[0.12] bg-white/75 px-4 py-1.5 shadow-[0_1px_0_rgb(201_169_97_/_0.12)] backdrop-blur-xl backdrop-saturate-150">
+      <div className="border-b border-white/10 bg-white/[0.1] px-4 py-1.5 shadow-[0_1px_0_0_rgba(11,30,92,0.06)] backdrop-blur-2xl backdrop-saturate-150">
         <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-x-2 sm:gap-x-3">
             <details className="relative sm:hidden">
@@ -322,7 +322,7 @@ function AppNavHeaderInner({
 
   return (
     <header className="sticky top-0 z-30">
-      <div className="border-b border-royal/10 bg-white/60 backdrop-blur-xl">
+      <div className="border-b border-white/15 bg-white/[0.08] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.12)] backdrop-blur-2xl backdrop-saturate-150">
         <div className="mx-auto flex max-w-screen-2xl justify-center px-4 py-3 sm:justify-start sm:px-6 lg:px-8">
           <TripTilesLogoLink
             href={plannerHomeHref}
@@ -331,7 +331,7 @@ function AppNavHeaderInner({
           />
         </div>
       </div>
-      <div className="border-b border-royal/[0.12] bg-white/75 px-4 py-1.5 shadow-[0_1px_0_rgb(201_169_97_/_0.12)] backdrop-blur-xl backdrop-saturate-150">
+      <div className="border-b border-white/10 bg-white/[0.1] px-4 py-1.5 shadow-[0_1px_0_0_rgba(11,30,92,0.06)] backdrop-blur-2xl backdrop-saturate-150">
         <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-x-2 sm:gap-x-3">
             <details className="relative sm:hidden">
