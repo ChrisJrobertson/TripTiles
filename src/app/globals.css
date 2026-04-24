@@ -20,9 +20,6 @@
   --tt-cyan: #c3f5fd;
   --tt-pink: #ffb8c2;
   --tt-lavender: #d5caf8;
-
-  /* Subtle sparkle */
-  --tt-sparkle: rgb(255 255 255 / 0.7);
 }
 
 @theme inline {
@@ -44,19 +41,8 @@
 html {
   min-height: 100%;
   background-color: #fce7cc;
-  /* Very subtle colorful accent glows using brand palette */
-  background-image:
-    /* Soft royal blue corners */
-    radial-gradient(ellipse 35% 25% at 0% 0%, rgb(36 85 172 / 0.08), transparent 70%),
-    radial-gradient(ellipse 35% 25% at 100% 0%, rgb(36 85 172 / 0.08), transparent 70%),
-    /* Soft orange/gold bottom corners */
-    radial-gradient(ellipse 35% 25% at 0% 100%, rgb(221 78 20 / 0.06), transparent 70%),
-    radial-gradient(ellipse 35% 25% at 100% 100%, rgb(221 78 20 / 0.06), transparent 70%),
-    /* Tiny sparkles scattered */
-    radial-gradient(circle 1px at 15% 25%, rgba(255,255,255,0.6), transparent 1.5px),
-    radial-gradient(circle 1.2px at 85% 15%, rgba(255,255,255,0.5), transparent 1.6px),
-    radial-gradient(circle 0.8px at 75% 75%, rgba(255,255,255,0.4), transparent 1.2px);
-  background-attachment: fixed;
+  /* Clean background - no gradients, just the image overlay */
+  background-image: none;
 }
 
 /* Site background image - magical theme park decorative border */
