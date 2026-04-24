@@ -159,9 +159,9 @@ export default async function MarketingHomePage() {
           <figure className="overflow-hidden rounded-2xl border border-royal/15 bg-white shadow-lg">
             <Image
               src="/marketing/hero-planner.png"
-              alt="TripTiles planner: calendar with park days, dining slots, stats, and notes"
+              alt="TripTiles planner: Your trip at a glance stats, park tiles in the left rail, and a multi-week day grid with parks, dining, and daily notes"
               width={1024}
-              height={484}
+              height={447}
               className="h-auto w-full object-cover object-top"
               priority
               sizes="(max-width: 1024px) 100vw, 50vw"
