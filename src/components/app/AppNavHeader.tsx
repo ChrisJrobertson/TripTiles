@@ -112,7 +112,7 @@ function AppNavHeaderFallback({
   const showTripRatio = typeof cap === "number";
   const upgradeNav = showUpgradeNavCta ?? isLegacyFreeNav;
   return (
-    <header className="sticky top-0 z-30">
+    <header className="relative z-30">
       {/* No backdrop-blur here — blur hides the same sparkles/gradient as the page edges */}
       <div className="tt-logo-band border-b border-white/20 bg-transparent">
         <div className="mx-auto flex max-w-screen-2xl justify-center px-4 py-3 sm:justify-start sm:px-6 lg:px-8">
@@ -322,7 +322,7 @@ function AppNavHeaderInner({
     );
 
   return (
-    <header className="sticky top-0 z-30">
+    <header className="relative z-30">
       <div className="tt-logo-band border-b border-white/20 bg-transparent">
         <div className="mx-auto flex max-w-screen-2xl justify-center px-4 py-3 sm:justify-start sm:px-6 lg:px-8">
           <TripTilesLogoLink

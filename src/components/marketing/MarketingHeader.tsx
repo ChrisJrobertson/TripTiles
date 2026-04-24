@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export function MarketingHeader() {
   return (
-    <header className="sticky top-0 z-20">
+    <header className="relative z-20">
       <div className="tt-logo-band border-b border-white/20 bg-transparent">
         <div className="mx-auto flex max-w-5xl justify-center px-6 py-4 sm:justify-start">
           <TripTilesLogoLink
