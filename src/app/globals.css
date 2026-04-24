@@ -21,15 +21,7 @@
   --tt-pink: #ffb8c2;
   --tt-lavender: #d5caf8;
 
-  /* Mesh gradient colors derived from palette */
-  --tt-mesh-coral: rgb(221 78 20 / 0.25);
-  --tt-mesh-amber: rgb(252 231 204 / 0.6);
-  --tt-mesh-mint: rgb(162 223 86 / 0.2);
-  --tt-mesh-sky: rgb(63 162 236 / 0.25);
-  --tt-mesh-violet: rgb(213 202 248 / 0.3);
-  --tt-mesh-rose: rgb(255 184 194 / 0.25);
-  --tt-mesh-gold: rgb(221 78 20 / 0.15);
-  --tt-mesh-royal: rgb(36 85 172 / 0.12);
+  /* Subtle sparkle */
   --tt-sparkle: rgb(255 255 255 / 0.7);
 }
 
@@ -52,23 +44,13 @@
 html {
   min-height: 100%;
   background-color: #fce7cc;
-  /* Magical mesh gradient using new color palette */
+  /* Subtle sparkle texture - no large shapes */
   background-image:
-    /* Sparkle overlay */
     radial-gradient(circle 1.25px at 18% 42%, var(--tt-sparkle), transparent 1.6px),
     radial-gradient(circle 1px at 84% 28%, var(--tt-sparkle), transparent 1.3px),
     radial-gradient(circle 1.1px at 62% 78%, var(--tt-sparkle), transparent 1.4px),
     radial-gradient(circle 1px at 31% 88%, var(--tt-sparkle), transparent 1.2px),
-    radial-gradient(circle 1.2px at 91% 62%, var(--tt-sparkle), transparent 1.5px),
-    /* Color bursts from palette */
-    radial-gradient(ellipse 72% 48% at 50% -5%, var(--tt-mesh-gold), transparent 58%),
-    radial-gradient(ellipse 55% 42% at 8% 92%, var(--tt-mesh-royal), transparent 62%),
-    radial-gradient(ellipse 130% 95% at 0% -15%, var(--tt-mesh-coral), transparent 58%),
-    radial-gradient(ellipse 115% 85% at 100% -8%, var(--tt-mesh-sky), transparent 52%),
-    radial-gradient(ellipse 120% 90% at 100% 108%, var(--tt-mesh-violet), transparent 58%),
-    radial-gradient(ellipse 100% 75% at 0% 102%, var(--tt-mesh-amber), transparent 52%),
-    radial-gradient(ellipse 85% 55% at 50% 100%, var(--tt-mesh-mint), transparent 48%),
-    radial-gradient(ellipse 70% 45% at 72% 18%, var(--tt-mesh-rose), transparent 42%);
+    radial-gradient(circle 1.2px at 91% 62%, var(--tt-sparkle), transparent 1.5px);
   background-attachment: fixed;
 }
 
