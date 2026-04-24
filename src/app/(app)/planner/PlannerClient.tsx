@@ -1941,7 +1941,7 @@ export function PlannerClient({
                   {showGoToTodayPill ? (
                     <button
                       type="button"
-                      className="min-h-11 rounded-full border border-gold/40 bg-gold/90 px-3 font-serif text-xs font-semibold text-[#0B1E5C] shadow-sm transition hover:bg-gold"
+                      className="min-h-11 rounded-full border border-gold/40 bg-gold/90 px-3 font-serif text-xs font-semibold text-royal shadow-sm transition hover:bg-gold"
                       onClick={() => {
                         const todayKey = formatDateKey(new Date());
                         const el = document.getElementById(
@@ -2050,7 +2050,7 @@ export function PlannerClient({
           ) : null}
 
           <section
-            className="mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-royal/15 bg-gradient-to-br from-cream via-white to-[color-mix(in_srgb,var(--tt-ring)_7%,#faf8f3)] px-3 py-3 shadow-sm ring-1 ring-gold/20"
+            className="mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-royal/15 bg-gradient-to-br from-cream via-white to-[color-mix(in_srgb,var(--tt-ring)_7%,#fce7cc)] px-3 py-3 shadow-sm ring-1 ring-gold/20"
             aria-label="Trip actions"
           >
             <button

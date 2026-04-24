@@ -156,23 +156,23 @@ export function KeyDatesPanel({ trip, className = "" }: Props) {
 
   return (
     <section
-      className={`rounded-2xl border border-royal/12 bg-[#FAF8F3] p-4 shadow-sm sm:p-5 ${className}`}
+      className={`rounded-2xl border border-royal/12 bg-cream p-4 shadow-sm sm:p-5 ${className}`}
       aria-labelledby="key-dates-heading"
     >
       <h3
         id="key-dates-heading"
-        className="font-serif text-lg font-semibold text-[#0B1E5C]"
+        className="font-serif text-lg font-semibold text-royal"
       >
         {`📅 Key dates & booking windows`}
       </h3>
-      <p className="mt-1 font-sans text-sm text-[#0B1E5C]/70">
+      <p className="mt-1 font-sans text-sm text-royal/70">
         Important dates to put in your calendar before you travel.
       </p>
       <ul className="mt-4 space-y-3">
         {rows.map((row) => (
           <li
             key={`${row.id}-${row.dateKey}`}
-            className="rounded-xl border border-[#0B1E5C]/10 bg-white px-3 py-3 sm:px-4"
+            className="rounded-xl border border-royal/10 bg-white px-3 py-3 sm:px-4"
           >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
               <div className="min-w-0 flex-1">
@@ -181,11 +181,11 @@ export function KeyDatesPanel({ trip, className = "" }: Props) {
                     {row.icon}
                   </span>
                   <div className="min-w-0">
-                    <p className="font-sans text-sm font-semibold text-[#0B1E5C]">
+                    <p className="font-sans text-sm font-semibold text-royal">
                       {row.label}
                     </p>
                     {row.notes ? (
-                      <p className="mt-1 font-sans text-xs italic leading-snug text-[#0B1E5C]/60">
+                      <p className="mt-1 font-sans text-xs italic leading-snug text-royal/60">
                         {row.notes}
                       </p>
                     ) : null}

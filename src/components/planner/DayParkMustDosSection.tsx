@@ -94,7 +94,7 @@ export function DayParkMustDosSection({
               key={parkId}
               className="rounded-xl border border-royal/12 bg-white/90 p-3"
             >
-              <div className="mb-3 rounded-r-md border-l-[3px] border-l-[#C9A961] bg-[#FAF8F3] p-3 text-sm text-royal/85">
+              <div className="mb-3 rounded-r-md border-l-[3px] border-l-gold bg-cream p-3 text-sm text-royal/85">
                 AI suggestions for {name}. We don&apos;t have detailed ride data
                 for this park yet — verify times, heights, and closures on the
                 official site before you go.
@@ -159,15 +159,15 @@ export function DayParkMustDosSection({
                         />
                         <span className="min-w-0 flex-1">
                           <span className="flex flex-wrap items-center gap-2">
-                            <span className="font-sans text-sm font-semibold text-[#0B1E5C]">
+                            <span className="font-sans text-sm font-semibold text-royal">
                               {m.title}
                             </span>
-                            <span className="inline-flex rounded-full border border-royal/15 bg-white px-2 py-0.5 font-sans text-[10px] font-medium text-[#0B1E5C]/80">
+                            <span className="inline-flex rounded-full border border-royal/15 bg-white px-2 py-0.5 font-sans text-[10px] font-medium text-royal/80">
                               {timingPillLabel(m.timing)}
                             </span>
                           </span>
                           {m.why ? (
-                            <span className="mt-0.5 block text-sm text-[#0B1E5C]/70">
+                            <span className="mt-0.5 block text-sm text-royal/70">
                               {m.why}
                             </span>
                           ) : null}

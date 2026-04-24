@@ -1,6 +1,6 @@
-const ROYAL = "#0B1E5C";
-const GOLD = "#C9A961";
-const CREAM = "#FAF8F3";
+const ROYAL = "#2455ac";
+const GOLD = "#dd4e14";
+const CREAM = "#fce7cc";
 
 export function brandEmailShell(bodyHtml: string): string {
   return `<!DOCTYPE html>

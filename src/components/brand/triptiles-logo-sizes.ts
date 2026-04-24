@@ -1,9 +1,9 @@
 /**
  * Full wordmark (`/images/triptiles-logo.png`) — not the Tripp mascot.
- * Sticky nav: lean on small screens (tap targets, menu), ~5× old 48px mark on xl+.
+ * App nav: compact, readable, doesn't dominate the header (~32-40px).
  */
 export const TRIP_TILES_LOGO_NAV_IMG_CLASS =
-  "h-20 w-auto max-w-[min(100%,20rem)] sm:h-28 md:h-40 lg:h-52 xl:h-60";
+  "h-8 w-auto max-w-[10rem] sm:h-9 md:h-10";
 
 /** Centred auth / wizard — big enough to read, leaves room for the form on phones. */
 export const TRIP_TILES_LOGO_AUTH_IMG_CLASS =

@@ -48,7 +48,7 @@ export function FeedbackWidget() {
           setStatus("idle");
           setError(null);
         }}
-        className="fixed bottom-5 right-5 z-50 hidden h-14 w-14 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-transparent bg-cream shadow-lg shadow-royal/20 ring-offset-2 ring-offset-cream transition hover:scale-110 hover:ring-2 hover:ring-[#C9A961] md:flex"
+        className="fixed bottom-5 right-5 z-50 hidden h-14 w-14 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-transparent bg-cream shadow-lg shadow-royal/20 ring-offset-2 ring-offset-cream transition hover:scale-110 hover:ring-2 hover:ring-gold md:flex"
         aria-label="Chat with Tripp"
       >
         {/* eslint-disable-next-line @next/next/no-img-element -- fixed-size mascot crop */}

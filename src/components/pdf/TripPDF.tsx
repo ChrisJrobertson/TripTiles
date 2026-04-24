@@ -47,9 +47,9 @@ export type PdfExportMode =
   | "payments_schedule";
 
 const COLOURS = {
-  royal: "#0B1E5C",
-  gold: "#C9A961",
-  cream: "#FAF8F3",
+  royal: "#2455ac",
+  gold: "#dd4e14",
+  cream: "#fce7cc",
   muted: "#888888",
 };
 

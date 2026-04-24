@@ -198,7 +198,7 @@ function SortableRideRow({
       ref={setNodeRef}
       style={style}
       className={`flex flex-wrap items-center gap-2 border-b border-[#E5E1D8]/80 py-2 font-sans text-xs text-royal last:border-b-0 sm:text-[13px] ${
-        isDragging ? "z-10 rounded-md bg-white shadow-md ring-2 ring-[#0B1E5C] ring-offset-1" : ""
+        isDragging ? "z-10 rounded-md bg-white shadow-md ring-2 ring-royal ring-offset-1" : ""
       }`}
     >
       <button
@@ -520,7 +520,7 @@ export function ExpandedDayPanel({
         className={
           embedded
             ? "w-full px-1 py-2"
-            : "w-full border-y border-[#E5E1D8] bg-[#FAF8F3] px-3 py-4 sm:px-4"
+            : "w-full border-y border-[#E5E1D8] bg-cream px-3 py-4 sm:px-4"
         }
       >
         <div className="flex items-start justify-between gap-2">

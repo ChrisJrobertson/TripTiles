@@ -35,7 +35,7 @@ function tierLabel(tier: UserTier | null, tierLoadError: boolean): string {
 }
 
 function ManageSubscriptionControl({
-  className = "hidden min-h-11 items-center justify-center rounded-full border border-royal/20 bg-white/90 px-3 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-royal/5 disabled:opacity-60 sm:inline-flex",
+  className = "hidden items-center justify-center rounded-full border border-royal/20 bg-white/90 px-2.5 py-1.5 font-sans text-xs font-medium text-royal shadow-sm transition hover:bg-royal/5 disabled:opacity-60 sm:inline-flex",
 }: {
   className?: string;
 }) {
@@ -112,11 +112,12 @@ function AppNavHeaderFallback({
   const showTripRatio = typeof cap === "number";
   const upgradeNav = showUpgradeNavCta ?? isLegacyFreeNav;
   return (
-    <header className="sticky top-0 z-30 border-b border-royal/[0.12] bg-white/70 px-4 py-2 sm:py-3 shadow-[0_1px_0_rgb(201_169_97_/_0.12)] backdrop-blur-xl backdrop-saturate-150">
-      <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+    <header className="sticky top-0 z-30 border-b border-royal/[0.12] bg-white/70 px-4 py-2 shadow-[0_1px_0_rgb(201_169_97_/_0.12)] backdrop-blur-xl backdrop-saturate-150">
+      <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-4">
+        <div className="flex items-center gap-x-3 sm:gap-x-4">
           <TripTilesLogoLink
             href="/planner"
+            imgClassName="h-8 w-auto sm:h-9 md:h-10"
             className="inline-flex shrink-0 items-center transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream rounded-sm"
           />
           <details className="relative sm:hidden">
@@ -212,31 +213,24 @@ function AppNavHeaderFallback({
             Feedback
           </Link>
           <span
-            className="hidden rounded-full border border-royal/15 bg-white/80 px-2.5 py-0.5 font-sans text-xs font-medium text-royal/75 sm:inline"
-            title="Your plan"
+            className="hidden rounded-full border border-royal/15 bg-white/80 px-2 py-0.5 font-sans text-xs font-medium text-royal/75 sm:inline"
+            title={showTripRatio ? `Your plan: ${tripCount}/${cap} trips` : "Your plan"}
           >
             {badge}
-            {showTripRatio ? (
-              <>
-                {" "}
-                · {tripCount}/{cap} trip
-                {cap === 1 ? "" : "s"}
-              </>
-            ) : null}
           </span>
           {stripeCustomerId ? <ManageSubscriptionControl /> : null}
           {upgradeNav ? (
             <Link
               href="/pricing"
-              className="hidden min-h-11 min-w-11 items-center justify-center rounded-full bg-gold/90 px-3 py-1 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-gold sm:inline-flex"
+              className="hidden items-center justify-center rounded-full bg-gold/90 px-2.5 py-1.5 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-gold sm:inline-flex"
             >
               Upgrade
             </Link>
           ) : null}
         </div>
-        <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+        <div className="flex items-center gap-2 sm:gap-3">
           <span
-            className="max-w-[min(100%,14rem)] truncate font-sans text-sm text-royal/70"
+            className="hidden max-w-[10rem] truncate font-sans text-sm text-royal/70 sm:inline"
             title={userEmail}
           >
             {userEmail}
@@ -321,11 +315,12 @@ function AppNavHeaderInner({
     );
 
   return (
-    <header className="sticky top-0 z-30 border-b border-royal/[0.12] bg-white/70 px-4 py-2 sm:py-3 shadow-[0_1px_0_rgb(201_169_97_/_0.12)] backdrop-blur-xl backdrop-saturate-150">
-      <div className="mx-auto flex w-full max-w-screen-2xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+    <header className="sticky top-0 z-30 border-b border-royal/[0.12] bg-white/70 px-4 py-2 shadow-[0_1px_0_rgb(201_169_97_/_0.12)] backdrop-blur-xl backdrop-saturate-150">
+      <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-4">
+        <div className="flex items-center gap-x-3 sm:gap-x-4">
           <TripTilesLogoLink
             href="/planner"
+            imgClassName="h-8 w-auto sm:h-9 md:h-10"
             className="inline-flex shrink-0 items-center transition hover:opacity-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-cream rounded-sm"
           />
           <details className="relative sm:hidden">
@@ -451,31 +446,24 @@ function AppNavHeaderInner({
             Feedback
           </Link>
           <span
-            className="hidden rounded-full border border-royal/15 bg-white/80 px-2.5 py-0.5 font-sans text-xs font-medium text-royal/75 sm:inline"
-            title="Your plan"
+            className="hidden rounded-full border border-royal/15 bg-white/80 px-2 py-0.5 font-sans text-xs font-medium text-royal/75 sm:inline"
+            title={showTripRatio ? `Your plan: ${tripCount}/${cap} trips` : "Your plan"}
           >
             {badge}
-            {showTripRatio ? (
-              <>
-                {" "}
-                · {tripCount}/{cap} trip
-                {cap === 1 ? "" : "s"}
-              </>
-            ) : null}
           </span>
           {stripeCustomerId ? <ManageSubscriptionControl /> : null}
           {upgradeNav ? (
             <Link
               href="/pricing"
-              className="hidden min-h-11 min-w-11 items-center justify-center rounded-full bg-gold/90 px-3 py-1 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-gold sm:inline-flex"
+              className="hidden items-center justify-center rounded-full bg-gold/90 px-2.5 py-1.5 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-gold sm:inline-flex"
             >
               Upgrade
             </Link>
           ) : null}
         </div>
-        <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+        <div className="flex items-center gap-2 sm:gap-3">
           <span
-            className="max-w-[min(100%,14rem)] truncate font-sans text-sm text-royal/70"
+            className="hidden max-w-[10rem] truncate font-sans text-sm text-royal/70 sm:inline"
             title={userEmail}
           >
             {userEmail}

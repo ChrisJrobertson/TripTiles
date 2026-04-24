@@ -26,11 +26,11 @@ export function SequenceTimeline({
   const rope = sequence.rope_drop_recommendation?.trim();
 
   return (
-    <div className="space-y-4 text-[color:#0B1E5C]">
+    <div className="space-y-4 text-royal">
       {rope ? (
         <div
           className="flex gap-2 rounded-lg px-3 py-3 shadow-sm"
-          style={{ backgroundColor: "#0B1E5C", color: "#FAF8F3" }}
+          style={{ backgroundColor: "#2455ac", color: "#fce7cc" }}
         >
           <span aria-hidden className="shrink-0 text-lg">
             ✨
@@ -46,22 +46,22 @@ export function SequenceTimeline({
             return (
               <li
                 key={`${item.type}-${item.order}`}
-                className="rounded-r-lg border-l-4 border-[#0B1E5C] bg-white/90 py-3 pl-3 pr-2 shadow-sm"
+                className="rounded-r-lg border-l-4 border-royal bg-white/90 py-3 pl-3 pr-2 shadow-sm"
               >
-                <div className="font-mono text-sm font-medium text-[#0B1E5C]">
+                <div className="font-mono text-sm font-medium text-royal">
                   {item.time_estimate}
                 </div>
-                <h3 className="font-display text-base font-semibold text-[#0B1E5C]">
+                <h3 className="font-display text-base font-semibold text-royal">
                   {title}
                 </h3>
                 <span
-                  className="mt-1 inline-block rounded-full px-2 py-0.5 font-sans text-xs font-medium text-[#0B1E5C]"
+                  className="mt-1 inline-block rounded-full px-2 py-0.5 font-sans text-xs font-medium text-royal"
                   style={{ backgroundColor: "rgba(201, 169, 97, 0.35)" }}
                 >
                   {item.expected_wait_band}
                 </span>
                 {item.note ? (
-                  <p className="mt-1 font-sans text-xs leading-relaxed text-[#0B1E5C]/75">
+                  <p className="mt-1 font-sans text-xs leading-relaxed text-royal/75">
                     {item.note}
                   </p>
                 ) : null}
@@ -71,12 +71,12 @@ export function SequenceTimeline({
           return (
             <li
               key={`${item.type}-${item.order}`}
-              className="rounded-r-lg border-l-4 border-[#C9A961] py-3 pl-3 pr-2 shadow-sm"
+              className="rounded-r-lg border-l-4 border-gold py-3 pl-3 pr-2 shadow-sm"
               style={{ backgroundColor: "rgba(250, 248, 243, 0.65)" }}
             >
               <div
                 className="font-mono text-sm font-medium"
-                style={{ color: "#C9A961" }}
+                style={{ color: "#dd4e14" }}
               >
                 {item.time_window}
               </div>
@@ -94,11 +94,11 @@ export function SequenceTimeline({
       </ol>
 
       {sequence.dining_suggestions.length > 0 ? (
-        <div className="rounded-lg border-2 border-[#C9A961]/80 bg-white/90 px-3 py-3">
-          <h4 className="font-sans text-sm font-semibold text-[#0B1E5C]">
+        <div className="rounded-lg border-2 border-gold/80 bg-white/90 px-3 py-3">
+          <h4 className="font-sans text-sm font-semibold text-royal">
             Dining gap noticed
           </h4>
-          <ul className="mt-2 list-inside list-disc space-y-1 font-sans text-sm text-[#0B1E5C]/85">
+          <ul className="mt-2 list-inside list-disc space-y-1 font-sans text-sm text-royal/85">
             {sequence.dining_suggestions.map((line, i) => (
               <li key={i}>{line}</li>
             ))}
@@ -119,21 +119,21 @@ export function SequenceTimeline({
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-3 border-t border-[#0B1E5C]/15 pt-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0 font-sans text-xs text-[#0B1E5C]/75">
+      <div className="flex flex-col gap-3 border-t border-royal/15 pt-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0 font-sans text-xs text-royal/75">
           <p>
-            <span className="font-semibold text-[#0B1E5C]">Pace:</span>{" "}
+            <span className="font-semibold text-royal">Pace:</span>{" "}
             {sequence.pace_applied}
           </p>
           {sequence.anchor_confirmation ? (
-            <p className="mt-1 text-[#0B1E5C]/65">{sequence.anchor_confirmation}</p>
+            <p className="mt-1 text-royal/65">{sequence.anchor_confirmation}</p>
           ) : null}
         </div>
         <div className="flex flex-wrap justify-end gap-2">
           <button
             type="button"
             onClick={onRegenerate}
-            className="rounded-lg border border-[#0B1E5C]/25 bg-white px-3 py-2 font-sans text-sm font-medium text-[#0B1E5C] hover:bg-cream"
+            className="rounded-lg border border-royal/25 bg-white px-3 py-2 font-sans text-sm font-medium text-royal hover:bg-cream"
           >
             Regenerate
           </button>
@@ -141,7 +141,7 @@ export function SequenceTimeline({
             type="button"
             disabled
             title="Saving generated sequences to a day is not wired yet."
-            className="rounded-lg bg-[#0B1E5C] px-3 py-2 font-sans text-sm font-semibold text-[#FAF8F3] opacity-50"
+            className="rounded-lg bg-royal px-3 py-2 font-sans text-sm font-semibold text-cream opacity-50"
           >
             Save to day
           </button>
@@ -150,7 +150,7 @@ export function SequenceTimeline({
 
       {/* TODO(V1.1): Persist touring sequence on "Save to day" when schema supports it (client scratch only for now). */}
 
-      <p className="font-sans text-[0.7rem] leading-snug text-[#0B1E5C]/55">
+      <p className="font-sans text-[0.7rem] leading-snug text-royal/55">
         Draft plan based on historic averages. Actual waits will vary — always
         check posted times in-park.
       </p>

@@ -28,8 +28,8 @@ export default async function Image({
           alignItems: "center",
           justifyContent: "center",
           gap: 32,
-          background: "#0B1E5C",
-          color: "#FAF8F3",
+          background: "#2455ac",
+          color: "#fce7cc",
         }}
       >
         <img src={tripp} width={160} height={160} alt="" style={{ objectFit: "contain" }} />
@@ -57,8 +57,8 @@ export default async function Image({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            background: "#0B1E5C",
-            color: "#FAF8F3",
+            background: "#2455ac",
+            color: "#fce7cc",
             fontSize: 36,
           }}
         >
@@ -107,9 +107,9 @@ export default async function Image({
           flexDirection: "column",
           justifyContent: "space-between",
           padding: 48,
-          background: "#0B1E5C",
-          border: "12px solid #C9A961",
-          color: "#FAF8F3",
+          background: "#2455ac",
+          border: "12px solid #dd4e14",
+          color: "#fce7cc",
           fontFamily: "Georgia, serif",
         }}
       >
@@ -126,7 +126,7 @@ export default async function Image({
             style={{
               fontSize: 22,
               letterSpacing: "0.35em",
-              color: "#C9A961",
+              color: "#dd4e14",
               textTransform: "uppercase",
             }}
           >
@@ -145,7 +145,7 @@ export default async function Image({
           <span style={{ fontSize: 56, fontWeight: 700, lineHeight: 1.15 }}>
             {adventureName}
           </span>
-          <span style={{ fontSize: 28, color: "#C9A961" }}>
+          <span style={{ fontSize: 28, color: "#dd4e14" }}>
             {startDate} — {endDate}
           </span>
           <span style={{ fontSize: 24, opacity: 0.9 }}>
@@ -167,8 +167,8 @@ export default async function Image({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#0B1E5C",
-          color: "#FAF8F3",
+          background: "#2455ac",
+          color: "#fce7cc",
           fontSize: 36,
         }}
       >

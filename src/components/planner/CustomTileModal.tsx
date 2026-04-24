@@ -46,9 +46,9 @@ const MODAL_CATEGORY_KEYS = [
 ] as const;
 
 const SWATCHES: { bg: string; label: string }[] = [
-  { bg: "#0B1E5C", label: "Royal" },
-  { bg: "#C9A961", label: "Gold" },
-  { bg: "#FAF8F3", label: "Cream" },
+  { bg: "#2455ac", label: "Royal" },
+  { bg: "#dd4e14", label: "Gold" },
+  { bg: "#fce7cc", label: "Cream" },
   { bg: "#E63946", label: "Rose" },
   { bg: "#2D5016", label: "Forest" },
   { bg: "#006B9F", label: "Ocean" },
@@ -68,7 +68,7 @@ function luminance(hex: string): number {
 }
 
 function fgForBg(bg: string): string {
-  return luminance(bg) > 0.55 ? "#0B1E5C" : "#FAF8F3";
+  return luminance(bg) > 0.55 ? "#2455ac" : "#fce7cc";
 }
 
 type Props = {
@@ -107,8 +107,8 @@ export function CustomTileModal({
   const [name, setName] = useState("");
   const [icon, setIcon] = useState<string | null>(null);
   const [parkGroup, setParkGroup] = useState<string>("dining");
-  const [bg, setBg] = useState("#0B1E5C");
-  const [fg, setFg] = useState("#C9A961");
+  const [bg, setBg] = useState("#2455ac");
+  const [fg, setFg] = useState("#dd4e14");
   const [saveLibrary, setSaveLibrary] = useState(false);
   const [notes, setNotes] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -128,7 +128,7 @@ export function CustomTileModal({
       setSaveLibrary(editingTile.save_to_library);
       setNotes(editingTile.notes ?? "");
     } else {
-      const defaultBg = "#0B1E5C";
+      const defaultBg = "#2455ac";
       setName("");
       setIcon(null);
       setParkGroup(initialCategory);

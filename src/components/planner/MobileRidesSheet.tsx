@@ -244,7 +244,7 @@ export function MobileRidesSheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-2xl border border-royal bg-[#FAF8F3] shadow-2xl transition-transform duration-300 ease-out safe-area-inset-bottom ${
+        className={`absolute inset-x-0 bottom-0 max-h-[88vh] overflow-hidden rounded-t-2xl border border-royal bg-cream shadow-2xl transition-transform duration-300 ease-out safe-area-inset-bottom ${
           open ? "translate-y-0" : "translate-y-full"
         }`}
       >

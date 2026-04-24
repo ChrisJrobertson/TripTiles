@@ -2,18 +2,35 @@
 @config "../../tailwind.config.ts";
 
 :root {
-  /* TripTiles cream + logo “fireworks” mesh — richer than a flat wash. */
-  --background: #faf8f3;
-  --foreground: #171717;
-  --tt-mesh-coral: rgb(232 93 76 / 0.22);
-  --tt-mesh-amber: rgb(240 176 66 / 0.24);
-  --tt-mesh-mint: rgb(52 143 110 / 0.18);
-  --tt-mesh-sky: rgb(37 99 235 / 0.2);
-  --tt-mesh-violet: rgb(109 40 217 / 0.16);
-  --tt-mesh-rose: rgb(236 72 153 / 0.14);
-  --tt-mesh-gold: rgb(201 169 97 / 0.32);
-  --tt-mesh-royal: rgb(11 30 92 / 0.12);
-  --tt-sparkle: rgb(255 255 255 / 0.55);
+  /* TripTiles magical theme park color palette */
+  --background: #fce7cc;
+  --foreground: #1a1a2e;
+
+  /* Primary brand colors */
+  --tt-royal: #2455ac;
+  --tt-gold: #dd4e14;
+  --tt-cream: #fce7cc;
+
+  /* Accent colors */
+  --tt-magic: #3fa2ec;
+  --tt-lime: #a2df56;
+  --tt-sky: #c0d5e0;
+
+  /* Highlight colors */
+  --tt-cyan: #c3f5fd;
+  --tt-pink: #ffb8c2;
+  --tt-lavender: #d5caf8;
+
+  /* Mesh gradient colors derived from palette */
+  --tt-mesh-coral: rgb(221 78 20 / 0.25);
+  --tt-mesh-amber: rgb(252 231 204 / 0.6);
+  --tt-mesh-mint: rgb(162 223 86 / 0.2);
+  --tt-mesh-sky: rgb(63 162 236 / 0.25);
+  --tt-mesh-violet: rgb(213 202 248 / 0.3);
+  --tt-mesh-rose: rgb(255 184 194 / 0.25);
+  --tt-mesh-gold: rgb(221 78 20 / 0.15);
+  --tt-mesh-royal: rgb(36 85 172 / 0.12);
+  --tt-sparkle: rgb(255 255 255 / 0.7);
 }
 
 @theme inline {
@@ -21,22 +38,29 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --color-royal: #0b1e5c;
-  --color-gold: #c9a961;
-  --color-cream: #faf8f3;
-  --color-magic: #2e3192;
+  --color-royal: #2455ac;
+  --color-gold: #dd4e14;
+  --color-cream: #fce7cc;
+  --color-magic: #3fa2ec;
+  --color-lime: #a2df56;
+  --color-sky: #c0d5e0;
+  --color-cyan: #c3f5fd;
+  --color-pink: #ffb8c2;
+  --color-lavender: #d5caf8;
 }
 
 html {
   min-height: 100%;
-  background-color: #faf8f3;
-  /* Layer order: first = top — keep gold “burst” and sparkles readable. */
+  background-color: #fce7cc;
+  /* Magical mesh gradient using new color palette */
   background-image:
+    /* Sparkle overlay */
     radial-gradient(circle 1.25px at 18% 42%, var(--tt-sparkle), transparent 1.6px),
     radial-gradient(circle 1px at 84% 28%, var(--tt-sparkle), transparent 1.3px),
     radial-gradient(circle 1.1px at 62% 78%, var(--tt-sparkle), transparent 1.4px),
     radial-gradient(circle 1px at 31% 88%, var(--tt-sparkle), transparent 1.2px),
     radial-gradient(circle 1.2px at 91% 62%, var(--tt-sparkle), transparent 1.5px),
+    /* Color bursts from palette */
     radial-gradient(ellipse 72% 48% at 50% -5%, var(--tt-mesh-gold), transparent 58%),
     radial-gradient(ellipse 55% 42% at 8% 92%, var(--tt-mesh-royal), transparent 62%),
     radial-gradient(ellipse 130% 95% at 0% -15%, var(--tt-mesh-coral), transparent 58%),
@@ -48,16 +72,38 @@ html {
   background-attachment: fixed;
 }
 
+/* Site background image - magical theme park decorative border */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: -1;
+  background-image: url("/images/site-background.png");
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  opacity: 0.15;
+  pointer-events: none;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #1a1a2e;
+    --foreground: #fce7cc;
   }
 
   html {
-    background-color: #0a0a0a;
+    background-color: #1a1a2e;
     background-image: none;
     background-attachment: scroll;
+  }
+
+  body::before {
+    opacity: 0.08;
+    filter: saturate(0.7);
   }
 }
 
@@ -66,12 +112,6 @@ body {
   background: transparent;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
-}
-
-@media (prefers-color-scheme: dark) {
-  body {
-    background: var(--background);
-  }
 }
 
 @keyframes achievement-card-in {

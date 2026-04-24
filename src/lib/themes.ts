@@ -31,7 +31,7 @@ export const THEMES: Record<ThemeKey, ThemeDefinition> = {
   classic: {
     name: "Classic",
     label: "Classic",
-    ring: "#0B1E5C",
+    ring: "#2455ac",
   },
   pastel: {
     name: "Pastel Dream",

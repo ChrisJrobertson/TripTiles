@@ -65,10 +65,10 @@ export function TierLimitModal({
       aria-modal="true"
       aria-labelledby="tier-limit-title"
     >
-      <div className="w-full max-w-md rounded-2xl border border-gold/40 bg-[#FAF8F3] p-6 shadow-2xl sm:p-8">
+      <div className="w-full max-w-md rounded-2xl border border-gold/40 bg-cream p-6 shadow-2xl sm:p-8">
         <h2
           id="tier-limit-title"
-          className="font-serif text-xl font-semibold text-[#0B1E5C]"
+          className="font-serif text-xl font-semibold text-royal"
         >
           {headingFor(variant, upgradeTargetTier)}
         </h2>
@@ -79,7 +79,7 @@ export function TierLimitModal({
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
             href="/pricing"
-            className="inline-flex flex-1 items-center justify-center rounded-lg bg-[#C9A961] px-4 py-2.5 font-sans text-sm font-semibold text-[#0B1E5C] shadow-sm transition hover:bg-gold/90 sm:flex-none"
+            className="inline-flex flex-1 items-center justify-center rounded-lg bg-gold px-4 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition hover:bg-gold/90 sm:flex-none"
           >
             {ctaLabel}
           </Link>

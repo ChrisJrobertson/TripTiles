@@ -426,7 +426,7 @@ export function PaymentsTab({
                       type="button"
                       onClick={() => void onMarkPaid(p)}
                       disabled={busy || formActive || markingPaidId === p.id}
-                      className="min-h-[44px] min-w-[44px] rounded-lg border-2 border-[#0B1E5C]/25 bg-white px-3 py-2 text-sm font-semibold text-[#0B1E5C] transition hover:bg-[#FAF8F3] disabled:opacity-50"
+                      className="min-h-[44px] min-w-[44px] rounded-lg border-2 border-royal/25 bg-white px-3 py-2 text-sm font-semibold text-royal transition hover:bg-cream disabled:opacity-50"
                     >
                       Mark as paid ✓
                     </button>

@@ -419,7 +419,7 @@ export function Calendar({
                   id={`planner-day-${key}`}
                   className={`relative flex min-h-[8rem] flex-col rounded-md border border-royal/15 bg-white sm:min-h-[9rem] md:min-h-[5.75rem]${
                     highlightDateKey === key
-                      ? " ring-2 ring-[#0B1E5C] ring-offset-2 ring-offset-cream"
+                      ? " ring-2 ring-royal ring-offset-2 ring-offset-cream"
                       : ""
                   }${
                     useDayDetailShell && onOpenDayDetail && !readOnly

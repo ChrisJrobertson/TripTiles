@@ -39,7 +39,7 @@ export function TripTilesLogoLink({
   return (
     <Link href={href} className={className}>
       {framed ? (
-        <span className="inline-flex rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-[#0B1E5C]/[0.08] sm:rounded-3xl sm:p-2">
+        <span className="inline-flex rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-royal/[0.08] sm:rounded-3xl sm:p-2">
           {img}
         </span>
       ) : (

@@ -60,7 +60,7 @@ export function PlannerMoreMenu({ onOpenPanel, disabled }: Props) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
-        className="flex min-h-12 min-w-12 items-center justify-center rounded-lg border border-royal/15 bg-cream px-4 font-serif text-base font-semibold text-[#0B1E5C] shadow-sm transition hover:bg-white"
+        className="flex min-h-12 min-w-12 items-center justify-center rounded-lg border border-royal/15 bg-cream px-4 font-serif text-base font-semibold text-royal shadow-sm transition hover:bg-white"
         onClick={() => setOpen((v) => !v)}
       >
         More <span aria-hidden>▾</span>

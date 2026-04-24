@@ -20,7 +20,7 @@ export const THEME_TRANSFORMS: Record<ThemeKey, ThemeTransform> = {
 
 /** Representative tile colours for the theme picker preview (not from DB). */
 export const THEME_PREVIEW_BASE_HEXES = [
-  "#0B1E5C",
+  "#2455ac",
   "#2E7D32",
   "#E65100",
   "#546E7A",
@@ -186,7 +186,7 @@ export function parkChromaTileStyle(
   themeKey: ThemeKey,
 ): CSSProperties {
   const raw =
-    typeof bgColour === "string" && /^#/.test(bgColour) ? bgColour : "#0B1E5C";
+    typeof bgColour === "string" && /^#/.test(bgColour) ? bgColour : "#2455ac";
   const bg = applyThemeToColour(raw, getThemeTransform(themeKey));
   const color = resolveTileTextColour(themeKey, bg, fgColour);
   return {

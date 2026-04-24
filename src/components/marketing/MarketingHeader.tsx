@@ -5,7 +5,7 @@ export function MarketingHeader() {
   return (
     <header className="sticky top-0 z-20 border-b border-royal/[0.12] bg-white/70 px-6 py-3 shadow-[0_1px_0_rgb(201_169_97_/_0.12)] backdrop-blur-xl backdrop-saturate-150 sm:py-4">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
-        <TripTilesLogoLink href="/" />
+        <TripTilesLogoLink href="/" imgClassName="h-8 w-auto sm:h-9 md:h-10" />
         <nav className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 font-sans text-sm md:gap-x-5">
           <Link href="/plans" className="text-royal/80 hover:text-royal">
             Browse plans

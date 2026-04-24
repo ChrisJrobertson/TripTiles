@@ -35,16 +35,16 @@ export function skipLineBadgeStyle(tier: SkipLineTier | null): {
   backgroundColor: string;
   color: string;
 } {
-  if (!tier) return { backgroundColor: "#0B1E5C", color: "#fff" };
+  if (!tier) return { backgroundColor: "#2455ac", color: "#fff" };
   if (tier === "single_pass")
-    return { backgroundColor: "#C9A961", color: "#fff" };
+    return { backgroundColor: "#dd4e14", color: "#fff" };
   if (tier === "multi_pass_tier1")
-    return { backgroundColor: "#0B1E5C", color: "#fff" };
+    return { backgroundColor: "#2455ac", color: "#fff" };
   if (tier === "multi_pass_tier2")
-    return { backgroundColor: "#4A6FA5", color: "#fff" };
+    return { backgroundColor: "#3fa2ec", color: "#fff" };
   if (tier === "express" || tier === "express_now")
-    return { backgroundColor: "#00A651", color: "#fff" };
-  return { backgroundColor: "#0B1E5C", color: "#fff" };
+    return { backgroundColor: "#a2df56", color: "#fff" };
+  return { backgroundColor: "#2455ac", color: "#fff" };
 }
 
 export function waitMinutesColourClass(minutes: number | null): string {

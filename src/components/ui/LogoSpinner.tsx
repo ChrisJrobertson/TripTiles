@@ -63,7 +63,7 @@ export function LogoSpinner({
       {decorative ? null : <span className="sr-only">Loading</span>}
       {mark}
       {label ? (
-        <span className="mt-2 max-w-xs text-center font-sans text-sm text-[#0B1E5C]/70">
+        <span className="mt-2 max-w-xs text-center font-sans text-sm text-royal/70">
           {label}
         </span>
       ) : null}
@@ -73,7 +73,7 @@ export function LogoSpinner({
   if (fullscreen) {
     return (
       <div
-        className={`absolute inset-0 z-20 flex flex-col items-center justify-center overflow-y-auto overflow-x-hidden bg-[#FAF8F3]/80 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-sm pointer-events-auto ${fullscreenClassName}`.trim()}
+        className={`absolute inset-0 z-20 flex flex-col items-center justify-center overflow-y-auto overflow-x-hidden bg-cream/80 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] backdrop-blur-sm pointer-events-auto ${fullscreenClassName}`.trim()}
         {...(decorative
           ? { "aria-hidden": true as const }
           : {
