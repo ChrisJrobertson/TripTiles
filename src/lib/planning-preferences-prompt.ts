@@ -20,10 +20,19 @@ const PRIORITY_LABELS: Record<string, string> = {
   evenings: "Evening events & fireworks",
 };
 
+export type FormatPlanningPreferencesOpts = {
+  /**
+   * When true, do not include `additionalNotes` here — that text is sent in
+   * `USER CONSTRAINTS` instead (avoids duplication).
+   */
+  omitFreeformFamilyNotes?: boolean;
+};
+
 /** Extra user-message block for Claude from structured wizard answers. */
 export function formatPlanningPreferencesForPrompt(
   prefs: TripPlanningPreferences,
   parkIdToName: Map<string, string>,
+  opts: FormatPlanningPreferencesOpts = {},
 ): string {
   const mustNames = prefs.mustDoParks
     .map((id) => parkIdToName.get(id) ?? id)
@@ -35,9 +44,10 @@ export function formatPlanningPreferencesForPrompt(
     prefs.childAges.length > 0
       ? `Children ages (years): ${prefs.childAges.join(", ")}.`
       : "";
-  const notes = prefs.additionalNotes?.trim()
-    ? `Additional family notes:\n${prefs.additionalNotes.trim()}`
-    : "";
+  const notes =
+    !opts.omitFreeformFamilyNotes && prefs.additionalNotes?.trim()
+      ? `Additional family notes:\n${prefs.additionalNotes.trim()}`
+      : "";
 
   const disneyTips = prefs.includeDisneySkipTips !== false;
   const universalTips = prefs.includeUniversalSkipTips !== false;

@@ -1264,6 +1264,17 @@ export function PlannerClient({
           },
         );
         if (!res.ok) {
+          if (res.error === "SMART_PLAN_TRUNCATED") {
+            setSmartError(
+              res.message ||
+                "Your plan was too long to finish in one go. Please try Regenerate.",
+            );
+            showToast(
+              res.message ||
+                "Your plan was too long to finish. Try again in a moment.",
+            );
+            return;
+          }
           if (res.stoppedEarly) {
             setSmartCanRetryPartial(true);
             setSmartError(res.message || "Stopped early - retry?");

@@ -59,6 +59,11 @@ import {
 } from "@/lib/must-dos";
 import type { ParkMustDo, TripMustDosMap } from "@/types/must-dos";
 import { buildAiParkIdResolver, type AiParkIdResolver } from "@/lib/ai-park-id-coerce";
+import {
+  collectUserBrief,
+  formatCurrentTripAssignmentsBlock,
+} from "@/lib/smart-plan-user-brief";
+import { validateDayNotesAgainstAssignments } from "@/lib/smart-plan-validate";
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY ?? "",
 });
@@ -188,6 +193,14 @@ Rides prefixed with "🔒 BOOKED RETURN HH:MM" have confirmed real-world return 
 - If a booked return conflicts with the rest of the plan (e.g. a dining reservation at the same time), raise it in "planner_day_notes" for that date so the guest can decide — do not silently resolve it.
 
 Booked returns are often paid (Single Pass / Individual Lightning Lane) or time-limited (Multi Pass / Genie+). Protecting them is the single most important job of this plan.
+
+USER CONSTRAINTS RULES
+
+- The "USER CONSTRAINTS" user-message block (when present) contains the guest's own words about bookings, preferences, and commitments.
+- Treat every time-specific statement as an immovable anchor, equivalent in importance to a booked Lightning Lane return. Example: a stated time for a named attraction must be sequenced to match that window, not shuffled to generic rope drop unless the note allows flexibility.
+- Treat every park-specific preference as a hard requirement. Example: "We want to do Hollywood Studios on Tuesday" means Tuesday must match that request for AM/PM slots.
+- If a user constraint conflicts with your crowd-pattern reasoning, the guest's constraint wins. Mention the tradeoff in planner_day_notes so they can decide.
+- You may echo honoured constraints in "skip_line_return_echo" and/or a short "user_constraints_echo" string (UK English) listing what you respected.
 
 MUST_DOS (full-trip mode):
 - For each date key under "must_dos", include an entry ONLY for each park id you place in that day's am/pm/lunch/dinner slots (the same id strings as in "assignments").
@@ -488,7 +501,8 @@ export type GenerateAIPlanResult =
         | "TRIP_NOT_FOUND"
         | "TIER_LIMIT"
         | "TIER_AI_DISABLED"
-        | "AI_ERROR";
+        | "AI_ERROR"
+        | "SMART_PLAN_TRUNCATED";
       message: string;
       partialResponse?: string;
       stoppedEarly?: boolean;
@@ -545,6 +559,10 @@ function buildPlannerUserMessage(params: {
   cruiseInstruction: string;
   childAges: string;
   crowdJson: string;
+  /** Collected `collectUserBrief` output (empty if none). */
+  userBrief: string;
+  /** Preformatted `formatCurrentTripAssignmentsBlock` (empty for day scope). */
+  fullTripAssignmentsBlock: string;
   /** Structured wizard answers (optional). */
   wizardContext: string | null;
   /** Nearby dining names for day-note hints only (optional). */
@@ -559,13 +577,14 @@ function buildPlannerUserMessage(params: {
 }): string {
   const {
     mode,
-    userPrompt,
     dateKey,
     regionName,
     trip,
     cruiseInstruction,
     childAges,
     crowdJson,
+    userBrief,
+    fullTripAssignmentsBlock,
     wizardContext,
     diningHint,
     namedRestaurantHint,
@@ -573,6 +592,22 @@ function buildPlannerUserMessage(params: {
     dayRidePicksLines,
     preserveExistingSlots,
   } = params;
+
+  const userConstraintsBlock =
+    userBrief.trim().length > 0
+      ? `USER CONSTRAINTS (verbatim — treat as immovable)
+
+${userBrief.trim()}
+
+END USER CONSTRAINTS
+
+`
+      : "";
+
+  const fullTripBlock =
+    !dateKey && fullTripAssignmentsBlock.trim().length > 0
+      ? `${fullTripAssignmentsBlock.trim()}\n\n`
+      : "";
 
   const crowdSection =
     crowdJson === "{}"
@@ -631,33 +666,34 @@ function buildPlannerUserMessage(params: {
     : "CRUISE TILES: This trip does not include a cruise. Do not suggest or assign cruise-only, ship-only, or port-excursion tiles (for example at sea, ship pool, shore excursion) unless the traveller has explicitly asked for them in their notes.";
 
   if (mode === "smart") {
-    const extra = userPrompt.trim();
-    return `${coreTrip}
+    const smartIntro = dateKey
+      ? "DAY-SCOPED SMART PLAN — refine this single calendar day using crowd patterns, slot block times, and (if any) the guest ride list. Respect locked calendar slots and notes above. Treat the day as a draft plan from historic patterns, not a guarantee."
+      : `SMART PLAN MODE
+
+Your job is to annotate and complete the guest's existing plan:
+- For dates with assigned parks: generate day_crowd_notes, planner_day_notes, and must_dos for THOSE parks.
+- For dates with empty slots: recommend parks using crowd patterns and the guest's stated preferences, then write matching notes.
+- Generate a trip-wide crowd_reasoning summary that accounts for the actual assignments.
+- Populate must_dos from the parks the guest has assigned, not an idealised plan of your own.`;
+
+    return `${userConstraintsBlock}${fullTripBlock}${coreTrip}
 
 ${crowdSection}
 ${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}${dayPacingAndRidesBlock}
 
-${
-  dateKey
-    ? "DAY-SCOPED SMART PLAN — refine this single calendar day using crowd patterns, slot block times, and (if any) the guest ride list. Respect locked calendar slots and notes above. Treat the day as a draft plan from historic patterns, not a guarantee."
-    : "SMART PLAN MODE — build a full itinerary using crowd patterns to place busier parks on historically lighter days within this window. The user did not write a long custom brief."
-}
-${extra ? `Optional family notes from the user:\n${extra}\n` : ""}
-${dateKey ? `For this date only (${dateKey}), add planner_day_notes with 1–2 practical tips tied to that date and assigned parks.` : "For each trip day, add planner_day_notes with 1–2 practical tips tied to that date and the parks you assign (rope drop times, virtual queues, rest-day ideas, dining). Keep each value concise. Skip generic advice that applies to every day."}
+${smartIntro}
+${dateKey ? `For this date only (${dateKey}), add planner_day_notes with 1–2 practical tips tied to that date and the parks in CALENDAR / assignments.` : "For each trip day, add planner_day_notes with 1–2 practical tips tied to that date and the parks you use in assignments (rope drop, virtual queues, rest-day ideas, dining). Keep each value concise. Skip generic advice that applies to every day."}
 
 Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and planner_day_notes when possible).`;
   }
 
-  return `${coreTrip}
+  return `${userConstraintsBlock}${fullTripBlock}${coreTrip}
 
 ${crowdSection}
 ${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}${dayPacingAndRidesBlock}
 
-CUSTOM PROMPT MODE — apply the traveller's preferences first, then use crowd patterns to improve date choices.
-
-Traveller's own words:
-${userPrompt.trim() || "(empty — rely on trip defaults only.)"}
-
+CUSTOM PROMPT MODE — apply the USER CONSTRAINTS block and TRIP WIZARD PREFERENCES first, then use crowd patterns to improve date choices.
+${!userConstraintsBlock.trim() ? `\n(The guest did not add a freeform brief — use structured preferences above and trip defaults.)\n` : ""}
 ${dateKey ? `For this date only (${dateKey}), add planner_day_notes with 1–2 practical tips tied to that date and assigned parks.` : "For each trip day, add planner_day_notes with 1–2 practical tips tied to that date and the parks you assign. Keep each value concise."}
 
 Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and planner_day_notes when possible).`;
@@ -919,11 +955,18 @@ export async function runGenerateAIPlan(
   );
 
   const parkIdToName = new Map(parksForPrompt.map((p) => [p.id, p.name]));
+  const userBrief = collectUserBrief(trip, {
+    inlineUserPrompt: input.userPrompt,
+  });
+  const fullTripAssignmentsBlock = normalizedDateKey
+    ? ""
+    : formatCurrentTripAssignmentsBlock(trip, parksById);
   const wizardContext =
     trip.planning_preferences != null
       ? formatPlanningPreferencesForPrompt(
           trip.planning_preferences,
           parkIdToName,
+          { omitFreeformFamilyNotes: true },
         )
       : null;
 
@@ -951,6 +994,8 @@ export async function runGenerateAIPlan(
   const composedUserMessage = buildPlannerUserMessage({
     mode: input.mode,
     userPrompt: input.userPrompt,
+    userBrief,
+    fullTripAssignmentsBlock,
     dateKey: normalizedDateKey ?? undefined,
     regionName: `${region.name} (${region.country})`,
     trip,
@@ -1001,59 +1046,107 @@ export async function runGenerateAIPlan(
       let streamStoppedEarly = false;
 
       try {
-        logAiGen({
-          step: "anthropic_call_start",
-          tripId: input.tripId,
-          userId: user.id,
-          regionId: rid,
-          mode: input.mode,
-          parksCount: parksForPrompt.length,
-          details: { planAttempt },
-        });
-        const stream = await anthropic.messages.create({
-          model,
-          max_tokens: 8192,
-          stream: true,
-          system: [
-            {
-              type: "text",
-              text: SYSTEM_PROMPT,
-              cache_control: { type: "ephemeral" },
-            },
-            {
-              type: "text",
-              text: parksSystemText,
-              cache_control: { type: "ephemeral" },
-            },
-          ],
-          messages: [{ role: "user", content: currentUserMessage }],
-        });
+        const SMART_MAIN_MAX = 16_384;
+        const SMART_RETRY_MAX = 20_000;
+        let lastStopReason: string | null = null;
+        tokenTries: for (let tPass = 0; tPass < 2; tPass++) {
+          const maxTok = tPass === 0 ? SMART_MAIN_MAX : SMART_RETRY_MAX;
+          lastStopReason = null;
+          rawText = "";
+          logAiGen({
+            step: "anthropic_call_start",
+            tripId: input.tripId,
+            userId: user.id,
+            regionId: rid,
+            mode: input.mode,
+            parksCount: parksForPrompt.length,
+            details: { planAttempt, tPass, maxTokens: maxTok },
+          });
+          const stream = await anthropic.messages.create({
+            model,
+            max_tokens: maxTok,
+            stream: true,
+            system: [
+              {
+                type: "text",
+                text: SYSTEM_PROMPT,
+                cache_control: { type: "ephemeral" },
+              },
+              {
+                type: "text",
+                text: parksSystemText,
+                cache_control: { type: "ephemeral" },
+              },
+            ],
+            messages: [{ role: "user", content: currentUserMessage }],
+          });
 
-        for await (const event of stream) {
-          if (event.type === "message_start") {
-            const usage = event.message.usage as
-              | AnthropicMessageUsage
-              | undefined;
-            localInputTokens = inputTokensFromUsage(usage);
-            localOutputTokens = usage?.output_tokens ?? localOutputTokens;
-            continue;
-          }
-          if (event.type === "message_delta") {
-            const usage = event.usage as AnthropicMessageUsage | undefined;
-            localOutputTokens = usage?.output_tokens ?? localOutputTokens;
-            continue;
-          }
-          if (
-            event.type === "content_block_delta" &&
-            event.delta.type === "text_delta"
-          ) {
-            const delta = event.delta.text;
-            if (!delta) continue;
-            rawText += delta;
-            if (options.onTextDelta) {
-              await options.onTextDelta(delta);
+          for await (const event of stream) {
+            if (event.type === "message_start") {
+              const usage = event.message.usage as
+                | AnthropicMessageUsage
+                | undefined;
+              localInputTokens = inputTokensFromUsage(usage);
+              localOutputTokens = usage?.output_tokens ?? localOutputTokens;
+              continue;
+            }
+            if (event.type === "message_delta") {
+              const md = event as {
+                type: "message_delta";
+                usage?: AnthropicMessageUsage;
+                delta?: { stop_reason?: string | null };
+              };
+              const usage = md.usage;
+              localOutputTokens = usage?.output_tokens ?? localOutputTokens;
+              if (md.delta?.stop_reason) {
+                lastStopReason = md.delta.stop_reason;
+              }
+              continue;
+            }
+            if (
+              event.type === "content_block_delta" &&
+              event.delta.type === "text_delta"
+            ) {
+              const delta = event.delta.text;
+              if (!delta) continue;
+              rawText += delta;
+              if (options.onTextDelta) {
+                await options.onTextDelta(delta);
+              }
             }
           }
+          if (lastStopReason === "max_tokens" && tPass < 1) {
+            logAiGen({
+              step: "anthropic_max_tokens_retry",
+              tripId: input.tripId,
+              userId: user.id,
+              details: { planAttempt, nextMax: SMART_RETRY_MAX },
+            });
+            continue tokenTries;
+          }
+          break tokenTries;
+        }
+        if (lastStopReason === "max_tokens") {
+          inputTokens = localInputTokens;
+          outputTokens = localOutputTokens;
+          await supabase.from("ai_generations").insert({
+            user_id: user.id,
+            trip_id: input.tripId,
+            prompt: currentUserMessage,
+            model,
+            input_tokens: localInputTokens,
+            output_tokens: localOutputTokens,
+            cost_gbp_pence: null,
+            success: false,
+            status: "truncated",
+            error: "stop_reason: max_tokens (after output budget increase)",
+          });
+          return {
+            ok: false,
+            error: "SMART_PLAN_TRUNCATED",
+            message:
+              "Your plan was too long to finish in one go. Please tap Regenerate to try again — we give the model more room on the next run. If that keeps happening, try shorter notes or email hello@triptiles.app.",
+          };
         }
         logAiGen({
           step: "anthropic_call_success",
@@ -1064,6 +1157,7 @@ export async function runGenerateAIPlan(
             outputTokens: localOutputTokens,
             latencyMs: Date.now() - t0,
             planAttempt,
+            lastStopReason,
           },
         });
       } catch (streamError) {
@@ -1314,6 +1408,21 @@ export async function runGenerateAIPlan(
       });
     }
 
+    const dayNoteAssignmentCheck = validateDayNotesAgainstAssignments(
+      meta.planner_day_notes,
+      trip.assignments,
+      parksForPrompt,
+      fullDateAllow,
+    );
+    if (dayNoteAssignmentCheck.warningText) {
+      logAiGen({
+        step: "planner_day_notes_park_mismatch",
+        tripId: input.tripId,
+        userId: user.id,
+        details: { warning: dayNoteAssignmentCheck.warningText },
+      });
+    }
+
     const guarded = enforceAiPlanGuardrails(sanitized, {
       trip,
       parksById,
@@ -1443,18 +1552,22 @@ export async function runGenerateAIPlan(
       return { ok: false, error: "AI_ERROR", message: upErr.message };
     }
 
-    const { error: genInsertErr } = await supabase.from("ai_generations").insert({
-      user_id: user.id,
-      trip_id: input.tripId,
-      prompt: currentUserMessage,
-      model,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      cost_gbp_pence: null,
-      success: true,
-      status: "success",
-      error: null,
-    });
+    const { error: genInsertErr } = await supabase
+      .from("ai_generations")
+      .insert({
+        user_id: user.id,
+        trip_id: input.tripId,
+        prompt: currentUserMessage,
+        model,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_gbp_pence: null,
+        success: true,
+        status: dayNoteAssignmentCheck.warningText
+          ? "success_with_warnings"
+          : "success",
+        error: dayNoteAssignmentCheck.warningText,
+      });
 
     if (genInsertErr) {
       return {
@@ -1851,6 +1964,8 @@ Rules:
 - Respect park operating hours. Rope drop arrival is 30 min before open.
 - Families with young children need rest breaks in peak heat (>= 30°C) and shorter evenings.
 - Do not invent attractions. Only use the park names provided in the context.
+- When the user message includes "USER CONSTRAINTS", treat that block as immovable. Day notes, crowd hints, and timeline titles for this date must match the park(s) the guest has in their calendar for this day — not a different headline park.
+- The guest's calendar slots for this date take precedence for park identity; nudge, never override silently.
 
 Output format: a single JSON object, no markdown fences, no prose outside the JSON, matching this TypeScript type:
 
@@ -1897,6 +2012,7 @@ function buildTripMetadataForDayTimelineCache(trip: Trip, regionName: string): s
 }
 
 function buildDayTimelineUserMessage(params: {
+  userConstraintsBlock: string;
   trip: Trip;
   dateKey: string;
   amName: string;
@@ -1914,7 +2030,8 @@ function buildDayTimelineUserMessage(params: {
     params.trip.child_ages.length > 0
       ? params.trip.child_ages.join(", ")
       : "n/a";
-  return `Trip: ${params.trip.adventure_name} — ${params.trip.destination} — ${params.trip.adults} adults, ${params.trip.children} children (ages ${childAges}).
+  const uBlock = params.userConstraintsBlock.trim();
+  return `${uBlock ? `${uBlock}\n\n` : ""}Trip: ${params.trip.adventure_name} — ${params.trip.destination} — ${params.trip.adults} adults, ${params.trip.children} children (ages ${childAges}).
 Date: ${params.dateKey} (${w}).
 Weather: ${params.tempC}°C, ${params.weatherSummary}.
 Crowd level for this day: ${params.crowdLevel}.
@@ -2214,7 +2331,16 @@ export async function generateDayTimeline(
     trip.planning_preferences?.includeUniversalSkipTips !== false;
   const skipLineOn = skipDisney || skipUniversal;
 
+  const brief = collectUserBrief(trip, {});
+  const userConstraintsBlock = brief
+    ? `USER CONSTRAINTS (verbatim — treat as immovable)
+
+${brief}
+
+END USER CONSTRAINTS`
+    : "";
   const userBlock = buildDayTimelineUserMessage({
+    userConstraintsBlock,
     trip,
     dateKey,
     amName,
@@ -2253,9 +2379,12 @@ export async function generateDayTimeline(
   let outputTokens = 0;
 
   try {
-    const msg = await anthropic.messages.create({
+    const DAY_TL_MAX = 8192;
+    const DAY_TL_MAX_RETRY = 12_000;
+    let msg: Awaited<ReturnType<typeof anthropic.messages.create>>;
+    msg = await anthropic.messages.create({
       model,
-      max_tokens: 8192,
+      max_tokens: DAY_TL_MAX,
       system: [
         {
           type: "text",
@@ -2275,6 +2404,53 @@ export async function generateDayTimeline(
       ],
       messages: [{ role: "user", content: userBlock }],
     });
+    if (msg.stop_reason === "max_tokens") {
+      msg = await anthropic.messages.create({
+        model,
+        max_tokens: DAY_TL_MAX_RETRY,
+        system: [
+          {
+            type: "text",
+            text: DAY_TIMELINE_SYSTEM,
+            cache_control: { type: "ephemeral" },
+          },
+          {
+            type: "text",
+            text: tripMetaCache,
+            cache_control: { type: "ephemeral" },
+          },
+          {
+            type: "text",
+            text: parksSystemText,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages: [{ role: "user", content: userBlock }],
+      });
+    }
+    if (msg.stop_reason === "max_tokens") {
+      const uFail = msg.usage as AnthropicMessageUsage | undefined;
+      inputTokens = inputTokensFromUsage(uFail);
+      outputTokens = uFail?.output_tokens ?? 0;
+      await supabase.from("ai_generations").insert({
+        user_id: user.id,
+        trip_id: tripId,
+        prompt: `day_timeline:${dateKey}\n${userBlock}`,
+        model,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_gbp_pence: null,
+        success: false,
+        status: "truncated",
+        error: "stop_reason: max_tokens (day_timeline, after budget increase)",
+      });
+      return {
+        ok: false,
+        error:
+          "The day plan was cut off before it finished. Please try again — if it keeps happening, use shorter guest notes for this day.",
+        code: "ai_failure",
+      };
+    }
     const block0 = msg.content[0];
     const rawText = block0?.type === "text" ? block0.text : "";
     const usage = msg.usage as AnthropicMessageUsage | undefined;

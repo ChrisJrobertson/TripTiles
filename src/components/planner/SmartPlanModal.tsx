@@ -36,7 +36,7 @@ import {
   type FormEvent,
 } from "react";
 
-const MAX_CHARS = 500;
+const MAX_CHARS = 2000;
 const DEFAULT_FREE_CAP = 5;
 
 const SEQUENCER_STATUS_LINES = [
@@ -407,7 +407,10 @@ export function SmartPlanModal({
             };
     await onGenerate({
       mode,
-      userPrompt: mode === "smart" ? "" : customText.trim(),
+      userPrompt:
+        mode === "smart"
+          ? additionalNotes.trim()
+          : customText.trim(),
       replaceExistingTiles,
       dateKey: isDayScope ? (dayDateKey ?? undefined) : undefined,
       planningPreferences,
