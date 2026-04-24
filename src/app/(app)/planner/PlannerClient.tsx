@@ -3,6 +3,7 @@
 import {
   assignmentWithUpdatedSlotTime,
   countFilledSlots,
+  getParkIdFromSlotValue,
 } from "@/lib/assignment-slots";
 import {
   generateAIPlanAction,
@@ -32,8 +33,18 @@ import {
   getConflictDotSummaryForTrip,
   getRidePrioritiesForDay,
   getRidePrioritiesForTrip,
+  updateRidePriorityMeta,
   type DayConflictDotSummary,
 } from "@/actions/ride-priorities";
+import {
+  anchorsAtRiskOnSlotClear,
+  anchorsAtRiskOnSlotParkChange,
+  type BookingAnchor,
+} from "@/lib/booking-anchor-risk";
+import {
+  BookingConflictModal,
+  type BookingConflictAction,
+} from "@/components/planner/BookingConflictModal";
 import { Calendar } from "@/components/planner/Calendar";
 import { CompareDaysPanel } from "@/components/planner/CompareDaysPanel";
 import { CrowdStrategyBanner } from "@/components/planner/CrowdStrategyBanner";
@@ -129,7 +140,6 @@ import { customTileToPark } from "@/lib/types";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  startTransition,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -340,6 +350,16 @@ async function streamGeneratePlan(
 
 type AchievementToastItem = { id: string; def: AchievementDefinition };
 
+type PlannerSlotBooking = {
+  dayDate: string;
+  action: BookingConflictAction;
+  anchors: BookingAnchor[];
+  newParkName?: string;
+  pending:
+    | { kind: "assign"; dateKey: string; slot: SlotType; parkId: string }
+    | { kind: "clear"; dateKey: string; slot: SlotType };
+};
+
 export function PlannerClient({
   initialTrips,
   parks,
@@ -467,6 +487,8 @@ export function PlannerClient({
   >("client");
   const [calendarConflictDotSummary, setCalendarConflictDotSummary] =
     useState<DayConflictDotSummary>({});
+  const [plannerSlotBooking, setPlannerSlotBooking] =
+    useState<PlannerSlotBooking | null>(null);
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
 
   const cataloguedParkIdSet = useMemo(
@@ -668,6 +690,28 @@ export function PlannerClient({
           ...items,
         ];
         return { ...prev, [activeTripId]: merged };
+      });
+    },
+    [activeTripId],
+  );
+
+  const parkByIdPlanner = useMemo(
+    () => new Map(parks.map((p) => [p.id, p] as const)),
+    [parks],
+  );
+
+  const patchClearSkipLineReturnsOnDay = useCallback(
+    (dayDate: string, attractionIds: string[]) => {
+      if (!activeTripId || attractionIds.length === 0) return;
+      setRidePrioritiesByTripId((prev) => {
+        const list = prev[activeTripId] ?? [];
+        const idSet = new Set(attractionIds);
+        const next = list.map((r) =>
+          r.day_date === dayDate && idSet.has(r.attraction_id)
+            ? { ...r, skip_line_return_hhmm: null }
+            : r,
+        );
+        return { ...prev, [activeTripId]: next };
       });
     },
     [activeTripId],
@@ -1418,7 +1462,7 @@ export function PlannerClient({
     trips,
   ]);
 
-  const onAssign = useCallback(
+  const applySlotAssign = useCallback(
     (dateKey: string, slot: SlotType, parkId: string) => {
       if (!activeTripId) return;
       setTrips((prev) =>
@@ -1444,7 +1488,7 @@ export function PlannerClient({
     [activeTripId, scheduleAssignmentsSave],
   );
 
-  const onClear = useCallback(
+  const applySlotClear = useCallback(
     (dateKey: string, slot: SlotType) => {
       if (!activeTripId) return;
       setTrips((prev) =>
@@ -1469,6 +1513,76 @@ export function PlannerClient({
       );
     },
     [activeTripId, scheduleAssignmentsSave],
+  );
+
+  const onAssign = useCallback(
+    (dateKey: string, slot: SlotType, parkId: string) => {
+      if (!activeTripId) return;
+      const t = trips.find((x) => x.id === activeTripId);
+      if (!t) return;
+      const day = t.assignments[dateKey] ?? {};
+      const oldSlotVal = day[slot];
+      const oldPark = getParkIdFromSlotValue(oldSlotVal);
+      const dayRows = ridePrioritiesByDayForActiveTrip[dateKey] ?? [];
+      const atRisk = anchorsAtRiskOnSlotParkChange(
+        oldPark,
+        parkId,
+        dayRows,
+        parkByIdPlanner,
+      );
+      if (atRisk.length > 0) {
+        setPlannerSlotBooking({
+          dayDate: dateKey,
+          action: "park-change",
+          anchors: atRisk,
+          newParkName: parkByIdPlanner.get(parkId)?.name,
+          pending: { kind: "assign", dateKey, slot, parkId },
+        });
+        return;
+      }
+      applySlotAssign(dateKey, slot, parkId);
+    },
+    [
+      activeTripId,
+      trips,
+      ridePrioritiesByDayForActiveTrip,
+      parkByIdPlanner,
+      applySlotAssign,
+    ],
+  );
+
+  const onClear = useCallback(
+    (dateKey: string, slot: SlotType) => {
+      if (!activeTripId) return;
+      const t = trips.find((x) => x.id === activeTripId);
+      if (!t) return;
+      const day = t.assignments[dateKey] ?? {};
+      const oldSlotVal = day[slot];
+      const oldPark = getParkIdFromSlotValue(oldSlotVal);
+      const dayRows = ridePrioritiesByDayForActiveTrip[dateKey] ?? [];
+      const atRisk = anchorsAtRiskOnSlotClear(
+        oldPark,
+        dayRows,
+        parkByIdPlanner,
+      );
+      if (atRisk.length > 0) {
+        setPlannerSlotBooking({
+          dayDate: dateKey,
+          action: "slot-clear",
+          anchors: atRisk,
+          pending: { kind: "clear", dateKey, slot },
+        });
+        return;
+      }
+      applySlotClear(dateKey, slot);
+    },
+    [
+      activeTripId,
+      trips,
+      ridePrioritiesByDayForActiveTrip,
+      parkByIdPlanner,
+      applySlotClear,
+    ],
   );
 
   const onSlotTimeChange = useCallback(
@@ -2784,8 +2898,57 @@ export function PlannerClient({
               : null
           }
           onTripPatch={(patch) => applyLocalPatch(activeTrip.id, patch)}
+          ridePrioritiesByDayForTrip={ridePrioritiesByDayForActiveTrip}
         />
       ) : null}
+
+      <BookingConflictModal
+        open={plannerSlotBooking != null}
+        dayDate={plannerSlotBooking?.dayDate ?? ""}
+        action={plannerSlotBooking?.action ?? "park-change"}
+        anchors={plannerSlotBooking?.anchors ?? []}
+        newParkName={plannerSlotBooking?.newParkName}
+        onKeepBooking={() => setPlannerSlotBooking(null)}
+        onDismiss={() => setPlannerSlotBooking(null)}
+        onProceedKeepBooking={() => {
+          const b = plannerSlotBooking;
+          if (!b) return;
+          setPlannerSlotBooking(null);
+          if (b.pending.kind === "assign") {
+            applySlotAssign(b.pending.dateKey, b.pending.slot, b.pending.parkId);
+          } else {
+            applySlotClear(b.pending.dateKey, b.pending.slot);
+          }
+        }}
+        onProceedClearBooking={() => {
+          const b = plannerSlotBooking;
+          if (!b || !activeTripId) return;
+          setPlannerSlotBooking(null);
+          void (async () => {
+            for (const a of b.anchors) {
+              await updateRidePriorityMeta(
+                activeTripId,
+                a.attractionId,
+                b.dayDate,
+                { skipLineReturnHhmm: null },
+              );
+            }
+            patchClearSkipLineReturnsOnDay(
+              b.dayDate,
+              b.anchors.map((x) => x.attractionId),
+            );
+            if (b.pending.kind === "assign") {
+              applySlotAssign(
+                b.pending.dateKey,
+                b.pending.slot,
+                b.pending.parkId,
+              );
+            } else {
+              applySlotClear(b.pending.dateKey, b.pending.slot);
+            }
+          })();
+        }}
+      />
 
       {surpriseUndo ? (
         <div className="fixed bottom-24 left-1/2 z-[92] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-2xl border border-royal/15 bg-white px-4 py-3 shadow-xl safe-area-inset-bottom">

@@ -55,7 +55,6 @@ export function buildBookFirstSkipNudges(
   for (const r of top) {
     const nm = attractionName(r);
     const ret = r.skip_line_return_hhmm?.trim();
-    const w = r.pasted_queue_minutes;
     if (ret) {
       lines.push(
         `Prioritise ${nm} around your ${ret} return — stack your next bookable headliner after that window.`,

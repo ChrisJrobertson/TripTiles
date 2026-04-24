@@ -178,6 +178,17 @@ Shape:
 
 Optional skip_line_return_echo: ONLY if the user message already lists guest BOOKED return times. Repeat those times here as structured { attraction_id, hhmm } for the correct trip date. Use the exact attraction_id strings from the ride list in the user message. Never invent return times, attraction ids, or hhmm values that the guest did not supply.
 
+BOOKED RETURN CONSTRAINTS
+
+Rides prefixed with "🔒 BOOKED RETURN HH:MM" have confirmed real-world return windows. These are immovable:
+
+- DO NOT suggest removing, replacing, or rescheduling a booked ride.
+- DO sequence other activities around the booked return time. The guest must be physically able to reach the ride for the window.
+- DO acknowledge each booked return in the "skip_line_return_echo" field of your JSON response, matching the exact HH:mm and the same ride as in the user list (use the "attraction_id" from the ride list for that date, plus "hhmm").
+- If a booked return conflicts with the rest of the plan (e.g. a dining reservation at the same time), raise it in "planner_day_notes" for that date so the guest can decide — do not silently resolve it.
+
+Booked returns are often paid (Single Pass / Individual Lightning Lane) or time-limited (Multi Pass / Genie+). Protecting them is the single most important job of this plan.
+
 MUST_DOS (full-trip mode):
 - For each date key under "must_dos", include an entry ONLY for each park id you place in that day's am/pm/lunch/dinner slots (the same id strings as in "assignments").
 - Each park: 4–6 objects in rough chronological order (rope drop → morning → … → evening). "timing" must be one of: rope_drop, morning, midday, afternoon, evening.

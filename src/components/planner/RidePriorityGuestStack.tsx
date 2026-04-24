@@ -13,6 +13,8 @@ type Props = {
   onSaveReturn: (next: string | null) => void;
   onSaveNote: (next: string | null) => void;
   onSavePasted: (next: number | null) => void;
+  /** Warning line from clash detection; informational only. */
+  clashMessage?: string | null;
 };
 
 /**
@@ -26,6 +28,7 @@ export function RidePriorityGuestStack({
   onSaveReturn,
   onSaveNote,
   onSavePasted,
+  clashMessage,
 }: Props) {
   const noteId = useId();
   const waitId = useId();
@@ -114,6 +117,7 @@ export function RidePriorityGuestStack({
         value={row.skip_line_return_hhmm}
         onSave={onSaveReturn}
         disabled={disabled}
+        clashMessage={clashMessage}
       />
       <div className="flex flex-col gap-0.5">
         <label

@@ -1,13 +1,19 @@
 "use client";
 
+import { updateRidePriorityMeta } from "@/actions/ride-priorities";
+import { BookingConflictModal } from "@/components/planner/BookingConflictModal";
+import {
+  anchorsOnTargetDay,
+  type BookingAnchor,
+} from "@/lib/booking-anchor-risk";
 import { formatUndoSnapshotHint } from "@/lib/date-helpers";
 import type { DayTemplatePayload } from "@/types/day-template";
 import type { Tier } from "@/lib/tier";
-import type { Trip } from "@/lib/types";
+import type { Park, Trip } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
 import { sortPrioritiesForDay } from "@/lib/ride-plan-display";
 import { plannerUserDayNotes } from "@/lib/planner-note-maps";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type TemplateRow = {
   id: string;
@@ -163,6 +169,8 @@ export function ApplyTemplateDialog({
   tripId,
   dayDate,
   productTier,
+  rideRowsForTargetDay,
+  parks,
   onLocked,
   onApplied,
 }: {
@@ -171,6 +179,8 @@ export function ApplyTemplateDialog({
   tripId: string;
   dayDate: string;
   productTier: Tier;
+  rideRowsForTargetDay: TripRidePriority[];
+  parks: Park[];
   onLocked: () => void;
   onApplied: () => void;
 }) {
@@ -178,6 +188,14 @@ export function ApplyTemplateDialog({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [merge, setMerge] = useState<"append" | "replace">("append");
   const [busy, setBusy] = useState(false);
+  const [replaceTemplateAnchors, setReplaceTemplateAnchors] = useState<
+    BookingAnchor[] | null
+  >(null);
+
+  const parkById = useMemo(
+    () => new Map(parks.map((p) => [p.id, p] as const)),
+    [parks],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -203,43 +221,66 @@ export function ApplyTemplateDialog({
     };
   }, [open, onLocked]);
 
-  const apply = useCallback(async () => {
+  useEffect(() => {
+    if (!open) setReplaceTemplateAnchors(null);
+  }, [open]);
+
+  const runApplyRequest = useCallback(
+    async (mergeMode: "append" | "replace") => {
+      if (productTier === "free") {
+        onLocked();
+        return;
+      }
+      if (!selectedId) return;
+      setBusy(true);
+      try {
+        const res = await fetch(`/api/day-templates/${selectedId}/apply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tripId, date: dayDate, merge: mergeMode }),
+        });
+        if (res.status === 403) {
+          onLocked();
+          return;
+        }
+        if (!res.ok) throw new Error();
+        onApplied();
+        onClose();
+      } finally {
+        setBusy(false);
+      }
+    },
+    [productTier, selectedId, tripId, dayDate, onLocked, onApplied, onClose],
+  );
+
+  const apply = useCallback(() => {
     if (productTier === "free") {
       onLocked();
       return;
     }
     if (!selectedId) return;
-    setBusy(true);
-    try {
-      const res = await fetch(`/api/day-templates/${selectedId}/apply`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tripId, date: dayDate, merge }),
-      });
-      if (res.status === 403) {
-        onLocked();
+    if (merge === "replace") {
+      const at = anchorsOnTargetDay(rideRowsForTargetDay, parkById);
+      if (at.length > 0) {
+        setReplaceTemplateAnchors(at);
         return;
       }
-      if (!res.ok) throw new Error();
-      onApplied();
-      onClose();
-    } finally {
-      setBusy(false);
     }
+    void runApplyRequest(merge);
   }, [
     productTier,
     selectedId,
-    tripId,
-    dayDate,
     merge,
+    rideRowsForTargetDay,
+    parkById,
     onLocked,
-    onApplied,
-    onClose,
+    runApplyRequest,
   ]);
 
   if (!open) return null;
 
   return (
+    <>
     <div
       className="fixed inset-0 z-[120] flex items-end justify-center bg-royal/50 p-0 sm:items-center sm:p-4"
       role="dialog"
@@ -312,7 +353,7 @@ export function ApplyTemplateDialog({
               type="button"
               className="min-h-11 flex-1 rounded-lg bg-royal px-4 font-sans text-sm font-semibold text-cream disabled:opacity-50"
               disabled={busy || !selectedId}
-              onClick={() => void apply()}
+              onClick={() => apply()}
             >
               Apply
             </button>
@@ -327,5 +368,36 @@ export function ApplyTemplateDialog({
         </div>
       </div>
     </div>
+    <BookingConflictModal
+      open={replaceTemplateAnchors != null}
+      dayDate={dayDate}
+      action="day-replace"
+      anchors={replaceTemplateAnchors ?? []}
+      onKeepBooking={() => setReplaceTemplateAnchors(null)}
+      onDismiss={() => setReplaceTemplateAnchors(null)}
+      onProceedKeepBooking={() => {
+        const a = replaceTemplateAnchors;
+        if (!a) return;
+        setReplaceTemplateAnchors(null);
+        void runApplyRequest(merge);
+      }}
+      onProceedClearBooking={() => {
+        const a = replaceTemplateAnchors;
+        if (!a) return;
+        setReplaceTemplateAnchors(null);
+        void (async () => {
+          for (const anchor of a) {
+            await updateRidePriorityMeta(
+              tripId,
+              anchor.attractionId,
+              dayDate,
+              { skipLineReturnHhmm: null },
+            );
+          }
+          await runApplyRequest(merge);
+        })();
+      }}
+    />
+    </>
   );
 }

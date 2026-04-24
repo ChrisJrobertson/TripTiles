@@ -892,6 +892,12 @@ export function Calendar({
             <ExpandedDayPanel
               tripId={trip.id}
               dayDate={expandedDay}
+              dayAssignment={trip.assignments[expandedDay] as
+                | Partial<Assignment>
+                | undefined}
+              plannerPreferences={
+                trip.preferences as Record<string, unknown> | null | undefined
+              }
               parkIds={parkIdsAmPmForDay(trip, expandedDay)}
               childAges={trip.child_ages ?? []}
               ridePriorities={ridePrioritiesByDay[expandedDay] ?? []}

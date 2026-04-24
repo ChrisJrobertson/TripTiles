@@ -1,13 +1,20 @@
 "use client";
 
+import { updateRidePriorityMeta } from "@/actions/ride-priorities";
+import { BookingConflictModal } from "@/components/planner/BookingConflictModal";
+import {
+  anchorsOnTargetDay,
+  type BookingAnchor,
+} from "@/lib/booking-anchor-risk";
 import {
   eachDateKeyInRange,
   formatDateISO,
   parseDate,
 } from "@/lib/date-helpers";
 import type { Tier } from "@/lib/tier";
-import type { Trip } from "@/lib/types";
-import { useCallback, useMemo, useState } from "react";
+import type { Park, Trip } from "@/lib/types";
+import type { TripRidePriority } from "@/types/attractions";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const WEEK: { dow: number; label: string }[] = [
   { dow: 1, label: "Mon" },
@@ -28,6 +35,8 @@ type Props = {
   productTier: Tier;
   onLockedPaidTemplates: () => void;
   onSuccess: () => void;
+  ridePrioritiesByDay: Record<string, TripRidePriority[]>;
+  parks: Park[];
 };
 
 export function DuplicateDayModal({
@@ -39,12 +48,23 @@ export function DuplicateDayModal({
   productTier,
   onLockedPaidTemplates,
   onSuccess,
+  ridePrioritiesByDay,
+  parks,
 }: Props) {
   const [tab, setTab] = useState<"specific" | "recurring">("specific");
   const [merge, setMerge] = useState<"append" | "replace">("append");
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [weekdays, setWeekdays] = useState<Set<number>>(() => new Set());
   const [busy, setBusy] = useState(false);
+  const [replaceDayAnchors, setReplaceDayAnchors] = useState<{
+    targets: string[];
+    anchors: BookingAnchor[];
+  } | null>(null);
+
+  const parkById = useMemo(
+    () => new Map(parks.map((p) => [p.id, p] as const)),
+    [parks],
+  );
 
   const rangeKeys = useMemo(
     () => eachDateKeyInRange(trip.start_date, trip.end_date),
@@ -88,51 +108,71 @@ export function DuplicateDayModal({
     });
   };
 
+  const runDuplicateRequest = useCallback(
+    async (targetList: string[], mergeMode: "append" | "replace") => {
+      setBusy(true);
+      try {
+        const res = await fetch(
+          `/api/trip/${tripId}/day/${encodeURIComponent(sourceDate)}/duplicate`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              targets: targetList,
+              merge: mergeMode,
+              source: tab === "recurring" ? "recurring-weekday" : "specific",
+            }),
+          },
+        );
+        if (res.status === 403) {
+          onLockedPaidTemplates();
+          return;
+        }
+        if (!res.ok) throw new Error();
+        onSuccess();
+        onClose();
+      } finally {
+        setBusy(false);
+      }
+    },
+    [tab, tripId, sourceDate, onLockedPaidTemplates, onSuccess, onClose],
+  );
+
   const submit = useCallback(async () => {
     if (tab === "recurring" && productTier === "free") {
       onLockedPaidTemplates();
       return;
     }
     if (targets.length === 0) return;
-    setBusy(true);
-    try {
-      const res = await fetch(
-        `/api/trip/${tripId}/day/${encodeURIComponent(sourceDate)}/duplicate`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            targets,
-            merge,
-            source: tab === "recurring" ? "recurring-weekday" : "specific",
-          }),
-        },
+    if (merge === "replace") {
+      const allAnchors = targets.flatMap((d) =>
+        anchorsOnTargetDay(ridePrioritiesByDay[d] ?? [], parkById),
       );
-      if (res.status === 403) {
-        onLockedPaidTemplates();
+      if (allAnchors.length > 0) {
+        setReplaceDayAnchors({ targets: [...targets], anchors: allAnchors });
         return;
       }
-      if (!res.ok) throw new Error();
-      onSuccess();
-      onClose();
-    } finally {
-      setBusy(false);
     }
+    await runDuplicateRequest(targets, merge);
   }, [
     tab,
     productTier,
     targets,
     merge,
-    tripId,
-    sourceDate,
+    ridePrioritiesByDay,
+    parkById,
     onLockedPaidTemplates,
-    onSuccess,
-    onClose,
+    runDuplicateRequest,
   ]);
+
+  useEffect(() => {
+    if (!open) setReplaceDayAnchors(null);
+  }, [open]);
 
   if (!open) return null;
 
   return (
+    <>
     <div
       className="fixed inset-0 z-[120] flex items-end justify-center bg-royal/50 p-0 sm:items-center sm:p-4"
       role="dialog"
@@ -287,5 +327,37 @@ export function DuplicateDayModal({
         </div>
       </div>
     </div>
+    <BookingConflictModal
+      open={replaceDayAnchors != null}
+      dayDate={replaceDayAnchors?.targets[0] ?? sourceDate}
+      action="day-replace"
+      anchors={replaceDayAnchors?.anchors ?? []}
+      onKeepBooking={() => setReplaceDayAnchors(null)}
+      onDismiss={() => setReplaceDayAnchors(null)}
+      onProceedKeepBooking={() => {
+        const g = replaceDayAnchors;
+        if (!g) return;
+        setReplaceDayAnchors(null);
+        void runDuplicateRequest(g.targets, merge);
+      }}
+      onProceedClearBooking={() => {
+        const g = replaceDayAnchors;
+        if (!g) return;
+        setReplaceDayAnchors(null);
+        void (async () => {
+          for (const d of g.targets) {
+            const rows = ridePrioritiesByDay[d] ?? [];
+            for (const r of rows) {
+              if (!r.skip_line_return_hhmm?.trim()) continue;
+              await updateRidePriorityMeta(tripId, r.attraction_id, d, {
+                skipLineReturnHhmm: null,
+              });
+            }
+          }
+          await runDuplicateRequest(g.targets, merge);
+        })();
+      }}
+    />
+    </>
   );
 }

@@ -42,7 +42,21 @@ import {
 import type { Attraction, TripRidePriority } from "@/types/attractions";
 import { buildBookFirstSkipNudges } from "@/lib/book-first-skip-nudges";
 import { showToast } from "@/lib/toast";
+import {
+  anchorForRideRemoval,
+  type BookingAnchor,
+} from "@/lib/booking-anchor-risk";
+import {
+  BookingConflictModal,
+} from "@/components/planner/BookingConflictModal";
+import {
+  aiTimelineClashItemsFromPreferences,
+  detectSkipLineClashes,
+  selectPreferredClashMessage,
+  userSlotTimesFromAssignment,
+} from "@/lib/skip-line-clashes";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Assignment } from "@/lib/types";
 
 export type ExpandedDayPanelProps = {
   tripId: string;
@@ -51,6 +65,10 @@ export type ExpandedDayPanelProps = {
   childAges: number[];
   ridePriorities: TripRidePriority[];
   parks: Park[];
+  /** That day’s calendar slots (object slots → clash times). */
+  dayAssignment?: Partial<Assignment>;
+  /** `trips.preferences` for `ai_day_timeline` (ADR / show clash hints). */
+  plannerPreferences?: Record<string, unknown> | null;
   onClose: () => void;
   onPrioritiesUpdated: (items: TripRidePriority[]) => void;
   /** Hides title, close, and legend — used inside Day Detail shell. */
@@ -100,6 +118,7 @@ function RideRow({
   onSaveNote,
   onSavePasted,
   pending,
+  clashMessage,
 }: {
   row: TripRidePriority;
   canUp: boolean;
@@ -111,6 +130,7 @@ function RideRow({
   onSaveNote: (next: string | null) => void;
   onSavePasted: (next: number | null) => void;
   pending: boolean;
+  clashMessage?: string | null;
 }) {
   const a = row.attraction;
   if (!a) return null;
@@ -142,6 +162,7 @@ function RideRow({
           onSaveReturn={onSaveReturn}
           onSaveNote={onSaveNote}
           onSavePasted={onSavePasted}
+          clashMessage={clashMessage}
         />
       </div>
       <span className="flex shrink-0 gap-0.5">
@@ -198,6 +219,7 @@ function SortableRideRow({
   onSaveNote,
   onSavePasted,
   pending,
+  clashMessage,
 }: {
   row: TripRidePriority;
   onToggleIcon: () => void;
@@ -205,6 +227,7 @@ function SortableRideRow({
   onSaveNote: (next: string | null) => void;
   onSavePasted: (next: number | null) => void;
   pending: boolean;
+  clashMessage?: string | null;
 }) {
   const {
     attributes,
@@ -267,6 +290,7 @@ function SortableRideRow({
           onSaveReturn={onSaveReturn}
           onSaveNote={onSaveNote}
           onSavePasted={onSavePasted}
+          clashMessage={clashMessage}
         />
       </div>
       {badge ? (
@@ -303,6 +327,8 @@ export function ExpandedDayPanel({
   childAges,
   ridePriorities,
   parks,
+  dayAssignment,
+  plannerPreferences = null,
   onClose,
   onPrioritiesUpdated,
   embedded = false,
@@ -317,6 +343,28 @@ export function ExpandedDayPanel({
   const sorted = useMemo(
     () => sortPrioritiesForDay(ridePriorities),
     [ridePriorities],
+  );
+
+  const skipLineClashByRideId = useMemo(() => {
+    const aiTimelineItems = aiTimelineClashItemsFromPreferences(
+      plannerPreferences ?? undefined,
+      dayDate,
+    );
+    const userSlotTimes = userSlotTimesFromAssignment(dayAssignment, parkById);
+    const rideInputs = sorted.map((r) => ({
+      id: r.id,
+      attractionName: r.attraction?.name ?? "Ride",
+      skipLineReturnHhmm: r.skip_line_return_hhmm,
+    }));
+    return detectSkipLineClashes({
+      rides: rideInputs,
+      aiTimelineItems,
+      userSlotTimes,
+    });
+  }, [sorted, dayDate, dayAssignment, parkById, plannerPreferences]);
+
+  const [rideRemoveAnchor, setRideRemoveAnchor] = useState<BookingAnchor | null>(
+    null,
   );
 
   const mustRows = sorted.filter((r) => r.priority === "must_do");
@@ -462,9 +510,12 @@ export function ExpandedDayPanel({
       );
       return;
     }
-    runMutation(() =>
-      removeRidePriority(tripId, row.attraction_id, dayDate),
-    );
+    const anchor = anchorForRideRemoval(row, parkById);
+    if (anchor) {
+      setRideRemoveAnchor(anchor);
+      return;
+    }
+    runMutation(() => removeRidePriority(tripId, row.attraction_id, dayDate));
   };
 
   const moveWithinSection = (
@@ -713,6 +764,9 @@ export function ExpandedDayPanel({
                       )
                     }
                     pending={pending}
+                    clashMessage={selectPreferredClashMessage(
+                      skipLineClashByRideId.get(row.id),
+                    )}
                   />
                 ))}
               </SortableContext>
@@ -765,6 +819,9 @@ export function ExpandedDayPanel({
                       )
                     }
                     pending={pending}
+                    clashMessage={selectPreferredClashMessage(
+                      skipLineClashByRideId.get(row.id),
+                    )}
                   />
                 ))}
               </SortableContext>
@@ -821,6 +878,9 @@ export function ExpandedDayPanel({
                     )
                   }
                   pending={pending}
+                  clashMessage={selectPreferredClashMessage(
+                    skipLineClashByRideId.get(row.id),
+                  )}
                 />
               ))
             )}
@@ -872,6 +932,9 @@ export function ExpandedDayPanel({
                     )
                   }
                   pending={pending}
+                  clashMessage={selectPreferredClashMessage(
+                    skipLineClashByRideId.get(row.id),
+                  )}
                 />
               ))
             )}
@@ -908,6 +971,37 @@ export function ExpandedDayPanel({
           </ul>
         </div>
       ) : null}
+
+      <BookingConflictModal
+        open={rideRemoveAnchor != null}
+        dayDate={dayDate}
+        action="ride-remove"
+        anchors={rideRemoveAnchor ? [rideRemoveAnchor] : []}
+        onKeepBooking={() => setRideRemoveAnchor(null)}
+        onDismiss={() => setRideRemoveAnchor(null)}
+        onProceedKeepBooking={() => {
+          const a = rideRemoveAnchor;
+          if (!a) return;
+          setRideRemoveAnchor(null);
+          runMutation(() => removeRidePriority(tripId, a.attractionId, dayDate));
+        }}
+        onProceedClearBooking={() => {
+          const a = rideRemoveAnchor;
+          if (!a) return;
+          setRideRemoveAnchor(null);
+          runMutation(() =>
+            (async () => {
+              await updateRidePriorityMeta(
+                tripId,
+                a.attractionId,
+                dayDate,
+                { skipLineReturnHhmm: null },
+              );
+              await removeRidePriority(tripId, a.attractionId, dayDate);
+            })(),
+          );
+        }}
+      />
     </div>
   );
 }

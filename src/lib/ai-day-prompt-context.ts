@@ -55,18 +55,23 @@ export function formatDayRidePicksForPrompt(rows: TripRidePriority[]): string | 
   if (withNames.length === 0) return null;
   return withNames
     .map((r) => {
-      const tag = r.priority === "must_do" ? "must-do" : "if time";
+      const role = r.priority === "must_do" ? "must-do" : "if time";
       const n = r.attraction!.name;
-      const park = r.attraction!.park_id;
+      const peak = r.attraction!.avg_wait_peak_minutes;
+      const hasTypical = peak != null && Number.isFinite(peak);
+      const roleAndTypical = hasTypical
+        ? `(${role}, ${Math.round(peak)} min typical)`
+        : `(${role})`;
       const note = r.notes?.trim() ? ` — guest note: ${r.notes.trim()}` : "";
-      const ret = r.skip_line_return_hhmm?.trim()
-        ? ` — BOOKED skip-line return ${r.skip_line_return_hhmm.trim()} (honour in pacing; do not plan conflicting heavy experiences here)`
-        : "";
-      const wait =
+      const book = r.skip_line_return_hhmm?.trim();
+      const pasted =
         r.pasted_queue_minutes != null && r.pasted_queue_minutes > 0
           ? ` — guest pasted wait ~${r.pasted_queue_minutes} min (snapshot, not live; use as a soft hint only)`
           : "";
-      return `  - [${tag}] ${n} (park id ${park})${ret}${wait}${note}`;
+      if (book) {
+        return `  - 🔒 BOOKED RETURN ${book} — ${n} ${roleAndTypical}${pasted}${note}`;
+      }
+      return `  - ${n} ${roleAndTypical}${pasted}${note}`;
     })
     .join("\n");
 }

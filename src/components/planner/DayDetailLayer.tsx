@@ -38,7 +38,13 @@ import { buildSkipLineDayTimelineRows } from "@/lib/skip-line-day-timeline";
 import { isThemePark } from "@/lib/park-categories";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import type { Tier } from "@/lib/tier";
-import type { Park, TemperatureUnit, Trip, TripPlanningPreferences } from "@/lib/types";
+import type {
+  Assignment,
+  Park,
+  TemperatureUnit,
+  Trip,
+  TripPlanningPreferences,
+} from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
 import { useRouter } from "next/navigation";
 import {
@@ -118,6 +124,8 @@ export type DayDetailLayerProps = {
   onTripPatch?: (patch: Partial<Trip>) => void;
   /** Parks with a catalogue: never show AI and catalogue for the same `park_id`. */
   cataloguedParkIdSet: ReadonlySet<string>;
+  /** All days’ ride rows for this trip (duplicate / template replace guards). */
+  ridePrioritiesByDayForTrip: Record<string, TripRidePriority[]>;
 };
 
 export function DayDetailLayer({
@@ -139,6 +147,7 @@ export function DayDetailLayer({
   onToggleMustDoDone,
   rideCountsForDay = null,
   onTripPatch,
+  ridePrioritiesByDayForTrip,
 }: DayDetailLayerProps) {
   const router = useRouter();
   const titleId = useId();
@@ -273,7 +282,10 @@ export function DayDetailLayer({
     [trip, dayDate, ridePriorities, rideCountsForDay, parkById],
   );
 
-  const ass = trip.assignments[dayDate] ?? {};
+  const ass = useMemo(
+    () => trip.assignments[dayDate] ?? {},
+    [trip.assignments, dayDate],
+  );
   const meals = (["lunch", "dinner"] as const).map((slot) => {
     const id = getParkIdFromSlotValue(ass[slot]);
     const park = id ? parkById.get(id) : undefined;
@@ -851,6 +863,10 @@ export function DayDetailLayer({
               embedded
               tripId={trip.id}
               dayDate={dayDate}
+              dayAssignment={ass as Partial<Assignment>}
+              plannerPreferences={
+                trip.preferences as Record<string, unknown> | null | undefined
+              }
               parkIds={
                 amPmThemeIdsForRides.length === 0
                   ? []
@@ -985,6 +1001,8 @@ export function DayDetailLayer({
         tripId={trip.id}
         dayDate={dayDate}
         productTier={productTier}
+        rideRowsForTargetDay={ridePriorities}
+        parks={parks}
         onLocked={() => {
           setApplyTplOpen(false);
           openProUpsell();
@@ -1006,6 +1024,8 @@ export function DayDetailLayer({
         tripId={trip.id}
         sourceDate={dayDate}
         productTier={productTier}
+        ridePrioritiesByDay={ridePrioritiesByDayForTrip}
+        parks={parks}
         onLockedPaidTemplates={() => {
           setDupOpen(false);
           openProUpsell();
