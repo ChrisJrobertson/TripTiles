@@ -77,7 +77,7 @@ export function Palette({
 
   if (!hasCatalog && !hasCustom) {
     return (
-      <aside className="rounded-2xl border border-royal/12 bg-cream p-4 text-royal shadow-sm">
+      <aside className="rounded-2xl border border-royal/12 bg-white/45 p-4 text-royal shadow-sm backdrop-blur-md">
         <h2 className="mb-2 font-serif text-base font-semibold text-royal">
           Parks
         </h2>
@@ -91,7 +91,7 @@ export function Palette({
   }
 
   return (
-    <aside className="rounded-2xl border border-royal/12 bg-cream p-4 text-royal shadow-sm">
+    <aside className="rounded-2xl border border-royal/12 bg-white/45 p-4 text-royal shadow-sm backdrop-blur-md">
       <h2 className="mb-3 font-serif text-base font-semibold text-royal">
         Parks
       </h2>

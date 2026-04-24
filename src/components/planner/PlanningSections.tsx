@@ -80,7 +80,7 @@ export function PlanningSections({
           <div
             key={key}
             id={`planning-section-${key}`}
-            className="overflow-hidden rounded-2xl border border-royal/12 bg-white shadow-sm"
+            className="overflow-hidden rounded-2xl border border-royal/12 bg-white/50 shadow-sm backdrop-blur-md"
           >
             <button
               type="button"

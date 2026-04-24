@@ -319,7 +319,7 @@ export function Calendar({
       {skeletonActive ? (
         <div
           aria-hidden
-          className="mb-2 space-y-1 rounded-md border border-royal/10 bg-white p-2"
+          className="mb-2 space-y-1 rounded-md border border-royal/10 bg-white/50 p-2 backdrop-blur-sm"
         >
           <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
             {Array.from({ length: 7 }).map((_, i) => (
@@ -417,9 +417,9 @@ export function Calendar({
                 <div
                   key={key}
                   id={`planner-day-${key}`}
-                  className={`relative flex min-h-[8rem] flex-col rounded-md border border-royal/15 bg-white sm:min-h-[9rem] md:min-h-[5.75rem]${
+                  className={`relative flex min-h-[8rem] flex-col rounded-md border border-royal/15 bg-white/50 backdrop-blur-md sm:min-h-[9rem] md:min-h-[5.75rem]${
                     highlightDateKey === key
-                      ? " ring-2 ring-royal ring-offset-2 ring-offset-cream"
+                      ? " ring-2 ring-royal ring-offset-2 ring-offset-white/50"
                       : ""
                   }${
                     useDayDetailShell && onOpenDayDetail && !readOnly
@@ -451,7 +451,7 @@ export function Calendar({
                       aria-hidden
                     />
                   ) : null}
-                  <div className="relative z-[1] flex items-center justify-between gap-0.5 border-b border-royal/10 bg-white/95 px-1 py-0.5 md:py-1">
+                  <div className="relative z-[1] flex items-center justify-between gap-0.5 border-b border-royal/10 bg-white/60 px-1 py-0.5 backdrop-blur-sm md:py-1">
                     {!readOnly && (onRideDayPrioritiesUpdated || onOpenDayDetail) ? (
                       <button
                         type="button"

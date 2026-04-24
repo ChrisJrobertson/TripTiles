@@ -100,7 +100,7 @@ export function TripStatsCard({
   }
 
   return (
-    <section className="mb-5 rounded-2xl border border-royal/15 bg-white/85 p-4 shadow-md shadow-royal/[0.04] backdrop-blur-sm">
+    <section className="mb-5 rounded-2xl border border-royal/15 bg-white/50 p-4 shadow-md shadow-royal/[0.04] backdrop-blur-md">
       <button
         type="button"
         className="flex w-full min-h-[44px] items-center justify-between gap-2 text-left"

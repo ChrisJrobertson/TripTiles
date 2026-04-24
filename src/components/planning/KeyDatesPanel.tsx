@@ -156,7 +156,7 @@ export function KeyDatesPanel({ trip, className = "" }: Props) {
 
   return (
     <section
-      className={`rounded-2xl border border-royal/12 bg-cream p-4 shadow-sm sm:p-5 ${className}`}
+      className={`rounded-2xl border border-royal/12 bg-white/45 p-4 shadow-sm backdrop-blur-md sm:p-5 ${className}`}
       aria-labelledby="key-dates-heading"
     >
       <h3

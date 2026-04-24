@@ -83,7 +83,7 @@ export function FirstRunChecklist({
   if (embedded) {
     return (
       <details
-        className="group rounded-lg border border-royal/10 bg-white/95 px-3 py-2 shadow-sm"
+        className="group rounded-lg border border-royal/10 bg-white/55 px-3 py-2 shadow-sm backdrop-blur-sm"
         open={tipsOpen}
         onToggle={(e) =>
           setTipsOpen((e.target as HTMLDetailsElement).open)
@@ -110,7 +110,7 @@ export function FirstRunChecklist({
   }
 
   return (
-    <div className="mx-auto mb-6 max-w-3xl rounded-2xl border border-gold/40 bg-white/95 px-4 py-4 shadow-sm sm:px-6">
+    <div className="mx-auto mb-6 max-w-3xl rounded-2xl border border-gold/40 bg-white/50 px-4 py-4 shadow-sm backdrop-blur-md sm:px-6">
       <div className="flex items-start justify-between gap-2">
         <p className="font-serif text-base font-semibold text-royal">
           Welcome — quick start

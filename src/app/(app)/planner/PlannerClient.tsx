@@ -2050,7 +2050,7 @@ export function PlannerClient({
           ) : null}
 
           <section
-            className="mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-royal/15 bg-gradient-to-br from-cream via-white to-[color-mix(in_srgb,var(--tt-ring)_7%,#fce7cc)] px-3 py-3 shadow-sm ring-1 ring-gold/20"
+            className="mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-royal/15 bg-gradient-to-br from-white/40 via-white/30 to-white/25 px-3 py-3 shadow-sm ring-1 ring-gold/20 backdrop-blur-md"
             aria-label="Trip actions"
           >
             <button
