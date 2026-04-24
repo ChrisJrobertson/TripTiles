@@ -1,4 +1,5 @@
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
+import { getPublicAdventureTitleFromRow } from "@/lib/public-trip-display";
 import { getTrippMascotDataUrl } from "@/lib/og/tripp-mascot-data-url";
 import { ImageResponse } from "next/og";
 
@@ -69,7 +70,7 @@ export default async function Image({
     }
 
     const row = tripRow as Record<string, unknown>;
-    const adventureName = String(row.adventure_name ?? "Trip plan");
+    const adventureName = getPublicAdventureTitleFromRow(row);
     const startDate = String(row.start_date ?? "");
     const endDate = String(row.end_date ?? "");
     const regionId =

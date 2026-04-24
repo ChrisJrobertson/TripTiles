@@ -1,3 +1,4 @@
+import { getPublicAdventureTitle } from "@/lib/public-trip-display";
 import { PlannerValueHighlights } from "@/components/marketing/PlannerValueHighlights";
 import { TwoPathPlanningSection } from "@/components/marketing/TwoPathPlanningSection";
 import { getFeaturedRegions } from "@/lib/db/regions";
@@ -460,7 +461,7 @@ export default async function MarketingHomePage() {
                       className="block h-full rounded-2xl border border-royal/10 bg-cream p-5 text-left shadow-sm transition hover:border-gold/40 hover:shadow-md"
                     >
                       <p className="font-serif text-lg font-semibold text-royal">
-                        {trip.adventure_name}
+                        {getPublicAdventureTitle(trip)}
                       </p>
                       <p className="mt-2 font-sans text-xs text-royal/55">
                         {trip.clone_count ?? 0} clones · {trip.view_count ?? 0}{" "}

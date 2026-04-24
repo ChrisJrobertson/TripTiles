@@ -2836,6 +2836,7 @@ export function PlannerClient({
             {adminPanel === "share" ? (
               <ShareTripPanel
                 tripId={activeTrip.id}
+                trip={activeTrip}
                 isPublic={activeTrip.is_public}
                 publicSlug={activeTrip.public_slug}
                 siteUrl={siteUrl}

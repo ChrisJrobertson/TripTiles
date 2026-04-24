@@ -1104,6 +1104,86 @@ export async function updateTripPreferencesPatchAction(input: {
   }
 }
 
+/**
+ * Merges `preferences.public_view` (public /plans page labels). Empty strings clear overrides.
+ * Private `family_name` / `adventure_name` on the trip are never shown on public pages except via these overrides.
+ */
+export async function updateTripPublicViewLabelsAction(input: {
+  tripId: string;
+  familyLabel: string;
+  adventureTitle: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { ok: false, error: "Not signed in." };
+
+    const supabase = await createClient();
+    const { data: row, error: fetchErr } = await supabase
+      .from("trips")
+      .select("preferences, public_slug")
+      .eq("id", input.tripId)
+      .eq("owner_id", user.id)
+      .maybeSingle();
+
+    if (fetchErr) return { ok: false, error: fetchErr.message };
+    if (!row) return { ok: false, error: "Trip not found." };
+
+    const prev =
+      row.preferences &&
+      typeof row.preferences === "object" &&
+      !Array.isArray(row.preferences)
+        ? (row.preferences as Record<string, unknown>)
+        : {};
+    const prevPv =
+      prev.public_view &&
+      typeof prev.public_view === "object" &&
+      !Array.isArray(prev.public_view)
+        ? ({ ...(prev.public_view as Record<string, unknown>) } as Record<
+            string,
+            unknown
+          >)
+        : ({} as Record<string, unknown>);
+
+    const fl = input.familyLabel.trim();
+    const at = input.adventureTitle.trim();
+    if (fl) prevPv.family_label = fl;
+    else delete prevPv.family_label;
+    if (at) prevPv.adventure_title = at;
+    else delete prevPv.adventure_title;
+
+    const nextPv = Object.keys(prevPv).length > 0 ? prevPv : undefined;
+    const next: Record<string, unknown> = { ...prev };
+    if (nextPv) next.public_view = nextPv;
+    else delete next.public_view;
+
+    const { error } = await supabase
+      .from("trips")
+      .update({
+        preferences: next,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.tripId)
+      .eq("owner_id", user.id);
+
+    if (error) return { ok: false, error: error.message };
+
+    revalidatePlanner();
+    revalidatePath("/plans");
+    const slug =
+      row && typeof row === "object" && "public_slug" in row && row.public_slug
+        ? String(row.public_slug)
+        : null;
+    if (slug) revalidatePath(`/plans/${slug}`);
+
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
+  }
+}
+
 export async function updateParkMustDoDoneAction({
   tripId,
   dateISO,

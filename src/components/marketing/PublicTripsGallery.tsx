@@ -1,3 +1,4 @@
+import { getPublicAdventureTitle } from "@/lib/public-trip-display";
 import { computeTripStats } from "@/lib/compute-trip-stats";
 import { getAllParks } from "@/lib/db/parks";
 import {
@@ -168,7 +169,7 @@ export async function PublicTripsGallery({
                     {dest}
                   </p>
                   <h2 className="mt-2 font-serif text-lg font-semibold leading-snug text-royal">
-                    {trip.adventure_name}
+                    {getPublicAdventureTitle(trip)}
                   </h2>
                   <p className="mt-2 font-sans text-xs text-royal/60">
                     {days} days · {stats.parkDays} park days · {stats.restDays}{" "}

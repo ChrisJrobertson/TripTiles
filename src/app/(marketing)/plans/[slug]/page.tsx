@@ -14,6 +14,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { getCurrentUser } from "@/lib/supabase/server";
+import {
+  getPublicAdventureTitle,
+  getPublicFamilyLine,
+} from "@/lib/public-trip-display";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -40,8 +44,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     new Date(trip.end_date).getTime() - new Date(trip.start_date).getTime();
   const days = Math.max(1, Math.floor(dayMs / 86400000) + 1);
 
-  const title = `${trip.adventure_name} · TripTiles`;
-  const description = `A ${days}-day ${dest} community plan — full calendar and day-timeline preview with the same nudges and clash checks as a live trip. Clone to edit in your account.`;
+  const publicTitle = getPublicAdventureTitle(trip);
+  const title = `${publicTitle} · TripTiles`;
+  const description = `A ${days}-day ${dest} plan — read-only calendar & timeline preview. Clone to edit in your account. Group label and title are what the publisher chose for the public page.`;
 
   const base =
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
@@ -51,13 +56,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title,
     description,
     openGraph: {
-      title: trip.adventure_name,
+      title: publicTitle,
       description,
       images: [{ url: `${base}/plans/${slug}/opengraph-image` }],
     },
     twitter: {
       card: "summary_large_image",
-      title: trip.adventure_name,
+      title: publicTitle,
       description,
     },
   };
@@ -123,6 +128,8 @@ export default async function PublicPlanPage({
       ? trip.preferences.ai_crowd_summary.trim()
       : null;
   const crowd = crowdRaw ? sanitizeDayNote(crowdRaw) : null;
+  const publicAdventure = getPublicAdventureTitle(trip);
+  const publicFamily = getPublicFamilyLine(trip);
 
   return (
     <div className="min-h-screen bg-transparent">
@@ -136,20 +143,18 @@ export default async function PublicPlanPage({
         <span className="text-royal/70"> — no credit card.</span>
       </div>
 
-      <div className="border-b border-royal/10 bg-cream/90 px-4 py-3">
-        <div className="mx-auto max-w-6xl font-sans text-sm leading-relaxed text-royal/85">
+      <div className="border-b border-royal/10 bg-white px-4 py-3">
+        <div className="mx-auto max-w-6xl space-y-2 font-sans text-sm leading-relaxed text-royal/80">
           <p>
-            <span className="font-semibold text-royal">What you’re viewing — </span>
-            A live read-only trip: the same grid, day timeline, nudges, and
-            clash checks as a plan in your account — not a static screenshot.
-            Use <span className="font-semibold text-royal">Clone this plan</span>{" "}
-            to make an editable copy with Smart Plan, conflict surfacing, and
-            per-day ride detail.
+            <span className="font-semibold text-royal">Live preview</span> — This
+            is the same calendar, day view, and nudges you get in the app
+            (read-only). <span className="font-medium text-royal">Clone this plan</span>{" "}
+            copies the itinerary to your account to edit, including Smart Plan
+            and clash checks.
           </p>
           {wantsClone && !isAuthed ? (
-            <p className="mt-2 text-royal/75">
-              We&apos;ll ask you to sign in next — you&apos;ll return here to
-              finish the clone, or use Clone this plan on any visit.
+            <p className="text-royal/70">
+              Sign in when prompted, then you&apos;ll return to finish the clone.
             </p>
           ) : null}
         </div>
@@ -165,11 +170,11 @@ export default async function PublicPlanPage({
               <span className="mr-2" aria-hidden>
                 {flag}
               </span>
-              {trip.adventure_name}
+              {publicAdventure}
             </h1>
             <p className="mt-2 font-sans text-sm text-royal/70">
-              {trip.start_date} → {trip.end_date} · Family:{" "}
-              <span className="text-royal">{trip.family_name}</span>
+              {trip.start_date} → {trip.end_date} · Group:{" "}
+              <span className="text-royal">{publicFamily}</span>
             </p>
             <div className="mt-3 flex flex-wrap gap-2 font-sans text-xs text-royal/55">
               <span className="rounded-full bg-cream px-2 py-0.5">
