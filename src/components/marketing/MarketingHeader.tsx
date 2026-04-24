@@ -12,7 +12,7 @@ export function MarketingHeader() {
           />
         </div>
       </div>
-      <div className="border-b border-white/10 bg-white/[0.08] px-6 py-2 shadow-[0_1px_0_0_rgba(11,30,92,0.04)] backdrop-blur-md backdrop-saturate-150">
+      <div className="tt-nav-band border-b border-white/15 bg-transparent px-6 py-2">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-end gap-x-4 gap-y-2 font-sans text-sm md:gap-x-5">
           <Link href="/plans" className="text-ink/80 hover:text-ink">
             Browse plans

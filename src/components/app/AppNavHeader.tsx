@@ -123,7 +123,7 @@ function AppNavHeaderFallback({
           />
         </div>
       </div>
-      <div className="border-b border-white/10 bg-white/[0.08] px-4 py-1.5 shadow-[0_1px_0_0_rgba(11,30,92,0.04)] backdrop-blur-md backdrop-saturate-150">
+      <div className="tt-nav-band border-b border-white/15 bg-transparent px-4 py-1.5">
         <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-x-2 sm:gap-x-3">
             <details className="relative sm:hidden">
@@ -332,7 +332,7 @@ function AppNavHeaderInner({
           />
         </div>
       </div>
-      <div className="border-b border-white/10 bg-white/[0.08] px-4 py-1.5 shadow-[0_1px_0_0_rgba(11,30,92,0.04)] backdrop-blur-md backdrop-saturate-150">
+      <div className="tt-nav-band border-b border-white/15 bg-transparent px-4 py-1.5">
         <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-x-2 sm:gap-x-3">
             <details className="relative sm:hidden">
