@@ -1,5 +1,10 @@
 import type { AiDayTimeline, AiDayTimelineBlock } from "@/lib/types";
-import type { Assignment, Assignments, SlotType } from "@/lib/types";
+import type {
+  Assignment,
+  Assignments,
+  SlotAssignmentValue,
+  SlotType,
+} from "@/lib/types";
 import {
   getParkIdFromSlotValue,
   slotValueWithOptionalTime,
@@ -161,4 +166,48 @@ export function applyAiTimelineToAssignmentSlotTimes(
 
   if (!changed) return assignments;
   return { ...assignments, [dateKey]: dayNext };
+}
+
+function slotValueHasCustomTime(
+  v: SlotAssignmentValue | undefined,
+): boolean {
+  if (v == null || v === "" || typeof v === "string") return false;
+  if (
+    typeof v === "object" &&
+    v &&
+    typeof (v as { time?: string }).time === "string" &&
+    (v as { time: string }).time.trim() !== ""
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * For the Pro draggable 4-block timeline: show start times that match the AI
+ * day plan (`ai_day_timeline`) when the guest has not set a custom time on that
+ * slot. Drag/typed times on `Assignment` (object with `time`) are left as-is.
+ */
+export function displayDayForTimelinePanel(
+  day: Assignment,
+  rich: AiDayTimeline | undefined,
+  parkIdToName: Map<string, string>,
+): Assignment {
+  if (!rich) return day;
+  const inferred = inferSlotStartTimesFromAiDayTimeline(
+    rich,
+    day,
+    parkIdToName,
+  );
+  if (Object.keys(inferred).length === 0) return day;
+  const out: Assignment = { ...day };
+  for (const slot of ORDERED_SLOTS) {
+    const pid = getParkIdFromSlotValue(out[slot]);
+    if (!pid) continue;
+    if (slotValueHasCustomTime(out[slot])) continue;
+    const t = inferred[slot];
+    if (t == null) continue;
+    out[slot] = slotValueWithOptionalTime(pid, t, slot);
+  }
+  return out;
 }

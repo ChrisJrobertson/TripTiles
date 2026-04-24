@@ -7,6 +7,8 @@ import {
   formatUndoSnapshotHint,
   parseDate,
 } from "@/lib/date-helpers";
+import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
+import { displayDayForTimelinePanel } from "@/lib/ai-timeline-to-slot-times";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { MobileRidesSheet } from "@/components/planner/MobileRidesSheet";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
@@ -496,6 +498,16 @@ export function MobileDayView({
     ],
   );
 
+  const parkNameById = useMemo(
+    () => new Map(parks.map((p) => [p.id, p.name] as const)),
+    [parks],
+  );
+  const mobileDayForTimelinePanel = useMemo(() => {
+    const raw = assignments[activeDay.dateKey] ?? {};
+    const rich = getAiDayTimelineForDate(trip.preferences, activeDay.dateKey);
+    return displayDayForTimelinePanel(raw, rich, parkNameById);
+  }, [assignments, activeDay.dateKey, trip.preferences, parkNameById]);
+
   const showRidesSheetButton =
     onOpenDayDetail != null ||
     themeParkIdsAmPm.length === 0 ||
@@ -758,7 +770,7 @@ export function MobileDayView({
             </div>
           ) : onSlotTimeChange ? (
             <DayTimelinePanel
-              day={assignments[activeDay.dateKey] ?? {}}
+              day={mobileDayForTimelinePanel}
               parks={parks}
               colourTheme={colourTheme}
               unlocked={timelineUnlocked}

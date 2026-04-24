@@ -9,6 +9,8 @@ import {
   parseDate,
   startOfWeekMonday,
 } from "@/lib/date-helpers";
+import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
+import { displayDayForTimelinePanel } from "@/lib/ai-timeline-to-slot-times";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { DayTimelinePanel } from "@/components/planner/DayTimelinePanel";
 import { ExpandedDayPanel } from "@/components/planner/ExpandedDayPanel";
@@ -198,6 +200,10 @@ export function Calendar({
   onOpenDayDetail,
 }: Props) {
   const parkById = new Map(parks.map((p) => [p.id, p]));
+  const parkNameById = useMemo(
+    () => new Map(parks.map((p) => [p.id, p.name] as const)),
+    [parks],
+  );
   const themeKey = normaliseThemeKey(trip.colour_theme);
   const regionForConditions = plannerRegionId ?? trip.region_id;
   const [skeletonActive, setSkeletonActive] = useState(true);
@@ -219,6 +225,13 @@ export function Calendar({
   const [notePopover, setNotePopover] = useState<NotePopoverState | null>(
     null,
   );
+  const dayForTimelinePanel = useMemo(() => {
+    if (!notePopover) return null;
+    const key = notePopover.dateKey;
+    const raw = trip.assignments[key] ?? {};
+    const rich = getAiDayTimelineForDate(trip.preferences, key);
+    return displayDayForTimelinePanel(raw, rich, parkNameById);
+  }, [notePopover, trip.assignments, trip.preferences, parkNameById]);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const useDayDetailShell = Boolean(onOpenDayDetail) && !readOnly;
   const [dayPopoverTab, setDayPopoverTab] = useState<"details" | "timeline">(
@@ -1020,7 +1033,10 @@ export function Calendar({
               </>
             ) : onSlotTimeChange ? (
               <DayTimelinePanel
-                day={trip.assignments[notePopover.dateKey] ?? {}}
+                day={
+                  dayForTimelinePanel ??
+                  (trip.assignments[notePopover.dateKey] ?? {})
+                }
                 parks={parks}
                 colourTheme={themeKey}
                 unlocked={timelineUnlocked}
