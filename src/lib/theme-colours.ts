@@ -123,6 +123,22 @@ function rgbToHex(r: number, g: number, b: number): string {
   return `#${x(r)}${x(g)}${x(b)}`;
 }
 
+/**
+ * Blends a hex toward white so park tiles read as lighter pastels (less heavy on screen).
+ * `amount` 0 = unchanged, 1 = white.
+ */
+function mixHexTowardWhite(hex: string, amount: number): string {
+  const t = clamp(amount, 0, 1);
+  if (t === 0) return hex;
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  const m = (c: number) => Math.round(c + (255 - c) * t);
+  return rgbToHex(m(rgb.r), m(rgb.g), m(rgb.b));
+}
+
+/** How much to lighten catalogue tile fills (on top of theme transforms). */
+const TILE_PASTEL_WHITEN = 0.46;
+
 const PASTEL_L_MIN = 0.68;
 const PASTEL_L_MAX = 0.9;
 const PASTEL_S_FLOOR = 0.07;
@@ -182,15 +198,18 @@ function uiAccentBorder(themeKey: ThemeKey): string {
  */
 export function parkChromaTileStyle(
   bgColour: string | undefined,
-  fgColour: string | undefined,
+  /** Kept for API compatibility; contrast is derived from the lightened fill. */
+  _fgColour: string | undefined,
   themeKey: ThemeKey,
 ): CSSProperties {
   const raw =
     typeof bgColour === "string" && /^#/.test(bgColour) ? bgColour : "#2455ac";
   const bg = applyThemeToColour(raw, getThemeTransform(themeKey));
-  const color = resolveTileTextColour(themeKey, bg, fgColour);
+  const displayBg = mixHexTowardWhite(bg, TILE_PASTEL_WHITEN);
+  /** Lightened tiles need contrast based on the actual fill, not legacy white-on-dark assumptions. */
+  const color = getContrastText(displayBg);
   return {
-    backgroundColor: bg,
+    backgroundColor: displayBg,
     color,
     border: `1px solid ${uiAccentBorder(themeKey)}`,
   } as CSSProperties;
