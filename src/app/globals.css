@@ -45,7 +45,7 @@ html {
   background-image: none;
 }
 
-/* Site background image - magical theme park decorative border */
+/* Site background image - magical TripTiles theme */
 body::before {
   content: "";
   position: fixed;
@@ -54,13 +54,12 @@ body::before {
   right: 0;
   bottom: 0;
   z-index: -1;
-  background-image: url("/images/site-background.png");
+  background-image: url("/images/triptiles-bg.png");
   background-size: cover;
-  background-position: center top;
+  background-position: center center;
   background-repeat: no-repeat;
-  opacity: 0.12;
+  opacity: 0.25;
   pointer-events: none;
-  mix-blend-mode: multiply;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -76,8 +75,8 @@ body::before {
   }
 
   body::before {
-    opacity: 0.08;
-    filter: saturate(0.7);
+    opacity: 0.15;
+    filter: saturate(0.6);
   }
 }
 
