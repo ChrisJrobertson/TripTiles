@@ -5,6 +5,7 @@ import { getPublicSiteUrl } from "@/lib/site";
 import { TIERS } from "@/lib/tiers";
 import type { Trip } from "@/lib/types";
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 
 export const revalidate = 300;
@@ -147,20 +148,26 @@ export default async function MarketingHomePage() {
               Free forever plan · No credit card · 45 destinations
             </p>
           </div>
-          <div
-            className="flex min-h-[220px] items-center justify-center rounded-2xl border border-royal/15 bg-royal/5 p-8 text-center shadow-inner md:min-h-[320px]"
-            aria-hidden
-          >
-            <div>
-              <p className="font-serif text-sm font-semibold uppercase tracking-widest text-gold">
+          <figure className="overflow-hidden rounded-2xl border border-royal/15 bg-white shadow-lg">
+            <Image
+              src="/marketing/hero-planner.png"
+              alt="TripTiles planner: calendar with park days, dining slots, stats, and notes"
+              width={1024}
+              height={484}
+              className="h-auto w-full object-cover object-top"
+              priority
+              sizes="(max-width: 1024px) 100vw, 50vw"
+            />
+            <figcaption className="border-t border-royal/10 bg-cream/95 px-4 py-3 text-center">
+              <span className="font-serif text-sm font-semibold uppercase tracking-widest text-gold">
                 Planner preview
-              </p>
-              <p className="mt-3 font-sans text-sm text-royal/60">
+              </span>
+              <p className="mt-2 font-sans text-sm text-royal/60">
                 Drag everything yourself, or tap Smart Plan for a first draft —
                 then tweak.
               </p>
-            </div>
-          </div>
+            </figcaption>
+          </figure>
         </div>
       </section>
 
