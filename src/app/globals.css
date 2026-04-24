@@ -89,6 +89,47 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Header logo row: no frosted bar — let triptiles-bg show through; edge sparkles match page sides */
+.tt-logo-band {
+  position: relative;
+  isolation: isolate;
+}
+
+.tt-logo-band::before,
+.tt-logo-band::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 0;
+  width: min(32vw, 16rem);
+  pointer-events: none;
+  opacity: 0.75;
+  background-image:
+    radial-gradient(circle 1.2px at 18% 32%, rgba(255, 255, 255, 0.95), transparent 1.7px),
+    radial-gradient(circle 1px at 48% 58%, rgba(255, 255, 255, 0.7), transparent 1.4px),
+    radial-gradient(circle 0.75px at 36% 72%, rgba(255, 255, 255, 0.55), transparent 1.1px),
+    radial-gradient(circle 1.05px at 78% 28%, rgba(255, 255, 255, 0.8), transparent 1.4px),
+    radial-gradient(circle 0.65px at 65% 85%, rgba(255, 255, 255, 0.5), transparent 1px),
+    radial-gradient(circle 0.9px at 12% 78%, rgba(255, 255, 255, 0.65), transparent 1.2px);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+.tt-logo-band::before {
+  left: 0;
+}
+
+.tt-logo-band::after {
+  right: 0;
+  transform: scaleX(-1);
+}
+
+.tt-logo-band > * {
+  position: relative;
+  z-index: 1;
+}
+
 @keyframes achievement-card-in {
   from {
     opacity: 0;
