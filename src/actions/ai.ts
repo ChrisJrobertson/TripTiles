@@ -18,6 +18,7 @@ import {
   formatDaySlotLinesWithTimesForPrompt,
 } from "@/lib/ai-day-prompt-context";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
+import { applyAiTimelineToAssignmentSlotTimes } from "@/lib/ai-timeline-to-slot-times";
 import type {
   Assignment,
   Assignments,
@@ -1979,7 +1980,12 @@ function parseAndValidateDayTimelineJson(
 }
 
 export type GenerateDayTimelineResult =
-  | { ok: true; timeline: AiDayTimeline }
+  | {
+      ok: true;
+      timeline: AiDayTimeline;
+      /** Full `assignments` after syncing slot start times from the AI timeline (Pro drag strip + calendar). */
+      assignments: Assignments;
+    }
   | {
       ok: false;
       error: string;
@@ -2278,6 +2284,16 @@ export async function generateDayTimeline(
       model: mapApiModelToAiDayModelId(model),
     };
 
+    const parkIdToNameForSync = new Map(
+      parksForPrompt.map((p) => [p.id, p.name] as const),
+    );
+    const nextAssignments = applyAiTimelineToAssignmentSlotTimes(
+      trip.assignments,
+      dateKey,
+      value,
+      parkIdToNameForSync,
+    );
+
     const prevPrefs =
       trip.preferences && typeof trip.preferences === "object"
         ? { ...trip.preferences }
@@ -2295,6 +2311,7 @@ export async function generateDayTimeline(
       .from("trips")
       .update({
         preferences: { ...prevPrefs, ai_day_timeline: dayMap },
+        assignments: nextAssignments,
         updated_at: new Date().toISOString(),
       })
       .eq("id", tripId)
@@ -2336,7 +2353,8 @@ export async function generateDayTimeline(
       .eq("id", user.id);
 
     revalidatePath("/planner");
-    return { ok: true, timeline: value };
+    revalidatePath(`/trip/${tripId}`);
+    return { ok: true, timeline: value, assignments: nextAssignments };
   } catch (e: unknown) {
     const status = (e as { status?: number })?.status;
     if (status === 429) {

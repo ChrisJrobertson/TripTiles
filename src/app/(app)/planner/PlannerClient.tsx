@@ -1180,8 +1180,9 @@ export function PlannerClient({
           dayMap[payload.dateKey] = dayRes.timeline;
           applyLocalPatch(activeTripId, {
             preferences: { ...prevPrefs, ai_day_timeline: dayMap },
+            assignments: dayRes.assignments,
           });
-          showToast("✨ Day plan ready!");
+          showToast("✨ Day plan ready! Slot times updated to match the plan.");
           trackEvent("day_timeline_success", { dateKey: payload.dateKey });
           setSmartOpen(false);
           startTransition(() => router.refresh());
