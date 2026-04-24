@@ -456,11 +456,20 @@ export function Calendar({
                       <button
                         type="button"
                         data-day-interactive
+                        title={
+                          useDayDetailShell
+                            ? "Open day planner (rides, must-dos, and notes for this day)"
+                            : undefined
+                        }
                         className="min-h-11 min-w-0 flex flex-1 flex-wrap items-center justify-center gap-1 text-center transition hover:bg-cream/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
                         aria-expanded={
                           useDayDetailShell ? false : expandedDay === key
                         }
-                        aria-label={`Open day detail for ${headingDate}`}
+                        aria-label={
+                          useDayDetailShell
+                            ? `Open day planner for ${headingDate}`
+                            : `Open day detail for ${headingDate}`
+                        }
                         onClick={() => {
                           if (useDayDetailShell && onOpenDayDetail) {
                             onOpenDayDetail(key);
@@ -508,10 +517,10 @@ export function Calendar({
                         </span>
                       ) : (
                         <span
-                          className="font-sans text-[0.55rem] text-royal/45"
-                          aria-hidden
+                          className="inline-flex items-center gap-0.5 font-sans text-[0.55rem] text-royal/50"
                         >
-                          →
+                          <span className="hidden sm:inline">Open</span>
+                          <span aria-hidden>→</span>
                         </span>
                       )}
                       {rideCount > 0 ? (
@@ -564,8 +573,8 @@ export function Calendar({
                         data-day-note-toggle
                         title={
                           hasInsight
-                            ? "View tips, crowd note, and timeline for this day"
-                            : "Tips, notes, and timeline for this day"
+                            ? "Quick tips and timeline (full day planner: tap the date above or a park tile)"
+                            : "Quick tips and timeline (full day planner: tap the date above or a park tile)"
                         }
                         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-lg leading-none shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${
                           hasInsight
@@ -605,10 +614,7 @@ export function Calendar({
                       <span className="w-9 shrink-0" aria-hidden />
                     )}
                   </div>
-                  <div
-                    className="planner-slot-grid flex-1 p-0.5"
-                    data-day-interactive
-                  >
+                  <div className="planner-slot-grid flex-1 p-0.5">
                     {SLOTS.map(({ key: slot, label, area }) => {
                       const pid = getParkIdFromSlotValue(ass[slot]);
                       const park = pid ? parkById.get(pid) : undefined;
@@ -627,6 +633,13 @@ export function Calendar({
                             themeKey,
                           )
                         : undefined;
+                      const canOpenDayPanel =
+                        Boolean(
+                          !readOnly &&
+                            park &&
+                            useDayDetailShell &&
+                            onOpenDayDetail,
+                        );
                       return (
                         <div
                           key={slot}
@@ -640,15 +653,42 @@ export function Calendar({
                             readOnly || park
                               ? ""
                               : "cursor-pointer hover:brightness-[1.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--tt-ring)]/50 focus-visible:ring-inset"
-                          }`}
+                          }${canOpenDayPanel ? " cursor-pointer" : ""}`}
                           style={park ? filledSlotStyle : emptySlotStyle}
-                          role={readOnly || park ? undefined : "button"}
-                          tabIndex={readOnly || park ? undefined : 0}
-                          aria-label={slotAria}
-                          title={slotAria}
-                          onClick={() => {
+                          role={
+                            canOpenDayPanel
+                              ? "button"
+                              : readOnly || park
+                                ? undefined
+                                : "button"
+                          }
+                          tabIndex={
+                            canOpenDayPanel
+                              ? 0
+                              : readOnly || park
+                                ? undefined
+                                : 0
+                          }
+                          aria-label={
+                            canOpenDayPanel
+                              ? `Open day planner — ${slotAria}`
+                              : slotAria
+                          }
+                          title={
+                            canOpenDayPanel
+                              ? "Open day planner (rides, must-dos, and notes)"
+                              : slotAria
+                          }
+                          onClick={(e) => {
                             if (readOnly) return;
-                            if (park) return;
+                            if (park) {
+                              if (useDayDetailShell && onOpenDayDetail) {
+                                e.stopPropagation();
+                                onOpenDayDetail(key);
+                              }
+                              return;
+                            }
+                            e.stopPropagation();
                             if (selectedParkId) {
                               onAssign(key, slot, selectedParkId);
                             } else {
@@ -657,14 +697,25 @@ export function Calendar({
                           }}
                           onKeyDown={(e) => {
                             if (readOnly) return;
+                            if (park) {
+                              if (
+                                useDayDetailShell &&
+                                onOpenDayDetail &&
+                                (e.key === "Enter" || e.key === " ")
+                              ) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onOpenDayDetail(key);
+                              }
+                              return;
+                            }
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
-                              if (!park) {
-                                if (selectedParkId) {
-                                  onAssign(key, slot, selectedParkId);
-                                } else {
-                                  onNeedParkFirst();
-                                }
+                              e.stopPropagation();
+                              if (selectedParkId) {
+                                onAssign(key, slot, selectedParkId);
+                              } else {
+                                onNeedParkFirst();
                               }
                             }
                           }}
@@ -925,6 +976,19 @@ export function Calendar({
                 </span>
               </button>
             </div>
+            {onOpenDayDetail && useDayDetailShell ? (
+              <button
+                type="button"
+                className="mb-2 flex w-full min-h-11 items-center justify-center gap-1.5 rounded-lg border-2 border-royal/20 bg-royal/5 px-3 py-2 font-sans text-sm font-semibold text-royal transition hover:border-royal/35 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                onClick={() => {
+                  onOpenDayDetail(notePopover.dateKey);
+                  closeNotePopover();
+                }}
+              >
+                <span aria-hidden>📋</span>
+                Open full day planner
+              </button>
+            ) : null}
             {dayPopoverTab === "details" ? (
               <>
                 {notePopover.crowdLine ? (
@@ -943,9 +1007,12 @@ export function Calendar({
                 ) : null}
                 {!notePopover.crowdLine && !notePopover.dayNote ? (
                   <p className="mb-1 font-sans text-xs leading-relaxed text-royal/70">
-                    No crowd tips or notes for this day yet. Use{" "}
-                    <span className="font-semibold text-royal">Add note…</span>{" "}
-                    on the day card, or open the{" "}
+                    No crowd tips or notes in this popover yet. You can also open
+                    the full{" "}
+                    <span className="font-semibold text-royal">day planner</span>{" "}
+                    from the date row or by tapping a park tile on the calendar.
+                    Use <span className="font-semibold text-royal">Add note…</span>{" "}
+                    on the day card, or the{" "}
                     <span className="font-semibold text-royal">Timeline</span>{" "}
                     tab when available.
                   </p>

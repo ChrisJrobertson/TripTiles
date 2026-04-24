@@ -150,6 +150,8 @@ export type TripPreferences = {
   day_notes?: Record<string, string>;
   must_dos?: unknown;
   must_dos_snapshot?: unknown;
+  /** Hex color for the editable “adventure” segment of the trip title; null/omitted = default royal. */
+  adventure_title_color?: string | null;
 };
 
 export interface Region {

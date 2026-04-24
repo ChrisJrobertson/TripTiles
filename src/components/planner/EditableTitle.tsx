@@ -1,14 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type CSSProperties } from "react";
 
 type Props = {
   value: string;
   onSave: (newValue: string) => void;
   className?: string;
+  style?: CSSProperties;
 };
 
-export function EditableTitle({ value, onSave, className = "" }: Props) {
+export function EditableTitle({ value, onSave, className = "", style }: Props) {
   const ref = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
@@ -32,7 +33,8 @@ export function EditableTitle({ value, onSave, className = "" }: Props) {
       title="Click to edit"
       contentEditable
       suppressContentEditableWarning
-      className={`cursor-text border-b border-dashed border-transparent outline-none hover:border-royal/40 focus:border-royal focus:font-semibold ${className}`}
+      style={style}
+      className={`cursor-text border-b border-dashed border-transparent outline-none hover:border-current/40 focus:border-current focus:font-semibold ${className}`}
       onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === "Enter") {

@@ -43,6 +43,7 @@ import { Countdown } from "@/components/planner/Countdown";
 import { CustomTileModal } from "@/components/planner/CustomTileModal";
 import { DayDetailLayer } from "@/components/planner/DayDetailLayer";
 import { DayNotesPanel } from "@/components/planner/DayNotesPanel";
+import { AdventureTitleColorControl } from "@/components/planner/AdventureTitleColorControl";
 import { EditableTitle } from "@/components/planner/EditableTitle";
 import { MobilePlannerDock } from "@/components/planner/MobilePlannerDock";
 import { Palette } from "@/components/planner/Palette";
@@ -80,6 +81,10 @@ import {
   SMART_PLAN_CLIENT_TIMEOUT_MS,
   withTimeout,
 } from "@/lib/smart-plan-client";
+import {
+  ADVENTURE_TITLE_COLOR_KEY,
+  resolvedAdventureTitleColor,
+} from "@/lib/adventure-title-color";
 import { trackEvent } from "@/lib/analytics/client";
 import {
   plannerAiDayCrowdNotes,
@@ -124,6 +129,7 @@ import { customTileToPark } from "@/lib/types";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  startTransition,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -1695,9 +1701,11 @@ export function PlannerClient({
         );
       }
       const daySeg = formatDateISO(parseDate(dateKey));
-      router.push(
-        `${tripRouteBase}/day/${daySeg}${options?.focusNotes ? "#day-notes" : ""}`,
-      );
+      startTransition(() => {
+        router.push(
+          `${tripRouteBase}/day/${daySeg}${options?.focusNotes ? "#day-notes" : ""}`,
+        );
+      });
     },
     [tripRouteBase, activeTripId, router],
   );
@@ -1898,7 +1906,7 @@ export function PlannerClient({
           <header className="border-b border-royal/10 pb-5">
             <div className="flex flex-col gap-1">
               <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-                <h1 className="min-w-0 flex-1 text-balance font-serif text-3xl font-semibold tracking-tight text-royal sm:text-4xl">
+                <h1 className="min-w-0 flex-1 text-balance font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
                   <EditableTitle
                     key={`${activeTrip.id}-fam`}
                     value={activeTrip.family_name}
@@ -1914,28 +1922,64 @@ export function PlannerClient({
                         if (!res.ok) setSaveError(res.error);
                       });
                     }}
-                    className="inline-block min-w-[4ch]"
+                    className="inline-block min-w-[4ch] text-royal"
                   />
                   <span className="text-royal/40"> — </span>
-                  <EditableTitle
-                    key={`${activeTrip.id}-adv`}
-                    value={activeTrip.adventure_name}
-                    onSave={(v) => {
-                      const trimmed = v.trim();
-                      applyLocalPatch(activeTrip.id, {
-                        adventure_name: trimmed,
-                      });
-                      void withSaving(async () => {
-                        setSaveError(null);
-                        const res = await updateTripMetadataAction({
-                          tripId: activeTrip.id,
-                          adventureName: trimmed,
+                  <span className="inline-flex max-w-full flex-wrap items-baseline gap-1.5 sm:gap-2">
+                    <EditableTitle
+                      key={`${activeTrip.id}-adv`}
+                      value={activeTrip.adventure_name}
+                      onSave={(v) => {
+                        const trimmed = v.trim();
+                        applyLocalPatch(activeTrip.id, {
+                          adventure_name: trimmed,
                         });
-                        if (!res.ok) setSaveError(res.error);
-                      });
-                    }}
-                    className="inline-block min-w-[6ch]"
-                  />
+                        void withSaving(async () => {
+                          setSaveError(null);
+                          const res = await updateTripMetadataAction({
+                            tripId: activeTrip.id,
+                            adventureName: trimmed,
+                          });
+                          if (!res.ok) setSaveError(res.error);
+                        });
+                      }}
+                      className="inline-block min-w-[6ch]"
+                      style={{
+                        color: resolvedAdventureTitleColor(
+                          activeTrip.preferences,
+                        ),
+                      }}
+                    />
+                    <AdventureTitleColorControl
+                      preferences={activeTrip.preferences}
+                      onColorChange={(next) => {
+                        const prev =
+                          activeTrip.preferences &&
+                          typeof activeTrip.preferences === "object" &&
+                          !Array.isArray(activeTrip.preferences)
+                            ? ({
+                                ...activeTrip.preferences,
+                              } as Record<string, unknown>)
+                            : ({} as Record<string, unknown>);
+                        applyLocalPatch(activeTrip.id, {
+                          preferences: {
+                            ...prev,
+                            [ADVENTURE_TITLE_COLOR_KEY]: next,
+                          },
+                        });
+                        void withSaving(async () => {
+                          setSaveError(null);
+                          const res = await updateTripPreferencesPatchAction({
+                            tripId: activeTrip.id,
+                            patch: {
+                              [ADVENTURE_TITLE_COLOR_KEY]: next,
+                            },
+                          });
+                          if (!res.ok) setSaveError(res.error);
+                        });
+                      }}
+                    />
+                  </span>
                 </h1>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                   {showGoToTodayPill ? (
