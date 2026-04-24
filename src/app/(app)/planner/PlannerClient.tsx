@@ -2060,7 +2060,7 @@ export function PlannerClient({
                 setWizardFirstRun(false);
                 setWizardOpen(true);
               }}
-              className="rounded-lg bg-royal px-4 py-2.5 font-sans text-sm font-semibold text-cream shadow-sm transition hover:bg-royal/90"
+              className="rounded-lg bg-royalSoft px-4 py-2.5 font-sans text-sm font-semibold text-white shadow-sm transition hover:bg-royalSoft/90"
             >
               Edit trip
             </button>
@@ -2070,7 +2070,7 @@ export function PlannerClient({
                 setSmartError(null);
                 setSmartOpen(true);
               }}
-              className="rounded-lg border-2 border-[color:var(--tt-accent)]/35 bg-[color:var(--tt-ring)] px-4 py-2.5 font-sans text-sm font-semibold text-white shadow-sm transition hover:brightness-105"
+              className="rounded-lg border-2 border-royalSoft/40 bg-royalSoft px-4 py-2.5 font-sans text-sm font-semibold text-white shadow-sm transition hover:bg-royalSoft/90"
             >
               Smart Plan ✨
             </button>
@@ -2082,7 +2082,7 @@ export function PlannerClient({
             />
             <button
               type="button"
-              className="inline-flex cursor-pointer select-none rounded-lg border border-royal/20 bg-white px-4 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition hover:border-gold/35 hover:bg-cream"
+              className="inline-flex cursor-pointer select-none rounded-lg border border-royalSoft/25 bg-white px-4 py-2.5 font-sans text-sm font-semibold text-ink shadow-sm transition hover:border-gold/35 hover:bg-cream"
               onClick={openCompareDays}
             >
               Compare days

@@ -344,7 +344,7 @@ export function Calendar({
           {DAYS_OF_WEEK.map((d) => (
             <div
               key={d}
-              className="bg-royal py-2 text-center font-sans text-[0.65rem] font-semibold text-gold sm:text-xs"
+              className="bg-royalSoft py-2 text-center font-sans text-[0.65rem] font-semibold text-white sm:text-xs"
             >
               {d}
             </div>

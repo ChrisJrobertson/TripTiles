@@ -112,7 +112,7 @@ export function PdfExportButton({
           setModalOpen(true);
         }}
         disabled={disabled || pdfBusy}
-        className="rounded-lg bg-royal px-4 py-2.5 font-serif text-sm font-bold text-gold shadow-sm transition hover:bg-royal/90 disabled:opacity-50"
+        className="rounded-lg bg-royalSoft px-4 py-2.5 font-serif text-sm font-bold text-white shadow-sm transition hover:bg-royalSoft/90 disabled:opacity-50"
       >
         {pdfBusy ? (
           <span className="inline-flex items-center justify-center gap-2">

@@ -9,7 +9,11 @@ const config: Config = {
     extend: {
       colors: {
         // Primary brand colors (from logo palette)
-        royal: "#2455ac",      // Deep blue from logo
+        royal: "#2455ac",      // Deep blue (accents, borders)
+        /** Softer blue for large fills (nav CTAs, headers) — less harsh than royal. */
+        royalSoft: "#5c6b88",
+        /** Muted blue-gray for nav/body text — easier on the eye with cream + pastels. */
+        ink: "#3d4a5c",
         gold: "#dd4e14",       // Vibrant orange from logo (was gold)
         cream: "#fce7cc",      // Warm cream/peach from logo
 

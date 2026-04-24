@@ -26,7 +26,7 @@ export function SignOutButton() {
       type="button"
       onClick={signOut}
       disabled={loading}
-      className="bg-transparent p-0 font-sans text-sm font-medium text-royal underline-offset-4 transition hover:text-gold hover:underline disabled:opacity-60"
+      className="bg-transparent p-0 font-sans text-sm font-medium text-ink/90 underline-offset-4 transition hover:text-royalSoft hover:underline disabled:opacity-60"
     >
       {loading ? (
         <span className="inline-flex items-center gap-2">
