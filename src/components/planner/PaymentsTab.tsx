@@ -9,6 +9,7 @@ import {
 import { CountdownChip } from "@/components/planning/CountdownChip";
 import { PdfExportButton } from "@/components/planner/PdfExportButton";
 import { currencyApproximationText, formatMoney } from "@/lib/format";
+import { formatOutstandingPaymentsTotal } from "@/lib/payment-totals";
 import { showToast } from "@/lib/toast";
 import type { Trip } from "@/lib/types";
 import type { PaymentCurrency, TripPayment } from "@/types/payments";
@@ -253,20 +254,10 @@ export function PaymentsTab({
     setDeleteConfirmId(null);
   };
 
-  const totalsLine = useMemo(() => {
-    const unpaidPayments = payments.filter((p) => !p.paid_at);
-    const gbp = unpaidPayments
-      .filter((p) => p.currency === "GBP")
-      .reduce((s, p) => s + p.amount_pence, 0);
-    const usd = unpaidPayments
-      .filter((p) => p.currency === "USD")
-      .reduce((s, p) => s + p.amount_pence, 0);
-    const parts: string[] = [];
-    if (gbp > 0) parts.push(formatMoney(gbp, "GBP"));
-    if (usd > 0) parts.push(formatMoney(usd, "USD"));
-    if (parts.length === 0) return "£0.00";
-    return parts.join(" + ");
-  }, [payments]);
+  const totalsLine = useMemo(
+    () => formatOutstandingPaymentsTotal(payments),
+    [payments],
+  );
 
   const formActive = adding || editingId !== null;
 
@@ -406,6 +397,7 @@ export function PaymentsTab({
                 ? "border-l-4 border-l-amber-500"
                 : "border-l-4 border-l-transparent";
           const isEditing = editingId === p.id;
+          const statusBusy = markingPaidId === p.id || markingUnpaidId === p.id;
           if (isEditing) {
             return null;
           }
@@ -455,7 +447,7 @@ export function PaymentsTab({
                     <button
                       type="button"
                       onClick={() => void onMarkPaid(p)}
-                      disabled={busy || formActive || markingPaidId === p.id}
+                      disabled={busy || formActive || statusBusy}
                       className="min-h-[44px] min-w-[44px] rounded-lg border-2 border-royal/25 bg-white px-3 py-2 text-sm font-semibold text-royal transition hover:bg-cream disabled:opacity-50"
                     >
                       Mark as paid ✓
@@ -467,7 +459,7 @@ export function PaymentsTab({
                         <span>Mark unpaid?</span>
                         <button
                           type="button"
-                          disabled={busy || markingUnpaidId === p.id}
+                          disabled={busy || statusBusy}
                           onClick={() => void onConfirmMarkUnpaid(p)}
                           className="min-h-[44px] rounded-lg bg-royal px-3 py-2 text-sm font-semibold text-cream"
                         >
@@ -475,7 +467,7 @@ export function PaymentsTab({
                         </button>
                         <button
                           type="button"
-                          disabled={busy || markingUnpaidId === p.id}
+                          disabled={busy || statusBusy}
                           onClick={() => setUnpaidConfirmId(null)}
                           className="min-h-[44px] rounded-lg border border-royal/20 px-3 py-2 text-sm font-medium"
                         >
@@ -491,7 +483,7 @@ export function PaymentsTab({
                           setAdding(false);
                           setEditingId(null);
                         }}
-                        disabled={busy || formActive || markingUnpaidId === p.id}
+                        disabled={busy || formActive || statusBusy}
                         className="min-h-[44px] min-w-[44px] rounded-lg border-2 border-royal/25 bg-white px-3 py-2 text-sm font-semibold text-royal transition hover:bg-cream disabled:opacity-50"
                       >
                         Mark as unpaid
@@ -501,7 +493,7 @@ export function PaymentsTab({
                   <button
                     type="button"
                     onClick={() => startEdit(p)}
-                    disabled={busy || formActive}
+                    disabled={busy || formActive || statusBusy}
                     className="min-h-[44px] min-w-[5rem] rounded-lg border border-royal/20 bg-cream px-3 py-2 text-sm font-semibold text-royal transition hover:bg-cream/80 disabled:opacity-50"
                   >
                     Edit
@@ -511,7 +503,7 @@ export function PaymentsTab({
                       <span>Are you sure?</span>
                       <button
                         type="button"
-                        disabled={busy}
+                        disabled={busy || statusBusy}
                         onClick={() => void onConfirmDelete(p.id)}
                         className="min-h-[44px] rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white"
                       >
@@ -519,7 +511,7 @@ export function PaymentsTab({
                       </button>
                       <button
                         type="button"
-                        disabled={busy}
+                        disabled={busy || statusBusy}
                         onClick={() => setDeleteConfirmId(null)}
                         className="min-h-[44px] rounded-lg border border-royal/20 px-3 py-2 text-sm font-medium"
                       >
@@ -529,7 +521,7 @@ export function PaymentsTab({
                   ) : (
                     <button
                       type="button"
-                      disabled={busy || formActive}
+                      disabled={busy || formActive || statusBusy}
                       onClick={() => {
                         setDeleteConfirmId(p.id);
                         setUnpaidConfirmId(null);
