@@ -1,6 +1,6 @@
 "use client";
 
-import { markPaymentPaid } from "@/actions/planning";
+import { markPaymentPaid, markPaymentUnpaid } from "@/actions/planning";
 import {
   createPayment,
   deletePayment,
@@ -81,7 +81,9 @@ export function PaymentsTab({
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [unpaidConfirmId, setUnpaidConfirmId] = useState<string | null>(null);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
+  const [markingUnpaidId, setMarkingUnpaidId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [formLabel, setFormLabel] = useState("");
   const [formAmount, setFormAmount] = useState("");
@@ -105,12 +107,14 @@ export function PaymentsTab({
     setEditingId(null);
     setAdding(true);
     setDeleteConfirmId(null);
+    setUnpaidConfirmId(null);
   };
 
   const startEdit = (p: TripPayment) => {
     setAdding(false);
     setEditingId(p.id);
     setDeleteConfirmId(null);
+    setUnpaidConfirmId(null);
     setFormLabel(p.label);
     setFormAmount((p.amount_pence / 100).toFixed(2));
     setFormCurrency(p.currency);
@@ -207,6 +211,31 @@ export function PaymentsTab({
     });
   };
 
+  const onConfirmMarkUnpaid = async (p: TripPayment) => {
+    const snapshot = payments;
+    const optimistic: TripPayment = {
+      ...p,
+      paid_at: null,
+      updated_at: new Date().toISOString(),
+    };
+    applyList(snapshot.map((x) => (x.id === p.id ? optimistic : x)));
+    setUnpaidConfirmId(null);
+    setMarkingUnpaidId(p.id);
+    const r = await markPaymentUnpaid(p.id);
+    setMarkingUnpaidId(null);
+    if (!r.ok) {
+      applyList(snapshot);
+      showToast(r.error, { type: "error" });
+      return;
+    }
+    applyList(snapshot.map((x) => (x.id === p.id ? r.payment : x)));
+    showToast("Marked as unpaid", {
+      type: "success",
+      debounceKey: "payment-write",
+      debounceMs: 500,
+    });
+  };
+
   const onConfirmDelete = async (id: string) => {
     setBusy(true);
     const r = await deletePayment(id);
@@ -225,10 +254,11 @@ export function PaymentsTab({
   };
 
   const totalsLine = useMemo(() => {
-    const gbp = payments
+    const unpaidPayments = payments.filter((p) => !p.paid_at);
+    const gbp = unpaidPayments
       .filter((p) => p.currency === "GBP")
       .reduce((s, p) => s + p.amount_pence, 0);
-    const usd = payments
+    const usd = unpaidPayments
       .filter((p) => p.currency === "USD")
       .reduce((s, p) => s + p.amount_pence, 0);
     const parts: string[] = [];
@@ -431,6 +461,43 @@ export function PaymentsTab({
                       Mark as paid ✓
                     </button>
                   ) : null}
+                  {p.paid_at ? (
+                    unpaidConfirmId === p.id ? (
+                      <span className="flex flex-wrap items-center gap-2 text-sm text-royal/80">
+                        <span>Mark unpaid?</span>
+                        <button
+                          type="button"
+                          disabled={busy || markingUnpaidId === p.id}
+                          onClick={() => void onConfirmMarkUnpaid(p)}
+                          className="min-h-[44px] rounded-lg bg-royal px-3 py-2 text-sm font-semibold text-cream"
+                        >
+                          Yes, mark unpaid
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy || markingUnpaidId === p.id}
+                          onClick={() => setUnpaidConfirmId(null)}
+                          className="min-h-[44px] rounded-lg border border-royal/20 px-3 py-2 text-sm font-medium"
+                        >
+                          No
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUnpaidConfirmId(p.id);
+                          setDeleteConfirmId(null);
+                          setAdding(false);
+                          setEditingId(null);
+                        }}
+                        disabled={busy || formActive || markingUnpaidId === p.id}
+                        className="min-h-[44px] min-w-[44px] rounded-lg border-2 border-royal/25 bg-white px-3 py-2 text-sm font-semibold text-royal transition hover:bg-cream disabled:opacity-50"
+                      >
+                        Mark as unpaid
+                      </button>
+                    )
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => startEdit(p)}
@@ -465,6 +532,7 @@ export function PaymentsTab({
                       disabled={busy || formActive}
                       onClick={() => {
                         setDeleteConfirmId(p.id);
+                        setUnpaidConfirmId(null);
                         setAdding(false);
                         setEditingId(null);
                       }}
