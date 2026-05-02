@@ -23,6 +23,14 @@ export type CheckoutPriceIds = {
   familyYear: string;
 };
 
+function formatMonthlyPrice(amount: number): string {
+  return `£${amount.toFixed(2)}/mo`;
+}
+
+function formatAnnualPrice(amount: number): string {
+  return `£${amount.toFixed(0)}/yr`;
+}
+
 export function PricingClient({
   initialMe,
   checkoutPriceIds,
@@ -106,14 +114,14 @@ export function PricingClient({
   const proPrice = useMemo(() => {
     if (billing === "yearly") {
       return {
-        main: `£${pro.annualGbp.toFixed(2)}/year`,
-        sub: `or £${pro.monthlyGbp.toFixed(2)}/month`,
+        main: formatAnnualPrice(pro.annualGbp),
+        sub: `or ${formatMonthlyPrice(pro.monthlyGbp)} billed monthly`,
         save: `Save £${pro.annualSavingsVsMonthlyGbp.toFixed(2)}/year`,
       };
     }
     return {
-      main: `£${pro.monthlyGbp.toFixed(2)}/month`,
-      sub: `or £${pro.annualGbp.toFixed(2)}/year billed annually`,
+      main: formatMonthlyPrice(pro.monthlyGbp),
+      sub: `or ${formatAnnualPrice(pro.annualGbp)} billed annually`,
       save: null,
     };
   }, [billing, pro]);
@@ -121,14 +129,14 @@ export function PricingClient({
   const familyPrice = useMemo(() => {
     if (billing === "yearly") {
       return {
-        main: `£${family.annualGbp.toFixed(2)}/year`,
-        sub: `or £${family.monthlyGbp.toFixed(2)}/month`,
+        main: formatAnnualPrice(family.annualGbp),
+        sub: `or ${formatMonthlyPrice(family.monthlyGbp)} billed monthly`,
         save: `Save £${family.annualSavingsVsMonthlyGbp.toFixed(2)}/year`,
       };
     }
     return {
-      main: `£${family.monthlyGbp.toFixed(2)}/month`,
-      sub: `or £${family.annualGbp.toFixed(2)}/year billed annually`,
+      main: formatMonthlyPrice(family.monthlyGbp),
+      sub: `or ${formatAnnualPrice(family.annualGbp)} billed annually`,
       save: null,
     };
   }, [billing, family]);
@@ -251,7 +259,7 @@ export function PricingClient({
         </div>
         {billing === "yearly" ? (
           <span className="rounded-full bg-gold/25 px-3 py-1 font-sans text-xs font-semibold text-royal">
-            Save up to £{TIERS.family.annualSavingsVsMonthlyGbp.toFixed(2)}
+            Save £{TIERS.family.annualSavingsVsMonthlyGbp.toFixed(2)}/year
           </span>
         ) : null}
       </div>
@@ -265,7 +273,7 @@ export function PricingClient({
           <p className="mt-1 font-sans text-xs text-royal/60">Cancel anytime — no card required</p>
           <ul className="mt-4 flex-1 list-inside list-disc space-y-1.5 font-sans text-sm text-royal/80">
             <li>1 active trip</li>
-            <li>5 Smart Plan runs per account (lifetime on Free)</li>
+            <li>5 Smart Plan runs per account</li>
             <li>5 custom tiles total</li>
             <li>Watermarked PDF export</li>
             <li>Haiku 4.5 model</li>
@@ -342,7 +350,7 @@ export function PricingClient({
           <ul className="mt-3 flex-1 list-inside list-disc space-y-1.5 font-sans text-sm text-royal/80">
             <li>Everything in Pro</li>
             <li>Up to 4 family members with shared access</li>
-            <li>Haiku 4.5 (not Sonnet)</li>
+            <li>Haiku 4.5</li>
           </ul>
           <button
             type="button"
@@ -358,6 +366,11 @@ export function PricingClient({
           </button>
         </article>
       </div>
+
+      <p className="mt-8 rounded-2xl border border-gold/35 bg-gold/10 px-4 py-3 text-center font-sans text-sm font-semibold text-royal">
+        Use code <code className="rounded bg-white/70 px-1">LAUNCH20</code> at
+        checkout for 20% off your first month — first 100 customers.
+      </p>
 
       <div className="mt-12 overflow-x-auto rounded-xl border border-royal/10 bg-white/90">
         <table className="w-full min-w-[520px] border-collapse font-sans text-sm text-royal">
@@ -379,7 +392,7 @@ export function PricingClient({
             </tr>
             <tr className="border-b border-royal/10">
               <td className="px-4 py-2">Smart Plan (AI)</td>
-              <td className="px-4 py-2">5 lifetime (Free tier)</td>
+              <td className="px-4 py-2">5 total on Free</td>
               <td className="px-4 py-2">Unlimited</td>
               <td className="px-4 py-2">Unlimited</td>
             </tr>

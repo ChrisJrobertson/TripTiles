@@ -67,6 +67,7 @@ function progressHint(
   return null;
 }
 
+// 'upgraded_premium' deprecated post-Session 14; Premium tier removed. Existing unlocks preserved.
 const RETIRED_ACHIEVEMENT_KEYS = new Set(["upgraded_premium"]);
 
 export function AchievementsClient({
@@ -76,20 +77,19 @@ export function AchievementsClient({
 }: Props) {
   const [filter, setFilter] = useState<AchievementCategory | "all">("all");
 
-  const definitionsVisible = useMemo(
-    () => definitions.filter((d) => !RETIRED_ACHIEVEMENT_KEYS.has(d.key)),
-    [definitions],
-  );
-  const earnedVisible = useMemo(
-    () => earned.filter((a) => !RETIRED_ACHIEVEMENT_KEYS.has(a.achievement_key)),
-    [earned],
-  );
-
   const earnedByKey = useMemo(() => {
     const m = new Map<string, Achievement>();
-    for (const a of earnedVisible) m.set(a.achievement_key, a);
+    for (const a of earned) m.set(a.achievement_key, a);
     return m;
-  }, [earnedVisible]);
+  }, [earned]);
+
+  const definitionsVisible = useMemo(
+    () =>
+      definitions.filter(
+        (d) => !RETIRED_ACHIEVEMENT_KEYS.has(d.key) || earnedByKey.has(d.key),
+      ),
+    [definitions, earnedByKey],
+  );
 
   const sorted = useMemo(() => {
     return [...definitionsVisible].sort((a, b) => {
@@ -105,8 +105,10 @@ export function AchievementsClient({
     return sorted.filter((d) => d.category === filter);
   }, [sorted, filter]);
 
-  const total = definitionsVisible.length;
-  const unlocked = earnedVisible.length;
+  const total = definitions.filter((d) => !RETIRED_ACHIEVEMENT_KEYS.has(d.key)).length;
+  const unlocked = earned.filter(
+    (a) => !RETIRED_ACHIEVEMENT_KEYS.has(a.achievement_key),
+  ).length;
   const pct = total > 0 ? Math.round((unlocked / total) * 100) : 0;
 
   return (
@@ -186,7 +188,7 @@ export function AchievementsClient({
             All
           </button>
           {ALL_CATEGORIES.map((cat) => {
-            const count = definitions.filter((d) => d.category === cat).length;
+            const count = definitionsVisible.filter((d) => d.category === cat).length;
             if (count === 0) return null;
             return (
               <button

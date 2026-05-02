@@ -273,8 +273,8 @@ export function SettingsAccountPanel({
             Security
           </h2>
           <p className="mt-2 font-sans text-sm text-royal/70">
-            You signed in with a one-time email code. To set a permanent
-            password, use the password reset flow.
+            You signed in with an email code. To set a permanent password, use
+            the password reset flow.
           </p>
           <button
             type="button"

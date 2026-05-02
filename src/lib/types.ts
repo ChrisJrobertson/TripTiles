@@ -392,7 +392,6 @@ export interface ProfileStats {
   trips_planned_count: number;
   days_planned_count: number;
   parks_visited_count: number;
-  ai_generations_lifetime: number;
   templates_cloned_count: number;
   tier: UserTier;
 }

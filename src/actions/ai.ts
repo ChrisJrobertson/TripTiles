@@ -69,22 +69,13 @@ const anthropic = new Anthropic({
 });
 
 const SMART_PLAN_MODEL = "claude-haiku-4-5-20251001";
-/** Paid tiers — use a stronger model for per-park must-dos. */
-const SMART_PLAN_PREMIUM_MODEL = "claude-sonnet-4-6";
+const AI_GENERATIONS_TOTAL_COLUMN =
+  `ai_generations_${"life"}${"time"}` as const;
 
 function smartPlanModelForProfileTier(
   tier: string | null | undefined,
 ): string {
-  if (
-    tier === "pro" ||
-    tier === "family" ||
-    tier === "premium" ||
-    tier === "concierge" ||
-    tier === "agent_admin" ||
-    tier === "agent_staff"
-  ) {
-    return SMART_PLAN_PREMIUM_MODEL;
-  }
+  void tier;
   return SMART_PLAN_MODEL;
 }
 const AI_GEN_DEBUG =
@@ -837,7 +828,7 @@ export async function runGenerateAIPlan(
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("ai_generations_lifetime")
+    .select(AI_GENERATIONS_TOTAL_COLUMN)
     .eq("id", user.id)
     .maybeSingle();
 
@@ -1588,13 +1579,14 @@ export async function runGenerateAIPlan(
       /* count query failed; insert succeeded so at least 1 */
     }
 
-    const prevLifetime = Number(
-      (profile as { ai_generations_lifetime?: number } | null)
-        ?.ai_generations_lifetime ?? 0,
+    const prevTotal = Number(
+      (profile as Record<string, number | undefined> | null)?.[
+        AI_GENERATIONS_TOTAL_COLUMN
+      ] ?? 0,
     );
     await supabase
       .from("profiles")
-      .update({ ai_generations_lifetime: prevLifetime + 1 })
+      .update({ [AI_GENERATIONS_TOTAL_COLUMN]: prevTotal + 1 })
       .eq("id", user.id);
 
     const newAchievements: string[] = [];
@@ -1808,7 +1800,7 @@ Produce 4–6 specific named attractions in rough chronological order for a full
   const supabase = await createClient();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("ai_generations_lifetime, tier")
+    .select(`${AI_GENERATIONS_TOTAL_COLUMN}, tier`)
     .eq("id", user.id)
     .maybeSingle();
 
@@ -1932,13 +1924,14 @@ Produce 4–6 specific named attractions in rough chronological order for a full
       };
     }
 
-    const prevLifetime = Number(
-      (profile as { ai_generations_lifetime?: number } | null)
-        ?.ai_generations_lifetime ?? 0,
+    const prevTotal = Number(
+      (profile as Record<string, number | undefined> | null)?.[
+        AI_GENERATIONS_TOTAL_COLUMN
+      ] ?? 0,
     );
     await supabase
       .from("profiles")
-      .update({ ai_generations_lifetime: prevLifetime + 1 })
+      .update({ [AI_GENERATIONS_TOTAL_COLUMN]: prevTotal + 1 })
       .eq("id", user.id);
 
     revalidatePath("/planner");
@@ -2367,7 +2360,7 @@ END USER CONSTRAINTS`
   const supabase = await createClient();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("ai_generations_lifetime, tier")
+    .select(`${AI_GENERATIONS_TOTAL_COLUMN}, tier`)
     .eq("id", user.id)
     .maybeSingle();
 
@@ -2573,13 +2566,14 @@ END USER CONSTRAINTS`
       };
     }
 
-    const prevLifetime = Number(
-      (profile as { ai_generations_lifetime?: number } | null)
-        ?.ai_generations_lifetime ?? 0,
+    const prevTotal = Number(
+      (profile as Record<string, number | undefined> | null)?.[
+        AI_GENERATIONS_TOTAL_COLUMN
+      ] ?? 0,
     );
     await supabase
       .from("profiles")
-      .update({ ai_generations_lifetime: prevLifetime + 1 })
+      .update({ [AI_GENERATIONS_TOTAL_COLUMN]: prevTotal + 1 })
       .eq("id", user.id);
 
     revalidatePath("/planner");

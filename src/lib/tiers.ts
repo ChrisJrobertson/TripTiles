@@ -8,13 +8,13 @@ export type Tier = UserTier;
 
 export interface TierFeatures {
   max_trips: number | null;
-  /** @deprecated Display only; Smart Plan limits use `max_smart_plan_lifetime`. */
+  /** @deprecated Display only; Smart Plan limits use `max_smart_plan_runs`. */
   max_ai_per_trip: number | null;
-  max_smart_plan_lifetime: number | null;
+  maxSmartPlanRuns: number | null;
   max_custom_tiles: number | null;
   pdf_watermark: boolean;
   pdf_design: "standard";
-  ai_model: "claude-haiku-4-5";
+  ai_model: "claude-haiku-4-5-20251001";
   family_sharing: boolean;
   max_family_members: number;
   priority_support: boolean;
@@ -27,7 +27,15 @@ export interface TierFeatures {
 interface TierConfigBase {
   id: RetailTier;
   name: string;
-  /** One-off display price (legacy); prefer monthly/annual subscription fields. */
+  displayPrice: string;
+  monthlyPrice: number | null;
+  annualPrice: number | null;
+  stripePriceIds: {
+    monthly: string | null;
+    annual: string | null;
+  };
+  aiModel: "claude-haiku-4-5-20251001";
+  /** Legacy numeric fields kept for existing display code. */
   price_gbp: number;
   price_pence: number;
   description: string;
@@ -59,17 +67,22 @@ export type FamilyTierConfig = Extract<TierConfig, { id: "family" }>;
 const freeTier: FreeTierConfig = {
   id: "free",
   name: "Free",
+  displayPrice: "Free",
+  monthlyPrice: null,
+  annualPrice: null,
+  stripePriceIds: { monthly: null, annual: null },
+  aiModel: "claude-haiku-4-5-20251001",
   price_gbp: 0,
   price_pence: 0,
   description: "Plan one trip and try Smart Plan",
   features: {
     max_trips: 1,
     max_ai_per_trip: 5,
-    max_smart_plan_lifetime: 5,
+    maxSmartPlanRuns: 5,
     max_custom_tiles: 5,
     pdf_watermark: true,
     pdf_design: "standard",
-    ai_model: "claude-haiku-4-5",
+    ai_model: "claude-haiku-4-5-20251001",
     family_sharing: false,
     max_family_members: 0,
     priority_support: false,
@@ -85,20 +98,28 @@ const freeTier: FreeTierConfig = {
 const proTier: ProTierConfig = {
   id: "pro",
   name: "Pro",
-  price_gbp: 4.99,
-  price_pence: 499,
-  monthlyGbp: 4.99,
-  annualGbp: 39.99,
-  annualSavingsVsMonthlyGbp: 19.89,
+  displayPrice: "£6.99/mo or £39/yr",
+  monthlyPrice: 699,
+  annualPrice: 3900,
+  stripePriceIds: {
+    monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY!,
+    annual: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL!,
+  },
+  aiModel: "claude-haiku-4-5-20251001",
+  price_gbp: 6.99,
+  price_pence: 699,
+  monthlyGbp: 6.99,
+  annualGbp: 39,
+  annualSavingsVsMonthlyGbp: 44.88,
   description: "Unlimited trips, full Smart Plan, clean PDFs",
   features: {
     max_trips: null,
     max_ai_per_trip: null,
-    max_smart_plan_lifetime: null,
+    maxSmartPlanRuns: null,
     max_custom_tiles: null,
     pdf_watermark: false,
     pdf_design: "standard",
-    ai_model: "claude-haiku-4-5",
+    ai_model: "claude-haiku-4-5-20251001",
     family_sharing: false,
     max_family_members: 0,
     priority_support: false,
@@ -114,20 +135,28 @@ const proTier: ProTierConfig = {
 const familyTier: FamilyTierConfig = {
   id: "family",
   name: "Family",
-  price_gbp: 7.99,
-  price_pence: 799,
-  monthlyGbp: 7.99,
-  annualGbp: 59.99,
-  annualSavingsVsMonthlyGbp: 35.89,
+  displayPrice: "£11.99/mo or £99/yr",
+  monthlyPrice: 1199,
+  annualPrice: 9900,
+  stripePriceIds: {
+    monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_FAMILY_MONTHLY!,
+    annual: process.env.NEXT_PUBLIC_STRIPE_PRICE_FAMILY_ANNUAL!,
+  },
+  aiModel: "claude-haiku-4-5-20251001",
+  price_gbp: 11.99,
+  price_pence: 1199,
+  monthlyGbp: 11.99,
+  annualGbp: 99,
+  annualSavingsVsMonthlyGbp: 44.88,
   description: "Everything in Pro, plus share with up to four family members",
   features: {
     max_trips: null,
     max_ai_per_trip: null,
-    max_smart_plan_lifetime: null,
+    maxSmartPlanRuns: null,
     max_custom_tiles: null,
     pdf_watermark: false,
     pdf_design: "standard",
-    ai_model: "claude-haiku-4-5",
+    ai_model: "claude-haiku-4-5-20251001",
     family_sharing: true,
     max_family_members: 4,
     priority_support: false,
@@ -148,14 +177,12 @@ export const TIERS = {
 
 export const PUBLIC_TIERS: RetailTier[] = ["free", "pro", "family"];
 
-/** Maps legacy DB / Stripe labels to a retail tier key (`premium` → Family-tier entitlements). */
+/** Maps DB / Stripe labels to a retail tier key; internal staff tiers receive Family-tier entitlements. */
 export function normalizeToRetailTier(tier: string | null | undefined): RetailTier {
   const t = (tier ?? "free").toLowerCase();
-  if (t === "navigator" || t === "pro") return "pro";
+  if (t === "pro") return "pro";
   if (
-    t === "captain" ||
     t === "family" ||
-    t === "premium" ||
     t === "concierge" ||
     t === "agent_admin" ||
     t === "agent_staff"

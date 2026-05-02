@@ -108,7 +108,7 @@ export default async function MarketingHomePage() {
     {
       icon: "💳",
       title: "Fair subscriptions",
-      body: `From £${tierPro.monthlyGbp.toFixed(2)} a month on Pro — cancel anytime. Annual plans save up to £${tierFamily.annualSavingsVsMonthlyGbp.toFixed(2)}.`,
+      body: `From £${tierPro.monthlyGbp.toFixed(2)}/mo or £${tierPro.annualGbp.toFixed(0)}/yr on Pro — cancel anytime. Family is £${tierFamily.monthlyGbp.toFixed(2)}/mo or £${tierFamily.annualGbp.toFixed(0)}/yr.`,
     },
   ];
 
@@ -135,8 +135,9 @@ export default async function MarketingHomePage() {
               Smart Plan drafts from your must-dos and dining anchors, a
               day-by-day timeline with clash checks, and plain-English nudges
               when something won&apos;t work. Free to try, from £
-              {tierPro.monthlyGbp.toFixed(2)}/month when you&apos;re ready —
-              Disney, Universal, and 300+ parks worldwide.
+              {tierPro.monthlyGbp.toFixed(2)}/mo or £
+              {tierPro.annualGbp.toFixed(0)}/yr when you&apos;re ready — Disney,
+              Universal, and 300+ parks worldwide.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <Link
@@ -362,10 +363,9 @@ export default async function MarketingHomePage() {
             Simple pricing
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-center font-sans text-sm leading-relaxed text-royal/75">
-            From £{tierPro.monthlyGbp.toFixed(2)} a month. Cancel anytime.
-            Annual plans save up to £
-            {tierFamily.annualSavingsVsMonthlyGbp.toFixed(2)}. Free
-            forever for one trip.
+            From £{tierPro.monthlyGbp.toFixed(2)}/mo or £
+            {tierPro.annualGbp.toFixed(0)}/yr. Cancel anytime. Free forever for
+            one trip.
           </p>
           <div className="mt-10 grid gap-6 sm:grid-cols-3">
             <div className="rounded-2xl border border-royal/10 bg-cream p-6 text-center">
@@ -373,7 +373,7 @@ export default async function MarketingHomePage() {
               <p className="mt-2 font-serif text-3xl text-gold">£0</p>
               <p className="mt-3 font-sans text-xs text-royal/70">
                 {tierFree.features.max_trips ?? 1} trip ·{" "}
-                {tierFree.features.max_smart_plan_lifetime ?? 5} Smart Plan runs
+                {tierFree.features.maxSmartPlanRuns ?? 5} Smart Plan runs
                 total
               </p>
             </div>

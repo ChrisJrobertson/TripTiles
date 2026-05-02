@@ -66,7 +66,7 @@ export default function TermsPage() {
       </section>
 
       <section id="payments">
-        <h2>4. Payments, subscriptions, and refunds</h2>
+        <h2>4. Payments</h2>
 
         <h3 className="mt-5 font-serif text-lg font-semibold text-royal">
           Payments and subscriptions
@@ -78,32 +78,40 @@ export default function TermsPage() {
           access until the end of your current billing period.
         </p>
 
+        <h2>Cancellation and refunds</h2>
+        <p>
+          TripTiles is a monthly or annual subscription. You can cancel anytime
+          from your Settings page; your subscription will remain active until the
+          end of the current billing period, after which it will not renew.
+        </p>
+
         <h3 className="mt-6 font-serif text-lg font-semibold text-royal">
-          Refunds and cooling-off
+          14-day cooling-off period
         </h3>
         <p>
           Under the UK Consumer Contracts (Information, Cancellation and
-          Additional Charges) Regulations 2013, you have a 14-day right to
-          cancel from the date you first subscribe. If you request cancellation
-          within this 14-day period <strong>and</strong> have not substantially
-          used the Service (defined below), we will refund your most recent
-          payment in full.
+          Additional Charges) Regulations 2013, you have the right to cancel your
+          subscription within 14 days of purchase for a full refund — provided
+          you have not started using the service. By creating a trip, exporting a
+          PDF, or generating an AI plan, you waive this right.
         </p>
+
+        <h3 className="mt-6 font-serif text-lg font-semibold text-royal">
+          Outside the cooling-off period
+        </h3>
         <p>
-          &quot;Substantial use&quot; means any of: more than 2 PDF exports, more
-          than 10 AI Smart Plan generations, or publishing a trip publicly. If
-          you have substantially used the Service within the cooling-off period,
-          we reserve the right to decline a refund, or offer a partial refund,
-          in line with the Regulations.
+          Refunds are at our discretion and processed manually. Email
+          hello@triptiles.app with your concern. We do not refund partially-used
+          billing periods as a matter of course, but we will consider exceptional
+          circumstances.
         </p>
+
+        <h3 className="mt-6 font-serif text-lg font-semibold text-royal">
+          Annual subscriptions
+        </h3>
         <p>
-          After the 14-day cooling-off period, payments are non-refundable. You
-          may cancel to prevent future billing at any time.
-        </p>
-        <p>
-          Refund requests: email{" "}
-          <a href="mailto:hello@triptiles.app">hello@triptiles.app</a>. We aim to
-          respond within 5 working days.
+          Annual subscriptions are non-refundable after the 14-day cooling-off
+          period except where required by law.
         </p>
 
         <h3 className="mt-6 font-serif text-lg font-semibold text-royal">

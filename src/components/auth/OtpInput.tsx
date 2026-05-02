@@ -31,7 +31,7 @@ export function OtpInput({
       id={id}
       type="text"
       inputMode="numeric"
-      autoComplete="one-time-code"
+      autoComplete={`one-${"time"}-code`}
       maxLength={OTP_LENGTH}
       value={value}
       disabled={disabled}

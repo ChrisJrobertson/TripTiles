@@ -36,19 +36,15 @@ export const metadata: Metadata = {
 const FAQ = [
   {
     q: "Can I cancel anytime?",
-    a: "Yes — cancel from Settings, which opens the Stripe Customer Portal. You keep access until the end of your current billing period.",
+    a: "Yes, from Settings. Takes effect at the end of your current billing period.",
   },
   {
-    q: "What happens if my payment fails?",
-    a: "Stripe retries automatically over about 7 days. We email you if the payment cannot be recovered.",
+    q: "What happens to my trips if I cancel?",
+    a: "Your trips remain accessible in read-only mode. Re-subscribe anytime to regain editing and AI features.",
   },
   {
-    q: "Can I switch between Pro and Family?",
-    a: "Yes — use the Customer Portal from Settings to upgrade or downgrade.",
-  },
-  {
-    q: "Do you offer a free trial?",
-    a: "The Free tier (1 trip, 5 Smart Plan runs) is the trial. Upgrade when you are ready.",
+    q: "Can I switch between monthly and annual?",
+    a: "Yes, from the customer portal.",
   },
   {
     q: "What is the refund policy?",
@@ -58,9 +54,17 @@ const FAQ = [
         <Link href="/terms" className="text-royal underline underline-offset-2">
           terms of service
         </Link>{" "}
-        for the full policy — in summary, new subscribers have a 14-day cooling-off period under UK Consumer Contracts Regulations, subject to fair use.
+        for the full policy — in summary, new subscribers have a 14-day cooling-off period under UK Consumer Contracts Regulations before they start using the service.
       </>
     ),
+  },
+  {
+    q: "What happens if my payment fails?",
+    a: "Stripe retries automatically over about 7 days. We email you if the payment cannot be recovered.",
+  },
+  {
+    q: "Do you offer a free trial?",
+    a: "The Free tier (1 trip, 5 Smart Plan runs) is the trial. Upgrade when you are ready.",
   },
   {
     q: "Who processes payments?",
@@ -82,10 +86,12 @@ const FAQ = [
 
 function checkoutPriceIdsFromEnv(): CheckoutPriceIds {
   return {
-    proMonth: process.env.STRIPE_PRICE_PRO_MONTHLY?.trim() ?? "",
-    proYear: process.env.STRIPE_PRICE_PRO_ANNUAL?.trim() ?? "",
-    familyMonth: process.env.STRIPE_PRICE_FAMILY_MONTHLY?.trim() ?? "",
-    familyYear: process.env.STRIPE_PRICE_FAMILY_ANNUAL?.trim() ?? "",
+    proMonth: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY?.trim() ?? "",
+    proYear: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL?.trim() ?? "",
+    familyMonth:
+      process.env.NEXT_PUBLIC_STRIPE_PRICE_FAMILY_MONTHLY?.trim() ?? "",
+    familyYear:
+      process.env.NEXT_PUBLIC_STRIPE_PRICE_FAMILY_ANNUAL?.trim() ?? "",
   };
 }
 

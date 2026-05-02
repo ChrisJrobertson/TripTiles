@@ -1,6 +1,6 @@
 // Required env vars (set in Vercel Production + Preview) — map to live Stripe GBP prices:
-//   STRIPE_PRICE_PRO_MONTHLY (£4.99/mo), STRIPE_PRICE_PRO_ANNUAL (£39.99/yr)
-//   STRIPE_PRICE_FAMILY_MONTHLY (£7.99/mo), STRIPE_PRICE_FAMILY_ANNUAL (£59.99/yr)
+//   NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY (£6.99/mo), NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL (£39/yr)
+//   NEXT_PUBLIC_STRIPE_PRICE_FAMILY_MONTHLY (£11.99/mo), NEXT_PUBLIC_STRIPE_PRICE_FAMILY_ANNUAL (£99/yr)
 
 import type { UserTier } from "@/lib/types";
 
@@ -17,10 +17,10 @@ export type PaidTier = "pro" | "family";
 export type BillingInterval = "month" | "year";
 
 export const PRICE_IDS = {
-  pro_month: process.env.STRIPE_PRICE_PRO_MONTHLY!,
-  pro_year: process.env.STRIPE_PRICE_PRO_ANNUAL!,
-  family_month: process.env.STRIPE_PRICE_FAMILY_MONTHLY!,
-  family_year: process.env.STRIPE_PRICE_FAMILY_ANNUAL!,
+  pro_month: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY!,
+  pro_year: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL!,
+  family_month: process.env.NEXT_PUBLIC_STRIPE_PRICE_FAMILY_MONTHLY!,
+  family_year: process.env.NEXT_PUBLIC_STRIPE_PRICE_FAMILY_ANNUAL!,
 } as const;
 
 export function allowedCheckoutPriceIds(): string[] {
@@ -44,7 +44,7 @@ export function priceIdToTier(
 export function mapStripeIdsToProductSku(
   stripeProductId: string | null,
   priceId: string | null,
-): ProductSkuFromStripe | "premium" | "concierge" | null {
+): ProductSkuFromStripe | "concierge" | null {
   if (stripeProductId && stripeProductId in STRIPE_PRODUCT_TO_TIER) {
     return STRIPE_PRODUCT_TO_TIER[
       stripeProductId as keyof typeof STRIPE_PRODUCT_TO_TIER
@@ -58,9 +58,9 @@ export function mapStripeIdsToProductSku(
 }
 
 export function productSkuToProfileTier(
-  sku: ProductSkuFromStripe | "premium" | "concierge",
+  sku: ProductSkuFromStripe | "concierge",
 ): UserTier {
-  if (sku === "premium" || sku === "concierge") return sku;
+  if (sku === "concierge") return sku;
   if (sku === "pro" || sku === "family") return sku;
   return "free";
 }

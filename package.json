@@ -2,6 +2,7 @@
   "name": "triptiles",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev --turbopack -p 3001",
     "dev:clean": "rm -rf .next && next dev --turbopack -p 3001",
@@ -43,7 +44,6 @@
     "eslint-config-next": "15.5.15",
     "tailwindcss": "^4",
     "tsx": "^4.19.3",
-    "typescript": "^5",
-    "vercel": "^50.44.0"
+    "typescript": "^5"
   }
 }

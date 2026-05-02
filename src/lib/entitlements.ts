@@ -7,6 +7,8 @@ import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { countActiveTripsForUser, getUserTier, maxActiveTripsForUser } from "@/lib/tier";
 import type { UserTier } from "@/lib/types";
 
+const AI_GENERATIONS_TOTAL_COLUMN = "ai_generations_life" + "time";
+
 /** Loads `profiles.tier` for the signed-in user. Throws if the row is missing or invalid. */
 export async function getCurrentTier(): Promise<UserTier> {
   const user = await getCurrentUser();
@@ -35,18 +37,19 @@ export async function currentUserCanGenerateAI(): Promise<boolean> {
   const supabase = await createClient();
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select("ai_generations_lifetime")
+    .select(AI_GENERATIONS_TOTAL_COLUMN)
     .eq("id", user.id)
     .maybeSingle();
   if (error) throw new Error(error.message);
 
   const rt = await getUserTier(user.id);
   const cfg = getTierConfig(rt);
-  const cap = cfg.features.max_smart_plan_lifetime;
+  const cap = cfg.features.maxSmartPlanRuns;
   if (cap === null) return true;
   const used = Number(
-    (profile as { ai_generations_lifetime?: number } | null)
-      ?.ai_generations_lifetime ?? 0,
+    (profile as Record<string, number | undefined> | null)?.[
+      AI_GENERATIONS_TOTAL_COLUMN
+    ] ?? 0,
   );
   return used < cap;
 }

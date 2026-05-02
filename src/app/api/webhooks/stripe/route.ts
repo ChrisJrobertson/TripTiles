@@ -15,6 +15,42 @@ import type Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
 
+type HandledEvent =
+  | (Stripe.Event & {
+      type: "checkout.session.completed";
+      data: Stripe.Event.Data & { object: Stripe.Checkout.Session };
+    })
+  | (Stripe.Event & {
+      type:
+        | "customer.subscription.created"
+        | "customer.subscription.updated"
+        | "customer.subscription.deleted";
+      data: Stripe.Event.Data & { object: Stripe.Subscription };
+    })
+  | (Stripe.Event & {
+      type: "invoice.paid" | "invoice.payment_failed";
+      data: Stripe.Event.Data & { object: Stripe.Invoice };
+    });
+
+function isHandledEvent(event: Stripe.Event): event is HandledEvent {
+  return (
+    event.type === "checkout.session.completed" ||
+    event.type === "customer.subscription.created" ||
+    event.type === "customer.subscription.updated" ||
+    event.type === "customer.subscription.deleted" ||
+    event.type === "invoice.paid" ||
+    event.type === "invoice.payment_failed"
+  );
+}
+
+function subscriptionIdFromInvoice(inv: Stripe.Invoice): string | null {
+  const invoiceWithSubscription = inv as Stripe.Invoice & {
+    subscription?: string | Stripe.Subscription | null;
+  };
+  const subRaw = invoiceWithSubscription.subscription;
+  return typeof subRaw === "string" ? subRaw : subRaw?.id ?? null;
+}
+
 export async function POST(req: Request) {
   const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
   if (!secret) {
@@ -58,9 +94,12 @@ export async function POST(req: Request) {
       eventId: event.id,
       type: event.type,
     });
+    if (!isHandledEvent(event)) {
+      return NextResponse.json({ received: true });
+    }
     switch (event.type) {
       case "checkout.session.completed": {
-        const sess = event.data.object as Stripe.Checkout.Session;
+        const sess = event.data.object;
         if (sess.mode !== "subscription") break;
         const subId =
           typeof sess.subscription === "string"
@@ -109,7 +148,7 @@ export async function POST(req: Request) {
       case "customer.subscription.created":
       case "customer.subscription.updated":
       case "customer.subscription.deleted": {
-        const sub = event.data.object as Stripe.Subscription;
+        const sub = event.data.object;
         const userId = await resolveUserIdForSubscription(
           supabaseAdmin,
           stripe,
@@ -131,11 +170,30 @@ export async function POST(req: Request) {
         });
         break;
       }
+      case "invoice.paid": {
+        const inv = event.data.object;
+        const subId = subscriptionIdFromInvoice(inv);
+        const custRaw = inv.customer;
+        const custId =
+          typeof custRaw === "string" ? custRaw : custRaw?.id ?? null;
+        const userId = await resolveUserIdByStripeCustomerId(
+          supabaseAdmin,
+          stripe,
+          custId,
+          ctx,
+        );
+        if (!userId || !subId || !custId) break;
+        const sub = await stripe.subscriptions.retrieve(subId);
+        await upsertPurchaseFromStripeSubscription(supabaseAdmin, {
+          userId,
+          stripeCustomerId: custId,
+          subscription: sub,
+        });
+        break;
+      }
       case "invoice.payment_failed": {
-        const inv = event.data.object as Stripe.Invoice;
-        const subRaw = inv.subscription;
-        const subId =
-          typeof subRaw === "string" ? subRaw : subRaw?.id ?? null;
+        const inv = event.data.object;
+        const subId = subscriptionIdFromInvoice(inv);
         if (subId) {
           await setPurchasePastDueBySubscriptionId(supabaseAdmin, subId);
         }
