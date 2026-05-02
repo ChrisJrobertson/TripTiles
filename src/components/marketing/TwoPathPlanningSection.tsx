@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 /** Inline icons — no extra icon dependency. */
 function IconCalendarGrid({ className }: { className?: string }) {
   return (
@@ -105,37 +107,47 @@ export function TwoPathPlanningSection({
         fast, TripTiles works the way you do.
       </p>
       <div className="mt-10 grid gap-4 md:grid-cols-2 md:items-stretch">
-        <article className="flex min-h-[220px] flex-col rounded-2xl border border-royal/25 bg-cream p-6 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <IconCalendarGrid className="h-10 w-10 shrink-0 text-royal" />
-            <span className="rounded-full border border-royal/20 bg-white px-2.5 py-0.5 font-sans text-xs font-semibold text-royal/80">
-              Free to use
-            </span>
-          </div>
-          <h3 className="mt-4 font-serif text-xl font-semibold text-royal">
-            Build it yourself
-          </h3>
-          <p className="mt-3 flex-1 font-sans text-sm leading-relaxed text-royal/80">
-            Drag parks, restaurants, and activities onto your calendar.
-            Rearrange anything, any time. You&apos;re in full control.
-          </p>
-        </article>
-        <article className="flex min-h-[220px] flex-col rounded-2xl border border-royal/25 border-l-4 border-l-gold bg-cream p-6 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <IconSparkles className="h-10 w-10 shrink-0 text-gold" />
-            <span className="rounded-full border border-gold/40 bg-white/90 px-2.5 py-0.5 font-sans text-xs font-semibold text-royal">
-              Smart Plan ✨
-            </span>
-          </div>
-          <h3 className="mt-4 font-serif text-xl font-semibold text-royal">
-            Let Trip plan it
-          </h3>
-          <p className="mt-3 flex-1 font-sans text-sm leading-relaxed text-royal/80">
-            Set must-dos, dining anchors, and who&apos;s traveling — Trip drafts
-            a day-by-day itinerary in seconds, then the timeline and nudges help
-            you harden the plan. Tweak anything you like.
-          </p>
-        </article>
+        <Link
+          href="/signup?intent=manual"
+          className="block h-full rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+        >
+          <article className="flex min-h-[220px] flex-col rounded-2xl border border-royal/25 bg-cream p-6 shadow-sm transition hover:border-royal/40 hover:shadow-md">
+            <div className="flex items-start justify-between gap-3">
+              <IconCalendarGrid className="h-10 w-10 shrink-0 text-royal" />
+              <span className="rounded-full border border-royal/20 bg-white px-2.5 py-0.5 font-sans text-xs font-semibold text-royal/80">
+                Free to use
+              </span>
+            </div>
+            <h3 className="mt-4 font-serif text-xl font-semibold text-royal">
+              Build it yourself
+            </h3>
+            <p className="mt-3 flex-1 font-sans text-sm leading-relaxed text-royal/80">
+              Drag parks, restaurants, and activities onto your calendar.
+              Rearrange anything, any time. You&apos;re in full control.
+            </p>
+          </article>
+        </Link>
+        <Link
+          href="/signup?intent=smart"
+          className="block h-full rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+        >
+          <article className="flex min-h-[220px] flex-col rounded-2xl border border-royal/25 border-l-4 border-l-gold bg-cream p-6 shadow-sm transition hover:border-gold/50 hover:shadow-md">
+            <div className="flex items-start justify-between gap-3">
+              <IconSparkles className="h-10 w-10 shrink-0 text-gold" />
+              <span className="rounded-full border border-gold/40 bg-white/90 px-2.5 py-0.5 font-sans text-xs font-semibold text-royal">
+                Smart Plan ✨
+              </span>
+            </div>
+            <h3 className="mt-4 font-serif text-xl font-semibold text-royal">
+              Let Trip plan it
+            </h3>
+            <p className="mt-3 flex-1 font-sans text-sm leading-relaxed text-royal/80">
+              Set must-dos, dining anchors, and who&apos;s traveling — Trip
+              drafts a day-by-day itinerary in seconds, then the timeline and
+              nudges help you harden the plan. Tweak anything you like.
+            </p>
+          </article>
+        </Link>
       </div>
     </div>
   );
