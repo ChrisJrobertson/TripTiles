@@ -131,7 +131,7 @@ export function TwoPathPlanningSection({
           href="/signup?intent=smart"
           className="block h-full rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
         >
-          <article className="flex min-h-[220px] flex-col rounded-2xl border border-royal/25 border-l-4 border-l-gold bg-cream p-6 shadow-sm transition hover:border-gold/50 hover:shadow-md">
+          <article className="flex min-h-[220px] flex-col rounded-2xl border border-royal/25 border-l-[4px] border-l-gold bg-cream p-6 shadow-sm transition hover:border-gold/50 hover:shadow-md">
             <div className="flex items-start justify-between gap-3">
               <IconSparkles className="h-10 w-10 shrink-0 text-gold" />
               <span className="rounded-full border border-gold/40 bg-white/90 px-2.5 py-0.5 font-sans text-xs font-semibold text-royal">
