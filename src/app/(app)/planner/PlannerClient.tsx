@@ -309,15 +309,33 @@ async function streamGeneratePlan(
     }
   }
 
+  // Diagnostic logs use a stable `[smart-plan-client]` prefix to make browser
+  // console output easy to scan and to surface in Jam recordings. Logs only —
+  // no behaviour changes in this part.
+  const startTs = Date.now();
+  const logCtx = {
+    tripId: input.tripId,
+    mode: input.mode,
+    hasDateKey: typeof input.dateKey === "string",
+  };
+  let lastEventTs = startTs;
+  const eventCounts: Record<string, number> = {};
+
   let idleTimer: number | null = null;
   const resetIdleTimer = () => {
     if (idleTimer) window.clearTimeout(idleTimer);
     idleTimer = window.setTimeout(() => {
+      console.warn("[smart-plan-client] idle-timeout-fired", {
+        ...logCtx,
+        msSinceLastEvent: Date.now() - lastEventTs,
+        eventCounts: { ...eventCounts },
+      });
       controller.abort(new DOMException("Smart Plan timed out", "TimeoutError"));
     }, SMART_PLAN_STREAM_IDLE_TIMEOUT_MS);
   };
   resetIdleTimer();
 
+  console.log("[smart-plan-client] fetch-started", logCtx);
   const response = await fetch("/api/ai/generate-plan-stream", {
     method: "POST",
     headers: {
@@ -329,8 +347,18 @@ async function streamGeneratePlan(
   });
 
   if (!response.ok || !response.body) {
+    console.error("[smart-plan-client] fetch-failed", {
+      ...logCtx,
+      status: response.status,
+      hasBody: !!response.body,
+    });
     throw new Error("Smart Plan stream failed to start.");
   }
+
+  console.log("[smart-plan-client] fetch-ok", {
+    ...logCtx,
+    status: response.status,
+  });
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -363,6 +391,20 @@ async function streamGeneratePlan(
       return;
     }
 
+    lastEventTs = Date.now();
+    eventCounts[eventName] = (eventCounts[eventName] ?? 0) + 1;
+    // Avoid log spam: only emit per-event log on first occurrence of each kind,
+    // plus every event for `started` and `done` (which are the diagnostic ones).
+    if (eventCounts[eventName] === 1 || eventName === "done" || eventName === "started") {
+      console.log("[smart-plan-client] event-received", {
+        ...logCtx,
+        eventName,
+        count: eventCounts[eventName],
+        hasData: payload != null,
+        ageMs: lastEventTs - startTs,
+      });
+    }
+
     if (eventName === "delta") {
       const text = (payload as { text?: unknown }).text;
       if (typeof text === "string" && text.length > 0) {
@@ -377,13 +419,27 @@ async function streamGeneratePlan(
 
     if (eventName === "done") {
       doneResult = payload as GenerateAIPlanResult;
+      console.log("[smart-plan-client] done-received", {
+        ...logCtx,
+        hasResult: !!doneResult,
+        ok: (doneResult as { ok?: boolean })?.ok ?? null,
+        totalDurationMs: lastEventTs - startTs,
+      });
     }
   };
 
   try {
     while (true) {
       const { value, done } = await reader.read();
-      if (done) break;
+      if (done) {
+        console.log("[smart-plan-client] reader-eof", {
+          ...logCtx,
+          hasDoneResult: !!doneResult,
+          eventCounts: { ...eventCounts },
+          totalDurationMs: Date.now() - startTs,
+        });
+        break;
+      }
       resetIdleTimer();
       buffer += decoder.decode(value, { stream: true });
       let separatorIndex = buffer.indexOf("\n\n");
@@ -400,17 +456,35 @@ async function streamGeneratePlan(
     }
 
     if (!doneResult) {
+      console.error("[smart-plan-client] stream-ended-without-done", {
+        ...logCtx,
+        eventCounts: { ...eventCounts },
+        totalDurationMs: Date.now() - startTs,
+      });
       throw new Error("Smart Plan stream ended unexpectedly.");
     }
     return doneResult;
   } catch (error) {
     if (controller.signal.aborted && signal?.aborted) {
+      console.log("[smart-plan-client] cancelled-by-parent", {
+        ...logCtx,
+        msSinceLastEvent: Date.now() - lastEventTs,
+      });
       throw new DOMException("Smart Plan cancelled", "AbortError");
     }
     if (controller.signal.aborted) {
+      console.warn("[smart-plan-client] cancelled-by-idle-timeout", {
+        ...logCtx,
+        msSinceLastEvent: Date.now() - lastEventTs,
+      });
       await logSmartPlanTimeout(input);
       throw new Error("Smart Plan timed out — try again");
     }
+    console.error("[smart-plan-client] stream-error", {
+      ...logCtx,
+      message: error instanceof Error ? error.message : String(error),
+      eventCounts: { ...eventCounts },
+    });
     throw error;
   } finally {
     if (idleTimer) window.clearTimeout(idleTimer);
@@ -1251,6 +1325,20 @@ export function PlannerClient({
       setSmartRetryPayload(payload);
       setIsAiGenerating(true);
       let sawFirstToken = false;
+      // `spinnerClearReason` records why the spinner came down — surfaced via
+      // `[smart-plan-client] spinner-cleared` so a hung-spinner reproduction
+      // immediately tells us whether the stream completed, errored, or aborted.
+      let spinnerClearReason:
+        | "done"
+        | "abort"
+        | "timeout"
+        | "error"
+        | "stopped-early"
+        | "stale-server-action"
+        | "tier-limit"
+        | "day-error"
+        | "smart-error"
+        | "unknown" = "unknown";
       try {
         if (payload.planningPreferences != null) {
           const prefRes = await updateTripPlanningPreferencesAction({
@@ -1258,6 +1346,7 @@ export function PlannerClient({
             planningPreferences: payload.planningPreferences,
           });
           if (!prefRes.ok) {
+            spinnerClearReason = "smart-error";
             setSmartError(prefRes.error);
             showToast(prefRes.error);
             return;
@@ -1273,6 +1362,7 @@ export function PlannerClient({
             payload.dateKey,
           );
           if (!dayRes.ok) {
+            spinnerClearReason = "day-error";
             if (dayRes.code === "tier_limit") {
               setTierLimitVariant("ai");
               setTierLimitReason(dayRes.error);
@@ -1302,6 +1392,7 @@ export function PlannerClient({
             preferences: { ...prevPrefs, ai_day_timeline: dayMap },
             assignments: dayRes.assignments,
           });
+          spinnerClearReason = "done";
           showToast("✨ Day plan ready! Slot times updated to match the plan.");
           trackEvent("day_timeline_success", { dateKey: payload.dateKey });
           setSmartOpen(false);
@@ -1341,10 +1432,12 @@ export function PlannerClient({
           },
         );
         if (generationController.signal.aborted) {
+          spinnerClearReason = "abort";
           return;
         }
         if (!res.ok) {
           if (res.error === "SMART_PLAN_TRUNCATED") {
+            spinnerClearReason = "smart-error";
             setSmartError(
               res.message ||
                 "Your plan was too long to finish in one go. Please try Regenerate.",
@@ -1356,11 +1449,13 @@ export function PlannerClient({
             return;
           }
           if (res.stoppedEarly) {
+            spinnerClearReason = "stopped-early";
             setSmartCanRetryPartial(true);
             setSmartError(res.message || "Stopped early - retry?");
             return;
           }
           if (res.error === "TIER_AI_DISABLED") {
+            spinnerClearReason = "tier-limit";
             setTierLimitVariant("ai");
             setTierLimitReason(
               res.message ||
@@ -1370,6 +1465,7 @@ export function PlannerClient({
             return;
           }
           if (res.error === "TIER_LIMIT") {
+            spinnerClearReason = "tier-limit";
             setTierLimitVariant("ai");
             setTierLimitReason(
               "Smart Plan is not available on your current plan. See Pricing for Pro or Family.",
@@ -1377,6 +1473,7 @@ export function PlannerClient({
             setTierLimitOpen(true);
             return;
           }
+          spinnerClearReason = "smart-error";
           const errMsg =
             res.message ||
             "Smart Plan couldn't generate your plan — try again, or build the calendar yourself.";
@@ -1411,6 +1508,7 @@ export function PlannerClient({
             prev[activeTripId] ?? 0,
           ),
         }));
+        spinnerClearReason = "done";
         showToast("✨ Plan generated!");
         trackEvent("smart_plan_success", { mode: payload.mode });
         enqueueAchievementKeys(res.newAchievements);
@@ -1418,17 +1516,24 @@ export function PlannerClient({
         startTransition(() => router.refresh());
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") {
+          spinnerClearReason = "abort";
           return;
         }
         if (sawFirstToken) {
+          spinnerClearReason = "stopped-early";
           setSmartCanRetryPartial(true);
           setSmartError("Stopped early — retry?");
           return;
         }
         if (notifyStaleServerActionIfNeeded(e)) {
+          spinnerClearReason = "stale-server-action";
           setSmartError(null);
           return;
         }
+        spinnerClearReason =
+          e instanceof Error && /timed out/i.test(e.message)
+            ? "timeout"
+            : "error";
         const msg =
           e instanceof Error ? e.message : "Something went wrong. Try again.";
         setSmartError(msg);
@@ -1437,6 +1542,10 @@ export function PlannerClient({
         if (smartPlanAbortRef.current === generationController) {
           smartPlanAbortRef.current = null;
         }
+        console.log("[smart-plan-client] spinner-cleared", {
+          tripId: activeTripId,
+          reason: spinnerClearReason,
+        });
         setIsAiGenerating(false);
       }
     },

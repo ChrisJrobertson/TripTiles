@@ -2123,21 +2123,6 @@ export async function runGenerateAIPlan(
       });
     }
 
-    const dayNoteAssignmentCheck = validateDayNotesAgainstAssignments(
-      meta.planner_day_notes,
-      trip.assignments,
-      parksForPrompt,
-      fullDateAllow,
-    );
-    if (dayNoteAssignmentCheck.warningText) {
-      logAiGen({
-        step: "planner_day_notes_park_mismatch",
-        tripId: input.tripId,
-        userId: user.id,
-        details: { warning: dayNoteAssignmentCheck.warningText },
-      });
-    }
-
     const guarded = enforceAiPlanGuardrails(sanitized, {
       trip,
       parksById,
@@ -2177,6 +2162,24 @@ export async function runGenerateAIPlan(
           sortedDateKeys,
           parksById,
         );
+
+    // Validate day notes against the post-generation, post-merge, post-sanitise
+    // assignments — `merged` — not `trip.assignments` (the pre-generation state).
+    // The previous comparison produced false-positive mismatch warnings on every run.
+    const dayNoteAssignmentCheck = validateDayNotesAgainstAssignments(
+      meta.planner_day_notes,
+      merged,
+      parksForPrompt,
+      fullDateAllow,
+    );
+    if (dayNoteAssignmentCheck.warningText) {
+      logAiGen({
+        step: "planner_day_notes_park_mismatch",
+        tripId: input.tripId,
+        userId: user.id,
+        details: { warning: dayNoteAssignmentCheck.warningText },
+      });
+    }
 
     const rawMustTop = (parsed as Record<string, unknown>).must_dos;
     const parsedMust = parseMustDosMapFromAI(
@@ -2541,6 +2544,14 @@ Produce 4–6 specific named attractions in rough chronological order for a full
     (profile as { tier?: string } | null)?.tier,
   );
   let rawText = "";
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let aiGenStatus: AiGenerationStatus = "pending";
+  let aiGenError: string | null = null;
+  // `recordAiGeneration` is invoked at most once per call: success and structured-failure
+  // paths set this flag so the `finally` block doesn't double-write.
+  let aiGenAlreadyLogged = false;
+  const aiGenPrompt = `must_dos:${input.parkId}\n${userBlock}`;
   try {
     const msg = await anthropic.messages.create({
       model,
@@ -2564,24 +2575,27 @@ Produce 4–6 specific named attractions in rough chronological order for a full
       rawText = block.text;
     }
     const usage = msg.usage as AnthropicMessageUsage | undefined;
-    const inputTokens = inputTokensFromUsage(usage);
-    const outputTokens = usage?.output_tokens ?? 0;
+    inputTokens = inputTokensFromUsage(usage);
+    outputTokens = usage?.output_tokens ?? 0;
 
     let parsed: unknown;
     try {
       parsed = JSON.parse(stripCodeFences(rawText));
     } catch {
+      aiGenStatus = "failed";
+      aiGenError = "Invalid JSON (must_dos single park)";
       await recordAiGeneration({
         userId: user.id,
         tripId: input.tripId,
-        prompt: `must_dos:${input.parkId}\n${userBlock}`,
+        prompt: aiGenPrompt,
         model,
         inputTokens,
         outputTokens,
         success: false,
-        status: "failed",
-        error: "Invalid JSON (must_dos single park)",
+        status: aiGenStatus,
+        error: aiGenError,
       });
+      aiGenAlreadyLogged = true;
       return {
         ok: false,
         error: "We could not read the AI response. Please try again.",
@@ -2591,17 +2605,20 @@ Produce 4–6 specific named attractions in rough chronological order for a full
     const root = parsed as Record<string, unknown>;
     const items = normaliseMustDoItems(root.must_dos);
     if (items.length === 0) {
+      aiGenStatus = "failed";
+      aiGenError = "empty must_dos";
       await recordAiGeneration({
         userId: user.id,
         tripId: input.tripId,
-        prompt: `must_dos:${input.parkId}\n${userBlock}`,
+        prompt: aiGenPrompt,
         model,
         inputTokens,
         outputTokens,
         success: false,
-        status: "failed",
-        error: "empty must_dos",
+        status: aiGenStatus,
+        error: aiGenError,
       });
+      aiGenAlreadyLogged = true;
       return {
         ok: false,
         error: "No attractions were returned. Try again.",
@@ -2632,20 +2649,24 @@ Produce 4–6 specific named attractions in rough chronological order for a full
       .eq("owner_id", user.id);
 
     if (upErr) {
+      aiGenStatus = "failed";
+      aiGenError = `trip update failed: ${upErr.message}`.slice(0, 1000);
       return { ok: false, error: upErr.message, code: "AI_ERROR" };
     }
 
+    aiGenStatus = "success";
     const { error: genInsertErr } = await recordAiGeneration({
       userId: user.id,
       tripId: input.tripId,
-      prompt: `must_dos:${input.parkId}\n${userBlock}`,
+      prompt: aiGenPrompt,
       model,
       inputTokens,
       outputTokens,
       success: true,
-      status: "success",
+      status: aiGenStatus,
       error: null,
     });
+    aiGenAlreadyLogged = true;
     if (genInsertErr) {
       return {
         ok: false,
@@ -2671,8 +2692,25 @@ Produce 4–6 specific named attractions in rough chronological order for a full
       nextPreferences: nextPreferences as Record<string, unknown>,
     };
   } catch (e) {
+    aiGenStatus = isAbortLikeError(e) ? "cancelled" : "failed";
     const msg = e instanceof Error ? e.message : "Unknown error";
+    aiGenError = aiGenStatus === "cancelled" ? null : msg.slice(0, 1000);
     return { ok: false, error: msg, code: "AI_ERROR" };
+  } finally {
+    if (!aiGenAlreadyLogged && aiGenStatus !== "pending") {
+      // Always-write guarantee: if we reached the Anthropic call site we must record
+      // the outcome (success/failed/cancelled) — never let an outer catch swallow logging.
+      await recordAiGeneration({
+        userId: user.id,
+        tripId: input.tripId,
+        prompt: aiGenPrompt,
+        model,
+        inputTokens,
+        outputTokens,
+        status: aiGenStatus,
+        error: aiGenError,
+      });
+    }
   }
 }
 
@@ -3100,6 +3138,12 @@ END USER CONSTRAINTS`
 
   let inputTokens = 0;
   let outputTokens = 0;
+  let aiGenStatus: AiGenerationStatus = "pending";
+  let aiGenError: string | null = null;
+  // `recordAiGeneration` is invoked at most once per call: success and structured-failure
+  // paths set this flag so the `finally` block doesn't double-write.
+  let aiGenAlreadyLogged = false;
+  const aiGenPrompt = `day_timeline:${dateKey}\n${userBlock}`;
 
   try {
     const DAY_TL_MAX = 8192;
@@ -3155,17 +3199,20 @@ END USER CONSTRAINTS`
       const uFail = msg.usage as AnthropicMessageUsage | undefined;
       inputTokens = inputTokensFromUsage(uFail);
       outputTokens = uFail?.output_tokens ?? 0;
+      aiGenStatus = "failed";
+      aiGenError = "truncated: stop_reason: max_tokens (day_timeline, after budget increase)";
       await recordAiGeneration({
         userId: user.id,
         tripId,
-        prompt: `day_timeline:${dateKey}\n${userBlock}`,
+        prompt: aiGenPrompt,
         model,
         inputTokens,
         outputTokens,
         success: false,
-        status: "failed",
-        error: "truncated: stop_reason: max_tokens (day_timeline, after budget increase)",
+        status: aiGenStatus,
+        error: aiGenError,
       });
+      aiGenAlreadyLogged = true;
       return {
         ok: false,
         error:
@@ -3184,17 +3231,20 @@ END USER CONSTRAINTS`
       parsed = JSON.parse(stripCodeFences(rawText));
     } catch {
       console.warn("[ai] day_timeline json_parse_failed", { tripId, dateKey });
+      aiGenStatus = "failed";
+      aiGenError = "Invalid JSON (day_timeline)";
       await recordAiGeneration({
         userId: user.id,
         tripId,
-        prompt: `day_timeline:${dateKey}\n${userBlock}`,
+        prompt: aiGenPrompt,
         model,
         inputTokens,
         outputTokens,
         success: false,
-        status: "failed",
-        error: "Invalid JSON (day_timeline)",
+        status: aiGenStatus,
+        error: aiGenError,
       });
+      aiGenAlreadyLogged = true;
       return {
         ok: false,
         error: "The plan could not be read. Try again.",
@@ -3209,17 +3259,20 @@ END USER CONSTRAINTS`
         dateKey,
         reason: validated.reason,
       });
+      aiGenStatus = "failed";
+      aiGenError = `day_timeline validation: ${validated.reason}`;
       await recordAiGeneration({
         userId: user.id,
         tripId,
-        prompt: `day_timeline:${dateKey}\n${userBlock}`,
+        prompt: aiGenPrompt,
         model,
         inputTokens,
         outputTokens,
         success: false,
-        status: "failed",
-        error: `day_timeline validation: ${validated.reason}`,
+        status: aiGenStatus,
+        error: aiGenError,
       });
+      aiGenAlreadyLogged = true;
       return {
         ok: false,
         error: "The plan was incomplete. Try again.",
@@ -3268,20 +3321,24 @@ END USER CONSTRAINTS`
       .eq("owner_id", user.id);
 
     if (upErr) {
+      aiGenStatus = "failed";
+      aiGenError = `trip update failed: ${upErr.message}`.slice(0, 1000);
       return { ok: false, error: upErr.message, code: "ai_failure" };
     }
 
+    aiGenStatus = "success";
     const { error: genInsertErr } = await recordAiGeneration({
       userId: user.id,
       tripId,
-      prompt: `day_timeline:${dateKey}\n${userBlock}`,
+      prompt: aiGenPrompt,
       model,
       inputTokens,
       outputTokens,
       success: true,
-      status: "success",
+      status: aiGenStatus,
       error: null,
     });
+    aiGenAlreadyLogged = true;
     if (genInsertErr) {
       return {
         ok: false,
@@ -3305,6 +3362,9 @@ END USER CONSTRAINTS`
     return { ok: true, timeline: value, assignments: nextAssignments };
   } catch (e: unknown) {
     const status = (e as { status?: number })?.status;
+    aiGenStatus = isAbortLikeError(e) ? "cancelled" : "failed";
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    aiGenError = aiGenStatus === "cancelled" ? null : msg.slice(0, 1000);
     if (status === 429) {
       return {
         ok: false,
@@ -3312,8 +3372,22 @@ END USER CONSTRAINTS`
         code: "rate_limit",
       };
     }
-    const msg = e instanceof Error ? e.message : "Unknown error";
     console.warn("[ai] day_timeline request_failed", { tripId, dateKey, msg });
     return { ok: false, error: msg, code: "ai_failure" };
+  } finally {
+    if (!aiGenAlreadyLogged && aiGenStatus !== "pending") {
+      // Always-write guarantee: if we reached the Anthropic call site we must record
+      // the outcome (success/failed/cancelled) — never let an outer catch swallow logging.
+      await recordAiGeneration({
+        userId: user.id,
+        tripId,
+        prompt: aiGenPrompt,
+        model,
+        inputTokens,
+        outputTokens,
+        status: aiGenStatus,
+        error: aiGenError,
+      });
+    }
   }
 }

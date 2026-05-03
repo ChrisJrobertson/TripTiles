@@ -152,6 +152,7 @@ async function createTripActionWithRegion(
       dates: [input.startDate, input.endDate],
       logTag,
     });
+    // payloadKeys is logged once we have built `row` below — see [createTrip] payload.
 
     try {
       await assertTierAllows(user.id, "trips");
@@ -223,6 +224,12 @@ async function createTripActionWithRegion(
       is_archived: false,
     };
 
+    console.log("[createTrip] payload", {
+      userId: user.id,
+      logTag,
+      payloadKeys: Object.keys(row),
+    });
+
     const { data: inserted, error } = await supabase
       .from("trips")
       .insert(row)
@@ -230,11 +237,19 @@ async function createTripActionWithRegion(
       .single();
 
     if (error) {
-      console.error("[createTrip] failed", {
-        error: error.message,
-        code: "code" in error ? String((error as { code?: string }).code) : undefined,
+      const errAny = error as {
+        code?: string;
+        hint?: string;
+        details?: string;
+      };
+      console.error("[createTrip] insert failed", {
         userId: user.id,
         logTag,
+        message: error.message,
+        code: errAny.code,
+        hint: errAny.hint,
+        details: errAny.details,
+        payloadKeys: Object.keys(row),
       });
       return { ok: false, error: `Insert failed: ${error.message}` };
     }
