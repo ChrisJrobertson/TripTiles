@@ -1,4 +1,7 @@
-export type TierErrorCode = "TIER_LIMIT_TRIPS" | "TIER_AI_DISABLED";
+export type TierErrorCode =
+  | "TIER_LIMIT_TRIPS"
+  | "TIER_AI_DISABLED"
+  | "TIER_PUBLIC_SHARE_DISABLED";
 
 export class TierError extends Error {
   readonly code: TierErrorCode;

@@ -1,14 +1,19 @@
 import { createClient } from "@/lib/supabase/server";
 import { readProfileRow } from "@/lib/supabase/profile-read";
 import { TierError, type TierErrorCode } from "@/lib/tier-errors";
-import { getEffectiveRetailTier, normalizeToRetailTier, type RetailTier } from "@/lib/tiers";
+import {
+  canRetailTierPublishPublic,
+  getEffectiveRetailTier,
+  normalizeToRetailTier,
+  type RetailTier,
+} from "@/lib/tiers";
 
 /** Product tier for planner gating (Free / Pro / Family). */
 export type Tier = RetailTier;
 
 export type ProductTier = RetailTier;
 
-export type TierFeature = "trips" | "ai";
+export type TierFeature = "trips" | "ai" | "public_share";
 
 export { formatProductTierName } from "./product-tier-labels";
 
@@ -122,6 +127,15 @@ export async function assertTierAllows(
     const n = await countActiveTripsForUser(userId);
     if (n >= cap) {
       throw new TierError("TIER_LIMIT_TRIPS");
+    }
+    return;
+  }
+  if (feature === "public_share") {
+    if (!canRetailTierPublishPublic(tier)) {
+      throw new TierError(
+        "TIER_PUBLIC_SHARE_DISABLED",
+        "Public sharing is included with Pro and Family plans.",
+      );
     }
   }
 }

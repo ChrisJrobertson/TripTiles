@@ -6,6 +6,13 @@ export type RetailTier = "free" | "pro" | "family";
 /** @deprecated Prefer `RetailTier`; kept for legacy call sites. */
 export type Tier = UserTier;
 
+/** Documented per-call model labels; runtime selection in `src/actions/ai.ts` is authoritative. */
+export type TierAIModels = {
+  main_plan: string;
+  day_timeline: string;
+  must_dos: string;
+};
+
 export interface TierFeatures {
   max_trips: number | null;
   /** @deprecated Display only; Smart Plan limits use `max_smart_plan_runs`. */
@@ -14,7 +21,9 @@ export interface TierFeatures {
   max_custom_tiles: number | null;
   pdf_watermark: boolean;
   pdf_design: "standard";
-  ai_model: "claude-haiku-4-5-20251001";
+  // Per-call model assignments. Runtime selection in src/actions/ai.ts is the source of truth
+  // for what the API actually invokes; this object documents what each tier should expect.
+  ai_models: TierAIModels;
   family_sharing: boolean;
   max_family_members: number;
   priority_support: boolean;
@@ -82,7 +91,11 @@ const freeTier: FreeTierConfig = {
     max_custom_tiles: 5,
     pdf_watermark: true,
     pdf_design: "standard",
-    ai_model: "claude-haiku-4-5-20251001",
+    ai_models: {
+      main_plan: "Haiku 4.5",
+      day_timeline: "Haiku 4.5",
+      must_dos: "Haiku 4.5",
+    },
     family_sharing: false,
     max_family_members: 0,
     priority_support: false,
@@ -119,7 +132,11 @@ const proTier: ProTierConfig = {
     max_custom_tiles: null,
     pdf_watermark: false,
     pdf_design: "standard",
-    ai_model: "claude-haiku-4-5-20251001",
+    ai_models: {
+      main_plan: "Haiku 4.5",
+      day_timeline: "Sonnet 4.6",
+      must_dos: "Sonnet 4.6",
+    },
     family_sharing: false,
     max_family_members: 0,
     priority_support: false,
@@ -156,7 +173,11 @@ const familyTier: FamilyTierConfig = {
     max_custom_tiles: null,
     pdf_watermark: false,
     pdf_design: "standard",
-    ai_model: "claude-haiku-4-5-20251001",
+    ai_models: {
+      main_plan: "Haiku 4.5",
+      day_timeline: "Sonnet 4.6",
+      must_dos: "Sonnet 4.6",
+    },
     family_sharing: true,
     max_family_members: 4,
     priority_support: false,
@@ -183,6 +204,7 @@ export function normalizeToRetailTier(tier: string | null | undefined): RetailTi
   if (t === "pro") return "pro";
   if (
     t === "family" ||
+    t === "premium" ||
     t === "concierge" ||
     t === "agent_admin" ||
     t === "agent_staff"
@@ -215,6 +237,10 @@ export function getEffectiveRetailTier(profile: ProfileTierInput): RetailTier {
 
 export function getTierConfig(tier: string): TierConfig {
   return TIERS[normalizeToRetailTier(tier)];
+}
+
+export function canRetailTierPublishPublic(tier: string): boolean {
+  return getTierConfig(tier).features.public_share;
 }
 
 /** Next renewal amount copy for Stripe subscription rows (GBP). */
