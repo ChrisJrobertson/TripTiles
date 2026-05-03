@@ -910,46 +910,50 @@ async function incrementAiGenerationCounter(
 
 type AiGenerationStatus = "pending" | "success" | "failed" | "cancelled";
 
-async function recordTweakDayAiGeneration(params: {
+type AiGenerationInsertResult = {
+  error: { message: string } | null;
+};
+
+async function recordAiGeneration(params: {
   userId: string;
   tripId: string;
-  date: string;
-  mode: DayTweakMode;
-  preview: boolean;
+  prompt: string | null;
   model: string;
   inputTokens: number;
   outputTokens: number;
+  success?: boolean;
   status: AiGenerationStatus;
   error: string | null;
-}): Promise<void> {
+}): Promise<AiGenerationInsertResult> {
   try {
     const admin = createServiceRoleClient();
     const { error } = await admin.from("ai_generations").insert({
       user_id: params.userId,
       trip_id: params.tripId,
-      prompt: `tweakDay:${params.mode}:${params.date}:preview=${params.preview ? "on" : "off"}`,
+      prompt: params.prompt,
       model: params.model,
       input_tokens: params.inputTokens,
       output_tokens: params.outputTokens,
       cost_gbp_pence: null,
-      success: params.status === "success",
+      success: params.success ?? params.status === "success",
       status: params.status,
       error: params.error,
     });
-    if (!error) return;
-    console.error("[ai] tweakDay ai_generations insert failed", {
+    if (!error) return { error: null };
+    console.error("[ai] ai_generations insert failed", {
       tripId: params.tripId,
-      date: params.date,
       status: params.status,
       message: error.message,
     });
+    return { error: { message: error.message } };
   } catch (error) {
-    console.error("[ai] tweakDay ai_generations insert crashed", {
+    const message = error instanceof Error ? error.message : "unknown";
+    console.error("[ai] ai_generations insert crashed", {
       tripId: params.tripId,
-      date: params.date,
       status: params.status,
-      message: error instanceof Error ? error.message : "unknown",
+      message,
     });
+    return { error: { message } };
   }
 }
 
@@ -1152,12 +1156,10 @@ ${input.mode === "freetext" ? `\nUSER REQUEST: ${input.freetext?.trim()}` : ""}`
     return { status: "error", error: msg, code: "ai_failure" };
   } finally {
     if (aiGenStatus !== "pending") {
-      await recordTweakDayAiGeneration({
+      await recordAiGeneration({
         userId: user.id,
         tripId: input.tripId,
-        date: dateKey,
-        mode: input.mode,
-        preview: input.preview,
+        prompt: `tweakDay:${input.mode}:${dateKey}:preview=${input.preview ? "on" : "off"}`,
         model,
         inputTokens,
         outputTokens,
@@ -1848,17 +1850,16 @@ export async function runGenerateAIPlan(
         if (lastStopReason === "max_tokens") {
           inputTokens = localInputTokens;
           outputTokens = localOutputTokens;
-          await supabase.from("ai_generations").insert({
-            user_id: user.id,
-            trip_id: input.tripId,
+          await recordAiGeneration({
+            userId: user.id,
+            tripId: input.tripId,
             prompt: currentUserMessage,
             model,
-            input_tokens: localInputTokens,
-            output_tokens: localOutputTokens,
-            cost_gbp_pence: null,
+            inputTokens: localInputTokens,
+            outputTokens: localOutputTokens,
             success: false,
-            status: "truncated",
-            error: "stop_reason: max_tokens (after output budget increase)",
+            status: "failed",
+            error: "truncated: stop_reason: max_tokens (after output budget increase)",
           });
           return {
             ok: false,
@@ -1919,14 +1920,13 @@ export async function runGenerateAIPlan(
       if (streamStoppedEarly) {
         inputTokens = localInputTokens;
         outputTokens = localOutputTokens;
-        await supabase.from("ai_generations").insert({
-          user_id: user.id,
-          trip_id: input.tripId,
+        await recordAiGeneration({
+          userId: user.id,
+          tripId: input.tripId,
           prompt: currentUserMessage,
           model,
-          input_tokens: localInputTokens,
-          output_tokens: localOutputTokens,
-          cost_gbp_pence: null,
+          inputTokens: localInputTokens,
+          outputTokens: localOutputTokens,
           success: false,
           status: "failed",
           error: "AI stream stopped early",
@@ -1957,14 +1957,13 @@ export async function runGenerateAIPlan(
         inputTokens = localInputTokens;
         outputTokens = localOutputTokens;
         if (rawText.trim().length > 0) {
-          await supabase.from("ai_generations").insert({
-            user_id: user.id,
-            trip_id: input.tripId,
+          await recordAiGeneration({
+            userId: user.id,
+            tripId: input.tripId,
             prompt: currentUserMessage,
             model,
-            input_tokens: localInputTokens,
-            output_tokens: localOutputTokens,
-            cost_gbp_pence: null,
+            inputTokens: localInputTokens,
+            outputTokens: localOutputTokens,
             success: false,
             status: "failed",
             error: "AI stream incomplete (invalid JSON)",
@@ -1977,14 +1976,13 @@ export async function runGenerateAIPlan(
             stoppedEarly: true,
           };
         }
-        await supabase.from("ai_generations").insert({
-          user_id: user.id,
-          trip_id: input.tripId,
+        await recordAiGeneration({
+          userId: user.id,
+          tripId: input.tripId,
           prompt: currentUserMessage,
           model,
-          input_tokens: localInputTokens,
-          output_tokens: localOutputTokens,
-          cost_gbp_pence: null,
+          inputTokens: localInputTokens,
+          outputTokens: localOutputTokens,
           success: false,
           status: "failed",
           error: "Invalid JSON from model",
@@ -2041,14 +2039,13 @@ export async function runGenerateAIPlan(
           ? `No valid assignments after validation (pre-retry: ${parseDetail})`
           : `No valid assignments after validation (after retry: ${parseDetail})`;
       if (planAttempt === 0) {
-        await supabase.from("ai_generations").insert({
-          user_id: user.id,
-          trip_id: input.tripId,
+        await recordAiGeneration({
+          userId: user.id,
+          tripId: input.tripId,
           prompt: currentUserMessage,
           model,
-          input_tokens: localInputTokens,
-          output_tokens: localOutputTokens,
-          cost_gbp_pence: null,
+          inputTokens: localInputTokens,
+          outputTokens: localOutputTokens,
           success: false,
           status: "failed",
           error: errDetail,
@@ -2085,14 +2082,13 @@ export async function runGenerateAIPlan(
       }
       inputTokens = localInputTokens;
       outputTokens = localOutputTokens;
-      await supabase.from("ai_generations").insert({
-        user_id: user.id,
-        trip_id: input.tripId,
+      await recordAiGeneration({
+        userId: user.id,
+        tripId: input.tripId,
         prompt: currentUserMessage,
         model,
-        input_tokens: localInputTokens,
-        output_tokens: localOutputTokens,
-        cost_gbp_pence: null,
+        inputTokens: localInputTokens,
+        outputTokens: localOutputTokens,
         success: false,
         status: "failed",
         error: errDetail,
@@ -2148,14 +2144,13 @@ export async function runGenerateAIPlan(
       sortedDateKeys,
     });
     if (Object.keys(guarded).length === 0) {
-      await supabase.from("ai_generations").insert({
-        user_id: user.id,
-        trip_id: input.tripId,
+      await recordAiGeneration({
+        userId: user.id,
+        tripId: input.tripId,
         prompt: currentUserMessage,
         model,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_gbp_pence: null,
+        inputTokens,
+        outputTokens,
         success: false,
         status: "failed",
         error: "Plan failed guardrail validation (empty after cleanup)",
@@ -2255,14 +2250,13 @@ export async function runGenerateAIPlan(
     });
 
     if (upErr) {
-      await supabase.from("ai_generations").insert({
-        user_id: user.id,
-        trip_id: input.tripId,
+      await recordAiGeneration({
+        userId: user.id,
+        tripId: input.tripId,
         prompt: currentUserMessage,
         model,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_gbp_pence: null,
+        inputTokens,
+        outputTokens,
         success: false,
         status: "failed",
         error: upErr.message,
@@ -2271,22 +2265,17 @@ export async function runGenerateAIPlan(
       return { ok: false, error: "AI_ERROR", message: upErr.message };
     }
 
-    const { error: genInsertErr } = await supabase
-      .from("ai_generations")
-      .insert({
-        user_id: user.id,
-        trip_id: input.tripId,
-        prompt: currentUserMessage,
-        model,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_gbp_pence: null,
-        success: true,
-        status: dayNoteAssignmentCheck.warningText
-          ? "success_with_warnings"
-          : "success",
-        error: dayNoteAssignmentCheck.warningText,
-      });
+    const { error: genInsertErr } = await recordAiGeneration({
+      userId: user.id,
+      tripId: input.tripId,
+      prompt: currentUserMessage,
+      model,
+      inputTokens,
+      outputTokens,
+      success: true,
+      status: "success",
+      error: dayNoteAssignmentCheck.warningText,
+    });
 
     if (genInsertErr) {
       return {
@@ -2343,15 +2332,13 @@ export async function runGenerateAIPlan(
     };
   } catch (e) {
     if (isAbortLikeError(e)) {
-      const supabase2 = await createClient();
-      await supabase2.from("ai_generations").insert({
-        user_id: user.id,
-        trip_id: input.tripId,
+      await recordAiGeneration({
+        userId: user.id,
+        tripId: input.tripId,
         prompt: composedUserMessage,
         model,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_gbp_pence: null,
+        inputTokens,
+        outputTokens,
         success: false,
         status: "cancelled",
         error: null,
@@ -2380,15 +2367,13 @@ export async function runGenerateAIPlan(
       userId: user.id,
       details: { ok: false, error: "AI_ERROR", message: msg },
     });
-    const supabase2 = await createClient();
-    await supabase2.from("ai_generations").insert({
-      user_id: user.id,
-      trip_id: input.tripId,
+    await recordAiGeneration({
+      userId: user.id,
+      tripId: input.tripId,
       prompt: composedUserMessage,
       model,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      cost_gbp_pence: null,
+      inputTokens,
+      outputTokens,
       success: false,
       status: "failed",
       error: msg,
@@ -2586,14 +2571,13 @@ Produce 4–6 specific named attractions in rough chronological order for a full
     try {
       parsed = JSON.parse(stripCodeFences(rawText));
     } catch {
-      await supabase.from("ai_generations").insert({
-        user_id: user.id,
-        trip_id: input.tripId,
+      await recordAiGeneration({
+        userId: user.id,
+        tripId: input.tripId,
         prompt: `must_dos:${input.parkId}\n${userBlock}`,
         model,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_gbp_pence: null,
+        inputTokens,
+        outputTokens,
         success: false,
         status: "failed",
         error: "Invalid JSON (must_dos single park)",
@@ -2607,14 +2591,13 @@ Produce 4–6 specific named attractions in rough chronological order for a full
     const root = parsed as Record<string, unknown>;
     const items = normaliseMustDoItems(root.must_dos);
     if (items.length === 0) {
-      await supabase.from("ai_generations").insert({
-        user_id: user.id,
-        trip_id: input.tripId,
+      await recordAiGeneration({
+        userId: user.id,
+        tripId: input.tripId,
         prompt: `must_dos:${input.parkId}\n${userBlock}`,
         model,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_gbp_pence: null,
+        inputTokens,
+        outputTokens,
         success: false,
         status: "failed",
         error: "empty must_dos",
@@ -2652,14 +2635,13 @@ Produce 4–6 specific named attractions in rough chronological order for a full
       return { ok: false, error: upErr.message, code: "AI_ERROR" };
     }
 
-    const { error: genInsertErr } = await supabase.from("ai_generations").insert({
-      user_id: user.id,
-      trip_id: input.tripId,
+    const { error: genInsertErr } = await recordAiGeneration({
+      userId: user.id,
+      tripId: input.tripId,
       prompt: `must_dos:${input.parkId}\n${userBlock}`,
       model,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      cost_gbp_pence: null,
+      inputTokens,
+      outputTokens,
       success: true,
       status: "success",
       error: null,
@@ -3173,17 +3155,16 @@ END USER CONSTRAINTS`
       const uFail = msg.usage as AnthropicMessageUsage | undefined;
       inputTokens = inputTokensFromUsage(uFail);
       outputTokens = uFail?.output_tokens ?? 0;
-      await supabase.from("ai_generations").insert({
-        user_id: user.id,
-        trip_id: tripId,
+      await recordAiGeneration({
+        userId: user.id,
+        tripId,
         prompt: `day_timeline:${dateKey}\n${userBlock}`,
         model,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_gbp_pence: null,
+        inputTokens,
+        outputTokens,
         success: false,
-        status: "truncated",
-        error: "stop_reason: max_tokens (day_timeline, after budget increase)",
+        status: "failed",
+        error: "truncated: stop_reason: max_tokens (day_timeline, after budget increase)",
       });
       return {
         ok: false,
@@ -3203,14 +3184,13 @@ END USER CONSTRAINTS`
       parsed = JSON.parse(stripCodeFences(rawText));
     } catch {
       console.warn("[ai] day_timeline json_parse_failed", { tripId, dateKey });
-      await supabase.from("ai_generations").insert({
-        user_id: user.id,
-        trip_id: tripId,
+      await recordAiGeneration({
+        userId: user.id,
+        tripId,
         prompt: `day_timeline:${dateKey}\n${userBlock}`,
         model,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_gbp_pence: null,
+        inputTokens,
+        outputTokens,
         success: false,
         status: "failed",
         error: "Invalid JSON (day_timeline)",
@@ -3229,14 +3209,13 @@ END USER CONSTRAINTS`
         dateKey,
         reason: validated.reason,
       });
-      await supabase.from("ai_generations").insert({
-        user_id: user.id,
-        trip_id: tripId,
+      await recordAiGeneration({
+        userId: user.id,
+        tripId,
         prompt: `day_timeline:${dateKey}\n${userBlock}`,
         model,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_gbp_pence: null,
+        inputTokens,
+        outputTokens,
         success: false,
         status: "failed",
         error: `day_timeline validation: ${validated.reason}`,
@@ -3292,20 +3271,17 @@ END USER CONSTRAINTS`
       return { ok: false, error: upErr.message, code: "ai_failure" };
     }
 
-    const { error: genInsertErr } = await supabase.from("ai_generations").insert(
-      {
-        user_id: user.id,
-        trip_id: tripId,
-        prompt: `day_timeline:${dateKey}\n${userBlock}`,
-        model,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cost_gbp_pence: null,
-        success: true,
-        status: "success",
-        error: null,
-      },
-    );
+    const { error: genInsertErr } = await recordAiGeneration({
+      userId: user.id,
+      tripId,
+      prompt: `day_timeline:${dateKey}\n${userBlock}`,
+      model,
+      inputTokens,
+      outputTokens,
+      success: true,
+      status: "success",
+      error: null,
+    });
     if (genInsertErr) {
       return {
         ok: false,
