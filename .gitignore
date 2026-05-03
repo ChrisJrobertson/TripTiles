@@ -39,6 +39,7 @@ yarn-error.log*
 
 # supabase cli
 supabase/.temp/
+supabase/.branches/
 
 # typescript
 *.tsbuildinfo
