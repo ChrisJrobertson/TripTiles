@@ -263,12 +263,59 @@ async function runSmartPlanWithTimeoutAndRetry(
 
 type StreamHandlers = {
   onDelta: (deltaText: string) => void;
+  signal?: AbortSignal;
 };
+
+const SMART_PLAN_STREAM_IDLE_TIMEOUT_MS = 30_000;
+
+async function logSmartPlanTimeout(input: GenerateAIPlanInput): Promise<void> {
+  try {
+    await fetch("/api/log-error", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      keepalive: true,
+      body: JSON.stringify({
+        message: "smart_plan_timeout",
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        context: {
+          prefix: "[AUTO-ERROR] smart_plan_timeout",
+          tripId: input.tripId,
+          mode: input.mode,
+          dateKey: input.dateKey ?? null,
+        },
+      }),
+    });
+  } catch {
+    // Best-effort observability only.
+  }
+}
 
 async function streamGeneratePlan(
   input: GenerateAIPlanInput,
   handlers: StreamHandlers,
 ): Promise<GenerateAIPlanResult> {
+  const controller = new AbortController();
+  const signal = handlers.signal;
+  const abortFromParent = () => controller.abort(signal?.reason);
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+    } else {
+      signal.addEventListener("abort", abortFromParent, { once: true });
+    }
+  }
+
+  let idleTimer: number | null = null;
+  const resetIdleTimer = () => {
+    if (idleTimer) window.clearTimeout(idleTimer);
+    idleTimer = window.setTimeout(() => {
+      controller.abort(new DOMException("Smart Plan timed out", "TimeoutError"));
+    }, SMART_PLAN_STREAM_IDLE_TIMEOUT_MS);
+  };
+  resetIdleTimer();
+
   const response = await fetch("/api/ai/generate-plan-stream", {
     method: "POST",
     headers: {
@@ -276,6 +323,7 @@ async function streamGeneratePlan(
     },
     body: JSON.stringify(input),
     cache: "no-store",
+    signal: controller.signal,
   });
 
   if (!response.ok || !response.body) {
@@ -293,6 +341,7 @@ async function streamGeneratePlan(
       .map((line) => line.trimEnd())
       .filter(Boolean);
     if (lines.length === 0) return;
+    resetIdleTimer();
 
     let eventName = "message";
     const dataLines: string[] = [];
@@ -320,32 +369,52 @@ async function streamGeneratePlan(
       return;
     }
 
+    if (eventName === "ping") {
+      return;
+    }
+
     if (eventName === "done") {
       doneResult = payload as GenerateAIPlanResult;
     }
   };
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let separatorIndex = buffer.indexOf("\n\n");
-    while (separatorIndex !== -1) {
-      const block = buffer.slice(0, separatorIndex);
-      parseEventBlock(block);
-      buffer = buffer.slice(separatorIndex + 2);
-      separatorIndex = buffer.indexOf("\n\n");
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      resetIdleTimer();
+      buffer += decoder.decode(value, { stream: true });
+      let separatorIndex = buffer.indexOf("\n\n");
+      while (separatorIndex !== -1) {
+        const block = buffer.slice(0, separatorIndex);
+        parseEventBlock(block);
+        buffer = buffer.slice(separatorIndex + 2);
+        separatorIndex = buffer.indexOf("\n\n");
+      }
     }
-  }
 
-  if (buffer.trim().length > 0) {
-    parseEventBlock(buffer.trim());
-  }
+    if (buffer.trim().length > 0) {
+      parseEventBlock(buffer.trim());
+    }
 
-  if (!doneResult) {
-    throw new Error("Smart Plan stream ended unexpectedly.");
+    if (!doneResult) {
+      throw new Error("Smart Plan stream ended unexpectedly.");
+    }
+    return doneResult;
+  } catch (error) {
+    if (controller.signal.aborted && signal?.aborted) {
+      throw new DOMException("Smart Plan cancelled", "AbortError");
+    }
+    if (controller.signal.aborted) {
+      await logSmartPlanTimeout(input);
+      throw new Error("Smart Plan timed out — try again");
+    }
+    throw error;
+  } finally {
+    if (idleTimer) window.clearTimeout(idleTimer);
+    signal?.removeEventListener("abort", abortFromParent);
+    reader.releaseLock();
   }
-  return doneResult;
 }
 
 type AchievementToastItem = { id: string; def: AchievementDefinition };
@@ -427,6 +496,7 @@ export function PlannerClient({
   const [smartCanRetryPartial, setSmartCanRetryPartial] = useState(false);
   const [smartRetryPayload, setSmartRetryPayload] =
     useState<SmartPlanGeneratePayload | null>(null);
+  const smartPlanAbortRef = useRef<AbortController | null>(null);
   /** Per-park must-do generation (mobile + day panel). */
   const [mustDosGenLoading, setMustDosGenLoading] = useState<{
     dateKey: string;
@@ -1170,6 +1240,9 @@ export function PlannerClient({
   const handleSmartPlanGenerate = useCallback(
     async (payload: SmartPlanGeneratePayload) => {
       if (!activeTripId) return;
+      const generationController = new AbortController();
+      smartPlanAbortRef.current?.abort();
+      smartPlanAbortRef.current = generationController;
       setSmartError(null);
       setSmartCanRetryPartial(false);
       setSmartRetryPayload(payload);
@@ -1256,6 +1329,7 @@ export function PlannerClient({
             preserveExistingSlots: !payload.replaceExistingTiles,
           },
           {
+            signal: generationController.signal,
             onDelta() {
               if (!sawFirstToken) {
                 sawFirstToken = true;
@@ -1263,6 +1337,9 @@ export function PlannerClient({
             },
           },
         );
+        if (generationController.signal.aborted) {
+          return;
+        }
         if (!res.ok) {
           if (res.error === "SMART_PLAN_TRUNCATED") {
             setSmartError(
@@ -1337,6 +1414,9 @@ export function PlannerClient({
         setSmartOpen(false);
         startTransition(() => router.refresh());
       } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+          return;
+        }
         if (sawFirstToken) {
           setSmartCanRetryPartial(true);
           setSmartError("Stopped early — retry?");
@@ -1351,6 +1431,9 @@ export function PlannerClient({
         setSmartError(msg);
         showToast(msg);
       } finally {
+        if (smartPlanAbortRef.current === generationController) {
+          smartPlanAbortRef.current = null;
+        }
         setIsAiGenerating(false);
       }
     },
@@ -1362,6 +1445,16 @@ export function PlannerClient({
       trips,
     ],
   );
+
+  const cancelSmartPlanGeneration = useCallback(() => {
+    smartPlanAbortRef.current?.abort();
+    smartPlanAbortRef.current = null;
+    setIsAiGenerating(false);
+    setSmartOpen(false);
+    setSmartError(null);
+    setSmartCanRetryPartial(false);
+    showToast("Smart Plan cancelled");
+  }, []);
 
   useEffect(() => {
     if (!initialAutoGenerate || !activeTripId) return;
@@ -2772,6 +2865,7 @@ export function PlannerClient({
           if (!smartRetryPayload || isAiGenerating) return;
           void handleSmartPlanGenerate(smartRetryPayload);
         }}
+        onCancelGeneration={cancelSmartPlanGeneration}
         onGenerate={handleSmartPlanGenerate}
         onTripPatch={(patch) => {
           if (!activeTripId) return;

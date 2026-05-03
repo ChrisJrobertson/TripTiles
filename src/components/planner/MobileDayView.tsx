@@ -234,7 +234,7 @@ function MobileDayStrip({
   }, [activeIndex]);
 
   return (
-    <div className="scrollbar-hide sticky top-0 z-20 overflow-x-auto border-b border-gold/20 bg-white/50 backdrop-blur-md">
+    <div className="scrollbar-hide relative overflow-x-auto border-b border-gold/20 bg-white/50">
       <div className="flex min-w-max gap-2 px-4 py-3">
         {days.map((day, i) => (
           <button
@@ -661,7 +661,7 @@ export function MobileDayView({
           key={safeIndex}
           className="animate-mobile-card-enter"
         >
-          <div className="sticky top-[4.25rem] z-10 mb-4 border-b border-gold/20 bg-white/50 pb-2 backdrop-blur-md">
+          <div className="relative mb-4 border-b border-gold/20 bg-white/50 pb-2">
             <div className="font-sans text-xs font-semibold uppercase tracking-wider text-gold">
               Day {safeIndex + 1} of {days.length}
             </div>

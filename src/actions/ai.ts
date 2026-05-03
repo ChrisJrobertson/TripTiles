@@ -501,7 +501,21 @@ export type GenerateAIPlanResult =
 
 type GenerateAIPlanOptions = {
   onTextDelta?: (deltaText: string) => void | Promise<void>;
+  signal?: AbortSignal;
 };
+
+class SmartPlanAbortError extends Error {
+  constructor() {
+    super("Smart Plan cancelled");
+    this.name = "AbortError";
+  }
+}
+
+function isAbortLikeError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  if (error instanceof Error && error.name === "AbortError") return true;
+  return false;
+}
 
 function inputTokensFromUsage(usage: AnthropicMessageUsage | undefined): number {
   const u = usage ?? {};
@@ -763,6 +777,14 @@ export async function runGenerateAIPlan(
       ok: false,
       error: "AI_ERROR",
       message: "ANTHROPIC_API_KEY is not configured.",
+    };
+  }
+
+  if (options.signal?.aborted) {
+    return {
+      ok: false,
+      error: "AI_ERROR",
+      message: "Smart Plan cancelled",
     };
   }
 
@@ -1053,26 +1075,32 @@ export async function runGenerateAIPlan(
             parksCount: parksForPrompt.length,
             details: { planAttempt, tPass, maxTokens: maxTok },
           });
-          const stream = await anthropic.messages.create({
-            model,
-            max_tokens: maxTok,
-            stream: true,
-            system: [
-              {
-                type: "text",
-                text: SYSTEM_PROMPT,
-                cache_control: { type: "ephemeral" },
-              },
-              {
-                type: "text",
-                text: parksSystemText,
-                cache_control: { type: "ephemeral" },
-              },
-            ],
-            messages: [{ role: "user", content: currentUserMessage }],
-          });
+          const stream = await anthropic.messages.create(
+            {
+              model,
+              max_tokens: maxTok,
+              stream: true,
+              system: [
+                {
+                  type: "text",
+                  text: SYSTEM_PROMPT,
+                  cache_control: { type: "ephemeral" },
+                },
+                {
+                  type: "text",
+                  text: parksSystemText,
+                  cache_control: { type: "ephemeral" },
+                },
+              ],
+              messages: [{ role: "user", content: currentUserMessage }],
+            },
+            options.signal ? { signal: options.signal } : undefined,
+          );
 
           for await (const event of stream) {
+            if (options.signal?.aborted) {
+              throw new SmartPlanAbortError();
+            }
             if (event.type === "message_start") {
               const usage = event.message.usage as
                 | AnthropicMessageUsage
@@ -1614,6 +1642,26 @@ export async function runGenerateAIPlan(
       mustDos: Object.keys(nextMustMap).length > 0 ? nextMustMap : null,
     };
   } catch (e) {
+    if (isAbortLikeError(e)) {
+      const supabase2 = await createClient();
+      await supabase2.from("ai_generations").insert({
+        user_id: user.id,
+        trip_id: input.tripId,
+        prompt: composedUserMessage,
+        model,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cost_gbp_pence: null,
+        success: false,
+        status: "cancelled",
+        error: null,
+      });
+      return {
+        ok: false,
+        error: "AI_ERROR",
+        message: "Smart Plan cancelled",
+      };
+    }
     const msg = e instanceof Error ? e.message : "Unknown error";
     const stack = e instanceof Error ? e.stack : undefined;
     await reportAiGenAutoError({

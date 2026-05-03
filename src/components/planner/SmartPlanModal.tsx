@@ -95,6 +95,7 @@ type Props = {
   canRetryPartial?: boolean;
   onRetryPartial?: () => void;
   onGenerate: (payload: SmartPlanGeneratePayload) => Promise<void>;
+  onCancelGeneration?: () => void;
   /** Keep trip.planning_preferences in sync when skip-line toggles change (avoids stale local state). */
   onTripPatch?: (patch: Partial<Trip>) => void;
   /** Day-detail ride priorities for this date (for touring summaries and names). */
@@ -118,6 +119,7 @@ export function SmartPlanModal({
   canRetryPartial = false,
   onRetryPartial,
   onGenerate,
+  onCancelGeneration,
   onTripPatch,
   ridePrioritiesForDay = [],
 }: Props) {
@@ -1007,11 +1009,11 @@ export function SmartPlanModal({
           <div className="flex flex-wrap gap-2 pt-2">
             <button
               type="button"
-              onClick={onClose}
-              disabled={isGenerating || sequencerBusy}
-              className="rounded-lg border border-royal/30 bg-white px-4 py-2.5 font-sans text-sm font-medium text-royal disabled:opacity-60"
+              onClick={isGenerating ? onCancelGeneration : onClose}
+              disabled={sequencerBusy}
+              className="min-h-[44px] rounded-lg border border-royal/30 bg-white px-4 py-2.5 font-sans text-sm font-medium text-royal disabled:opacity-60"
             >
-              Cancel
+              {isGenerating ? "Stop generating" : "Cancel"}
             </button>
             <button
               type="submit"
