@@ -908,6 +908,51 @@ async function incrementAiGenerationCounter(
     .eq("id", userId);
 }
 
+type AiGenerationStatus = "pending" | "success" | "failed" | "cancelled";
+
+async function recordTweakDayAiGeneration(params: {
+  userId: string;
+  tripId: string;
+  date: string;
+  mode: DayTweakMode;
+  preview: boolean;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  status: AiGenerationStatus;
+  error: string | null;
+}): Promise<void> {
+  try {
+    const admin = createServiceRoleClient();
+    const { error } = await admin.from("ai_generations").insert({
+      user_id: params.userId,
+      trip_id: params.tripId,
+      prompt: `tweakDay:${params.mode}:${params.date}:preview=${params.preview ? "on" : "off"}`,
+      model: params.model,
+      input_tokens: params.inputTokens,
+      output_tokens: params.outputTokens,
+      cost_gbp_pence: null,
+      success: params.status === "success",
+      status: params.status,
+      error: params.error,
+    });
+    if (!error) return;
+    console.error("[ai] tweakDay ai_generations insert failed", {
+      tripId: params.tripId,
+      date: params.date,
+      status: params.status,
+      message: error.message,
+    });
+  } catch (error) {
+    console.error("[ai] tweakDay ai_generations insert crashed", {
+      tripId: params.tripId,
+      date: params.date,
+      status: params.status,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
+}
+
 async function successfulAiGenerationCount(
   tripId: string,
   userId: string,
@@ -1049,6 +1094,8 @@ ${input.mode === "freetext" ? `\nUSER REQUEST: ${input.freetext?.trim()}` : ""}`
 
   let inputTokens = 0;
   let outputTokens = 0;
+  let aiGenStatus: AiGenerationStatus = "pending";
+  let aiGenError: string | null = null;
   try {
     const msg = await anthropic.messages.create({
       model,
@@ -1072,19 +1119,7 @@ ${input.mode === "freetext" ? `\nUSER REQUEST: ${input.freetext?.trim()}` : ""}`
       parkResolver,
     );
     if (!proposed) throw new Error("AI returned an invalid day plan.");
-
-    await supabase.from("ai_generations").insert({
-      user_id: user.id,
-      trip_id: input.tripId,
-      prompt: `day_tweak:${dateKey}:${input.mode}\n${userPrompt}`,
-      model,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      cost_gbp_pence: null,
-      success: true,
-      status: input.preview ? "preview" : "success",
-      error: null,
-    });
+    aiGenStatus = "success";
     await incrementAiGenerationCounter(
       user.id,
       profile as Record<string, number | undefined> | null,
@@ -1104,24 +1139,32 @@ ${input.mode === "freetext" ? `\nUSER REQUEST: ${input.freetext?.trim()}` : ""}`
       source: dayTweakSourceForMode(input.mode),
       model,
     });
-    return applied.status === "applied"
-      ? { ...applied, generationsUsedForTrip }
-      : { status: "error", error: applied.error, code: "ai_failure" };
+    if (applied.status === "applied") {
+      return { ...applied, generationsUsedForTrip };
+    }
+    aiGenStatus = "failed";
+    aiGenError = applied.error.slice(0, 1000);
+    return { status: "error", error: applied.error, code: "ai_failure" };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
-    await supabase.from("ai_generations").insert({
-      user_id: user.id,
-      trip_id: input.tripId,
-      prompt: `day_tweak:${dateKey}:${input.mode}\n${userPrompt}`,
-      model,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      cost_gbp_pence: null,
-      success: false,
-      status: "failed",
-      error: msg,
-    });
+    aiGenStatus = isAbortLikeError(e) ? "cancelled" : "failed";
+    aiGenError = msg.slice(0, 1000);
     return { status: "error", error: msg, code: "ai_failure" };
+  } finally {
+    if (aiGenStatus !== "pending") {
+      await recordTweakDayAiGeneration({
+        userId: user.id,
+        tripId: input.tripId,
+        date: dateKey,
+        mode: input.mode,
+        preview: input.preview,
+        model,
+        inputTokens,
+        outputTokens,
+        status: aiGenStatus,
+        error: aiGenError,
+      });
+    }
   }
 }
 
