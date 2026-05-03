@@ -174,6 +174,8 @@ export type MobileDayViewProps = {
     dateKey: string,
     options?: { focusNotes?: boolean },
   ) => void;
+  onOpenDayTweak?: (dateKey: string) => void;
+  onUndoDayTweak?: (dateKey: string) => void;
   /** Per-park AI must-dos (same server flow as day detail). */
   onGenerateMustDosForPark?: (dateKey: string, parkId: string) => void;
   mustDosGenLoading?: { dateKey: string; parkId: string } | null;
@@ -392,6 +394,8 @@ export function MobileDayView({
   rideCountsByDay,
   onRideDayPrioritiesUpdated,
   onOpenDayDetail,
+  onOpenDayTweak,
+  onUndoDayTweak,
   onGenerateMustDosForPark,
   mustDosGenLoading = null,
   onToggleMustDoDone,
@@ -642,6 +646,9 @@ export function MobileDayView({
 
   const hasTips =
     Boolean(activeDay?.aiNote?.trim()) || Boolean(activeDay?.userNote?.trim());
+  const activeDaySnapshotCount = (trip.day_snapshots ?? []).filter(
+    (snap) => snap.date === activeDay.dateKey,
+  ).length;
 
   return (
     <div className="md:hidden">
@@ -705,6 +712,27 @@ export function MobileDayView({
                   Crowds: {activeDay.crowdLabel}
                 </span>
               </div>
+            ) : null}
+            {!readOnly && onOpenDayTweak ? (
+              <button
+                type="button"
+                className="mt-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-royal px-4 py-3 font-sans text-sm font-semibold text-cream shadow-sm transition active:bg-royal/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                onClick={() => onOpenDayTweak(activeDay.dateKey)}
+              >
+                <span aria-hidden>✨</span>
+                AI tweak this day
+              </button>
+            ) : null}
+            {!readOnly && onUndoDayTweak && activeDaySnapshotCount > 0 ? (
+              <button
+                type="button"
+                className="mt-2 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border border-gold/40 bg-white px-4 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition active:bg-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                title={`Restores the day to before the last AI tweak — ${activeDaySnapshotCount} changes ago`}
+                onClick={() => onUndoDayTweak(activeDay.dateKey)}
+              >
+                <span aria-hidden>↩</span>
+                Undo last AI change
+              </button>
             ) : null}
           </div>
 

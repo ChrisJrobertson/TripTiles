@@ -51,6 +51,24 @@ function randomSlugSuffix(): string {
 
 const SLOT_TYPES = ["am", "pm", "lunch", "dinner"] as const;
 
+function dayAssignmentsEqual(a: Assignment | undefined, b: Assignment | undefined): boolean {
+  return JSON.stringify(a ?? {}) === JSON.stringify(b ?? {});
+}
+
+function filterDaySnapshots(
+  raw: unknown,
+  changedDates: Set<string>,
+): unknown[] {
+  if (!Array.isArray(raw) || changedDates.size === 0) {
+    return Array.isArray(raw) ? raw : [];
+  }
+  return raw.filter((snap) => {
+    if (!snap || typeof snap !== "object" || Array.isArray(snap)) return false;
+    const date = (snap as { date?: unknown }).date;
+    return typeof date !== "string" || !changedDates.has(date);
+  });
+}
+
 function localDateYmd(base: Date, addDays: number): string {
   const d = new Date(
     base.getFullYear(),
@@ -461,10 +479,37 @@ export async function updateAssignmentsAction(input: {
 
     const now = new Date().toISOString();
     const supabase = await createClient();
+    const { data: existing, error: fetchErr } = await supabase
+      .from("trips")
+      .select("assignments, day_snapshots")
+      .eq("id", input.tripId)
+      .eq("owner_id", user.id)
+      .maybeSingle();
+
+    if (fetchErr) return { ok: false, error: fetchErr.message };
+    if (!existing) return { ok: false, error: "Trip not found." };
+
+    const currentAssignments =
+      existing.assignments &&
+      typeof existing.assignments === "object" &&
+      !Array.isArray(existing.assignments)
+        ? (existing.assignments as Assignments)
+        : {};
+    const changedDates = new Set<string>();
+    for (const date of new Set([
+      ...Object.keys(currentAssignments),
+      ...Object.keys(input.assignments),
+    ])) {
+      if (!dayAssignmentsEqual(currentAssignments[date], input.assignments[date])) {
+        changedDates.add(date);
+      }
+    }
+
     const { error } = await supabase
       .from("trips")
       .update({
         assignments: input.assignments,
+        day_snapshots: filterDaySnapshots(existing.day_snapshots, changedDates),
         updated_at: now,
         last_opened_at: now,
         previous_assignments_snapshot: null,
@@ -687,6 +732,23 @@ export async function publishTripAction(
   try {
     const user = await getCurrentUser();
     if (!user) return { ok: false, error: "Not signed in." };
+
+    try {
+      await assertTierAllows(user.id, "public_share");
+    } catch (e) {
+      const mapped = tierErrorToClientPayload(e);
+      if (mapped?.code === "TIER_PUBLIC_SHARE_DISABLED") {
+        return {
+          ok: false,
+          error:
+            "Public sharing is included with Pro and Family. Upgrade to publish this trip.",
+        };
+      }
+      if (e instanceof TierError) {
+        return { ok: false, error: e.message };
+      }
+      throw e;
+    }
 
     const supabase = await createClient();
     const { data: tripRow, error: loadErr } = await supabase

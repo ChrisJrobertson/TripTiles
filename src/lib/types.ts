@@ -83,6 +83,32 @@ export type Assignment = Partial<Record<SlotType, SlotAssignmentValue>>;
 /** Date keys: zero-padded `YYYY-MM-DD` (matches `formatDateISO`). */
 export type Assignments = Record<string, Assignment>;
 
+export type DaySnapshotSource =
+  | "ai_day_tweak"
+  | "ai_day_smart_suggest"
+  | "ai_day_freetext";
+
+export type DaySnapshotPreferencesSubset = {
+  ai_day_timeline?: unknown;
+  ai_day_crowd_notes?: string;
+  day_notes?: string;
+};
+
+export type DaySnapshot = {
+  date: string;
+  before: {
+    assignments_for_day: Assignment;
+    preferences_subset: DaySnapshotPreferencesSubset;
+  };
+  after: {
+    assignments_for_day: Assignment;
+    preferences_subset: DaySnapshotPreferencesSubset;
+  };
+  model: string;
+  created_at: string;
+  source: DaySnapshotSource;
+};
+
 /** Wizard / Smart Plan pacing choice. */
 export type PlanningPace = "relaxed" | "balanced" | "intense";
 
@@ -348,6 +374,8 @@ export interface Trip {
   previous_assignments_snapshot?: Assignments | null;
   previous_preferences_snapshot?: Record<string, unknown> | null;
   previous_assignments_snapshot_at?: string | null;
+  /** Last 3 day-scoped AI changes; powers per-day undo. */
+  day_snapshots: DaySnapshot[];
   /** Smart Plan wizard answers; null if user chose manual-only creation. */
   planning_preferences: TripPlanningPreferences | null;
   /** Planner UI palette (`src/lib/themes.ts`). */

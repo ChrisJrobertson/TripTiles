@@ -4,7 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getCustomTilesForRegion } from "@/lib/db/custom-tiles";
 import { getParksForRegion } from "@/lib/db/parks";
 import { getRegionById } from "@/lib/db/regions";
-import { getTripById } from "@/lib/db/trips";
+import { getTripById, mapTripRow } from "@/lib/db/trips";
 import {
   applyArrivalDayNoThemeParks,
   enforceAiPlanGuardrails,
@@ -27,6 +27,9 @@ import type {
   AiDayTimelineModelId,
   AiDayTimelineRowTag,
   CustomTile,
+  DaySnapshot,
+  DaySnapshotPreferencesSubset,
+  DaySnapshotSource,
   Park,
   SlotType,
   Trip,
@@ -225,6 +228,7 @@ Rules:
 Return ONLY the JSON.`;
 
 const SLOT_SET = new Set<SlotType>(["am", "pm", "lunch", "dinner"]);
+const SLOT_TYPES: SlotType[] = ["am", "pm", "lunch", "dinner"];
 
 /** Incoming overwrites the same day/slot keys (full overlay). */
 function mergeAssignmentsOverlay(
@@ -503,6 +507,659 @@ type GenerateAIPlanOptions = {
   onTextDelta?: (deltaText: string) => void | Promise<void>;
   signal?: AbortSignal;
 };
+
+const DAY_TWEAK_SYSTEM = `You are tweaking ONE DAY of an existing theme park trip plan.
+You MUST only modify the day specified.
+You MUST NOT suggest changes to other days.
+Output JSON only - no markdown, no commentary, no scoring leakage.
+
+Schema:
+{
+  "assignments_for_day": {
+    "AM": "<parkId or null>",
+    "PM": "<parkId or null>",
+    "LUN": "<parkId or null>",
+    "DIN": "<parkId or null>"
+  },
+  "day_note": "<short tip, <=120 chars, UK English>",
+  "crowd_level": "<quiet|moderate|busy>"
+}`;
+
+type DayTweakMode = "smart_suggest" | "freetext";
+
+export type DayTweakProposed = {
+  assignments_for_day: Assignment;
+  preferences_subset: DaySnapshotPreferencesSubset;
+  note?: string;
+};
+
+export type DayTweakResult =
+  | {
+      status: "preview";
+      proposed: DayTweakProposed;
+      model: string;
+      generationsUsedForTrip: number;
+    }
+  | {
+      status: "applied";
+      proposed: DayTweakProposed;
+      assignments: Assignments;
+      preferences: Record<string, unknown>;
+      daySnapshots: DaySnapshot[];
+      model: string;
+      generationsUsedForTrip: number;
+    }
+  | { status: "error"; error: string; code?: "tier_limit" | "invalid_day" | "ai_failure" }
+  | { status: "cancelled" };
+
+function readDateStringMapValue(
+  prefs: Record<string, unknown>,
+  key: string,
+  date: string,
+): unknown {
+  const raw = prefs[key];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  return (raw as Record<string, unknown>)[date];
+}
+
+function readDayPreferencesSubset(
+  prefs: Record<string, unknown>,
+  date: string,
+): DaySnapshotPreferencesSubset {
+  const timeline = readDateStringMapValue(prefs, "ai_day_timeline", date);
+  const crowd = readDateStringMapValue(prefs, "ai_day_crowd_notes", date);
+  const note = readDateStringMapValue(prefs, "day_notes", date);
+  return {
+    ...(timeline !== undefined ? { ai_day_timeline: timeline } : {}),
+    ...(typeof crowd === "string" ? { ai_day_crowd_notes: crowd } : {}),
+    ...(typeof note === "string" ? { day_notes: note } : {}),
+  };
+}
+
+function setMapValueForDate(
+  prefs: Record<string, unknown>,
+  key: string,
+  date: string,
+  value: unknown,
+): void {
+  const raw = prefs[key];
+  const map =
+    raw && typeof raw === "object" && !Array.isArray(raw)
+      ? { ...(raw as Record<string, unknown>) }
+      : {};
+  if (value === undefined || value === null || value === "") {
+    delete map[date];
+  } else {
+    map[date] = value;
+  }
+  if (Object.keys(map).length === 0) delete prefs[key];
+  else prefs[key] = map;
+}
+
+function mergeDayPreferencesSubset(
+  base: Record<string, unknown>,
+  date: string,
+  subset: DaySnapshotPreferencesSubset,
+): Record<string, unknown> {
+  const next = { ...base };
+  setMapValueForDate(next, "ai_day_timeline", date, subset.ai_day_timeline);
+  setMapValueForDate(next, "ai_day_crowd_notes", date, subset.ai_day_crowd_notes);
+  setMapValueForDate(next, "day_notes", date, subset.day_notes);
+  return next;
+}
+
+function buildAssignmentsWithDay(
+  base: Assignments,
+  date: string,
+  day: Assignment,
+): Assignments {
+  const next = { ...base };
+  const cleaned: Assignment = {};
+  for (const slot of SLOT_TYPES) {
+    const val = day[slot];
+    if (typeof val === "string" && val.trim()) cleaned[slot] = val.trim();
+    else if (val && typeof val === "object") cleaned[slot] = val;
+  }
+  if (Object.keys(cleaned).length > 0) next[date] = cleaned;
+  else delete next[date];
+  return next;
+}
+
+function parseDayTweakJson(
+  parsed: unknown,
+  resolver: AiParkIdResolver,
+): DayTweakProposed | null {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const obj = parsed as Record<string, unknown>;
+  const rawAssignments = obj.assignments_for_day;
+  if (
+    !rawAssignments ||
+    typeof rawAssignments !== "object" ||
+    Array.isArray(rawAssignments)
+  ) {
+    return null;
+  }
+  const source = rawAssignments as Record<string, unknown>;
+  const aliases: Record<SlotType, string[]> = {
+    am: ["AM", "am"],
+    pm: ["PM", "pm"],
+    lunch: ["LUN", "lunch", "LUNCH"],
+    dinner: ["DIN", "dinner", "DINNER"],
+  };
+  const assignments_for_day: Assignment = {};
+  for (const slot of SLOT_TYPES) {
+    let raw: unknown;
+    for (const key of aliases[slot]) {
+      if (key in source) {
+        raw = source[key];
+        break;
+      }
+    }
+    if (raw == null || raw === "") continue;
+    if (typeof raw !== "string") return null;
+    const canon = resolver.resolve(raw);
+    if (canon == null) return null;
+    assignments_for_day[slot] = canon;
+  }
+  const dayNote =
+    typeof obj.day_note === "string"
+      ? sanitizeDayNote(softTruncateToMax(obj.day_note.trim(), 120))
+      : "";
+  const crowd =
+    obj.crowd_level === "quiet" ||
+    obj.crowd_level === "moderate" ||
+    obj.crowd_level === "busy"
+      ? `Crowds look ${obj.crowd_level} for this adjusted day.`
+      : undefined;
+  return {
+    assignments_for_day,
+    preferences_subset: {
+      ...(crowd ? { ai_day_crowd_notes: crowd } : {}),
+      ...(dayNote ? { day_notes: dayNote } : {}),
+    },
+    ...(dayNote ? { note: dayNote } : {}),
+  };
+}
+
+function normaliseDaySnapshots(raw: unknown): DaySnapshot[] {
+  return Array.isArray(raw)
+    ? (raw.filter(
+        (snap) => snap && typeof snap === "object" && !Array.isArray(snap),
+      ) as DaySnapshot[])
+    : [];
+}
+
+function nextDaySnapshots(
+  existing: unknown,
+  date: string,
+  before: DaySnapshot["before"],
+  after: DaySnapshot["after"],
+  source: DaySnapshotSource,
+  model: string,
+): DaySnapshot[] {
+  const snap: DaySnapshot = {
+    date,
+    before,
+    after,
+    model,
+    created_at: new Date().toISOString(),
+    source,
+  };
+  return [...normaliseDaySnapshots(existing), snap]
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, 3);
+}
+
+async function fetchOwnedTripForAi(
+  tripId: string,
+  userId: string,
+): Promise<Trip | null> {
+  const admin = createServiceRoleClient();
+  const { data, error } = await admin
+    .from("trips")
+    .select("*")
+    .eq("id", tripId)
+    .eq("owner_id", userId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return mapTripRow(data as Record<string, unknown>);
+}
+
+export async function pushDaySnapshot(
+  tripId: string,
+  date: string,
+  before: DaySnapshot["before"],
+  after: DaySnapshot["after"],
+  source: DaySnapshotSource,
+  model: string,
+): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user) return;
+  const admin = createServiceRoleClient();
+  const { data } = await admin
+    .from("trips")
+    .select("day_snapshots")
+    .eq("id", tripId)
+    .eq("owner_id", user.id)
+    .maybeSingle();
+  if (!data) return;
+  await admin
+    .from("trips")
+    .update({
+      day_snapshots: nextDaySnapshots(
+        (data as { day_snapshots?: unknown }).day_snapshots,
+        date,
+        before,
+        after,
+        source,
+        model,
+      ),
+    })
+    .eq("id", tripId)
+    .eq("owner_id", user.id);
+}
+
+export async function popDaySnapshot(
+  tripId: string,
+  date: string,
+): Promise<
+  | {
+      restored: true;
+      assignments: Assignments;
+      preferences: Record<string, unknown>;
+      daySnapshots: DaySnapshot[];
+      snapshot: { before: DaySnapshot["before"] };
+    }
+  | { restored: false; error?: string }
+> {
+  const user = await getCurrentUser();
+  if (!user) return { restored: false, error: "Not signed in." };
+  const admin = createServiceRoleClient();
+  const { data, error } = await admin
+    .from("trips")
+    .select("assignments, preferences, day_snapshots")
+    .eq("id", tripId)
+    .eq("owner_id", user.id)
+    .maybeSingle();
+  if (error || !data) return { restored: false, error: "Trip not found." };
+
+  const snapshots = normaliseDaySnapshots(
+    (data as { day_snapshots?: unknown }).day_snapshots,
+  );
+  const match = snapshots
+    .filter((snap) => snap.date === date)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+  if (!match) return { restored: false, error: "Nothing to undo." };
+
+  const remaining = snapshots.filter((snap) => snap !== match);
+  const baseAssignments =
+    data.assignments && typeof data.assignments === "object"
+      ? (data.assignments as Assignments)
+      : {};
+  const basePrefs =
+    data.preferences && typeof data.preferences === "object"
+      ? (data.preferences as Record<string, unknown>)
+      : {};
+  const assignments = buildAssignmentsWithDay(
+    baseAssignments,
+    date,
+    match.before.assignments_for_day,
+  );
+  const preferences = mergeDayPreferencesSubset(
+    basePrefs,
+    date,
+    match.before.preferences_subset,
+  );
+  const { error: upErr } = await admin
+    .from("trips")
+    .update({
+      assignments,
+      preferences,
+      day_snapshots: remaining,
+      updated_at: new Date().toISOString(),
+      last_opened_at: new Date().toISOString(),
+    })
+    .eq("id", tripId)
+    .eq("owner_id", user.id);
+  if (upErr) return { restored: false, error: upErr.message };
+  revalidatePath("/planner");
+  revalidatePath(`/trip/${tripId}`);
+  return {
+    restored: true,
+    assignments,
+    preferences,
+    daySnapshots: remaining,
+    snapshot: { before: match.before },
+  };
+}
+
+async function applyDayTweakProposal(params: {
+  trip: Trip;
+  userId: string;
+  date: string;
+  proposed: DayTweakProposed;
+  source: DaySnapshotSource;
+  model: string;
+}): Promise<Extract<DayTweakResult, { status: "applied" }> | { status: "error"; error: string }> {
+  const { trip, userId, date, proposed, source, model } = params;
+  const admin = createServiceRoleClient();
+  const before = {
+    assignments_for_day: trip.assignments[date] ?? {},
+    preferences_subset: readDayPreferencesSubset(trip.preferences ?? {}, date),
+  };
+  const after = {
+    assignments_for_day: proposed.assignments_for_day,
+    preferences_subset: proposed.preferences_subset,
+  };
+  const assignments = buildAssignmentsWithDay(
+    trip.assignments,
+    date,
+    proposed.assignments_for_day,
+  );
+  const preferences = mergeDayPreferencesSubset(
+    trip.preferences ?? {},
+    date,
+    proposed.preferences_subset,
+  );
+  const daySnapshots = nextDaySnapshots(
+    trip.day_snapshots,
+    date,
+    before,
+    after,
+    source,
+    model,
+  );
+  const now = new Date().toISOString();
+  const { error } = await admin
+    .from("trips")
+    .update({
+      assignments,
+      preferences,
+      day_snapshots: daySnapshots,
+      updated_at: now,
+      last_opened_at: now,
+    })
+    .eq("id", trip.id)
+    .eq("owner_id", userId);
+  if (error) return { status: "error", error: error.message };
+
+  revalidatePath("/planner");
+  revalidatePath(`/trip/${trip.id}`);
+  return {
+    status: "applied",
+    proposed,
+    assignments,
+    preferences,
+    daySnapshots,
+    model,
+    generationsUsedForTrip: 0,
+  };
+}
+
+async function incrementAiGenerationCounter(
+  userId: string,
+  previousProfile: Record<string, number | undefined> | null,
+): Promise<void> {
+  const supabase = await createClient();
+  const prevTotal = Number(previousProfile?.[AI_GENERATIONS_TOTAL_COLUMN] ?? 0);
+  await supabase
+    .from("profiles")
+    .update({ [AI_GENERATIONS_TOTAL_COLUMN]: prevTotal + 1 })
+    .eq("id", userId);
+}
+
+async function successfulAiGenerationCount(
+  tripId: string,
+  userId: string,
+): Promise<number> {
+  try {
+    return Math.max(1, await getSuccessfulAiGenerationCountForTrip(tripId, userId));
+  } catch {
+    return 1;
+  }
+}
+
+function dayTweakSourceForMode(mode: DayTweakMode): DaySnapshotSource {
+  return mode === "freetext" ? "ai_day_freetext" : "ai_day_smart_suggest";
+}
+
+export async function tweakDay(input: {
+  tripId: string;
+  date: string;
+  mode: DayTweakMode;
+  freetext?: string;
+  preview: boolean;
+}): Promise<DayTweakResult> {
+  const user = await getCurrentUser();
+  if (!user) return { status: "error", error: "Not signed in.", code: "ai_failure" };
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { status: "error", error: "AI is not configured.", code: "ai_failure" };
+  }
+  if (input.mode === "freetext" && !input.freetext?.trim()) {
+    return { status: "error", error: "Tell the AI what to change.", code: "invalid_day" };
+  }
+  if (input.freetext && input.freetext.length > 500) {
+    return { status: "error", error: "Keep requests to 500 characters.", code: "invalid_day" };
+  }
+
+  try {
+    await assertTierAllows(user.id, "ai");
+    if (!(await currentUserCanGenerateAI())) {
+      return {
+        status: "error",
+        error: "You have used your Smart Plan allowance on the Free plan.",
+        code: "tier_limit",
+      };
+    }
+  } catch (e) {
+    const mapped = tierErrorToClientPayload(e);
+    if (mapped?.code === "TIER_AI_DISABLED") {
+      return {
+        status: "error",
+        error:
+          mapped.error ||
+          "Smart Plan is not available on your current plan. Upgrade on Pricing.",
+        code: "tier_limit",
+      };
+    }
+    if (isTierLoadFailure(e)) {
+      return {
+        status: "error",
+        error: tierLoadFailureUserMessage(),
+        code: "ai_failure",
+      };
+    }
+    throw e;
+  }
+
+  let dateKey: string;
+  try {
+    dateKey = formatDateKey(parseDate(`${input.date}T12:00:00`));
+  } catch {
+    return { status: "error", error: "Invalid date.", code: "invalid_day" };
+  }
+
+  const trip = await fetchOwnedTripForAi(input.tripId, user.id);
+  if (!trip) return { status: "error", error: "Trip not found.", code: "invalid_day" };
+  const allowed = allowedDateKeys(trip.start_date, trip.end_date);
+  if (!allowed.has(dateKey)) {
+    return {
+      status: "error",
+      error: "This date is outside your trip dates.",
+      code: "invalid_day",
+    };
+  }
+
+  const rid = trip.region_id ?? (trip.destination !== "custom" ? trip.destination : null);
+  if (!rid) {
+    return {
+      status: "error",
+      error: "This trip needs a destination region.",
+      code: "ai_failure",
+    };
+  }
+  const region = await getRegionById(rid);
+  if (!region) return { status: "error", error: "Could not load region.", code: "ai_failure" };
+
+  const builtInParks = await getParksForRegion(rid);
+  const customTileRows = await getCustomTilesForRegion(user.id, rid);
+  const customAsParks = customTileRows.map(customTileToPark);
+  const parksForPrompt = [
+    ...(trip.has_cruise ? builtInParks : builtInParks.filter((p) => !requiresCruiseSegment(p))),
+    ...(trip.has_cruise ? customAsParks : customAsParks.filter((p) => !requiresCruiseSegment(p))),
+  ];
+  const parkResolver = buildAiParkIdResolver(parksForPrompt, input.tripId);
+  const parkNameById = new Map(parksForPrompt.map((p) => [p.id, p.name] as const));
+  const sortedDates = [...allowed].sort();
+  const dayNumber = sortedDates.indexOf(dateKey) + 1;
+  const currentDay = trip.assignments[dateKey] ?? {};
+  const otherDays = sortedDates
+    .filter((d) => d !== dateKey)
+    .map((d) => `${d}: ${JSON.stringify(trip.assignments[d] ?? {})}`)
+    .join("\n");
+  const model = smartPlanModelForProfileTier(undefined);
+  const tripPrefs = trip.planning_preferences
+    ? formatPlanningPreferencesForPrompt(trip.planning_preferences, parkNameById)
+    : "";
+  const parksSystemText = buildParksListSystemText(
+    `${region.name} (${region.country})`,
+    parksForPrompt,
+    customTileRows,
+    trip.has_cruise,
+  );
+  const userPrompt = `Trip: ${trip.family_name}, ${region.name}, ${trip.start_date}-${trip.end_date}, ${trip.adults} adults / ${trip.children} children aged ${(trip.child_ages ?? []).join(", ") || "none"}
+Day to tweak: ${dateKey} (Day ${dayNumber} of ${sortedDates.length})
+Current day state: ${JSON.stringify(currentDay)}
+Current day labels: ${SLOT_TYPES.map((slot) => {
+    const id = getParkIdFromSlotValue(currentDay[slot]);
+    return `${slot}: ${id ? (parkNameById.get(id) ?? id) : "empty"}`;
+  }).join(", ")}
+Other days assigned (DO NOT MODIFY):
+${otherDays || "None"}
+User trip preferences:
+${tripPrefs || "No saved Smart Plan preferences."}
+${input.mode === "freetext" ? `\nUSER REQUEST: ${input.freetext?.trim()}` : ""}`;
+
+  const supabase = await createClient();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select(`${AI_GENERATIONS_TOTAL_COLUMN}, tier`)
+    .eq("id", user.id)
+    .maybeSingle();
+
+  let inputTokens = 0;
+  let outputTokens = 0;
+  try {
+    const msg = await anthropic.messages.create({
+      model,
+      max_tokens: 2000,
+      system: [
+        { type: "text", text: DAY_TWEAK_SYSTEM },
+        {
+          type: "text",
+          text: parksSystemText,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: userPrompt }],
+    });
+    const usage = msg.usage as AnthropicMessageUsage | undefined;
+    inputTokens = inputTokensFromUsage(usage);
+    outputTokens = usage?.output_tokens ?? 0;
+    const rawText = msg.content[0]?.type === "text" ? msg.content[0].text : "";
+    const proposed = parseDayTweakJson(
+      JSON.parse(stripCodeFences(rawText)),
+      parkResolver,
+    );
+    if (!proposed) throw new Error("AI returned an invalid day plan.");
+
+    await supabase.from("ai_generations").insert({
+      user_id: user.id,
+      trip_id: input.tripId,
+      prompt: `day_tweak:${dateKey}:${input.mode}\n${userPrompt}`,
+      model,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      cost_gbp_pence: null,
+      success: true,
+      status: input.preview ? "preview" : "success",
+      error: null,
+    });
+    await incrementAiGenerationCounter(
+      user.id,
+      profile as Record<string, number | undefined> | null,
+    );
+    const generationsUsedForTrip = await successfulAiGenerationCount(
+      input.tripId,
+      user.id,
+    );
+    if (input.preview) {
+      return { status: "preview", proposed, model, generationsUsedForTrip };
+    }
+    const applied = await applyDayTweakProposal({
+      trip,
+      userId: user.id,
+      date: dateKey,
+      proposed,
+      source: dayTweakSourceForMode(input.mode),
+      model,
+    });
+    return applied.status === "applied"
+      ? { ...applied, generationsUsedForTrip }
+      : { status: "error", error: applied.error, code: "ai_failure" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    await supabase.from("ai_generations").insert({
+      user_id: user.id,
+      trip_id: input.tripId,
+      prompt: `day_tweak:${dateKey}:${input.mode}\n${userPrompt}`,
+      model,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      cost_gbp_pence: null,
+      success: false,
+      status: "failed",
+      error: msg,
+    });
+    return { status: "error", error: msg, code: "ai_failure" };
+  }
+}
+
+export async function confirmTweakDay(input: {
+  tripId: string;
+  date: string;
+  mode: DayTweakMode;
+  proposed: DayTweakProposed;
+  model?: string;
+}): Promise<DayTweakResult> {
+  const user = await getCurrentUser();
+  if (!user) return { status: "error", error: "Not signed in.", code: "ai_failure" };
+  try {
+    await assertTierAllows(user.id, "ai");
+  } catch (e) {
+    const mapped = tierErrorToClientPayload(e);
+    return {
+      status: "error",
+      error: mapped?.error || "Smart Plan is not available on your current plan.",
+      code: "tier_limit",
+    };
+  }
+  const dateKey = formatDateKey(parseDate(`${input.date}T12:00:00`));
+  const trip = await fetchOwnedTripForAi(input.tripId, user.id);
+  if (!trip) return { status: "error", error: "Trip not found.", code: "invalid_day" };
+  const applied = await applyDayTweakProposal({
+    trip,
+    userId: user.id,
+    date: dateKey,
+    proposed: input.proposed,
+    source: dayTweakSourceForMode(input.mode),
+    model: input.model ?? smartPlanModelForProfileTier(undefined),
+  });
+  if (applied.status === "error") {
+    return { status: "error", error: applied.error, code: "ai_failure" };
+  }
+  return applied;
+}
 
 class SmartPlanAbortError extends Error {
   constructor() {

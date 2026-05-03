@@ -111,6 +111,8 @@ export type DayDetailLayerProps = {
   onPrioritiesUpdated: (items: TripRidePriority[]) => void;
   onSaveDayNote: (dateKey: string, text: string) => void;
   onOpenSmartPlan: () => void;
+  onOpenDayTweak: (dateKey: string) => void;
+  onUndoDayTweak: (dateKey: string) => void;
   onGenerateMustDosForPark: (parkId: string) => void;
   generatingMustDosParkId: string | null;
   onToggleMustDoDone: (
@@ -142,6 +144,8 @@ export function DayDetailLayer({
   onPrioritiesUpdated,
   onSaveDayNote,
   onOpenSmartPlan,
+  onOpenDayTweak,
+  onUndoDayTweak,
   onGenerateMustDosForPark,
   generatingMustDosParkId,
   onToggleMustDoDone,
@@ -375,6 +379,12 @@ export function DayDetailLayer({
   const todayK = todayKey();
   const showJumpToday =
     isTodayInTrip(trip) && dayDate !== todayK && eachDateKeyInRange(trip.start_date, trip.end_date).includes(todayK);
+  const daySnapshotCount = (trip.day_snapshots ?? []).filter(
+    (snap) => snap.date === dayDate,
+  ).length;
+  const latestDaySnapshot = [...(trip.day_snapshots ?? [])]
+    .filter((snap) => snap.date === dayDate)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -745,6 +755,25 @@ export function DayDetailLayer({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 font-sans text-xs text-royal/80">
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-royal px-3 py-2 font-sans text-xs font-semibold text-cream shadow-sm transition hover:bg-royal/90"
+              onClick={() => queueAction(() => onOpenDayTweak(dayDate))}
+            >
+              <span aria-hidden>✨</span>
+              AI tweak this day
+            </button>
+            {daySnapshotCount > 0 && latestDaySnapshot ? (
+              <button
+                type="button"
+                className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-gold/40 bg-white px-3 py-2 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-cream"
+                title={`Restores the day to before the last AI tweak — ${daySnapshotCount} changes ago`}
+                onClick={() => queueAction(() => onUndoDayTweak(dayDate))}
+              >
+                <span aria-hidden>↩</span>
+                Undo last AI change
+              </button>
+            ) : null}
             {dc ? (
               <span className="inline-flex items-center gap-1">
                 <span aria-hidden>{dc.conditions.weatherEmoji}</span>

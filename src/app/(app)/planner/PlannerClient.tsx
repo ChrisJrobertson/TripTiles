@@ -9,6 +9,7 @@ import {
   generateAIPlanAction,
   generateDayTimeline,
   generateMustDosForPark,
+  popDaySnapshot,
   type GenerateAIPlanInput,
   type GenerateAIPlanResult,
 } from "@/actions/ai";
@@ -53,6 +54,7 @@ import { PlanningSections } from "@/components/planner/PlanningSections";
 import { Countdown } from "@/components/planner/Countdown";
 import { CustomTileModal } from "@/components/planner/CustomTileModal";
 import { DayDetailLayer } from "@/components/planner/DayDetailLayer";
+import { DayTweakModal } from "@/components/planner/DayTweakModal";
 import { DayNotesPanel } from "@/components/planner/DayNotesPanel";
 import { AdventureTitleColorControl } from "@/components/planner/AdventureTitleColorControl";
 import { EditableTitle } from "@/components/planner/EditableTitle";
@@ -492,6 +494,7 @@ export function PlannerClient({
   const [smartOpen, setSmartOpen] = useState(false);
   const [smartError, setSmartError] = useState<string | null>(null);
   const [smartPlanUndoOpen, setSmartPlanUndoOpen] = useState(false);
+  const [dayTweakDate, setDayTweakDate] = useState<string | null>(null);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [smartCanRetryPartial, setSmartCanRetryPartial] = useState(false);
   const [smartRetryPayload, setSmartRetryPayload] =
@@ -1583,6 +1586,9 @@ export function PlannerClient({
             previous_assignments_snapshot: null,
             previous_preferences_snapshot: null,
             previous_assignments_snapshot_at: null,
+            day_snapshots: (t.day_snapshots ?? []).filter(
+              (snap) => snap.date !== dateKey,
+            ),
           };
           scheduleAssignmentsSave(t.id, nextAss);
           return next;
@@ -1610,6 +1616,9 @@ export function PlannerClient({
             previous_assignments_snapshot: null,
             previous_preferences_snapshot: null,
             previous_assignments_snapshot_at: null,
+            day_snapshots: (t.day_snapshots ?? []).filter(
+              (snap) => snap.date !== dateKey,
+            ),
           };
           scheduleAssignmentsSave(t.id, nextAss);
           return next;
@@ -1710,6 +1719,9 @@ export function PlannerClient({
             previous_assignments_snapshot: null,
             previous_preferences_snapshot: null,
             previous_assignments_snapshot_at: null,
+            day_snapshots: (t.day_snapshots ?? []).filter(
+              (snap) => snap.date !== dateKey,
+            ),
           };
         }),
       );
@@ -1750,6 +1762,9 @@ export function PlannerClient({
             previous_assignments_snapshot: null,
             previous_preferences_snapshot: null,
             previous_assignments_snapshot_at: null,
+            day_snapshots: (t.day_snapshots ?? []).filter(
+              (snap) => snap.date !== fromDate && snap.date !== toDate,
+            ),
           };
         }),
       );
@@ -1813,6 +1828,9 @@ export function PlannerClient({
           previous_assignments_snapshot: null,
           previous_preferences_snapshot: null,
           previous_assignments_snapshot_at: null,
+          day_snapshots: (trip.day_snapshots ?? []).filter(
+            (snap) => snap.date !== dateKey,
+          ),
         };
       }),
     );
@@ -1888,6 +1906,9 @@ export function PlannerClient({
             previous_assignments_snapshot: null,
             previous_preferences_snapshot: null,
             previous_assignments_snapshot_at: null,
+            day_snapshots: (trip.day_snapshots ?? []).filter(
+              (snap) => snap.date !== res.dateKey,
+            ),
           };
         }),
       );
@@ -1927,6 +1948,39 @@ export function PlannerClient({
       });
     },
     [tripRouteBase, activeTripId, router],
+  );
+
+  const openDayTweak = useCallback((dateKey: string) => {
+    setDayTweakDate(dateKey);
+  }, []);
+
+  const handleUndoDayTweak = useCallback(
+    async (dateKey: string) => {
+      if (!activeTripId) return;
+      const trip = trips.find((t) => t.id === activeTripId);
+      const latest = [...(trip?.day_snapshots ?? [])]
+        .filter((snap) => snap.date === dateKey)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+      const ok = window.confirm(
+        latest
+          ? `Undo the AI tweak from ${formatUndoSnapshotHint(latest.created_at)}? This restores the day to its previous state.`
+          : "Undo the last AI tweak?",
+      );
+      if (!ok) return;
+      const res = await popDaySnapshot(activeTripId, dateKey);
+      if (!res.restored) {
+        showToast(res.error ?? "Nothing to undo.");
+        return;
+      }
+      applyLocalPatch(activeTripId, {
+        assignments: res.assignments,
+        preferences: res.preferences,
+        day_snapshots: res.daySnapshots,
+      });
+      showToast("Reverted.");
+      startTransition(() => router.refresh());
+    },
+    [activeTripId, applyLocalPatch, router, trips],
   );
 
   const closeDayDetail = useCallback(() => {
@@ -2630,6 +2684,8 @@ export function PlannerClient({
                       onOpenDayDetail={
                         tripRouteBase ? openDayDetail : undefined
                       }
+                      onOpenDayTweak={openDayTweak}
+                      onUndoDayTweak={handleUndoDayTweak}
                       cataloguedParkIdSet={cataloguedParkIdSet}
                       onGenerateMustDosForPark={runMustDosGen}
                       mustDosGenLoading={mustDosGenLoading}
@@ -2873,6 +2929,25 @@ export function PlannerClient({
         }}
       />
 
+      {activeTrip && dayTweakDate ? (
+        <DayTweakModal
+          open={true}
+          trip={activeTrip}
+          date={dayTweakDate}
+          parks={calendarParks}
+          onClose={() => setDayTweakDate(null)}
+          onApplied={(patch) => {
+            applyLocalPatch(activeTrip.id, patch);
+            startTransition(() => router.refresh());
+          }}
+          onTierLimit={(message) => {
+            setTierLimitVariant("ai");
+            setTierLimitReason(message);
+            setTierLimitOpen(true);
+          }}
+        />
+      ) : null}
+
       {activeTrip ? (
         <CustomTileModal
           isOpen={customTileModalOpen}
@@ -2945,6 +3020,7 @@ export function PlannerClient({
                 isPublic={activeTrip.is_public}
                 publicSlug={activeTrip.public_slug}
                 siteUrl={siteUrl}
+                canPublishPublic={productTier !== "free"}
                 cloneCount={activeTrip.clone_count ?? 0}
                 viewCount={activeTrip.view_count ?? 0}
               />
@@ -2982,6 +3058,8 @@ export function PlannerClient({
           }
           onSaveDayNote={onSaveDayNote}
           onOpenSmartPlan={() => setSmartOpen(true)}
+          onOpenDayTweak={openDayTweak}
+          onUndoDayTweak={handleUndoDayTweak}
           onGenerateMustDosForPark={(parkId) => {
             void runMustDosGen(dayCanonicalForDetail, parkId);
           }}

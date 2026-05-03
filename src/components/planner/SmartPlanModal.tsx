@@ -496,7 +496,7 @@ export function SmartPlanModal({
         >
           {isDayScope
             ? `Let Trip plan ${dayLabel ?? "this day"}`
-            : "Let Trip build your itinerary"}
+            : "Smart Plan: your whole trip"}
         </h2>
 
         {showTouringPlanToggle ? (
@@ -553,8 +553,9 @@ export function SmartPlanModal({
         ) : !touringSubmitReady ? (
           <>
             <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
-              Tell Trip your priorities — Trip will fill your calendar with the
-              best parks, dining, and activities for your family.
+              {isDayScope
+                ? "Tell Trip your priorities — Trip will fill this day with the best parks, dining, and activities for your family."
+                : `This generates a plan across all ${tripDays} days of your trip. Existing tiles you've placed are protected unless you check "Overwrite" below.`}
             </p>
             <p className="mt-1 font-sans text-xs leading-relaxed text-royal/60">
               Crowd-aware scheduling uses patterns we ship in-app — not live
@@ -1018,7 +1019,11 @@ export function SmartPlanModal({
             <button
               type="submit"
               disabled={isGenerating || sequencerBusy || !canSubmit}
-              className="min-h-[44px] min-w-[12rem] flex-1 rounded-lg bg-[color:var(--tt-ring)] px-4 py-3 font-serif text-sm font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-60"
+              className={`min-h-[44px] min-w-[12rem] flex-1 rounded-lg px-4 py-3 font-serif text-sm font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-60 ${
+                replaceExistingTiles && !touringSubmitReady
+                  ? "bg-amber-600"
+                  : "bg-[color:var(--tt-ring)]"
+              }`}
             >
               {isGenerating ? (
                 <span className="inline-flex items-center justify-center gap-2">
@@ -1034,11 +1039,25 @@ export function SmartPlanModal({
                 "Generate touring plan ✨"
               ) : isDayScope && dayHasAiTimeline ? (
                 "Regenerate ✨"
+              ) : replaceExistingTiles && !touringSubmitReady ? (
+                "Generate (will overwrite existing tiles)"
               ) : (
-                "Generate plan ✨"
+                "Generate"
               )}
             </button>
           </div>
+          {!isDayScope ? (
+            <p className="mt-3 text-left font-sans text-sm leading-relaxed text-gray-400">
+              Just want to tweak one day?{" "}
+              <button
+                type="button"
+                onClick={onClose}
+                className="font-semibold text-gold underline decoration-gold/40 underline-offset-2"
+              >
+                Close and open day view
+              </button>
+            </p>
+          ) : null}
           <p className="mt-4 text-left font-sans text-sm leading-relaxed text-gray-400">
             Prefer to plan manually? Close this and drag parks onto your
             calendar instead — Smart Plan is always optional.

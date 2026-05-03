@@ -2,6 +2,7 @@ import { normaliseThemeKey } from "@/lib/themes";
 import { createClient } from "@/lib/supabase/server";
 import type {
   Assignments,
+  DaySnapshot,
   Destination,
   Trip,
   TripPlanningPreferences,
@@ -38,6 +39,12 @@ export function mapTripRow(row: Record<string, unknown>): Trip {
   const prevAss = row.previous_assignments_snapshot;
   const prevPrefs = row.previous_preferences_snapshot;
   const prevAt = row.previous_assignments_snapshot_at;
+  const rawDaySnapshots = row.day_snapshots;
+  const day_snapshots: DaySnapshot[] = Array.isArray(rawDaySnapshots)
+    ? (rawDaySnapshots.filter(
+        (snap) => snap && typeof snap === "object" && !Array.isArray(snap),
+      ) as DaySnapshot[])
+    : [];
 
   const planningRaw = row.planning_preferences;
   const planning_preferences = parsePlanningPreferences(planningRaw);
@@ -79,6 +86,7 @@ export function mapTripRow(row: Record<string, unknown>): Trip {
         : null,
     previous_assignments_snapshot_at:
       prevAt != null ? String(prevAt) : null,
+    day_snapshots,
     planning_preferences,
     colour_theme: normaliseThemeKey(
       row.colour_theme != null ? String(row.colour_theme) : undefined,
@@ -102,6 +110,29 @@ export function mapTripRow(row: Record<string, unknown>): Trip {
     is_archived: Boolean(row.is_archived),
     archived_reason:
       row.archived_reason != null ? String(row.archived_reason) : null,
+  };
+}
+
+export function scrubTripForPublicRead(trip: Trip): Trip {
+  const publicPreferences = { ...(trip.preferences ?? {}) };
+  delete publicPreferences.day_notes;
+  const planning_preferences = trip.planning_preferences
+    ? {
+        ...trip.planning_preferences,
+        additionalNotes: null,
+      }
+    : null;
+
+  return {
+    ...trip,
+    family_name: "",
+    notes: null,
+    preferences: publicPreferences,
+    planning_preferences,
+    previous_assignments_snapshot: null,
+    previous_preferences_snapshot: null,
+    previous_assignments_snapshot_at: null,
+    day_snapshots: [],
   };
 }
 
@@ -191,7 +222,7 @@ export async function getTripById(tripId: string): Promise<Trip | null> {
     .maybeSingle();
 
   if (error || !data) return null;
-  return mapTripRow(data as Record<string, unknown>);
+  return scrubTripForPublicRead(mapTripRow(data as Record<string, unknown>));
 }
 
 /** Most recently opened trip for the planner shell, or null if none. */
@@ -297,7 +328,9 @@ export async function listPublicTrips(input: {
       input.offset + input.limit - 1,
     );
     if (error) throw error;
-    return (data ?? []).map((r) => mapTripRow(r as Record<string, unknown>));
+    return (data ?? []).map((r) =>
+      scrubTripForPublicRead(mapTripRow(r as Record<string, unknown>)),
+    );
   }
 
   const cap = 250;
@@ -312,7 +345,9 @@ export async function listPublicTrips(input: {
   const { data, error } = await q.range(0, cap - 1);
   if (error) throw error;
 
-  let list = (data ?? []).map((r) => mapTripRow(r as Record<string, unknown>));
+  let list = (data ?? []).map((r) =>
+    scrubTripForPublicRead(mapTripRow(r as Record<string, unknown>)),
+  );
   if (input.lengthBucket) {
     list = list.filter((t) => lengthBucketForTrip(t) === input.lengthBucket);
   }
