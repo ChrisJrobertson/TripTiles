@@ -127,10 +127,31 @@ async function createTripActionWithRegion(
   const logTag =
     input.regionId == null ? "[createBlankTripAction]" : "[createTripAction]";
   let sessionUser: { id: string } | null = null;
+  const startTs = Date.now();
   try {
     const user = await getCurrentUser();
     if (!user) return { ok: false, error: "Not signed in." };
     sessionUser = user;
+
+    const rogueTripId = (input as CreateTripInput & { tripId?: string }).tripId;
+    if (rogueTripId != null && String(rogueTripId).trim() !== "") {
+      console.error("[createTrip] failed", {
+        error: "createTrip received an existing tripId — bug",
+        userId: user.id,
+        tripId: rogueTripId,
+      });
+      return {
+        ok: false,
+        error: "Could not create trip — please refresh and try again.",
+      };
+    }
+
+    console.log("[createTrip] start", {
+      userId: user.id,
+      regionId: input.regionId,
+      dates: [input.startDate, input.endDate],
+      logTag,
+    });
 
     try {
       await assertTierAllows(user.id, "trips");
@@ -202,11 +223,6 @@ async function createTripActionWithRegion(
       is_archived: false,
     };
 
-    console.log(
-      `${logTag} insert payload:`,
-      JSON.stringify(row, null, 2),
-    );
-
     const { data: inserted, error } = await supabase
       .from("trips")
       .insert(row)
@@ -214,9 +230,22 @@ async function createTripActionWithRegion(
       .single();
 
     if (error) {
+      console.error("[createTrip] failed", {
+        error: error.message,
+        code: "code" in error ? String((error as { code?: string }).code) : undefined,
+        userId: user.id,
+        logTag,
+      });
       return { ok: false, error: `Insert failed: ${error.message}` };
     }
     if (!inserted?.id) return { ok: false, error: "Insert failed." };
+
+    console.log("[createTrip] success", {
+      newTripId: String(inserted.id),
+      durationMs: Date.now() - startTs,
+      userId: user.id,
+      logTag,
+    });
 
     const newAchievements: string[] = [];
 
@@ -273,6 +302,11 @@ async function createTripActionWithRegion(
       });
       return { ok: false, error: tierLoadFailureUserMessage() };
     }
+    console.error("[createTrip] failed", {
+      error: e instanceof Error ? e.message : String(e),
+      userId: sessionUser?.id,
+      logTag,
+    });
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Unknown error",

@@ -205,11 +205,11 @@ export function TripCreationWizard({
       await touchTripAction(res.tripId);
       onTripCreated?.();
       if (planPath === "ai") {
-        router.replace("/planner?autoGenerate=true");
+        router.replace(`/trip/${res.tripId}?autoGenerate=true`);
         router.refresh();
         return;
       }
-      router.replace("/planner");
+      router.replace(`/trip/${res.tripId}`);
       router.refresh();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Something went wrong.");
