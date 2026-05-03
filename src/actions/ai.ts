@@ -48,7 +48,10 @@ import { getMonthlyConditions } from "@/data/destination-conditions";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { softTruncateToMax } from "@/lib/truncate-text";
 import { formatRegionalDiningForPrompt } from "@/data/regional-dining";
-import { formatPlanningPreferencesForPrompt } from "@/lib/planning-preferences-prompt";
+import {
+  formatPlanningPreferencesForPrompt,
+  formatUserPrioritiesBlock,
+} from "@/lib/planning-preferences-prompt";
 import { isNamedRestaurantPark } from "@/lib/named-restaurant-tiles";
 import { getRidePrioritiesForDay } from "@/actions/ride-priorities";
 import { assertTierAllows, tierErrorToClientPayload } from "@/lib/tier";
@@ -65,6 +68,7 @@ import { buildAiParkIdResolver, type AiParkIdResolver } from "@/lib/ai-park-id-c
 import {
   collectUserBrief,
   formatCurrentTripAssignmentsBlock,
+  formatMandatoryAnchorsBlock,
 } from "@/lib/smart-plan-user-brief";
 import { validateDayNotesAgainstAssignments } from "@/lib/smart-plan-validate";
 const anthropic = new Anthropic({
@@ -1219,6 +1223,89 @@ function isAbortLikeError(error: unknown): boolean {
   return false;
 }
 
+/**
+ * Region IDs whose primary value is theme parks. Used by the post-Smart-Plan
+ * sanity check to detect rest-day-dominated plans on park trips. Other region
+ * IDs (e.g. London, Bath, Edinburgh) are sights/dining-led and would
+ * legitimately produce few `disney`/`universal` slots.
+ */
+const PARK_HEAVY_REGION_IDS: ReadonlySet<string> = new Set([
+  "orlando",
+  "cali",
+  "paris",
+  "tokyo",
+  "osaka",
+  "hongkong",
+  "shanghai",
+  "florida_combo",
+  "miami",
+  "uae",
+  "spain",
+  "denmark",
+  "germany",
+  "netherlands",
+  "sweden",
+  "goldcoast",
+]);
+
+const PARK_LIKE_GROUPS: ReadonlySet<string> = new Set([
+  "disney",
+  "disneyextra",
+  "universal",
+  "seaworld",
+  "attractions",
+]);
+
+/**
+ * Post-merge sanity check: detect plans dominated by rest/dining/transit slots
+ * on park-heavy regions. Log-only — never blocks the response. The warning
+ * text is also appended to `ai_generations.error` (with a `low_park_density:`
+ * prefix) so we can grep production data for repeat occurrences.
+ */
+function checkPlanQuality(args: {
+  tripId: string;
+  regionId: string | null;
+  assignments: Assignments;
+  parksById: Map<string, Park>;
+  days: number;
+}): string | null {
+  const { tripId, regionId, assignments, parksById, days } = args;
+  if (days < 5) return null;
+  if (!regionId || !PARK_HEAVY_REGION_IDS.has(regionId)) return null;
+
+  let parkSlots = 0;
+  let restSlots = 0;
+  let totalAssigned = 0;
+  for (const day of Object.values(assignments)) {
+    if (!day || typeof day !== "object") continue;
+    for (const slot of ["am", "pm", "lunch", "dinner"] as const) {
+      const raw = day[slot];
+      const pid = getParkIdFromSlotValue(raw);
+      if (!pid) continue;
+      totalAssigned += 1;
+      const group = parksById.get(pid)?.park_group;
+      if (group && PARK_LIKE_GROUPS.has(group)) {
+        parkSlots += 1;
+      } else if (pid === "rest" || pid === "pool") {
+        restSlots += 1;
+      }
+    }
+  }
+
+  if (parkSlots >= days / 2) return null;
+
+  const warning = `low_park_density: parkSlots=${parkSlots}, restSlots=${restSlots}, totalAssigned=${totalAssigned}, days=${days}, region=${regionId}`;
+  console.warn("[smart-plan] low-park-density-warning", {
+    tripId,
+    regionId,
+    days,
+    parkSlots,
+    restSlots,
+    totalAssigned,
+  });
+  return warning;
+}
+
 function inputTokensFromUsage(usage: AnthropicMessageUsage | undefined): number {
   const u = usage ?? {};
   return (
@@ -1268,8 +1355,20 @@ function buildPlannerUserMessage(params: {
   crowdJson: string;
   /** Collected `collectUserBrief` output (empty if none). */
   userBrief: string;
-  /** Preformatted `formatCurrentTripAssignmentsBlock` (empty for day scope). */
+  /** Preformatted `formatCurrentTripAssignmentsBlock` (empty for day scope, or
+   * empty in OVERWRITE mode where we use `mandatoryAnchorsBlock` instead). */
   fullTripAssignmentsBlock: string;
+  /** Preformatted `formatMandatoryAnchorsBlock` — non-empty only in OVERWRITE
+   * mode (full trip). Used as the surviving anchor list when assignments are
+   * intentionally wiped. */
+  mandatoryAnchorsBlock: string;
+  /** Concise USER PRIORITIES block in OVERWRITE-mode framing — emitted at the
+   * very top of the prompt because in overwrite mode priorities ARE the plan.
+   * Empty string when the trip has no `planning_preferences` or when not in
+   * overwrite mode. The PRESERVE-mode equivalent is built by the caller and
+   * inlined into `fullTripAssignmentsBlock` between the assignment lines and
+   * the Rules section, so does not need a separate field here. */
+  userPrioritiesBlockOverwrite: string;
   /** Structured wizard answers (optional). */
   wizardContext: string | null;
   /** Nearby dining names for day-note hints only (optional). */
@@ -1292,6 +1391,8 @@ function buildPlannerUserMessage(params: {
     crowdJson,
     userBrief,
     fullTripAssignmentsBlock,
+    mandatoryAnchorsBlock,
+    userPrioritiesBlockOverwrite,
     wizardContext,
     diningHint,
     namedRestaurantHint,
@@ -1311,8 +1412,32 @@ END USER CONSTRAINTS
 `
       : "";
 
+  const isFullTrip = !dateKey;
+  // Overwrite mode (full trip only): the "CURRENT TRIP ASSIGNMENTS … respect
+  // them" + "NEVER change" block is intentionally omitted. The USER PRIORITIES
+  // block + an OVERWRITE MODE directive replace it so Claude generates a
+  // fresh plan rather than annotating prior rest/pool slots.
+  const overwriteMode = isFullTrip && !preserveExistingSlots;
+  const overwritePriorities = userPrioritiesBlockOverwrite.trim();
+  const overwriteAnchors = mandatoryAnchorsBlock.trim();
+  const overwriteIntro = overwriteMode
+    ? `${overwritePriorities ? `${overwritePriorities}\n\n` : ""}OVERWRITE MODE — IGNORE PRIOR PLAN
+The user has explicitly asked you to replace ANY existing assignments with a fresh plan based on their priorities above. Disregard any rest/pool slots, dining slots, or park assignments that may already be on the calendar — those were temporary and the user wants you to overwrite them.
+
+Generate a complete fresh itinerary that:
+- Honours the user's family priorities above (e.g. if "Thrill rides" is listed, prioritise theme parks with thrill attractions across the trip)
+- Distributes rest days sensibly (typically 1 rest day per 4-5 park days, NOT consecutive blocks of rest)
+- Uses crowd patterns to choose which park on which day
+- Respects mandatory anchors only: arrival day (fly in), departure day (fly out), and any cruise embark/disembark dates${
+        overwriteAnchors ? `\n\n${overwriteAnchors}` : ""
+      }\n\n`
+    : "";
+  // Preserve mode (default): the assignments block already has the priorities
+  // block injected between the lines and the Rules section by `runGenerateAIPlan`.
   const fullTripBlock =
-    !dateKey && fullTripAssignmentsBlock.trim().length > 0
+    isFullTrip &&
+    !overwriteMode &&
+    fullTripAssignmentsBlock.trim().length > 0
       ? `${fullTripAssignmentsBlock.trim()}\n\n`
       : "";
 
@@ -1375,6 +1500,10 @@ END USER CONSTRAINTS
   if (mode === "smart") {
     const smartIntro = dateKey
       ? "DAY-SCOPED SMART PLAN — refine this single calendar day using crowd patterns, slot block times, and (if any) the guest ride list. Respect locked calendar slots and notes above. Treat the day as a draft plan from historic patterns, not a guarantee."
+      : overwriteMode
+      ? `SMART PLAN MODE — FRESH GENERATION
+
+Your job is to design a fresh itinerary from scratch based on the USER PRIORITIES above. Do not preserve or annotate prior rest/pool/dining assignments — replace them with park days where appropriate. Anchor only the arrival, departure, and cruise dates if present. For every other slot, choose what best serves the user's priorities.`
       : `SMART PLAN MODE
 
 Your job is to annotate and complete the guest's existing plan:
@@ -1383,7 +1512,7 @@ Your job is to annotate and complete the guest's existing plan:
 - Generate a trip-wide crowd_reasoning summary that accounts for the actual assignments.
 - Populate must_dos from the parks the guest has assigned, not an idealised plan of your own.`;
 
-    return `${userConstraintsBlock}${fullTripBlock}${coreTrip}
+    return `${userConstraintsBlock}${overwriteIntro}${fullTripBlock}${coreTrip}
 
 ${crowdSection}
 ${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}${dayPacingAndRidesBlock}
@@ -1394,7 +1523,7 @@ ${dateKey ? `For this date only (${dateKey}), add planner_day_notes with 1–2 p
 Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and planner_day_notes when possible).`;
   }
 
-  return `${userConstraintsBlock}${fullTripBlock}${coreTrip}
+  return `${userConstraintsBlock}${overwriteIntro}${fullTripBlock}${coreTrip}
 
 ${crowdSection}
 ${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}${dayPacingAndRidesBlock}
@@ -1673,9 +1802,42 @@ export async function runGenerateAIPlan(
   const userBrief = collectUserBrief(trip, {
     inlineUserPrompt: input.userPrompt,
   });
+  // PART 1 + PART 2: build USER PRIORITIES block(s).
+  //
+  // `userPrioritiesBlock` is the version inlined into the assignments block
+  // (PRESERVE mode) — it sits between the assignment lines and the Rules
+  // section so priorities are read BEFORE the rules. Header suffix matches
+  // the preserve framing.
+  //
+  // `userPrioritiesBlockOverwrite` is the version emitted at the very top in
+  // OVERWRITE mode with stronger language, since priorities ARE the plan in
+  // that mode (no prior assignments to honour).
+  const overwriteFlag =
+    !normalizedDateKey && input.preserveExistingSlots === false;
+  const userPrioritiesBlock = formatUserPrioritiesBlock(
+    trip.planning_preferences,
+    parkIdToName,
+  );
+  const userPrioritiesBlockOverwrite = overwriteFlag
+    ? formatUserPrioritiesBlock(trip.planning_preferences, parkIdToName, {
+        headerSuffix:
+          "these are the most important inputs — design the plan around them",
+      })
+    : "";
   const fullTripAssignmentsBlock = normalizedDateKey
     ? ""
-    : formatCurrentTripAssignmentsBlock(trip, parksById);
+    : formatCurrentTripAssignmentsBlock(
+        trip,
+        parksById,
+        userPrioritiesBlock || null,
+      );
+  // In OVERWRITE mode the full assignments list is intentionally omitted —
+  // only mandatory anchors (flights, cruise embark/disembark) survive the
+  // wipe so Claude generates a fresh plan based on USER PRIORITIES rather
+  // than annotating prior rest days.
+  const mandatoryAnchorsBlock = overwriteFlag
+    ? formatMandatoryAnchorsBlock(trip, parksById)
+    : "";
   const wizardContext =
     trip.planning_preferences != null
       ? formatPlanningPreferencesForPrompt(
@@ -1711,6 +1873,8 @@ export async function runGenerateAIPlan(
     userPrompt: input.userPrompt,
     userBrief,
     fullTripAssignmentsBlock,
+    mandatoryAnchorsBlock,
+    userPrioritiesBlockOverwrite,
     dateKey: normalizedDateKey ?? undefined,
     regionName: `${region.name} (${region.country})`,
     trip,
@@ -1727,6 +1891,17 @@ export async function runGenerateAIPlan(
     ),
     dayRidePicksLines,
     preserveExistingSlots: input.preserveExistingSlots !== false,
+  });
+  // Diagnostic preview so we can verify in Vercel runtime logs that the
+  // OVERWRITE branch is producing a different prompt structure than the
+  // PRESERVE branch. Bounded to 300 chars to avoid log spam.
+  console.log("[smart-plan-prompt] preview", {
+    tripId: input.tripId,
+    mode: input.mode,
+    dateKey: normalizedDateKey,
+    overwriteFlag,
+    promptLength: composedUserMessage.length,
+    opening: composedUserMessage.slice(0, 300),
   });
   logAiGen({
     step: "prompt_build_result",
@@ -2181,6 +2356,17 @@ export async function runGenerateAIPlan(
       });
     }
 
+    // PART 3: post-merge sanity check. Logs and surfaces a warning in
+    // `ai_generations.error` (prefixed `low_park_density:`) when a park-heavy
+    // region produces a rest-day-dominated plan. Never blocks the response.
+    const lowParkDensityWarning = checkPlanQuality({
+      tripId: input.tripId,
+      regionId: rid,
+      assignments: merged,
+      parksById,
+      days: sortedDateKeys.length,
+    });
+
     const rawMustTop = (parsed as Record<string, unknown>).must_dos;
     const parsedMust = parseMustDosMapFromAI(
       rawMustTop,
@@ -2268,6 +2454,12 @@ export async function runGenerateAIPlan(
       return { ok: false, error: "AI_ERROR", message: upErr.message };
     }
 
+    const successWarnings = [
+      dayNoteAssignmentCheck.warningText,
+      lowParkDensityWarning,
+    ]
+      .filter((s): s is string => !!s && s.trim().length > 0)
+      .join(" | ");
     const { error: genInsertErr } = await recordAiGeneration({
       userId: user.id,
       tripId: input.tripId,
@@ -2277,7 +2469,7 @@ export async function runGenerateAIPlan(
       outputTokens,
       success: true,
       status: "success",
-      error: dayNoteAssignmentCheck.warningText,
+      error: successWarnings.length > 0 ? successWarnings : null,
     });
 
     if (genInsertErr) {

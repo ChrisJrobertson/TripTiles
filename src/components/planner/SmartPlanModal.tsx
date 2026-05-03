@@ -951,6 +951,15 @@ export function SmartPlanModal({
                 </span>
               </span>
             </label>
+            {replaceExistingTiles ? (
+              <p className="mt-2 rounded-md border border-gold/40 bg-cream/85 px-3 py-2 font-sans text-xs leading-relaxed text-royal">
+                <span aria-hidden="true">✓</span>{" "}
+                <strong className="font-semibold">Fresh plan:</strong>{" "}
+                Smart Plan will design a new itinerary based on your priorities,
+                ignoring any existing rest/pool slots. Flights and cruise
+                embark/disembark dates stay put.
+              </p>
+            ) : null}
           </div>
 
           <p className="font-sans text-[0.7rem] leading-snug text-royal/55">

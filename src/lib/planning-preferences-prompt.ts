@@ -80,3 +80,50 @@ export function formatPlanningPreferencesForPrompt(
     .filter(Boolean)
     .join("\n");
 }
+
+const PACE_LABEL: Record<TripPlanningPreferences["pace"], string> = {
+  relaxed: "Relaxed",
+  balanced: "Balanced",
+  intense: "High energy",
+};
+
+/**
+ * Concise USER PRIORITIES block surfaced near the TOP of the prompt so the
+ * model weights guest priorities before reading rules or assignment lists.
+ *
+ * Returns "" when no `planning_preferences` exist (e.g. legacy trips that
+ * never went through the wizard).
+ */
+export function formatUserPrioritiesBlock(
+  prefs: TripPlanningPreferences | null | undefined,
+  parkIdToName: Map<string, string>,
+  opts?: { headerSuffix?: string },
+): string {
+  if (!prefs) return "";
+  const headerSuffix =
+    opts?.headerSuffix ?? "apply these when filling empty slots";
+  const priLabels = (prefs.priorities ?? [])
+    .map((k) => PRIORITY_LABELS[k] ?? k)
+    .filter(Boolean);
+  const mustNames = (prefs.mustDoParks ?? [])
+    .map((id) => parkIdToName.get(id) ?? id)
+    .filter(Boolean);
+  const ages =
+    prefs.childAges && prefs.childAges.length > 0
+      ? `, ages ${prefs.childAges.join(", ")}`
+      : "";
+  const partyLine = `${prefs.adults} adult(s), ${prefs.children} child(ren)${ages}`;
+  const additional = prefs.additionalNotes?.trim();
+
+  const lines: string[] = [
+    `USER PRIORITIES (${headerSuffix}):`,
+    `- Pace: ${PACE_LABEL[prefs.pace]}`,
+    `- Family priorities: ${priLabels.length ? priLabels.join(", ") : "none specified"}`,
+    `- Must-do parks: ${mustNames.length ? mustNames.join(", ") : "no specific list — use your judgement"}`,
+    `- Party: ${partyLine}`,
+  ];
+  if (additional) {
+    lines.push(`- Additional notes: ${additional}`);
+  }
+  return lines.join("\n");
+}
