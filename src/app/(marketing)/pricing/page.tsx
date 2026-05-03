@@ -64,7 +64,7 @@ const FAQ = [
   },
   {
     q: "Do you offer a free trial?",
-    a: "The Free tier (1 trip, 5 Smart Plan runs) is the trial. Upgrade when you are ready.",
+    a: "The Free tier (1 trip, 5 AI Smart Plan runs) is the trial. Upgrade when you are ready.",
   },
   {
     q: "Who processes payments?",

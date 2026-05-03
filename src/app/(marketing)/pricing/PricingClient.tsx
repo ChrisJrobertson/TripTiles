@@ -273,10 +273,9 @@ export function PricingClient({
           <p className="mt-1 font-sans text-xs text-royal/60">Cancel anytime — no card required</p>
           <ul className="mt-4 flex-1 list-inside list-disc space-y-1.5 font-sans text-sm text-royal/80">
             <li>1 active trip</li>
-            <li>5 Smart Plan runs per account</li>
+            <li>5 AI Smart Plan runs per account</li>
             <li>5 custom tiles total</li>
             <li>Watermarked PDF export</li>
-            <li>Haiku 4.5 model</li>
           </ul>
           <div className="mt-6 flex flex-1 flex-col justify-end">
             {current === "free" && me ? (
@@ -311,10 +310,9 @@ export function PricingClient({
           <p className="mt-2 font-sans text-xs text-royal/55">Cancel anytime</p>
           <ul className="mt-3 flex-1 list-inside list-disc space-y-1.5 font-sans text-sm text-royal/80">
             <li>Unlimited trips</li>
-            <li>Unlimited Smart Plan</li>
+            <li>Unlimited AI Smart Plan</li>
             <li>Unlimited custom tiles</li>
             <li>Clean PDF export</li>
-            <li>Haiku 4.5 — no family sharing</li>
           </ul>
           <button
             type="button"
@@ -349,8 +347,7 @@ export function PricingClient({
           <p className="mt-2 font-sans text-xs text-royal/55">Cancel anytime</p>
           <ul className="mt-3 flex-1 list-inside list-disc space-y-1.5 font-sans text-sm text-royal/80">
             <li>Everything in Pro</li>
-            <li>Up to 4 family members with shared access</li>
-            <li>Haiku 4.5</li>
+            <li>Shared planning for up to 4 family members</li>
           </ul>
           <button
             type="button"

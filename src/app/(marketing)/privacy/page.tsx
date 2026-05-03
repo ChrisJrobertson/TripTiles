@@ -74,7 +74,8 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Usage data:</strong> AI generation prompts and outputs
-            (stored to provide the service), timestamps, and model identifiers.
+            (stored to provide the service), timestamps, and technical metadata
+            for AI processing (such as request identifiers).
           </li>
           <li>
             <strong>Payment data:</strong> Stripe customer and subscription

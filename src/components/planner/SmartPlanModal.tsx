@@ -945,7 +945,7 @@ export function SmartPlanModal({
                   Overwrite my existing tiles where Smart Plan suggests something
                 </span>
                 <span className="mt-1 block text-xs leading-relaxed text-royal/65">
-                  Enable this for a full redo: any slot the model outputs can
+                  Enable this for a full redo: any slot Smart Plan suggests can
                   replace what you had. Leave unchecked to protect your manual
                   plan.
                 </span>

@@ -159,8 +159,9 @@ export default function TermsPage() {
         <p>
           AI plans are <strong>suggestions only</strong>, not professional travel
           advice. Crowd patterns, wait times, and schedules may be inaccurate.
-          You must verify opening hours and bookings before you travel. AI is
-          powered by Anthropic; their terms apply to model use.
+          You must verify opening hours and bookings before you travel. Smart Plan
+          is AI-powered; third-party providers listed in our Privacy Policy may
+          process content you submit, and their terms may apply.
         </p>
       </section>
 

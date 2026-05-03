@@ -6,7 +6,7 @@ export type RetailTier = "free" | "pro" | "family";
 /** @deprecated Prefer `RetailTier`; kept for legacy call sites. */
 export type Tier = UserTier;
 
-/** Documented per-call model labels; runtime selection in `src/actions/ai.ts` is authoritative. */
+/** Generic labels for which AI capability backs each call; runtime model IDs live in `src/actions/ai.ts`. */
 export type TierAIModels = {
   main_plan: string;
   day_timeline: string;
@@ -92,9 +92,9 @@ const freeTier: FreeTierConfig = {
     pdf_watermark: true,
     pdf_design: "standard",
     ai_models: {
-      main_plan: "Haiku 4.5",
-      day_timeline: "Haiku 4.5",
-      must_dos: "Haiku 4.5",
+      main_plan: "Smart Plan",
+      day_timeline: "Smart Plan",
+      must_dos: "Smart Plan",
     },
     family_sharing: false,
     max_family_members: 0,
@@ -133,9 +133,9 @@ const proTier: ProTierConfig = {
     pdf_watermark: false,
     pdf_design: "standard",
     ai_models: {
-      main_plan: "Haiku 4.5",
-      day_timeline: "Sonnet 4.6",
-      must_dos: "Sonnet 4.6",
+      main_plan: "Smart Plan",
+      day_timeline: "Premium AI",
+      must_dos: "Premium AI",
     },
     family_sharing: false,
     max_family_members: 0,
@@ -174,9 +174,9 @@ const familyTier: FamilyTierConfig = {
     pdf_watermark: false,
     pdf_design: "standard",
     ai_models: {
-      main_plan: "Haiku 4.5",
-      day_timeline: "Sonnet 4.6",
-      must_dos: "Sonnet 4.6",
+      main_plan: "Smart Plan",
+      day_timeline: "Premium AI",
+      must_dos: "Premium AI",
     },
     family_sharing: true,
     max_family_members: 4,
