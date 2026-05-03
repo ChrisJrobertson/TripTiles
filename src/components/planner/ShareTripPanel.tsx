@@ -17,6 +17,7 @@ type Props = {
   isPublic: boolean;
   publicSlug: string | null;
   siteUrl: string;
+  canPublishPublic: boolean;
   cloneCount?: number;
   viewCount?: number;
 };
@@ -27,6 +28,7 @@ export function ShareTripPanel({
   isPublic: initialPublic,
   publicSlug: initialSlug,
   siteUrl,
+  canPublishPublic,
   cloneCount = 0,
   viewCount = 0,
 }: Props) {
@@ -125,11 +127,16 @@ export function ShareTripPanel({
             type="checkbox"
             className="h-4 w-4 rounded border-royal/35 accent-royal"
             checked={isPublic}
-            disabled={loading}
+            disabled={loading || (!canPublishPublic && !isPublic)}
             onChange={(e) => void onToggle(e.target.checked)}
           />
           <span>Make this trip public</span>
         </label>
+        {!canPublishPublic && !isPublic ? (
+          <p className="mt-2 text-xs leading-relaxed text-royal/65">
+            Public sharing is included with Pro and Family plans.
+          </p>
+        ) : null}
         <p className="mt-2 text-xs leading-relaxed text-royal/60">
           {cloneCount} clones · {viewCount} views on the public page
         </p>
