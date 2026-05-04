@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { trackEvent } from "@/lib/analytics/client";
 
 export function DayStrategyUpgradeModal({
@@ -10,6 +11,11 @@ export function DayStrategyUpgradeModal({
   open: boolean;
   onClose: () => void;
 }) {
+  useEffect(() => {
+    if (!open) return;
+    trackEvent("day_strategy_upgrade_modal_open", { source: "modal" });
+  }, [open]);
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[110] flex items-end justify-center bg-royal/50 p-0 sm:items-center sm:p-4">

@@ -576,6 +576,9 @@ export function PlannerClient({
   const [dayPlannerInitialTab, setDayPlannerInitialTab] = useState<
     "adjust" | "strategy"
   >("adjust");
+  /** After save from mini-wizard, DayPlannerModal runs strategy once without a second tap. */
+  const [dayPlannerAutoRunStrategy, setDayPlannerAutoRunStrategy] =
+    useState(false);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [smartCanRetryPartial, setSmartCanRetryPartial] = useState(false);
   const [smartRetryPayload, setSmartRetryPayload] =
@@ -1288,7 +1291,11 @@ export function PlannerClient({
   const runDayStrategyGenerate = useCallback(
     async (
       dateKey: string,
-      options?: { suppressErrorToast?: boolean },
+      options?: {
+        suppressErrorToast?: boolean;
+        /** Opens Plan this day on Strategy tab and runs generate (mini-wizard if needed). */
+        openPlannerWithAutoStrategyOnMissingData?: boolean;
+      },
     ): Promise<{ ok: true } | { ok: false; error: string }> => {
       if (!activeTripId) {
         return { ok: false, error: "No trip selected." };
@@ -1322,6 +1329,12 @@ export function PlannerClient({
         }
 
         if (res.status === "missing_data") {
+          if (options?.openPlannerWithAutoStrategyOnMissingData) {
+            setDayPlannerDate(dateKey);
+            setDayPlannerInitialTab("strategy");
+            setDayPlannerAutoRunStrategy(true);
+            return { ok: true };
+          }
           const msg = "We still need a few planning details for this day.";
           if (!options?.suppressErrorToast) {
             showToast(msg);
@@ -1352,6 +1365,27 @@ export function PlannerClient({
       }
     },
     [activeTripId, trips, router, applyStrategyPatchForDate],
+  );
+
+  const openMobileDayStrategy = useCallback(
+    (dateKey: string) => {
+      if (!activeTripId) return;
+      if (isFreeTierForTripLimit(productTier)) {
+        trackEvent("day_strategy_upgrade_modal_open", { source: "day_view" });
+        setDayStrategyUpgradeOpen(true);
+        return;
+      }
+      void (async () => {
+        const r = await runDayStrategyGenerate(dateKey, {
+          suppressErrorToast: true,
+          openPlannerWithAutoStrategyOnMissingData: true,
+        });
+        if (r.ok) return;
+        if (!r.error) return;
+        showToast(r.error);
+      })();
+    },
+    [activeTripId, productTier, runDayStrategyGenerate],
   );
 
   const handlePlanPrefsSavedContinueStrategy = useCallback(
@@ -2193,9 +2227,13 @@ export function PlannerClient({
   );
 
   const openDayPlanner = useCallback(
-    (dateKey: string, options?: { tab?: "adjust" | "strategy" }) => {
+    (
+      dateKey: string,
+      options?: { tab?: "adjust" | "strategy"; autoRunStrategy?: boolean },
+    ) => {
       setDayPlannerDate(dateKey);
       setDayPlannerInitialTab(options?.tab ?? "adjust");
+      setDayPlannerAutoRunStrategy(options?.autoRunStrategy ?? false);
     },
     [],
   );
@@ -2935,6 +2973,8 @@ export function PlannerClient({
                       onClear={onClear}
                       crowdSummary={mobileCrowdSummaryText}
                       readOnly={false}
+                      productTier={productTier}
+                      onOpenDayStrategy={openMobileDayStrategy}
                       ridePrioritiesByDay={ridePrioritiesByDayForActiveTrip}
                       rideCountsByDay={rideCountsByDayForActiveTrip}
                       onRideDayPrioritiesUpdated={
@@ -3196,7 +3236,12 @@ export function PlannerClient({
           parks={calendarParks}
           productTier={productTier}
           initialTab={dayPlannerInitialTab}
-          onClose={() => setDayPlannerDate(null)}
+          autoRunStrategy={dayPlannerAutoRunStrategy}
+          onClose={() => {
+            setDayPlannerDate(null);
+            setDayPlannerAutoRunStrategy(false);
+          }}
+          onAutoRunStrategyConsumed={() => setDayPlannerAutoRunStrategy(false)}
           onApplied={(patch) => {
             applyLocalPatch(activeTrip.id, patch);
             startTransition(() => router.refresh());
@@ -3360,6 +3405,7 @@ export function PlannerClient({
             ridePrioritiesByDayForActiveTrip[dayCanonicalForDetail] ?? []
           }
           productTier={productTier}
+          onOpenDayStrategy={() => openMobileDayStrategy(dayCanonicalForDetail)}
           plannerRegionId={resolvePaletteRegionId(activeTrip)}
           temperatureUnit={temperatureUnit}
           onClose={closeDayDetail}

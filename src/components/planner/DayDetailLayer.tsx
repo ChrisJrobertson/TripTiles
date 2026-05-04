@@ -114,7 +114,12 @@ export type DayDetailLayerProps = {
   onSaveDayNote: (dateKey: string, text: string) => void;
   onOpenSmartPlan: () => void;
   /** Consolidated AI for this day (slots + ride strategy). */
-  onOpenDayPlanner: (options?: { tab?: "adjust" | "strategy" }) => void;
+  onOpenDayPlanner: (options?: {
+    tab?: "adjust" | "strategy";
+    autoRunStrategy?: boolean;
+  }) => void;
+  /** Direct entry to AI Day Strategy from day header (paid: generate or planner; free: parent opens upgrade). */
+  onOpenDayStrategy?: () => void;
   onUndoDayTweak: (dateKey: string) => void;
   onGenerateMustDosForPark: (parkId: string) => void;
   generatingMustDosParkId: string | null;
@@ -148,6 +153,7 @@ export function DayDetailLayer({
   onSaveDayNote,
   onOpenSmartPlan,
   onOpenDayPlanner,
+  onOpenDayStrategy,
   onUndoDayTweak,
   onGenerateMustDosForPark,
   generatingMustDosParkId,
@@ -774,6 +780,32 @@ export function DayDetailLayer({
               <span aria-hidden>✨</span>
               Plan this day
             </button>
+            {onOpenDayStrategy ? (
+              <button
+                type="button"
+                disabled={amPmThemeIdsForRides.length === 0}
+                title={
+                  amPmThemeIdsForRides.length === 0
+                    ? "AI Day Strategy is available on park days only"
+                    : undefined
+                }
+                className="inline-flex min-h-11 flex-col items-start gap-0.5 rounded-lg border border-royal/25 bg-white px-3 py-2 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-cream disabled:cursor-not-allowed disabled:opacity-55"
+                onClick={() => queueAction(() => onOpenDayStrategy())}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <span aria-hidden>✨</span>
+                  AI Day Strategy
+                  {productTier === "free" ? (
+                    <span className="rounded bg-gold/30 px-1 py-0.5 text-[0.55rem] font-bold uppercase tracking-wide text-royal">
+                      Pro
+                    </span>
+                  ) : null}
+                </span>
+                <span className="font-sans text-[10px] font-normal text-royal/60">
+                  Pro feature — sequenced ride plan
+                </span>
+              </button>
+            ) : null}
             {daySnapshotCount > 0 && latestDaySnapshot ? (
               <button
                 type="button"
@@ -905,7 +937,7 @@ export function DayDetailLayer({
                 queueAction(() => onOpenDayPlanner({ tab: "strategy" }))
               }
             />
-          ) : showExpandedDayPanel ? (
+          ) : !dayStrategyRow && showExpandedDayPanel ? (
             <ExpandedDayPanel
               embedded
               tripId={trip.id}

@@ -75,6 +75,9 @@ export type DayPlannerModalProps = {
   /** Used to gate server-side strategy generation; free users see upgrade CTA for Mode B. */
   productTier: string;
   onClose: () => void;
+  /** When true once, open on Strategy tab and auto-run generate after mount (mini-wizard if missing data). */
+  autoRunStrategy?: boolean;
+  onAutoRunStrategyConsumed?: () => void;
   onApplied: (patch: {
     assignments: Assignments;
     preferences: Record<string, unknown>;
@@ -110,6 +113,8 @@ export function DayPlannerModal({
   parks,
   productTier,
   onClose,
+  autoRunStrategy = false,
+  onAutoRunStrategyConsumed,
   onApplied,
   onTierLimit,
   onPlanPrefsSavedContinueStrategy,
@@ -136,6 +141,16 @@ export function DayPlannerModal({
   const [miniWizardOpen, setMiniWizardOpen] = useState(false);
   const [prefsLoading, setPrefsLoading] = useState(false);
   const [showUndoConfirm, setShowUndoConfirm] = useState(false);
+  const pendingAutoRunStrategyRef = useRef(false);
+
+  useEffect(() => {
+    if (!open) {
+      pendingAutoRunStrategyRef.current = false;
+      return;
+    }
+    if (autoRunStrategy) pendingAutoRunStrategyRef.current = true;
+    else pendingAutoRunStrategyRef.current = false;
+  }, [open, autoRunStrategy]);
 
   useEffect(() => {
     if (!open) return;
@@ -291,6 +306,26 @@ export function DayPlannerModal({
     onClose,
   ]);
 
+  useEffect(() => {
+    if (!open || !pendingAutoRunStrategyRef.current || productTier === "free")
+      return;
+    if (miniWizardOpen || strategyBusy || tweakBusy) return;
+    pendingAutoRunStrategyRef.current = false;
+    setTab("strategy");
+    void (async () => {
+      await handleStrategyPrimary();
+      onAutoRunStrategyConsumed?.();
+    })();
+  }, [
+    open,
+    miniWizardOpen,
+    strategyBusy,
+    tweakBusy,
+    productTier,
+    handleStrategyPrimary,
+    onAutoRunStrategyConsumed,
+  ]);
+
   const handleMiniWizardSaved = useCallback(
     async (prefs: TripPlanningPreferences) => {
       const r = await onPlanPrefsSavedContinueStrategy(prefs);
@@ -401,7 +436,6 @@ export function DayPlannerModal({
     }
   }
 
-  if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[130] flex items-center justify-center bg-royal/75 p-4">
