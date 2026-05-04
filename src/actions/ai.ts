@@ -22,6 +22,11 @@ import {
   formatDayRidePicksForPrompt,
   formatDaySlotLinesWithTimesForPrompt,
 } from "@/lib/ai-day-prompt-context";
+import {
+  buildParkRideConstraintsFromAttractions,
+  correctHeightInRideName,
+  type ParkRideConstraints,
+} from "@/lib/park-ride-constraints";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { applyAiTimelineToAssignmentSlotTimes } from "@/lib/ai-timeline-to-slot-times";
 import type {
@@ -3841,6 +3846,42 @@ function normaliseDayStrategyTime(
   return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
 }
 
+/** Coerce strict `HH:MM` to `:00` or `:30` only. Leaves windows / non-matching strings unchanged. */
+function coerceTimeToHalfHour(time: string): { coerced: string; wasChanged: boolean } {
+  const match = time.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return { coerced: time, wasChanged: false };
+
+  let hours = Number.parseInt(match[1]!, 10);
+  const minutes = Number.parseInt(match[2]!, 10);
+  if (
+    !Number.isFinite(hours) ||
+    !Number.isFinite(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return { coerced: time, wasChanged: false };
+  }
+
+  if (minutes === 0 || minutes === 30) {
+    return { coerced: time, wasChanged: false };
+  }
+
+  let newMinutes: number;
+  if (minutes < 15) {
+    newMinutes = 0;
+  } else if (minutes < 45) {
+    newMinutes = 30;
+  } else {
+    newMinutes = 0;
+    hours = (hours + 1) % 24;
+  }
+
+  const coerced = `${String(hours).padStart(2, "0")}:${String(newMinutes).padStart(2, "0")}`;
+  return { coerced, wasChanged: true };
+}
+
 function normaliseLightningLaneStrategy(
   raw: unknown,
   logTags: string[],
@@ -3940,6 +3981,8 @@ function validateAndNormaliseDayStrategy(
     allowLightningMultiBookings: boolean;
     /** When false, strip `express_pass_strategy` (family has no Express). */
     allowUniversalExpress: boolean;
+    /** Attraction catalogue heights for this park — used to fix wrong "(min NNN cm)" in ride names. */
+    rideConstraints: ParkRideConstraints;
   },
 ): { strategy: AIDayStrategy; logTags: string[] } {
   const logTags: string[] = [];
@@ -4098,9 +4141,39 @@ function validateAndNormaliseDayStrategy(
     });
   }
 
+  for (const step of ride_sequence) {
+    const originalTime = step.time;
+    const tc = coerceTimeToHalfHour(step.time);
+    if (tc.wasChanged) {
+      step.time = tc.coerced;
+      const tag = `sanitised:non_round_time:${originalTime}_to_${tc.coerced}`;
+      qualityWarnings.push(tag);
+      logTags.push(tag);
+    }
+
+    const beforeRide = step.ride_or_event;
+    const hc = correctHeightInRideName(step.ride_or_event, ctx.rideConstraints);
+    if (hc.wasChanged) {
+      step.ride_or_event = hc.corrected;
+      const rideShort = beforeRide.split("(")[0]!.trim().slice(0, 50);
+      const hwarn = `sanitised:height_mismatch:${rideShort}:${hc.detail ?? "corrected"}`.slice(
+        0,
+        220,
+      );
+      qualityWarnings.push(hwarn);
+      logTags.push("sanitised:height_mismatch");
+    }
+  }
+
+  ride_sequence.sort((a, b) => a.time.localeCompare(b.time));
+
   let lastMins = -1;
   for (const step of ride_sequence) {
-    const [hh, mm] = step.time.split(":").map((x) => Number(x));
+    const parts = step.time.split(":");
+    if (parts.length < 2) continue;
+    const hh = Number(parts[0]);
+    const mm = Number(parts[1]);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) continue;
     const mins = hh * 60 + mm;
     if (lastMins >= 0 && mins < lastMins) {
       logTags.push("validation_warning:sequence_times_out_of_order");
@@ -4450,6 +4523,8 @@ export async function generateDayStrategy(input: {
       return { status: "error", error: "Could not read AI response." };
     }
 
+    const rideConstraints = buildParkRideConstraintsFromAttractions(attractions);
+
     const { strategy: strategyNorm, logTags } = validateAndNormaliseDayStrategy(
       parsed,
       {
@@ -4462,6 +4537,7 @@ export async function generateDayStrategy(input: {
           prefs.disneyLightningLane?.multiPassStatus !== "none",
         allowUniversalExpress:
           line !== "universal" || prefs.universalExpress?.status !== "no",
+        rideConstraints,
       },
     );
 
