@@ -26,7 +26,6 @@ import {
   themedEmptySlotSurfaceStyle,
   type ThemeKey,
 } from "@/lib/themes";
-import type { Tier } from "@/lib/tier";
 import type {
   AIDayStrategy,
   Assignments,
@@ -185,10 +184,6 @@ export type MobileDayViewProps = {
     dateKey: string,
     options?: { tab?: "adjust" | "strategy"; autoRunStrategy?: boolean },
   ) => void;
-  /** Direct entry to AI Day Strategy (upgrade modal on free; generate or mini-wizard on paid). */
-  onOpenDayStrategy?: (dateKey: string) => void;
-  /** Retail tier for Pro badge on the Day Strategy entry. */
-  productTier?: Tier;
   onUndoDayTweak?: (dateKey: string) => void;
   /** Per-park AI must-dos (same server flow as day detail). */
   onGenerateMustDosForPark?: (dateKey: string, parkId: string) => void;
@@ -452,8 +447,6 @@ export function MobileDayView({
   onRideDayPrioritiesUpdated,
   onOpenDayDetail,
   onOpenDayPlanner,
-  onOpenDayStrategy,
-  productTier = "free",
   onUndoDayTweak,
   onGenerateMustDosForPark,
   mustDosGenLoading = null,
@@ -852,32 +845,6 @@ export function MobileDayView({
               >
                 <span aria-hidden>✨</span>
                 Plan this day
-              </button>
-            ) : null}
-            {!readOnly && onOpenDayStrategy ? (
-              <button
-                type="button"
-                disabled={themeParkIdsAmPm.length === 0}
-                title={
-                  themeParkIdsAmPm.length === 0
-                    ? "AI Day Strategy is available on park days only"
-                    : undefined
-                }
-                className="mt-2 flex min-h-[48px] w-full flex-col items-center justify-center gap-0.5 rounded-lg border border-royal/25 bg-white px-4 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition active:bg-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 disabled:cursor-not-allowed disabled:opacity-55"
-                onClick={() => onOpenDayStrategy(activeDay.dateKey)}
-              >
-                <span className="inline-flex items-center gap-2">
-                  <span aria-hidden>✨</span>
-                  AI Day Strategy
-                  {productTier === "free" ? (
-                    <span className="rounded bg-gold/30 px-1.5 py-0.5 text-[0.55rem] font-bold uppercase tracking-wide text-royal">
-                      Pro
-                    </span>
-                  ) : null}
-                </span>
-                <span className="font-sans text-[11px] font-normal text-royal/60">
-                  Pro feature — sequenced ride plan
-                </span>
               </button>
             ) : null}
             {!readOnly && onUndoDayTweak && activeDaySnapshotCount > 0 ? (

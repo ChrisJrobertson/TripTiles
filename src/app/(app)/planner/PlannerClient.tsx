@@ -1368,27 +1368,6 @@ export function PlannerClient({
     [activeTripId, trips, router, applyStrategyPatchForDate],
   );
 
-  const openMobileDayStrategy = useCallback(
-    (dateKey: string) => {
-      if (!activeTripId) return;
-      if (isFreeTierForTripLimit(productTier)) {
-        trackEvent("day_strategy_upgrade_modal_open", { source: "day_view" });
-        setDayStrategyUpgradeOpen(true);
-        return;
-      }
-      void (async () => {
-        const r = await runDayStrategyGenerate(dateKey, {
-          suppressErrorToast: true,
-          openPlannerWithAutoStrategyOnMissingData: true,
-        });
-        if (r.ok) return;
-        if (!r.error) return;
-        showToast(r.error);
-      })();
-    },
-    [activeTripId, productTier, runDayStrategyGenerate],
-  );
-
   const handlePlanPrefsSavedContinueStrategy = useCallback(
     async (prefs: TripPlanningPreferences) => {
       if (!activeTrip || !dayPlannerDate) {
@@ -2967,9 +2946,6 @@ export function PlannerClient({
                             onOpenDayPlanner={(opts) => {
                               openDayPlanner(dayCanonicalForDetail, opts);
                             }}
-                            onOpenDayStrategy={() =>
-                              openMobileDayStrategy(dayCanonicalForDetail)
-                            }
                             onUndoDayTweak={handleUndoDayTweak}
                             onGenerateMustDosForPark={(parkId) => {
                               void runMustDosGen(dayCanonicalForDetail, parkId);
@@ -3011,8 +2987,6 @@ export function PlannerClient({
                             onClear={onClear}
                             crowdSummary={mobileCrowdSummaryText}
                             readOnly={false}
-                            productTier={productTier}
-                            onOpenDayStrategy={openMobileDayStrategy}
                             ridePrioritiesByDay={
                               ridePrioritiesByDayForActiveTrip
                             }
