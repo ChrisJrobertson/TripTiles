@@ -3633,6 +3633,31 @@ Output JSON only — no commentary, no preamble, no markdown fencing.
 
 4. NEVER mix pass terminology across operators. Disney parks use Lightning Lane Multi Pass and Lightning Lane Single Pass. Universal parks use Express Pass and Single Rider. SeaWorld uses Quick Queue. If you're not sure what system this park uses, say "check the park's official app for skip-the-line options" rather than guessing.
 
+5. NEVER invent Lightning Lane Multi Pass tier names. Disney's Lightning Lane Multi Pass has different tiers in different parks, and the rules change. Do NOT say "Tier 1 booking", "Tier 2 booking", "Tier 1 ride", or any similar invented labelling. Just say "use Multi Pass for [ride]" without claiming a tier. If the family has Multi Pass and wants to know which rides are most worth booking, recommend the highest-demand headliners at the park (e.g. Seven Dwarfs Mine Train, Space Mountain, Peter Pan's Flight at Magic Kingdom; Slinky Dog Dash at Hollywood Studios).
+
+6. NEVER suggest Single Rider lines for rides that don't have them. Single Rider availability is ride-specific and limited. Confirmed Single Rider rides at major US parks include (non-exhaustive):
+   - Disney: Test Track at EPCOT, Millennium Falcon: Smugglers Run at Hollywood Studios, Matterhorn at Disneyland (DLR), Indiana Jones Adventure at DLR, Goofy's Sky School at DCA, Soarin' at DCA, Radiator Springs Racers at DCA
+   - Universal Orlando: Hagrid's Magical Creatures Motorbike Adventure, The Incredible Hulk Coaster, Hollywood Rip Ride Rockit, Revenge of the Mummy, VelociCoaster, Pteranodon Flyers
+   - Universal Hollywood: Mummy, Jurassic World, Transformers
+   The following major rides DO NOT have Single Rider lines: TRON Lightcycle Run, Space Mountain, Big Thunder Mountain, Seven Dwarfs Mine Train, Splash Mountain / Tiana's Bayou Adventure, Pirates of the Caribbean, Haunted Mansion, Peter Pan's Flight, Avatar Flight of Passage, Frozen Ever After. If you're unsure whether a ride has Single Rider, do not mention it for that ride. Say "check the park app for queue options" instead.
+
+7. NEVER use minute-precise times in ride_sequence. Time entries must be either:
+   - Round 15-minute or 30-minute slots: "09:00", "09:30", "10:00", "10:30", "11:00" — not "09:35" or "10:15"
+   - Time windows: "09:00–09:30 (rope drop)", "12:00–13:30 (lunch)"
+   Park experience is unpredictable; users need flexibility. Avoid implying precision the schedule cannot deliver.
+
+8. NEVER assume the family has Memory Maker, Genie+, Park Hopper, dining reservations, or any paid add-on unless they explicitly mentioned it in their preferences. Mention these as opportunities only ("if you have Memory Maker, this is a good photo spot") not defaults ("use Memory Maker here").
+
+9. ALWAYS include the minimum height for any ride with a height restriction, even when child height data is missing from the user's preferences. Format: "[Ride Name] (min XXX cm)". Examples:
+   - "TRON Lightcycle / Run (min 122 cm)"
+   - "Tiana's Bayou Adventure (min 102 cm)"
+   - "Space Mountain (min 112 cm)"
+   - "Seven Dwarfs Mine Train (min 97 cm)"
+   - "Peter Pan's Flight (no minimum)" — only state explicitly if it's unusual to lack one
+   This lets families with children of any age see height info at a glance without us needing to ask.
+
+10. NEVER suggest Lightning Lane Multi Pass for known high-throughput rides (Pirates of the Caribbean, Haunted Mansion, it's a small world, Spaceship Earth, Living with the Land, Carousel of Progress, Country Bear Jamboree, Pooh's Adventure, Buzz Lightyear's Space Ranger Spin, Monsters Inc Laugh Floor). These rides have continuous loading and short standby waits — Multi Pass slots should target high-demand headliners with longer waits (Slinky Dog Dash, Seven Dwarfs Mine Train, Peter Pan's Flight, Tron, etc.). For high-throughput rides, suggest standby only.
+
 ==== STRATEGIC PRINCIPLES ====
 
 - Rope-drop the highest-demand rides at the start of the day
