@@ -3700,109 +3700,363 @@ function buildOtherDaysStrategySummary(trip: Trip, excludeDate: string): string 
   return lines.length > 0 ? lines.join("\n") : "None recorded.";
 }
 
-function parseAndValidateDayStrategy(
-  parsed: unknown,
-  dateKey: string,
-  parkId: string,
-  model: string,
-): AIDayStrategy | null {
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
-  const o = parsed as Record<string, unknown>;
-  const arrival = o.arrival_recommendation;
-  if (arrival !== "rope_drop" && arrival !== "mid_morning" && arrival !== "afternoon")
-    return null;
-  if (typeof o.arrival_reason !== "string" || !o.arrival_reason.trim()) return null;
-  if (!Array.isArray(o.ride_sequence) || o.ride_sequence.length < 3) return null;
-  const ride_sequence: AIDayStrategy["ride_sequence"] = [];
-  for (const row of o.ride_sequence) {
-    if (!row || typeof row !== "object" || Array.isArray(row)) return null;
-    const r = row as Record<string, unknown>;
-    if (typeof r.time !== "string" || typeof r.ride_or_event !== "string") return null;
-    if (typeof r.notes !== "string") return null;
-    const t = r.type;
+const DAY_STRATEGY_STEP_TYPES = new Set<string>([
+  "rope_drop",
+  "standby",
+  "lightning_lane",
+  "single_rider",
+  "meal",
+  "show",
+  "rest",
+]);
+
+function normaliseDayStrategyTime(
+  raw: unknown,
+  logTags: string[],
+): string {
+  if (typeof raw !== "string") {
+    logTags.push("validation_warning:time_not_string");
+    return "12:00";
+  }
+  const t = raw.trim();
+  const m = t.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) {
+    logTags.push(`validation_warning:time_unparsed:${t.slice(0, 12)}`);
+    return "12:00";
+  }
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (
+    !Number.isFinite(h) ||
+    !Number.isFinite(min) ||
+    h < 0 ||
+    h > 23 ||
+    min < 0 ||
+    min > 59
+  ) {
+    logTags.push(`validation_warning:time_out_of_range:${t.slice(0, 12)}`);
+    return "12:00";
+  }
+  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
+
+function normaliseLightningLaneStrategy(
+  raw: unknown,
+  logTags: string[],
+): AIDayStrategy["lightning_lane_strategy"] | undefined {
+  if (raw == null) return undefined;
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    logTags.push("validation_warning:lightning_lane_invalid_shape");
+    return undefined;
+  }
+  const l = raw as Record<string, unknown>;
+  const mp = l.multi_pass_bookings;
+  if (!Array.isArray(mp)) {
+    logTags.push("validation_warning:lightning_lane_multi_pass_not_array");
+    return undefined;
+  }
+  const multi_pass_bookings: NonNullable<
+    AIDayStrategy["lightning_lane_strategy"]
+  >["multi_pass_bookings"] = [];
+  for (const b of mp) {
+    if (!b || typeof b !== "object" || Array.isArray(b)) continue;
+    const x = b as Record<string, unknown>;
     if (
-      t !== "rope_drop" &&
-      t !== "standby" &&
-      t !== "lightning_lane" &&
-      t !== "single_rider" &&
-      t !== "meal" &&
-      t !== "show" &&
-      t !== "rest"
-    )
-      return null;
+      typeof x.ride === "string" &&
+      typeof x.book_for_time === "string" &&
+      typeof x.reason === "string"
+    ) {
+      multi_pass_bookings.push({
+        ride: x.ride,
+        book_for_time: normaliseDayStrategyTime(x.book_for_time, logTags),
+        reason: x.reason,
+      });
+    }
+  }
+  const spr = l.single_pass_recommendations;
+  const single_pass_recommendations = Array.isArray(spr)
+    ? spr.filter((x): x is string => typeof x === "string")
+    : undefined;
+  return {
+    multi_pass_bookings,
+    ...(single_pass_recommendations?.length
+      ? { single_pass_recommendations }
+      : {}),
+  };
+}
+
+function normaliseExpressPassStrategy(
+  raw: unknown,
+  logTags: string[],
+): AIDayStrategy["express_pass_strategy"] | undefined {
+  if (raw == null) return undefined;
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    logTags.push("validation_warning:express_pass_invalid_shape");
+    return undefined;
+  }
+  const e = raw as Record<string, unknown>;
+  let pr: unknown = e.priority_rides;
+  let sk: unknown = e.skip_with_express;
+  if (typeof pr === "string") {
+    logTags.push(
+      "validation_warning:express_priority_rides_coerced_from_string",
+    );
+    pr = [pr];
+  }
+  if (typeof sk === "string") {
+    logTags.push("validation_warning:express_skip_coerced_from_string");
+    sk = [sk];
+  }
+  if (!Array.isArray(pr)) {
+    logTags.push("validation_warning:express_priority_rides_defaulted_empty");
+    pr = [];
+  }
+  if (!Array.isArray(sk)) {
+    logTags.push("validation_warning:express_skip_defaulted_empty");
+    sk = [];
+  }
+  const priority_rides = (pr as unknown[]).filter(
+    (x): x is string => typeof x === "string",
+  );
+  const skip_with_express = (sk as unknown[]).filter(
+    (x): x is string => typeof x === "string",
+  );
+  if (priority_rides.length === 0 && skip_with_express.length === 0) {
+    return undefined;
+  }
+  return { priority_rides, skip_with_express };
+}
+
+/** Always returns a storable strategy after JSON parse — see `logTags` / `quality_warnings`. */
+function validateAndNormaliseDayStrategy(
+  parsed: unknown,
+  ctx: {
+    dateKey: string;
+    parkId: string;
+    model: string;
+    parkLine: "disney" | "universal" | "other";
+  },
+): { strategy: AIDayStrategy; logTags: string[] } {
+  const logTags: string[] = [];
+  const qualityWarnings: string[] = [];
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    logTags.push("validation_error:root_not_object");
+    qualityWarnings.push(
+      "The response was not a JSON object — this is a placeholder until you regenerate.",
+    );
+    return {
+      strategy: {
+        date: ctx.dateKey,
+        park: ctx.parkId,
+        generated_at: new Date().toISOString(),
+        model: ctx.model,
+        arrival_recommendation: "mid_morning",
+        arrival_reason:
+          "We could not read structured plan details from this response. Try Regenerate or plan manually.",
+        ride_sequence: [
+          {
+            time: "09:00",
+            type: "rest",
+            ride_or_event: "Regenerate strategy",
+            notes:
+              "Open AI Day Strategy again for a fresh plan, or build the day manually.",
+          },
+        ],
+        warnings: [],
+        quality_warnings: qualityWarnings,
+      },
+      logTags,
+    };
+  }
+
+  const o = parsed as Record<string, unknown>;
+
+  let arrival: AIDayStrategy["arrival_recommendation"] = "mid_morning";
+  const arRaw = o.arrival_recommendation;
+  if (
+    arRaw === "rope_drop" ||
+    arRaw === "mid_morning" ||
+    arRaw === "afternoon"
+  ) {
+    arrival = arRaw;
+  } else if (arRaw != null && String(arRaw).trim() !== "") {
+    logTags.push(
+      `validation_warning:arrival_coerced:${String(arRaw).slice(0, 40)}`,
+    );
+    qualityWarnings.push(
+      "Arrival timing was adjusted — the model returned an unrecognised label.",
+    );
+  } else {
+    logTags.push("validation_warning:missing_arrival_recommendation");
+    qualityWarnings.push("Arrival recommendation was missing — a default was used.");
+  }
+
+  let arrival_reason =
+    typeof o.arrival_reason === "string" ? o.arrival_reason.trim() : "";
+  if (!arrival_reason) {
+    logTags.push("validation_error:missing_arrival_reason");
+    arrival_reason =
+      "Some narrative text was missing from the AI output — verify ride times and names on the day.";
+    qualityWarnings.push("The short arrival explanation was missing or empty.");
+  }
+
+  const ride_sequence: AIDayStrategy["ride_sequence"] = [];
+  const rawSeq = o.ride_sequence;
+  if (!Array.isArray(rawSeq)) {
+    logTags.push("validation_error:ride_sequence_not_array");
+    qualityWarnings.push(
+      "Ride sequence was missing or invalid — a placeholder step was added.",
+    );
+  } else {
+    if (rawSeq.length === 0) {
+      logTags.push("validation_warning:empty_ride_sequence");
+      qualityWarnings.push(
+        "The AI returned no ride steps — regenerate for a fuller plan.",
+      );
+    } else if (rawSeq.length < 3) {
+      logTags.push(`validation_warning:short_ride_sequence:${rawSeq.length}`);
+      qualityWarnings.push(
+        `Only ${rawSeq.length} step(s) were returned — consider regenerating for a fuller day.`,
+      );
+    }
+
+    for (let i = 0; i < rawSeq.length; i++) {
+      const row = rawSeq[i];
+      if (!row || typeof row !== "object" || Array.isArray(row)) {
+        logTags.push(`validation_warning:ride_step_skipped:${i}`);
+        continue;
+      }
+      const r = row as Record<string, unknown>;
+      let ride_or_event = "";
+      if (typeof r.ride_or_event === "string" && r.ride_or_event.trim()) {
+        ride_or_event = r.ride_or_event.trim();
+      } else {
+        ride_or_event = "Activity";
+        logTags.push(`validation_warning:ride_or_event_defaulted:${i}`);
+      }
+      const typeRaw = r.type;
+      let type: AIDayStrategy["ride_sequence"][number]["type"] = "standby";
+      if (typeof typeRaw === "string" && DAY_STRATEGY_STEP_TYPES.has(typeRaw)) {
+        type = typeRaw as AIDayStrategy["ride_sequence"][number]["type"];
+      } else if (typeRaw != null && String(typeRaw).trim() !== "") {
+        logTags.push(
+          `validation_warning:unknown_ride_type:${String(typeRaw).slice(0, 32)}`,
+        );
+      }
+      const time = normaliseDayStrategyTime(r.time, logTags);
+      let notes = "";
+      if (typeof r.notes === "string") {
+        notes = r.notes;
+      } else {
+        logTags.push(`validation_warning:notes_defaulted_empty:${i}`);
+      }
+      const step: AIDayStrategy["ride_sequence"][number] = {
+        time,
+        type,
+        ride_or_event,
+        notes,
+      };
+      if (typeof r.height_warning === "string" && r.height_warning.trim()) {
+        step.height_warning = r.height_warning.trim();
+      }
+      ride_sequence.push(step);
+    }
+  }
+
+  if (ride_sequence.length === 0) {
     ride_sequence.push({
-      time: r.time,
-      type: t,
-      ride_or_event: r.ride_or_event,
-      notes: r.notes,
-      ...(typeof r.height_warning === "string"
-        ? { height_warning: r.height_warning }
-        : {}),
+      time: "09:00",
+      type: "rest",
+      ride_or_event: "Plan your day",
+      notes:
+        "No valid ride steps were parsed — try Regenerate, or pick rides from your list below.",
     });
   }
-  let lightning_lane_strategy: AIDayStrategy["lightning_lane_strategy"];
-  if (o.lightning_lane_strategy != null) {
-    const ll = o.lightning_lane_strategy;
-    if (typeof ll !== "object" || Array.isArray(ll)) return null;
-    const l = ll as Record<string, unknown>;
-    const mp = l.multi_pass_bookings;
-    if (!Array.isArray(mp)) return null;
-    const multi_pass_bookings: NonNullable<
-      AIDayStrategy["lightning_lane_strategy"]
-    >["multi_pass_bookings"] = [];
-    for (const b of mp) {
-      if (!b || typeof b !== "object") continue;
-      const x = b as Record<string, unknown>;
-      if (
-        typeof x.ride === "string" &&
-        typeof x.book_for_time === "string" &&
-        typeof x.reason === "string"
-      ) {
-        multi_pass_bookings.push({
-          ride: x.ride,
-          book_for_time: x.book_for_time,
-          reason: x.reason,
-        });
-      }
+
+  let lastMins = -1;
+  for (const step of ride_sequence) {
+    const [hh, mm] = step.time.split(":").map((x) => Number(x));
+    const mins = hh * 60 + mm;
+    if (lastMins >= 0 && mins < lastMins) {
+      logTags.push("validation_warning:sequence_times_out_of_order");
+      qualityWarnings.push(
+        "Times may be out of order — double-check the sequence against park hours.",
+      );
+      break;
     }
-    const spr = l.single_pass_recommendations;
-    const single_pass_recommendations = Array.isArray(spr)
-      ? spr.filter((x): x is string => typeof x === "string")
-      : undefined;
-    lightning_lane_strategy = {
-      multi_pass_bookings,
-      ...(single_pass_recommendations?.length
-        ? { single_pass_recommendations }
-        : {}),
-    };
+    lastMins = mins;
   }
-  let express_pass_strategy: AIDayStrategy["express_pass_strategy"];
-  if (o.express_pass_strategy != null) {
-    const ex = o.express_pass_strategy;
-    if (typeof ex !== "object" || Array.isArray(ex)) return null;
-    const e = ex as Record<string, unknown>;
-    const pr = e.priority_rides;
-    const sk = e.skip_with_express;
-    if (!Array.isArray(pr) || !Array.isArray(sk)) return null;
-    express_pass_strategy = {
-      priority_rides: pr.filter((x): x is string => typeof x === "string"),
-      skip_with_express: sk.filter((x): x is string => typeof x === "string"),
-    };
+
+  const lightning_lane_strategy = normaliseLightningLaneStrategy(
+    o.lightning_lane_strategy,
+    logTags,
+  );
+  if (
+    ctx.parkLine === "disney" &&
+    o.lightning_lane_strategy != null &&
+    !lightning_lane_strategy
+  ) {
+    logTags.push("validation_warning:lightning_lane_strategy_dropped_malformed");
+    qualityWarnings.push(
+      "Lightning Lane booking block could not be read — rope-drop and sequence advice may still help.",
+    );
+  } else if (ctx.parkLine === "disney" && !lightning_lane_strategy) {
+    logTags.push("validation_warning:missing_lightning_lane_strategy");
   }
-  if (!Array.isArray(o.warnings)) return null;
-  const warnings = o.warnings.filter((x): x is string => typeof x === "string");
-  return {
-    date: dateKey,
-    park: parkId,
+
+  const express_pass_strategy = normaliseExpressPassStrategy(
+    o.express_pass_strategy,
+    logTags,
+  );
+  if (
+    ctx.parkLine === "universal" &&
+    o.express_pass_strategy != null &&
+    !express_pass_strategy
+  ) {
+    logTags.push("validation_warning:express_pass_strategy_dropped_malformed");
+    qualityWarnings.push(
+      "Express Pass strategy text could not be read — check ride order carefully.",
+    );
+  } else if (ctx.parkLine === "universal" && !express_pass_strategy) {
+    logTags.push("validation_warning:missing_express_pass_strategy");
+  }
+
+  let topWarnings: string[] = [];
+  if (Array.isArray(o.warnings)) {
+    topWarnings = o.warnings.filter((x): x is string => typeof x === "string");
+  } else if (o.warnings != null) {
+    logTags.push("validation_warning:warnings_not_array");
+    qualityWarnings.push(
+      'The top-level "warnings" list was missing or invalid — AI caveats may be incomplete.',
+    );
+  }
+
+  if (qualityWarnings.length > 0) {
+    const unique = [...new Set(qualityWarnings)];
+    qualityWarnings.length = 0;
+    qualityWarnings.push(...unique);
+  }
+
+  const strategy: AIDayStrategy = {
+    date: ctx.dateKey,
+    park: ctx.parkId,
     generated_at: new Date().toISOString(),
-    model,
+    model: ctx.model,
     arrival_recommendation: arrival,
-    arrival_reason: String(o.arrival_reason).trim(),
+    arrival_reason,
     ride_sequence,
-    ...(lightning_lane_strategy ? { lightning_lane_strategy } : {}),
+    warnings: topWarnings,
+    ...(qualityWarnings.length > 0 ? { quality_warnings: qualityWarnings } : {}),
+    ...(lightning_lane_strategy &&
+    (lightning_lane_strategy.multi_pass_bookings.length > 0 ||
+      (lightning_lane_strategy.single_pass_recommendations?.length ?? 0) > 0)
+      ? { lightning_lane_strategy }
+      : {}),
     ...(express_pass_strategy ? { express_pass_strategy } : {}),
-    warnings,
   };
+
+  return { strategy, logTags };
 }
 
 export async function generateDayStrategy(input: {
@@ -3995,27 +4249,18 @@ export async function generateDayStrategy(input: {
       return { status: "error", error: "Could not read AI response." };
     }
 
-    const strategy = parseAndValidateDayStrategy(parsed, dateKey, dom.id, model);
-    if (!strategy) {
-      aiGenStatus = "failed";
-      aiGenError = "day_strategy validation failed";
-      await recordAiGeneration({
-        userId: user.id,
-        tripId: input.tripId,
-        prompt: promptKey,
+    const { strategy: strategyNorm, logTags } = validateAndNormaliseDayStrategy(
+      parsed,
+      {
+        dateKey,
+        parkId: dom.id,
         model,
-        inputTokens,
-        outputTokens,
-        success: false,
-        status: "failed",
-        error: aiGenError,
-      });
-      aiGenLogged = true;
-      return { status: "error", error: "Plan was incomplete. Try again." };
-    }
+        parkLine: line,
+      },
+    );
 
     const unknownRides: string[] = [];
-    for (const r of strategy.ride_sequence) {
+    for (const r of strategyNorm.ride_sequence) {
       const name = r.ride_or_event.trim().toLowerCase();
       const generic = /meal|break|parade|fireworks|rest|walk|lunch|dinner|snack|pool|breakfast/i.test(
         name,
@@ -4028,10 +4273,26 @@ export async function generateDayStrategy(input: {
         if (!fuzzy) unknownRides.push(r.ride_or_event);
       }
     }
+    const validationPipe =
+      logTags.length > 0 ? logTags.join("|").slice(0, 700) : null;
     const warnExtra =
       unknownRides.length > 0
-        ? `unknown_ride: ${unknownRides.slice(0, 8).join("; ")}`
+        ? `unknown_ride:${unknownRides.slice(0, 8).join(";")}`.slice(0, 200)
         : null;
+    const recordDetail =
+      [validationPipe, warnExtra].filter(Boolean).join("|").slice(0, 950) ||
+      null;
+
+    let strategy = strategyNorm;
+    if (unknownRides.length > 0) {
+      strategy = {
+        ...strategyNorm,
+        warnings: [
+          ...strategyNorm.warnings,
+          `unknown_ride: ${unknownRides.slice(0, 8).join("; ")}`,
+        ],
+      };
+    }
 
     const prevPrefs =
       trip.preferences && typeof trip.preferences === "object"
@@ -4109,7 +4370,7 @@ export async function generateDayStrategy(input: {
         outputTokens,
         success: true,
         status: "success",
-        error: warnExtra,
+        error: recordDetail,
       });
     } catch {
       /* non-fatal */

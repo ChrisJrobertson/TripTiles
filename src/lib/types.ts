@@ -166,6 +166,8 @@ export type AIDayStrategy = {
     skip_with_express: string[];
   };
   warnings: string[];
+  /** Populated when output was normalised or degraded — show a gentle banner in UI. */
+  quality_warnings?: string[];
 };
 
 export type DaySnapshotSource =

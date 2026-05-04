@@ -1276,10 +1276,17 @@ export function PlannerClient({
   );
 
   const runDayStrategyGenerate = useCallback(
-    async (dateKey: string) => {
-      if (!activeTripId) return;
+    async (
+      dateKey: string,
+      options?: { suppressErrorToast?: boolean },
+    ): Promise<{ ok: true } | { ok: false; error: string }> => {
+      if (!activeTripId) {
+        return { ok: false, error: "No trip selected." };
+      }
       const trip = trips.find((t) => t.id === activeTripId);
-      if (!trip) return;
+      if (!trip) {
+        return { ok: false, error: "Trip not found." };
+      }
 
       setDayStrategyBusyDateKey(dateKey);
       try {
@@ -1302,29 +1309,53 @@ export function PlannerClient({
               ai_day_strategy: { ...base, [dateKey]: res.strategy },
             },
           });
-          showToast("AI Day Strategy is ready.");
+          if (!options?.suppressErrorToast) {
+            showToast("AI Day Strategy is ready.");
+          }
           startTransition(() => router.refresh());
-          return;
+          return { ok: true };
         }
 
         if (res.status === "tier_blocked") {
           setDayStrategyUpgradeOpen(true);
-          return;
+          const msg = "AI Day Strategy needs a Pro or Family plan.";
+          if (!options?.suppressErrorToast) {
+            showToast(msg);
+          }
+          return { ok: false, error: msg };
         }
 
         if (res.status === "missing_data") {
           dayStrategyPendingDateRef.current = dateKey;
           setDayStrategyPendingDateKey(dateKey);
           setDayStrategyMiniOpen(true);
-          return;
+          const msg = "We still need a few planning details for this day.";
+          if (!options?.suppressErrorToast) {
+            showToast(msg);
+          }
+          return { ok: false, error: msg };
         }
 
         if (res.status === "no_park_assigned") {
-          showToast("Assign a theme park to this day first.");
-          return;
+          const msg = "Assign a theme park to this day first.";
+          if (!options?.suppressErrorToast) {
+            showToast(msg);
+          }
+          return { ok: false, error: msg };
         }
 
-        showToast(res.error);
+        const err = res.error;
+        if (!options?.suppressErrorToast) {
+          showToast(err);
+        }
+        return { ok: false, error: err };
+      } catch (e) {
+        const msg =
+          e instanceof Error ? e.message : "Something went wrong. Try again.";
+        if (!options?.suppressErrorToast) {
+          showToast(msg);
+        }
+        return { ok: false, error: msg };
       } finally {
         setDayStrategyBusyDateKey(null);
       }
@@ -3222,13 +3253,44 @@ export function PlannerClient({
             setDayStrategyPendingDateKey(null);
           }}
           onSaved={async (prefs) => {
-            if (!activeTrip) return;
+            if (!activeTrip) {
+              return { ok: false, error: "Something went wrong. Try again." };
+            }
             const dk = dayStrategyPendingDateRef.current;
             applyLocalPatch(activeTrip.id, { planning_preferences: prefs });
-            dayStrategyPendingDateRef.current = null;
-            setDayStrategyPendingDateKey(null);
-            if (dk) await runDayStrategyGenerate(dk);
+            if (!dk) {
+              return {
+                ok: false,
+                error: "No day could be linked. Close and try again.",
+              };
+            }
+            const r = await runDayStrategyGenerate(dk, {
+              suppressErrorToast: true,
+            });
+            if (r.ok) {
+              dayStrategyPendingDateRef.current = null;
+              setDayStrategyPendingDateKey(null);
+            }
+            return r;
           }}
+          onRetryStrategyGenerate={
+            activeTripId
+              ? async () => {
+                  const dk = dayStrategyPendingDateRef.current;
+                  if (!dk) {
+                    return { ok: false, error: "No day selected." };
+                  }
+                  const r = await runDayStrategyGenerate(dk, {
+                    suppressErrorToast: true,
+                  });
+                  if (r.ok) {
+                    dayStrategyPendingDateRef.current = null;
+                    setDayStrategyPendingDateKey(null);
+                  }
+                  return r;
+                }
+              : undefined
+          }
         />
       ) : null}
 

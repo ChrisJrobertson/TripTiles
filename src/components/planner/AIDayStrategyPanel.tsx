@@ -59,6 +59,22 @@ export function AIDayStrategyPanel({
         </div>
       </div>
 
+      {strategy.quality_warnings && strategy.quality_warnings.length > 0 ? (
+        <div
+          className="mt-4 rounded-lg border border-gold/50 bg-gold/15 p-3"
+          role="status"
+        >
+          <p className="font-sans text-xs font-semibold text-royal">
+            Some details may be incomplete
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-4 font-sans text-xs text-royal/85">
+            {strategy.quality_warnings.map((w, i) => (
+              <li key={i}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div className="mt-4 rounded-lg border border-royal/10 bg-white/90 p-3">
         <p className="font-sans text-[11px] font-semibold uppercase tracking-wide text-gold">
           {strategy.arrival_recommendation.replace("_", " ")}
