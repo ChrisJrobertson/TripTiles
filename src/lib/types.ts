@@ -132,9 +132,12 @@ export type AIDayStrategyRideStepType =
   | "standby"
   | "lightning_lane"
   | "single_rider"
+  | "express_pass"
   | "meal"
   | "show"
-  | "rest";
+  | "indoor_break"
+  | "rest"
+  | "shopping";
 
 export type AIDayStrategyArrival = "rope_drop" | "mid_morning" | "afternoon";
 

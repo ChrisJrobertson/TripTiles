@@ -3606,22 +3606,54 @@ const DAY_STRATEGY_SYSTEM = `You are an expert theme park strategist creating a 
 You have access to:
 - Detailed information about every ride at the park
 - The family's pass status (Lightning Lane Multi Pass, Express Pass, Single Rider preference)
-- The family's mobility and height constraints
-- Historical crowd patterns
+- The family's mobility, height, and pace preferences
+- General training-data knowledge of how theme parks operate
 
-Output JSON only — no commentary, no preamble.
+You DO NOT have access to:
+- Live or historical wait-time data for any specific ride
+- Today's actual park schedule, special events, or ride closures
+- Crowd predictions for the specific date
 
-Schema:
+Output JSON only — no commentary, no preamble, no markdown fencing.
+
+==== ABSOLUTE RULES ====
+
+1. NEVER invent specific wait-time numbers. Do not say "Slinky Dog Dash 65 min at 11am" or "wait will be approximately 45 minutes" or "expect 30 minute queues". You don't have that data. Instead, give RELATIVE strategic guidance: "rope drop is the lowest-wait window for this ride", "single-rider line is typically much shorter than standby", "afternoon waits build up as the day progresses".
+
+2. NEVER suggest leaving the park mid-day for a "resort break", "head back to the hotel", or similar — UNLESS the family explicitly mentioned wanting a mid-day rest at the resort. Most families stay in the park all day. For peak-congestion windows, suggest IN-PARK options:
+   - Table-service or character meals (indoor, air-conditioned, often with a pre-booked dining reservation)
+   - Indoor shows with seating (e.g. Carousel of Progress, Mickey's PhilharMagic, Hollywood Studios shows)
+   - Indoor or low-wait dark rides (e.g. Haunted Mansion, Pirates, Spaceship Earth, Living with the Land)
+   - Character meet-and-greets (queues mostly indoor)
+   - Shopping at park shops or covered/indoor areas
+   - Slow-pace exploration, photography, parade or fountain viewing
+   Phrase suggestions like "indoor break: [option]" or "cooler-pace block: [option]" — never "resort break".
+
+3. NEVER claim specifics you can't verify. If unsure about a current pass-skip rule, ride status, or schedule detail, say "check the official park app for current details" rather than inventing. The family will trust your strategic guidance more if you're honest about limits.
+
+4. NEVER mix pass terminology across operators. Disney parks use Lightning Lane Multi Pass and Lightning Lane Single Pass. Universal parks use Express Pass and Single Rider. SeaWorld uses Quick Queue. If you're not sure what system this park uses, say "check the park's official app for skip-the-line options" rather than guessing.
+
+==== STRATEGIC PRINCIPLES ====
+
+- Rope-drop the highest-demand rides at the start of the day
+- Use pass-skip systems (Multi Pass, Express, Single Rider) where the family has access, prioritising high-wait headliners
+- Sequence rides by location to minimise backtracking when possible
+- Schedule heavier indoor breaks during peak-congestion windows (typically 13:00–16:00 in summer at most parks)
+- Build in time for height-restricted rides only for those tall enough
+- For mobility considerations (stroller, wheelchair, prefer-shorter-walks), factor in walking distances and accessible queues
+
+==== OUTPUT SCHEMA ====
+
 {
   "arrival_recommendation": "rope_drop" | "mid_morning" | "afternoon",
-  "arrival_reason": "<one sentence why>",
+  "arrival_reason": "<one sentence why, in plain language>",
   "ride_sequence": [
     {
       "time": "HH:MM",
-      "type": "rope_drop" | "standby" | "lightning_lane" | "single_rider" | "meal" | "show" | "rest",
-      "ride_or_event": "<exact ride name or event>",
-      "notes": "<one sentence strategy>",
-      "height_warning": "<only if min height applies, e.g. 'Min 40 inches'>"
+      "type": "rope_drop" | "standby" | "lightning_lane" | "single_rider" | "express_pass" | "meal" | "show" | "indoor_break" | "rest" | "shopping",
+      "ride_or_event": "<exact ride name OR descriptor like 'Quick-service lunch' or 'Indoor show'>",
+      "notes": "<one sentence of strategic context — why this here, why this order>",
+      "height_warning": "<only if a min-height rule applies and a child in this family is below it>"
     }
   ],
   "lightning_lane_strategy": {
@@ -3637,15 +3669,15 @@ Schema:
   "warnings": ["..."]
 }
 
-Critical rules:
-- Use realistic times: parks open ~09:00, close ~22:00
-- Sequence rides geographically when possible (avoid backtracking)
-- For Disney: respect Lightning Lane Multi Pass strategy (max 3 bookings, can book next after using one)
-- For Universal: respect Express Pass status (if "no", recommend Single Rider for headliners)
-- Flag any ride a child is too short for in height_warning
-- If mobility says wheelchair/stroller, factor walking distances and accessible queues
-- Do NOT recommend rides that don't exist at this park
-- Output JSON only — no markdown, no commentary`;
+==== FORMATTING NOTES ====
+
+- Use 24h time format (HH:MM)
+- Park hours: assume 09:00 open and 22:00 close unless the user prompt says otherwise
+- Sequence times should advance reasonably (no backwards times)
+- Skip lightning_lane_strategy entirely if the family doesn't have Multi Pass access
+- Skip express_pass_strategy entirely if the family doesn't have Express Pass access
+- Use indoor_break or rest as the type field for the in-park break, NEVER "resort break"
+- Output JSON only — no markdown, no commentary, no preamble`;
 
 function dominantThemeParkForDayStrategy(
   trip: Trip,
@@ -3705,10 +3737,54 @@ const DAY_STRATEGY_STEP_TYPES = new Set<string>([
   "standby",
   "lightning_lane",
   "single_rider",
+  "express_pass",
   "meal",
   "show",
+  "indoor_break",
   "rest",
+  "shopping",
 ]);
+
+const DAY_STRATEGY_BANNED_PHRASE_PATTERNS: RegExp[] = [
+  /resort break/i,
+  /head back to (the |your )?(hotel|resort)/i,
+  /return to (the |your )?(hotel|resort)/i,
+  /go back to (the |your )?(hotel|resort)/i,
+];
+
+const DAY_STRATEGY_WAIT_TIME_PATTERNS: RegExp[] = [
+  /\b\d+\s*(?:min|minute|minutes|mins)\s+wait/i,
+  /wait\s+(?:will be|is|of)\s+\d+/i,
+  /(?:typically|usually|expect)\s+\d+\s*(?:min|minute|minutes)/i,
+];
+
+const DAY_STRATEGY_INDOOR_BREAK_REPLACEMENT =
+  "Indoor break — pick a table-service meal, indoor show, or low-wait dark ride to escape peak congestion";
+
+function dayStrategyFieldContainsBannedPhrasing(
+  text: string | undefined | null,
+): boolean {
+  if (!text) return false;
+  return DAY_STRATEGY_BANNED_PHRASE_PATTERNS.some((re) => re.test(text));
+}
+
+function sanitiseDayStrategyFabricatedWaitTimesInNotes(notes: string): {
+  text: string;
+  hit: boolean;
+} {
+  let text = notes;
+  let hit = false;
+  for (const re of DAY_STRATEGY_WAIT_TIME_PATTERNS) {
+    if (re.test(text)) {
+      hit = true;
+      text = text.replace(
+        re,
+        "check the official park app for live waits — relative waits vary by season and day",
+      );
+    }
+  }
+  return { text, hit };
+}
 
 function normaliseDayStrategyTime(
   raw: unknown,
@@ -3835,10 +3911,15 @@ function validateAndNormaliseDayStrategy(
     parkId: string;
     model: string;
     parkLine: "disney" | "universal" | "other";
+    /** When false, strip `multi_pass_bookings` (family has no Multi Pass). */
+    allowLightningMultiBookings: boolean;
+    /** When false, strip `express_pass_strategy` (family has no Express). */
+    allowUniversalExpress: boolean;
   },
 ): { strategy: AIDayStrategy; logTags: string[] } {
   const logTags: string[] = [];
   const qualityWarnings: string[] = [];
+  const sanitiserWarnings = new Set<string>();
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     logTags.push("validation_error:root_not_object");
@@ -3951,6 +4032,24 @@ function validateAndNormaliseDayStrategy(
       } else {
         logTags.push(`validation_warning:notes_defaulted_empty:${i}`);
       }
+
+      if (dayStrategyFieldContainsBannedPhrasing(ride_or_event)) {
+        ride_or_event = DAY_STRATEGY_INDOOR_BREAK_REPLACEMENT;
+        logTags.push("sanitised:resort_break_phrase");
+        sanitiserWarnings.add("sanitised:resort_break_phrase");
+      }
+      if (dayStrategyFieldContainsBannedPhrasing(notes)) {
+        notes = DAY_STRATEGY_INDOOR_BREAK_REPLACEMENT;
+        logTags.push("sanitised:resort_break_phrase");
+        sanitiserWarnings.add("sanitised:resort_break_phrase");
+      }
+      const waitSan = sanitiseDayStrategyFabricatedWaitTimesInNotes(notes);
+      notes = waitSan.text;
+      if (waitSan.hit) {
+        logTags.push("sanitised:fabricated_wait_time");
+        sanitiserWarnings.add("sanitised:fabricated_wait_time");
+      }
+
       const step: AIDayStrategy["ride_sequence"][number] = {
         time,
         type,
@@ -3988,37 +4087,97 @@ function validateAndNormaliseDayStrategy(
     lastMins = mins;
   }
 
-  const lightning_lane_strategy = normaliseLightningLaneStrategy(
+  let lightning_lane_strategy = normaliseLightningLaneStrategy(
     o.lightning_lane_strategy,
     logTags,
   );
+
+  if (ctx.parkLine !== "disney" && lightning_lane_strategy) {
+    const had =
+      lightning_lane_strategy.multi_pass_bookings.length > 0 ||
+      (lightning_lane_strategy.single_pass_recommendations?.length ?? 0) > 0;
+    if (had) {
+      logTags.push("validation_strip:lightning_lane_wrong_operator");
+      sanitiserWarnings.add("sanitised:wrong_operator_lightning_lane_dropped");
+    }
+    lightning_lane_strategy = undefined;
+  }
+
+  if (
+    ctx.parkLine === "disney" &&
+    lightning_lane_strategy &&
+    !ctx.allowLightningMultiBookings &&
+    lightning_lane_strategy.multi_pass_bookings.length > 0
+  ) {
+    const keptSingles =
+      lightning_lane_strategy.single_pass_recommendations?.length ?? 0;
+    lightning_lane_strategy = {
+      multi_pass_bookings: [],
+      ...(keptSingles > 0
+        ? {
+            single_pass_recommendations:
+              lightning_lane_strategy.single_pass_recommendations,
+          }
+        : {}),
+    };
+    logTags.push("sanitised:multi_pass_bookings_removed");
+    sanitiserWarnings.add("sanitised:multi_pass_bookings_removed");
+  }
+
   if (
     ctx.parkLine === "disney" &&
     o.lightning_lane_strategy != null &&
-    !lightning_lane_strategy
+    !lightning_lane_strategy &&
+    ctx.allowLightningMultiBookings
   ) {
     logTags.push("validation_warning:lightning_lane_strategy_dropped_malformed");
     qualityWarnings.push(
       "Lightning Lane booking block could not be read — rope-drop and sequence advice may still help.",
     );
-  } else if (ctx.parkLine === "disney" && !lightning_lane_strategy) {
+  } else if (
+    ctx.parkLine === "disney" &&
+    !lightning_lane_strategy &&
+    ctx.allowLightningMultiBookings
+  ) {
     logTags.push("validation_warning:missing_lightning_lane_strategy");
   }
 
-  const express_pass_strategy = normaliseExpressPassStrategy(
+  let express_pass_strategy = normaliseExpressPassStrategy(
     o.express_pass_strategy,
     logTags,
   );
+
+  if (ctx.parkLine !== "universal" && express_pass_strategy) {
+    logTags.push("validation_strip:express_pass_wrong_operator");
+    sanitiserWarnings.add("sanitised:wrong_operator_express_pass_dropped");
+    express_pass_strategy = undefined;
+  }
+
+  if (
+    ctx.parkLine === "universal" &&
+    express_pass_strategy &&
+    !ctx.allowUniversalExpress
+  ) {
+    logTags.push("sanitised:express_pass_strategy_removed");
+    sanitiserWarnings.add("sanitised:express_pass_strategy_removed");
+    express_pass_strategy = undefined;
+  }
+
   if (
     ctx.parkLine === "universal" &&
     o.express_pass_strategy != null &&
-    !express_pass_strategy
+    !express_pass_strategy &&
+    ctx.allowUniversalExpress
   ) {
     logTags.push("validation_warning:express_pass_strategy_dropped_malformed");
     qualityWarnings.push(
       "Express Pass strategy text could not be read — check ride order carefully.",
     );
-  } else if (ctx.parkLine === "universal" && !express_pass_strategy) {
+  } else if (
+    ctx.parkLine === "universal" &&
+    !express_pass_strategy &&
+    ctx.allowUniversalExpress
+  ) {
     logTags.push("validation_warning:missing_express_pass_strategy");
   }
 
@@ -4031,6 +4190,8 @@ function validateAndNormaliseDayStrategy(
       'The top-level "warnings" list was missing or invalid — AI caveats may be incomplete.',
     );
   }
+
+  topWarnings = [...sanitiserWarnings, ...topWarnings];
 
   if (qualityWarnings.length > 0) {
     const unique = [...new Set(qualityWarnings)];
@@ -4165,6 +4326,20 @@ export async function generateDayStrategy(input: {
     [disneyPassSection, universalPassSection].filter(Boolean).join("\n") ||
     "General theme park queues";
 
+  const passInstructionTail: string[] = [];
+  if (line === "disney" && prefs.disneyLightningLane?.multiPassStatus === "none") {
+    passInstructionTail.push(
+      "",
+      "IMPORTANT: This family does NOT have Lightning Lane Multi Pass. Do not include multi_pass_bookings in your output (omit the field or use an empty array).",
+    );
+  }
+  if (line === "universal" && prefs.universalExpress?.status === "no") {
+    passInstructionTail.push(
+      "",
+      "IMPORTANT: This family does NOT have Universal Express Pass. Do not include express_pass_strategy in your output.",
+    );
+  }
+
   const userMsg = [
     `PARK: ${dom.park.name} (${dom.id})`,
     `DATE: ${dateKey} (${dow})`,
@@ -4176,6 +4351,7 @@ export async function generateDayStrategy(input: {
     "",
     "PASS STATUS:",
     passSection,
+    ...passInstructionTail,
     "",
     "PRIORITIES:",
     `- Pace: ${prefs.pace}`,
@@ -4256,6 +4432,11 @@ export async function generateDayStrategy(input: {
         parkId: dom.id,
         model,
         parkLine: line,
+        allowLightningMultiBookings:
+          line !== "disney" ||
+          prefs.disneyLightningLane?.multiPassStatus !== "none",
+        allowUniversalExpress:
+          line !== "universal" || prefs.universalExpress?.status !== "no",
       },
     );
 

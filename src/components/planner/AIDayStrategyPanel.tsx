@@ -8,14 +8,22 @@ function rideTypeEmoji(t: AIDayStrategyRideStepType): string {
       return "🚪";
     case "lightning_lane":
       return "⚡";
+    case "express_pass":
+      return "🎫";
     case "single_rider":
       return "🚶";
     case "meal":
       return "🍽️";
     case "show":
       return "🎭";
+    case "indoor_break":
+      return "🏠";
     case "rest":
       return "☕";
+    case "shopping":
+      return "🛍️";
+    case "standby":
+      return "🎢";
     default:
       return "🎢";
   }
