@@ -103,31 +103,19 @@ export function DayParkMustDosSection({
                 <p className="font-sans text-sm font-semibold text-royal">
                   {name}
                 </p>
-                <div className="flex shrink-0 items-center gap-1">
-                  {items.length > 0 ? (
-                    <button
-                      type="button"
-                      className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-royal/15 text-base text-royal transition hover:bg-cream"
-                      aria-label={`Regenerate suggestions for ${name}`}
-                      title="Regenerate"
-                      disabled={pending}
-                      onClick={() => onGenerateMustDos(parkId)}
-                    >
-                      🔄
-                    </button>
-                  ) : null}
+                {items.length === 0 ? (
                   <button
                     type="button"
                     disabled={pending}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-royal/20 bg-cream px-3 font-sans text-xs font-semibold text-royal disabled:opacity-60"
+                    className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-royal/20 bg-cream px-3 font-sans text-xs font-semibold text-royal disabled:opacity-60"
                     onClick={() => onGenerateMustDos(parkId)}
                   >
                     {pending ? (
                       <LogoSpinner size="sm" className="shrink-0" decorative />
                     ) : null}
-                    {items.length > 0 ? "Regenerate" : "Smart Plan →"}
+                    Smart Plan →
                   </button>
-                </div>
+                ) : null}
               </div>
 
               {pending && items.length === 0 ? (

@@ -28,6 +28,8 @@ export function PlanStrategyMiniWizard({
   tripChildAges,
   showDisney,
   showUniversal,
+  presentation = "overlay",
+  helpCtaLabel = "AI Day Strategy",
   onClose,
   onSaved,
   onRetryStrategyGenerate,
@@ -40,6 +42,10 @@ export function PlanStrategyMiniWizard({
   tripChildAges: number[];
   showDisney: boolean;
   showUniversal: boolean;
+  /** `embedded` = panel only (for nesting inside another modal). */
+  presentation?: "overlay" | "embedded";
+  /** Shown in timeout copy (e.g. "Plan this day" when embedded). */
+  helpCtaLabel?: string;
   onClose: () => void;
   onSaved: (
     prefs: TripPlanningPreferences,
@@ -191,24 +197,27 @@ export function PlanStrategyMiniWizard({
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-royal/50 sm:items-center sm:p-4">
-      <button
-        type="button"
-        className="absolute inset-0 cursor-default border-0 bg-transparent"
-        aria-label="Close"
-        onClick={onClose}
-      />
+  const embedded = presentation === "embedded";
+
+  const panel = (
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-gold/30 bg-cream p-6 shadow-2xl sm:rounded-2xl"
+        className={
+          embedded
+            ? "max-h-[min(70vh,28rem)] w-full max-w-lg overflow-y-auto rounded-xl border border-gold/30 bg-cream p-5 shadow-lg sm:rounded-2xl sm:p-6"
+            : "relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-gold/30 bg-cream p-6 shadow-2xl sm:rounded-2xl"
+        }
       >
         <h2 className="font-serif text-lg font-semibold text-royal">
-          We need a few quick details to tailor your day
+          {embedded
+            ? "A few details to finish planning this day"
+            : "We need a few quick details to tailor your day"}
         </h2>
         <p className="mt-2 font-sans text-sm text-royal/75">
-          Save once — we&apos;ll continue with your AI Day Strategy.
+          {embedded
+            ? "Save once — we&apos;ll generate your ride strategy in this window."
+            : "Save once — we&apos;ll continue with your AI Day Strategy."}
         </p>
 
         {saveTimedOut ? (
@@ -216,7 +225,7 @@ export function PlanStrategyMiniWizard({
             <p className="font-sans text-sm leading-relaxed text-royal/85">
               Taking longer than expected — your details are saved. You can
               close this and tap{" "}
-              <span className="font-semibold">AI Day Strategy</span> again on
+              <span className="font-semibold">{helpCtaLabel}</span> again on
               that day.
             </p>
             <button
@@ -232,7 +241,9 @@ export function PlanStrategyMiniWizard({
             <p className="font-sans text-sm leading-relaxed text-royal/85">
               We saved your details, but couldn&apos;t finish the strategy.{" "}
               <span className="font-medium text-royal">{saveError}</span> Try
-              again, or close and run Day Strategy from the day view.
+              again, or close and run{" "}
+              <span className="font-semibold">{helpCtaLabel}</span> from the day
+              view.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
               {onRetryStrategyGenerate ? (
@@ -428,6 +439,21 @@ export function PlanStrategyMiniWizard({
           </>
         )}
       </div>
+  );
+
+  if (embedded) {
+    return <div className="w-full max-w-lg">{panel}</div>;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-royal/50 sm:items-center sm:p-4">
+      <button
+        type="button"
+        className="absolute inset-0 cursor-default border-0 bg-transparent"
+        aria-label="Close"
+        onClick={onClose}
+      />
+      {panel}
     </div>
   );
 }

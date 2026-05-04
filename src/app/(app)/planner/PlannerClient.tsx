@@ -56,13 +56,12 @@ import { PlanningSections } from "@/components/planner/PlanningSections";
 import { Countdown } from "@/components/planner/Countdown";
 import { CustomTileModal } from "@/components/planner/CustomTileModal";
 import { DayDetailLayer } from "@/components/planner/DayDetailLayer";
-import { DayTweakModal } from "@/components/planner/DayTweakModal";
+import { DayPlannerModal } from "@/components/planner/DayPlannerModal";
 import { DayNotesPanel } from "@/components/planner/DayNotesPanel";
 import { AdventureTitleColorControl } from "@/components/planner/AdventureTitleColorControl";
 import { EditableTitle } from "@/components/planner/EditableTitle";
 import { MobilePlannerDock } from "@/components/planner/MobilePlannerDock";
 import { Palette } from "@/components/planner/Palette";
-import { PlanStrategyMiniWizard } from "@/components/planner/PlanStrategyMiniWizard";
 import { PlannerMoreMenu } from "@/components/planner/PlannerMoreMenu";
 import { PlannerActionsMenu } from "@/components/planner/PlannerActionsMenu";
 import { PlannerTopNotices } from "@/components/planner/PlannerTopNotices";
@@ -77,7 +76,6 @@ import {
 import { TripSelector } from "@/components/planner/TripSelector";
 import { BookTripAffiliatePanel } from "@/components/planner/BookTripAffiliatePanel";
 import { hasAnyAffiliatePartner } from "@/lib/affiliates";
-import { dominantThemeParkForAssignments } from "@/lib/dominant-theme-park";
 import { PdfExportButton } from "@/components/planner/PdfExportButton";
 import { TripTimeline } from "@/components/planner/TripTimeline";
 import { TripStatsCard } from "@/components/planner/TripStatsCard";
@@ -130,6 +128,7 @@ import {
 import { sortPrioritiesForDay } from "@/lib/ride-plan-display";
 import type {
   AchievementDefinition,
+  AIDayStrategy,
   Assignment,
   Assignments,
   CustomTile,
@@ -138,12 +137,12 @@ import type {
   SlotType,
   TemperatureUnit,
   Trip,
+  TripPlanningPreferences,
   UserTier,
 } from "@/lib/types";
 import { customTileToPark } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
 import type { TripPayment } from "@/types/payments";
-import { classifyThemeParkLine } from "@/lib/wizard-queue-step-region";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -573,7 +572,10 @@ export function PlannerClient({
   const [smartOpen, setSmartOpen] = useState(false);
   const [smartError, setSmartError] = useState<string | null>(null);
   const [smartPlanUndoOpen, setSmartPlanUndoOpen] = useState(false);
-  const [dayTweakDate, setDayTweakDate] = useState<string | null>(null);
+  const [dayPlannerDate, setDayPlannerDate] = useState<string | null>(null);
+  const [dayPlannerInitialTab, setDayPlannerInitialTab] = useState<
+    "adjust" | "strategy"
+  >("adjust");
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [smartCanRetryPartial, setSmartCanRetryPartial] = useState(false);
   const [smartRetryPayload, setSmartRetryPayload] =
@@ -642,14 +644,11 @@ export function PlannerClient({
   const [plannerSlotBooking, setPlannerSlotBooking] =
     useState<PlannerSlotBooking | null>(null);
   const [dayStrategyUpgradeOpen, setDayStrategyUpgradeOpen] = useState(false);
-  const [dayStrategyMiniOpen, setDayStrategyMiniOpen] = useState(false);
-  const [dayStrategyPendingDateKey, setDayStrategyPendingDateKey] = useState<
-    string | null
-  >(null);
-  const [dayStrategyBusyDateKey, setDayStrategyBusyDateKey] = useState<
-    string | null
-  >(null);
-  const dayStrategyPendingDateRef = useRef<string | null>(null);
+  const [undoDayTweakPrompt, setUndoDayTweakPrompt] = useState<{
+    dateKey: string;
+    message: string;
+  } | null>(null);
+  const [undoDayTweakBusy, setUndoDayTweakBusy] = useState(false);
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
 
   const cataloguedParkIdSet = useMemo(
@@ -952,17 +951,6 @@ export function PlannerClient({
         : catalog.filter((p) => !isCruisePaletteTileName(p.name));
     return [...filtered, ...customTilesForPalette.map(customTileToPark)];
   }, [parks, customTilesForPalette, activeTrip]);
-
-  const dayStrategyMiniParkLine = useMemo(() => {
-    if (!activeTrip || !dayStrategyPendingDateKey) return "other" as const;
-    const parkById = new Map(calendarParks.map((p) => [p.id, p]));
-    const dom = dominantThemeParkForAssignments(
-      activeTrip.assignments ?? {},
-      dayStrategyPendingDateKey,
-      parkById,
-    );
-    return classifyThemeParkLine(dom ?? undefined);
-  }, [activeTrip, dayStrategyPendingDateKey, calendarParks]);
 
   const smartPlanParks = useMemo(() => {
     const rid = resolvePaletteRegionId(activeTrip);
@@ -1275,6 +1263,28 @@ export function PlannerClient({
     [activeTripId, applyLocalPatch],
   );
 
+  const applyStrategyPatchForDate = useCallback(
+    (dateKey: string, strategy: AIDayStrategy) => {
+      if (!activeTripId) return;
+      const trip = trips.find((t) => t.id === activeTripId);
+      if (!trip) return;
+      const prevStrat = trip.preferences?.ai_day_strategy;
+      const base =
+        typeof prevStrat === "object" &&
+        prevStrat !== null &&
+        !Array.isArray(prevStrat)
+          ? { ...(prevStrat as Record<string, unknown>) }
+          : {};
+      applyLocalPatch(activeTripId, {
+        preferences: {
+          ...trip.preferences,
+          ai_day_strategy: { ...base, [dateKey]: strategy },
+        },
+      });
+    },
+    [activeTripId, trips, applyLocalPatch],
+  );
+
   const runDayStrategyGenerate = useCallback(
     async (
       dateKey: string,
@@ -1283,12 +1293,10 @@ export function PlannerClient({
       if (!activeTripId) {
         return { ok: false, error: "No trip selected." };
       }
-      const trip = trips.find((t) => t.id === activeTripId);
-      if (!trip) {
+      if (!trips.some((t) => t.id === activeTripId)) {
         return { ok: false, error: "Trip not found." };
       }
 
-      setDayStrategyBusyDateKey(dateKey);
       try {
         const res = await generateDayStrategy({
           tripId: activeTripId,
@@ -1296,19 +1304,7 @@ export function PlannerClient({
         });
 
         if (res.status === "success") {
-          const prevStrat = trip.preferences?.ai_day_strategy;
-          const base =
-            typeof prevStrat === "object" &&
-            prevStrat !== null &&
-            !Array.isArray(prevStrat)
-              ? { ...(prevStrat as Record<string, unknown>) }
-              : {};
-          applyLocalPatch(activeTripId, {
-            preferences: {
-              ...trip.preferences,
-              ai_day_strategy: { ...base, [dateKey]: res.strategy },
-            },
-          });
+          applyStrategyPatchForDate(dateKey, res.strategy);
           if (!options?.suppressErrorToast) {
             showToast("AI Day Strategy is ready.");
           }
@@ -1326,9 +1322,6 @@ export function PlannerClient({
         }
 
         if (res.status === "missing_data") {
-          dayStrategyPendingDateRef.current = dateKey;
-          setDayStrategyPendingDateKey(dateKey);
-          setDayStrategyMiniOpen(true);
           const msg = "We still need a few planning details for this day.";
           if (!options?.suppressErrorToast) {
             showToast(msg);
@@ -1356,39 +1349,38 @@ export function PlannerClient({
           showToast(msg);
         }
         return { ok: false, error: msg };
-      } finally {
-        setDayStrategyBusyDateKey(null);
       }
     },
-    [activeTripId, trips, applyLocalPatch, router],
+    [activeTripId, trips, router, applyStrategyPatchForDate],
   );
 
-  const handleDayStrategyRequest = useCallback(
-    (dateKey: string) => {
-      if (!activeTripId || !activeTrip) return;
-      if (productTier === "free") {
-        setDayStrategyUpgradeOpen(true);
-        return;
+  const handlePlanPrefsSavedContinueStrategy = useCallback(
+    async (prefs: TripPlanningPreferences) => {
+      if (!activeTrip || !dayPlannerDate) {
+        return { ok: false, error: "No day selected." };
       }
-      const parkById = new Map(calendarParks.map((p) => [p.id, p]));
-      const dom = dominantThemeParkForAssignments(
-        activeTrip.assignments ?? {},
-        dateKey,
-        parkById,
-      );
-      if (!dom) {
-        showToast("Assign a theme park to this day first.");
-        return;
-      }
-      void runDayStrategyGenerate(dateKey);
+      applyLocalPatch(activeTrip.id, { planning_preferences: prefs });
+      return runDayStrategyGenerate(dayPlannerDate, {
+        suppressErrorToast: true,
+      });
     },
-    [
-      activeTripId,
-      activeTrip,
-      productTier,
-      calendarParks,
-      runDayStrategyGenerate,
-    ],
+    [activeTrip, dayPlannerDate, applyLocalPatch, runDayStrategyGenerate],
+  );
+
+  const handleRetryStrategyFromMiniWizard = useCallback(async () => {
+    if (!dayPlannerDate) {
+      return { ok: false, error: "No day selected." };
+    }
+    return runDayStrategyGenerate(dayPlannerDate, {
+      suppressErrorToast: true,
+    });
+  }, [dayPlannerDate, runDayStrategyGenerate]);
+
+  const handleDayPlannerStrategySuccess = useCallback(
+    ({ date, strategy }: { date: string; strategy: AIDayStrategy }) => {
+      applyStrategyPatchForDate(date, strategy);
+    },
+    [applyStrategyPatchForDate],
   );
 
   const handleToggleMustDoDone = useCallback(
@@ -2200,24 +2192,39 @@ export function PlannerClient({
     [tripRouteBase, activeTripId, router],
   );
 
-  const openDayTweak = useCallback((dateKey: string) => {
-    setDayTweakDate(dateKey);
-  }, []);
+  const openDayPlanner = useCallback(
+    (dateKey: string, options?: { tab?: "adjust" | "strategy" }) => {
+      setDayPlannerDate(dateKey);
+      setDayPlannerInitialTab(options?.tab ?? "adjust");
+    },
+    [],
+  );
 
   const handleUndoDayTweak = useCallback(
-    async (dateKey: string) => {
+    (dateKey: string) => {
       if (!activeTripId) return;
       const trip = trips.find((t) => t.id === activeTripId);
       const latest = [...(trip?.day_snapshots ?? [])]
         .filter((snap) => snap.date === dateKey)
         .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-      const ok = window.confirm(
-        latest
+      setUndoDayTweakPrompt({
+        dateKey,
+        message: latest
           ? `Undo the AI tweak from ${formatUndoSnapshotHint(latest.created_at)}? This restores the day to its previous state.`
           : "Undo the last AI tweak?",
+      });
+    },
+    [activeTripId, trips],
+  );
+
+  const confirmUndoDayTweak = useCallback(async () => {
+    if (!undoDayTweakPrompt || !activeTripId) return;
+    setUndoDayTweakBusy(true);
+    try {
+      const res = await popDaySnapshot(
+        activeTripId,
+        undoDayTweakPrompt.dateKey,
       );
-      if (!ok) return;
-      const res = await popDaySnapshot(activeTripId, dateKey);
       if (!res.restored) {
         showToast(res.error ?? "Nothing to undo.");
         return;
@@ -2228,10 +2235,12 @@ export function PlannerClient({
         day_snapshots: res.daySnapshots,
       });
       showToast("Reverted.");
+      setUndoDayTweakPrompt(null);
       startTransition(() => router.refresh());
-    },
-    [activeTripId, applyLocalPatch, router, trips],
-  );
+    } finally {
+      setUndoDayTweakBusy(false);
+    }
+  }, [undoDayTweakPrompt, activeTripId, applyLocalPatch, router]);
 
   const closeDayDetail = useCallback(() => {
     startTransition(() => router.push(overviewHref, { scroll: false }));
@@ -2934,7 +2943,7 @@ export function PlannerClient({
                       onOpenDayDetail={
                         tripRouteBase ? openDayDetail : undefined
                       }
-                      onOpenDayTweak={openDayTweak}
+                      onOpenDayPlanner={openDayPlanner}
                       onUndoDayTweak={handleUndoDayTweak}
                       cataloguedParkIdSet={cataloguedParkIdSet}
                       onGenerateMustDosForPark={runMustDosGen}
@@ -2955,9 +2964,6 @@ export function PlannerClient({
                       onSaveUserDayNote={onSaveDayNote}
                       timelineUnlocked={timelineUnlocked}
                       onSlotTimeChange={onSlotTimeChange}
-                      productTier={productTier}
-                      onDayStrategy={handleDayStrategyRequest}
-                      dayStrategyBusyDateKey={dayStrategyBusyDateKey}
                     />
                     </div>
                   </>
@@ -3182,13 +3188,15 @@ export function PlannerClient({
         }}
       />
 
-      {activeTrip && dayTweakDate ? (
-        <DayTweakModal
+      {activeTrip && dayPlannerDate ? (
+        <DayPlannerModal
           open={true}
           trip={activeTrip}
-          date={dayTweakDate}
+          date={dayPlannerDate}
           parks={calendarParks}
-          onClose={() => setDayTweakDate(null)}
+          productTier={productTier}
+          initialTab={dayPlannerInitialTab}
+          onClose={() => setDayPlannerDate(null)}
           onApplied={(patch) => {
             applyLocalPatch(activeTrip.id, patch);
             startTransition(() => router.refresh());
@@ -3198,6 +3206,11 @@ export function PlannerClient({
             setTierLimitReason(message);
             setTierLimitOpen(true);
           }}
+          onPlanPrefsSavedContinueStrategy={handlePlanPrefsSavedContinueStrategy}
+          onRetryStrategyFromMiniWizard={handleRetryStrategyFromMiniWizard}
+          onStrategySuccess={handleDayPlannerStrategySuccess}
+          onRequestStrategyUpgrade={() => setDayStrategyUpgradeOpen(true)}
+          onNeedsTripRefresh={() => startTransition(() => router.refresh())}
         />
       ) : null}
 
@@ -3237,61 +3250,43 @@ export function PlannerClient({
         onClose={() => setDayStrategyUpgradeOpen(false)}
       />
 
-      {activeTrip ? (
-        <PlanStrategyMiniWizard
-          open={dayStrategyMiniOpen}
-          tripId={activeTrip.id}
-          initialPrefs={activeTrip.planning_preferences}
-          tripAdults={activeTrip.adults}
-          tripChildren={activeTrip.children}
-          tripChildAges={activeTrip.child_ages ?? []}
-          showDisney={dayStrategyMiniParkLine === "disney"}
-          showUniversal={dayStrategyMiniParkLine === "universal"}
-          onClose={() => {
-            setDayStrategyMiniOpen(false);
-            dayStrategyPendingDateRef.current = null;
-            setDayStrategyPendingDateKey(null);
-          }}
-          onSaved={async (prefs) => {
-            if (!activeTrip) {
-              return { ok: false, error: "Something went wrong. Try again." };
-            }
-            const dk = dayStrategyPendingDateRef.current;
-            applyLocalPatch(activeTrip.id, { planning_preferences: prefs });
-            if (!dk) {
-              return {
-                ok: false,
-                error: "No day could be linked. Close and try again.",
-              };
-            }
-            const r = await runDayStrategyGenerate(dk, {
-              suppressErrorToast: true,
-            });
-            if (r.ok) {
-              dayStrategyPendingDateRef.current = null;
-              setDayStrategyPendingDateKey(null);
-            }
-            return r;
-          }}
-          onRetryStrategyGenerate={
-            activeTripId
-              ? async () => {
-                  const dk = dayStrategyPendingDateRef.current;
-                  if (!dk) {
-                    return { ok: false, error: "No day selected." };
-                  }
-                  const r = await runDayStrategyGenerate(dk, {
-                    suppressErrorToast: true,
-                  });
-                  if (r.ok) {
-                    dayStrategyPendingDateRef.current = null;
-                    setDayStrategyPendingDateKey(null);
-                  }
-                  return r;
-                }
-              : undefined
-          }
-        />
+      {undoDayTweakPrompt ? (
+        <div
+          className="fixed inset-0 z-[128] flex items-center justify-center bg-royal/75 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="undo-day-tweak-title"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-gold/40 bg-cream p-5 shadow-xl">
+            <h2
+              id="undo-day-tweak-title"
+              className="font-serif text-lg font-semibold text-royal"
+            >
+              Undo AI change?
+            </h2>
+            <p className="mt-3 font-sans text-sm leading-relaxed text-royal/85">
+              {undoDayTweakPrompt.message}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="min-h-11 flex-1 rounded-lg border border-royal/25 bg-white px-4 py-2 font-sans text-sm font-semibold text-royal"
+                disabled={undoDayTweakBusy}
+                onClick={() => setUndoDayTweakPrompt(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="min-h-11 flex-1 rounded-lg bg-royal px-4 py-2 font-sans text-sm font-semibold text-cream disabled:opacity-60"
+                disabled={undoDayTweakBusy}
+                onClick={() => void confirmUndoDayTweak()}
+              >
+                {undoDayTweakBusy ? "Working…" : "Undo"}
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {adminPanel && activeTrip ? (
@@ -3373,7 +3368,10 @@ export function PlannerClient({
           }
           onSaveDayNote={onSaveDayNote}
           onOpenSmartPlan={() => setSmartOpen(true)}
-          onOpenDayTweak={openDayTweak}
+          onOpenDayPlanner={(opts) => {
+            if (!dayCanonicalForDetail) return;
+            openDayPlanner(dayCanonicalForDetail, opts);
+          }}
           onUndoDayTweak={handleUndoDayTweak}
           onGenerateMustDosForPark={(parkId) => {
             void runMustDosGen(dayCanonicalForDetail, parkId);
@@ -3398,17 +3396,6 @@ export function PlannerClient({
           }
           onTripPatch={(patch) => applyLocalPatch(activeTrip.id, patch)}
           ridePrioritiesByDayForTrip={ridePrioritiesByDayForActiveTrip}
-          onDayStrategy={
-            dayCanonicalForDetail
-              ? () => handleDayStrategyRequest(dayCanonicalForDetail)
-              : undefined
-          }
-          dayStrategyLoading={
-            Boolean(
-              dayCanonicalForDetail &&
-                dayStrategyBusyDateKey === dayCanonicalForDetail,
-            )
-          }
         />
       ) : null}
 

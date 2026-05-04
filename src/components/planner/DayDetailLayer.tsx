@@ -113,7 +113,8 @@ export type DayDetailLayerProps = {
   onPrioritiesUpdated: (items: TripRidePriority[]) => void;
   onSaveDayNote: (dateKey: string, text: string) => void;
   onOpenSmartPlan: () => void;
-  onOpenDayTweak: (dateKey: string) => void;
+  /** Consolidated AI for this day (slots + ride strategy). */
+  onOpenDayPlanner: (options?: { tab?: "adjust" | "strategy" }) => void;
   onUndoDayTweak: (dateKey: string) => void;
   onGenerateMustDosForPark: (parkId: string) => void;
   generatingMustDosParkId: string | null;
@@ -130,9 +131,6 @@ export type DayDetailLayerProps = {
   cataloguedParkIdSet: ReadonlySet<string>;
   /** All days’ ride rows for this trip (duplicate / template replace guards). */
   ridePrioritiesByDayForTrip: Record<string, TripRidePriority[]>;
-  /** Pro/Family AI Day Strategy trigger (day scope uses `dayDate`). */
-  onDayStrategy?: () => void;
-  dayStrategyLoading?: boolean;
 };
 
 export function DayDetailLayer({
@@ -149,7 +147,7 @@ export function DayDetailLayer({
   onPrioritiesUpdated,
   onSaveDayNote,
   onOpenSmartPlan,
-  onOpenDayTweak,
+  onOpenDayPlanner,
   onUndoDayTweak,
   onGenerateMustDosForPark,
   generatingMustDosParkId,
@@ -157,8 +155,6 @@ export function DayDetailLayer({
   rideCountsForDay = null,
   onTripPatch,
   ridePrioritiesByDayForTrip,
-  onDayStrategy,
-  dayStrategyLoading = false,
 }: DayDetailLayerProps) {
   const router = useRouter();
   const titleId = useId();
@@ -288,17 +284,6 @@ export function DayDetailLayer({
     if (!s || typeof s !== "object" || Array.isArray(s)) return null;
     return s as AIDayStrategy;
   }, [trip.preferences, dayDate]);
-
-  const domPark = useMemo(() => {
-    const ids = parkIdsAmPmForDay(trip, dayDate);
-    for (const id of ids) {
-      const p = parkById.get(id);
-      if (p && isThemePark(p.park_group)) return p;
-    }
-    return null;
-  }, [trip, dayDate, parkById]);
-
-  const dayStrategyDisabled = !domPark;
 
   const dayConflicts = useMemo(
     () =>
@@ -784,32 +769,11 @@ export function DayDetailLayer({
             <button
               type="button"
               className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-royal px-3 py-2 font-sans text-xs font-semibold text-cream shadow-sm transition hover:bg-royal/90"
-              onClick={() => queueAction(() => onOpenDayTweak(dayDate))}
+              onClick={() => queueAction(() => onOpenDayPlanner())}
             >
               <span aria-hidden>✨</span>
-              AI tweak this day
+              Plan this day
             </button>
-            {onDayStrategy ? (
-              <button
-                type="button"
-                disabled={dayStrategyDisabled || dayStrategyLoading}
-                title={
-                  dayStrategyDisabled
-                    ? "Assign a theme park day to use AI Day Strategy"
-                    : undefined
-                }
-                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gold/40 bg-white px-3 py-2 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-cream disabled:cursor-not-allowed disabled:opacity-55"
-                onClick={() => queueAction(() => onDayStrategy())}
-              >
-                <span aria-hidden>🗺️</span>
-                {dayStrategyLoading ? "Planning…" : "AI Day Strategy"}
-                {productTier === "free" ? (
-                  <span className="rounded bg-gold/35 px-1.5 py-0.5 text-[0.6rem] font-bold text-royal">
-                    Pro
-                  </span>
-                ) : null}
-              </button>
-            ) : null}
             {daySnapshotCount > 0 && latestDaySnapshot ? (
               <button
                 type="button"
@@ -937,10 +901,8 @@ export function DayDetailLayer({
           {dayStrategyRow ? (
             <AIDayStrategyPanel
               strategy={dayStrategyRow}
-              onRegenerate={
-                onDayStrategy
-                  ? () => queueAction(() => onDayStrategy())
-                  : undefined
+              onRegenerate={() =>
+                queueAction(() => onOpenDayPlanner({ tab: "strategy" }))
               }
             />
           ) : showExpandedDayPanel ? (

@@ -541,7 +541,7 @@ Schema:
   "crowd_level": "<quiet|moderate|busy>"
 }`;
 
-type DayTweakMode = "smart_suggest" | "freetext";
+export type DayTweakMode = "smart_suggest" | "freetext";
 
 export type DayTweakProposed = {
   assignments_for_day: Assignment;

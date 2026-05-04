@@ -33,7 +33,6 @@ import type {
   TemperatureUnit,
   Trip,
 } from "@/lib/types";
-import type { Tier } from "@/lib/tier";
 import type { TripRidePriority } from "@/types/attractions";
 import Link from "next/link";
 import {
@@ -177,7 +176,11 @@ export type MobileDayViewProps = {
     dateKey: string,
     options?: { focusNotes?: boolean },
   ) => void;
-  onOpenDayTweak?: (dateKey: string) => void;
+  /** Opens the consolidated ✨ Plan this day modal (adjust + strategy). */
+  onOpenDayPlanner?: (
+    dateKey: string,
+    options?: { tab?: "adjust" | "strategy" },
+  ) => void;
   onUndoDayTweak?: (dateKey: string) => void;
   /** Per-park AI must-dos (same server flow as day detail). */
   onGenerateMustDosForPark?: (dateKey: string, parkId: string) => void;
@@ -190,10 +193,6 @@ export type MobileDayViewProps = {
   ) => void;
   /** Set of `parks.id` with catalogue data — for catalogue vs AI must-do gating. */
   cataloguedParkIdSet?: ReadonlySet<string>;
-  /** Stripe-derived tier — for AI Day Strategy Pro gating. */
-  productTier?: Tier;
-  onDayStrategy?: (dateKey: string) => void;
-  dayStrategyBusyDateKey?: string | null;
 };
 
 function buildTripDays(
@@ -401,15 +400,12 @@ export function MobileDayView({
   rideCountsByDay,
   onRideDayPrioritiesUpdated,
   onOpenDayDetail,
-  onOpenDayTweak,
+  onOpenDayPlanner,
   onUndoDayTweak,
   onGenerateMustDosForPark,
   mustDosGenLoading = null,
   onToggleMustDoDone,
   cataloguedParkIdSet: cataloguedParkIdSetProp = EMPTY_CATALOGUED_PARK_ID_SET,
-  productTier,
-  onDayStrategy,
-  dayStrategyBusyDateKey = null,
 }: MobileDayViewProps) {
   void _crowdSummary;
   const notesPanelId = useId();
@@ -519,8 +515,6 @@ export function MobileDayView({
     if (!s || typeof s !== "object" || Array.isArray(s)) return null;
     return s as AIDayStrategy;
   }, [trip.preferences, activeDay.dateKey]);
-
-  const dayStrategyDisabledMobile = themeParkIdsAmPm.length === 0;
 
   const parkNameById = useMemo(
     () => new Map(parks.map((p) => [p.id, p.name] as const)),
@@ -733,14 +727,20 @@ export function MobileDayView({
                 </span>
               </div>
             ) : null}
-            {!readOnly && onOpenDayTweak ? (
+            {!readOnly && onOpenDayPlanner ? (
               <button
                 type="button"
-                className="mt-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-royal px-4 py-3 font-sans text-sm font-semibold text-cream shadow-sm transition active:bg-royal/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
-                onClick={() => onOpenDayTweak(activeDay.dateKey)}
+                disabled={themeParkIdsAmPm.length === 0}
+                title={
+                  themeParkIdsAmPm.length === 0
+                    ? "Assign a theme park day first"
+                    : undefined
+                }
+                className="mt-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-royal px-4 py-3 font-sans text-sm font-semibold text-cream shadow-sm transition active:bg-royal/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 disabled:cursor-not-allowed disabled:opacity-55"
+                onClick={() => onOpenDayPlanner(activeDay.dateKey)}
               >
                 <span aria-hidden>✨</span>
-                AI tweak this day
+                Plan this day
               </button>
             ) : null}
             {!readOnly && onUndoDayTweak && activeDaySnapshotCount > 0 ? (
@@ -752,32 +752,6 @@ export function MobileDayView({
               >
                 <span aria-hidden>↩</span>
                 Undo last AI change
-              </button>
-            ) : null}
-            {!readOnly && onDayStrategy ? (
-              <button
-                type="button"
-                disabled={
-                  dayStrategyDisabledMobile ||
-                  dayStrategyBusyDateKey === activeDay.dateKey
-                }
-                title={
-                  dayStrategyDisabledMobile
-                    ? "Assign a theme park day to use AI Day Strategy"
-                    : undefined
-                }
-                className="mt-2 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg border border-gold/40 bg-white px-4 py-3 font-sans text-sm font-semibold text-royal shadow-sm transition active:bg-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 disabled:cursor-not-allowed disabled:opacity-55"
-                onClick={() => onDayStrategy(activeDay.dateKey)}
-              >
-                <span aria-hidden>🗺️</span>
-                {dayStrategyBusyDateKey === activeDay.dateKey
-                  ? "Planning AI Day Strategy…"
-                  : "AI Day Strategy"}
-                {productTier === "free" ? (
-                  <span className="rounded bg-gold/35 px-1.5 py-0.5 text-[0.55rem] font-bold text-royal">
-                    Pro
-                  </span>
-                ) : null}
               </button>
             ) : null}
           </div>
@@ -859,8 +833,11 @@ export function MobileDayView({
               <AIDayStrategyPanel
                 strategy={activeDayStrategy}
                 onRegenerate={
-                  onDayStrategy
-                    ? () => onDayStrategy(activeDay.dateKey)
+                  onOpenDayPlanner
+                    ? () =>
+                        onOpenDayPlanner(activeDay.dateKey, {
+                          tab: "strategy",
+                        })
                     : undefined
                 }
               />
