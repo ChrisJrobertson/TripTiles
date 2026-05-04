@@ -355,6 +355,8 @@ export function TripDayPageView({
     [trip.preferences, dayDate],
   );
   const showDayPlannerBlock = hasDayAssignments || Boolean(richTimeline);
+  /** Saved AI Day Strategy is the canonical plan — do not stack legacy DayTimeline / heat / transport / must-do on top. */
+  const showLegacyPlannerChrome = showDayPlannerBlock && !dayStrategyRow;
 
   const parkOpenForTimeline = richTimeline?.park_hours.open ?? "09:00";
   const skipLineReturnRows = useMemo(
@@ -821,7 +823,7 @@ export function TripDayPageView({
             onGenerateMustDosForPark={onGenerateMustDosForPark}
             generatingMustDosParkId={generatingMustDosParkId}
           />
-          {showDayPlannerBlock ? (
+          {showLegacyPlannerChrome ? (
             <>
               <DayTimeline
                 date={dayDate}
@@ -876,7 +878,7 @@ export function TripDayPageView({
               ) : null}
             </>
           ) : null}
-          {showDayPlannerBlock ? (
+          {showLegacyPlannerChrome ? (
             <details className="mb-4 mt-3 rounded-lg border border-royal/10 bg-white/90 open:border-royal/20 dark:border-white/10 dark:bg-neutral-900/20">
               <summary className="cursor-pointer list-none p-3 font-sans text-sm font-semibold text-royal marker:hidden [&::-webkit-details-marker]:hidden dark:text-neutral-200">
                 Regenerate with different options
@@ -885,11 +887,11 @@ export function TripDayPageView({
                 {renderSmartPlanBody()}
               </div>
             </details>
-          ) : (
+          ) : !showDayPlannerBlock && !dayStrategyRow ? (
             <section className="mb-4 mt-0 rounded-lg border border-royal/10 bg-white/90 p-3 dark:border-white/10 dark:bg-neutral-900/20">
               {renderSmartPlanBody()}
             </section>
-          )}
+          ) : null}
 
           <div className="mb-3">
             <SkipLineLegend />

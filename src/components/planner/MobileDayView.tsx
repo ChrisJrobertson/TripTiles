@@ -893,47 +893,49 @@ export function MobileDayView({
             ) : null}
           </div>
 
-          <div className="mb-3 flex gap-1 rounded-lg bg-cream/80 p-0.5">
-            <button
-              type="button"
-              className={`min-h-11 flex-1 rounded-md px-2 font-sans text-xs font-semibold ${
-                mobileDayLayout === "grid"
-                  ? "bg-white text-royal shadow-sm"
-                  : "text-royal/65"
-              }`}
-              onClick={() => setMobileDayLayout("grid")}
-            >
-              Grid
-            </button>
-            <button
-              type="button"
-              disabled={!timelineUnlocked}
-              title={
-                !timelineUnlocked
-                  ? "Timeline editing is a Pro feature"
-                  : undefined
-              }
-              className={`min-h-11 flex-1 rounded-md px-2 font-sans text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
-                mobileDayLayout === "timeline"
-                  ? "bg-white text-royal shadow-sm"
-                  : "text-royal/65"
-              }`}
-              onClick={() => {
-                if (timelineUnlocked) setMobileDayLayout("timeline");
-              }}
-            >
-              <span className="inline-flex items-center justify-center gap-1">
-                Timeline
-                {!timelineUnlocked ? (
-                  <span className="rounded bg-gold/35 px-1 text-[0.55rem] font-bold text-royal">
-                    Pro
-                  </span>
-                ) : null}
-              </span>
-            </button>
-          </div>
+          {!activeDayStrategy ? (
+            <div className="mb-3 flex gap-1 rounded-lg bg-cream/80 p-0.5">
+              <button
+                type="button"
+                className={`min-h-11 flex-1 rounded-md px-2 font-sans text-xs font-semibold ${
+                  mobileDayLayout === "grid"
+                    ? "bg-white text-royal shadow-sm"
+                    : "text-royal/65"
+                }`}
+                onClick={() => setMobileDayLayout("grid")}
+              >
+                Grid
+              </button>
+              <button
+                type="button"
+                disabled={!timelineUnlocked}
+                title={
+                  !timelineUnlocked
+                    ? "Timeline editing is a Pro feature"
+                    : undefined
+                }
+                className={`min-h-11 flex-1 rounded-md px-2 font-sans text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-60 ${
+                  mobileDayLayout === "timeline"
+                    ? "bg-white text-royal shadow-sm"
+                    : "text-royal/65"
+                }`}
+                onClick={() => {
+                  if (timelineUnlocked) setMobileDayLayout("timeline");
+                }}
+              >
+                <span className="inline-flex items-center justify-center gap-1">
+                  Timeline
+                  {!timelineUnlocked ? (
+                    <span className="rounded bg-gold/35 px-1 text-[0.55rem] font-bold text-royal">
+                      Pro
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+            </div>
+          ) : null}
 
-          {mobileDayLayout === "grid" ? (
+          {activeDayStrategy || mobileDayLayout === "grid" ? (
             <div className="space-y-3">
               {SLOTS.map(({ key: slot }) => {
                 const ass = assignments[activeDay.dateKey] ?? {};
