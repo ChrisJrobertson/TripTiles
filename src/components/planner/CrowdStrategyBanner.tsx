@@ -68,7 +68,7 @@ export function CrowdStrategyBanner({ text }: Props) {
         </span>
         <span className="inline-flex items-center gap-1.5 max-md:basis-full max-md:ms-0 md:ms-auto">
           <span aria-hidden="true">💡</span>
-          <span>Has tips — tap to read</span>
+          <span>Day note — tap to read</span>
         </span>
       </div>
 
