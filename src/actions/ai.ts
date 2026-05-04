@@ -11,7 +11,12 @@ import {
   requiresCruiseSegment,
   sortDateKeysFromSet,
 } from "@/lib/ai-plan-guardrails";
-import { addDays, formatDateKey, parseDate } from "@/lib/date-helpers";
+import {
+  addDays,
+  eachDateKeyInRange,
+  formatDateKey,
+  parseDate,
+} from "@/lib/date-helpers";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import {
   formatDayRidePicksForPrompt,
@@ -20,6 +25,7 @@ import {
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { applyAiTimelineToAssignmentSlotTimes } from "@/lib/ai-timeline-to-slot-times";
 import type {
+  AIDayStrategy,
   Assignment,
   Assignments,
   AiDayTimeline,
@@ -37,7 +43,7 @@ import type {
 import { customTileToPark } from "@/lib/types";
 import { revalidatePath } from "next/cache";
 import { awardAchievementAction } from "@/actions/achievements";
-import { currentUserCanGenerateAI } from "@/lib/entitlements";
+import { currentUserCanGenerateAI, currentUserCanGenerateDayStrategy } from "@/lib/entitlements";
 import {
   isTierLoadFailure,
   tierLoadFailureUserMessage,
@@ -53,8 +59,14 @@ import {
   formatUserPrioritiesBlock,
 } from "@/lib/planning-preferences-prompt";
 import { isNamedRestaurantPark } from "@/lib/named-restaurant-tiles";
-import { getRidePrioritiesForDay } from "@/actions/ride-priorities";
-import { assertTierAllows, tierErrorToClientPayload } from "@/lib/tier";
+import { getRidePrioritiesForDay, getAttractionsForPark } from "@/actions/ride-priorities";
+import {
+  assertTierAllows,
+  tierErrorToClientPayload,
+} from "@/lib/tier";
+import { missingDayStrategyPlanningFields } from "@/lib/day-strategy-planning";
+import { classifyThemeParkLine } from "@/lib/wizard-queue-step-region";
+import { isThemePark } from "@/lib/park-categories";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import {
   filterMustDosToAssignedParks,
@@ -573,10 +585,14 @@ function readDayPreferencesSubset(
   const timeline = readDateStringMapValue(prefs, "ai_day_timeline", date);
   const crowd = readDateStringMapValue(prefs, "ai_day_crowd_notes", date);
   const note = readDateStringMapValue(prefs, "day_notes", date);
+  const strategy = readDateStringMapValue(prefs, "ai_day_strategy", date);
   return {
     ...(timeline !== undefined ? { ai_day_timeline: timeline } : {}),
     ...(typeof crowd === "string" ? { ai_day_crowd_notes: crowd } : {}),
     ...(typeof note === "string" ? { day_notes: note } : {}),
+    ...(strategy !== undefined
+      ? { ai_day_strategy: strategy as AIDayStrategy | null }
+      : {}),
   };
 }
 
@@ -609,6 +625,7 @@ function mergeDayPreferencesSubset(
   setMapValueForDate(next, "ai_day_timeline", date, subset.ai_day_timeline);
   setMapValueForDate(next, "ai_day_crowd_notes", date, subset.ai_day_crowd_notes);
   setMapValueForDate(next, "day_notes", date, subset.day_notes);
+  setMapValueForDate(next, "ai_day_strategy", date, subset.ai_day_strategy);
   return next;
 }
 
@@ -3580,6 +3597,576 @@ END USER CONSTRAINTS`
         status: aiGenStatus,
         error: aiGenError,
       });
+    }
+  }
+}
+
+const DAY_STRATEGY_SYSTEM = `You are an expert theme park strategist creating a sequenced day plan for a family.
+
+You have access to:
+- Detailed information about every ride at the park
+- The family's pass status (Lightning Lane Multi Pass, Express Pass, Single Rider preference)
+- The family's mobility and height constraints
+- Historical crowd patterns
+
+Output JSON only — no commentary, no preamble.
+
+Schema:
+{
+  "arrival_recommendation": "rope_drop" | "mid_morning" | "afternoon",
+  "arrival_reason": "<one sentence why>",
+  "ride_sequence": [
+    {
+      "time": "HH:MM",
+      "type": "rope_drop" | "standby" | "lightning_lane" | "single_rider" | "meal" | "show" | "rest",
+      "ride_or_event": "<exact ride name or event>",
+      "notes": "<one sentence strategy>",
+      "height_warning": "<only if min height applies, e.g. 'Min 40 inches'>"
+    }
+  ],
+  "lightning_lane_strategy": {
+    "multi_pass_bookings": [
+      { "ride": "...", "book_for_time": "HH:MM", "reason": "..." }
+    ],
+    "single_pass_recommendations": ["..."]
+  },
+  "express_pass_strategy": {
+    "priority_rides": ["..."],
+    "skip_with_express": ["..."]
+  },
+  "warnings": ["..."]
+}
+
+Critical rules:
+- Use realistic times: parks open ~09:00, close ~22:00
+- Sequence rides geographically when possible (avoid backtracking)
+- For Disney: respect Lightning Lane Multi Pass strategy (max 3 bookings, can book next after using one)
+- For Universal: respect Express Pass status (if "no", recommend Single Rider for headliners)
+- Flag any ride a child is too short for in height_warning
+- If mobility says wheelchair/stroller, factor walking distances and accessible queues
+- Do NOT recommend rides that don't exist at this park
+- Output JSON only — no markdown, no commentary`;
+
+function dominantThemeParkForDayStrategy(
+  trip: Trip,
+  dateKey: string,
+  parkById: Map<string, Park>,
+): { id: string; park: Park } | null {
+  const ass = trip.assignments[dateKey] ?? {};
+  for (const slot of ["am", "pm", "lunch", "dinner"] as const) {
+    const id = getParkIdFromSlotValue(ass[slot]);
+    if (!id) continue;
+    const p = parkById.get(id);
+    if (p && isThemePark(p.park_group)) return { id, park: p };
+  }
+  return null;
+}
+
+function formatAttractionsBlockForDayStrategy(
+  attractions: import("@/types/attractions").Attraction[],
+): string {
+  return attractions
+    .map((a) => {
+      const h =
+        a.height_requirement_cm != null
+          ? `${a.height_requirement_cm} cm min`
+          : "no min height in catalogue";
+      const sk = a.skip_line_system
+        ? `${a.skip_line_system}${a.skip_line_tier ? ` (${a.skip_line_tier})` : ""}`
+        : "standby/variable";
+      return `- ${a.name} | ${h} | skip-line: ${sk}`;
+    })
+    .join("\n");
+}
+
+function buildOtherDaysStrategySummary(trip: Trip, excludeDate: string): string {
+  const prefs = trip.preferences ?? {};
+  const raw = prefs.ai_day_strategy;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return "None recorded.";
+  }
+  const map = raw as Record<string, AIDayStrategy>;
+  const lines: string[] = [];
+  for (const dk of eachDateKeyInRange(trip.start_date, trip.end_date)) {
+    if (dk === excludeDate) continue;
+    const s = map[dk];
+    if (!s?.ride_sequence?.length) continue;
+    const bits = s.ride_sequence
+      .slice(0, 5)
+      .map((r) => r.ride_or_event)
+      .join(", ");
+    lines.push(`${dk}: ${bits}`);
+  }
+  return lines.length > 0 ? lines.join("\n") : "None recorded.";
+}
+
+function parseAndValidateDayStrategy(
+  parsed: unknown,
+  dateKey: string,
+  parkId: string,
+  model: string,
+): AIDayStrategy | null {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const o = parsed as Record<string, unknown>;
+  const arrival = o.arrival_recommendation;
+  if (arrival !== "rope_drop" && arrival !== "mid_morning" && arrival !== "afternoon")
+    return null;
+  if (typeof o.arrival_reason !== "string" || !o.arrival_reason.trim()) return null;
+  if (!Array.isArray(o.ride_sequence) || o.ride_sequence.length < 3) return null;
+  const ride_sequence: AIDayStrategy["ride_sequence"] = [];
+  for (const row of o.ride_sequence) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+    const r = row as Record<string, unknown>;
+    if (typeof r.time !== "string" || typeof r.ride_or_event !== "string") return null;
+    if (typeof r.notes !== "string") return null;
+    const t = r.type;
+    if (
+      t !== "rope_drop" &&
+      t !== "standby" &&
+      t !== "lightning_lane" &&
+      t !== "single_rider" &&
+      t !== "meal" &&
+      t !== "show" &&
+      t !== "rest"
+    )
+      return null;
+    ride_sequence.push({
+      time: r.time,
+      type: t,
+      ride_or_event: r.ride_or_event,
+      notes: r.notes,
+      ...(typeof r.height_warning === "string"
+        ? { height_warning: r.height_warning }
+        : {}),
+    });
+  }
+  let lightning_lane_strategy: AIDayStrategy["lightning_lane_strategy"];
+  if (o.lightning_lane_strategy != null) {
+    const ll = o.lightning_lane_strategy;
+    if (typeof ll !== "object" || Array.isArray(ll)) return null;
+    const l = ll as Record<string, unknown>;
+    const mp = l.multi_pass_bookings;
+    if (!Array.isArray(mp)) return null;
+    const multi_pass_bookings: NonNullable<
+      AIDayStrategy["lightning_lane_strategy"]
+    >["multi_pass_bookings"] = [];
+    for (const b of mp) {
+      if (!b || typeof b !== "object") continue;
+      const x = b as Record<string, unknown>;
+      if (
+        typeof x.ride === "string" &&
+        typeof x.book_for_time === "string" &&
+        typeof x.reason === "string"
+      ) {
+        multi_pass_bookings.push({
+          ride: x.ride,
+          book_for_time: x.book_for_time,
+          reason: x.reason,
+        });
+      }
+    }
+    const spr = l.single_pass_recommendations;
+    const single_pass_recommendations = Array.isArray(spr)
+      ? spr.filter((x): x is string => typeof x === "string")
+      : undefined;
+    lightning_lane_strategy = {
+      multi_pass_bookings,
+      ...(single_pass_recommendations?.length
+        ? { single_pass_recommendations }
+        : {}),
+    };
+  }
+  let express_pass_strategy: AIDayStrategy["express_pass_strategy"];
+  if (o.express_pass_strategy != null) {
+    const ex = o.express_pass_strategy;
+    if (typeof ex !== "object" || Array.isArray(ex)) return null;
+    const e = ex as Record<string, unknown>;
+    const pr = e.priority_rides;
+    const sk = e.skip_with_express;
+    if (!Array.isArray(pr) || !Array.isArray(sk)) return null;
+    express_pass_strategy = {
+      priority_rides: pr.filter((x): x is string => typeof x === "string"),
+      skip_with_express: sk.filter((x): x is string => typeof x === "string"),
+    };
+  }
+  if (!Array.isArray(o.warnings)) return null;
+  const warnings = o.warnings.filter((x): x is string => typeof x === "string");
+  return {
+    date: dateKey,
+    park: parkId,
+    generated_at: new Date().toISOString(),
+    model,
+    arrival_recommendation: arrival,
+    arrival_reason: String(o.arrival_reason).trim(),
+    ride_sequence,
+    ...(lightning_lane_strategy ? { lightning_lane_strategy } : {}),
+    ...(express_pass_strategy ? { express_pass_strategy } : {}),
+    warnings,
+  };
+}
+
+export async function generateDayStrategy(input: {
+  tripId: string;
+  date: string;
+}): Promise<
+  | {
+      status: "success";
+      strategy: AIDayStrategy;
+    }
+  | { status: "tier_blocked" }
+  | { status: "missing_data"; missingDataFields: string[] }
+  | { status: "no_park_assigned" }
+  | { status: "error"; error: string }
+> {
+  const user = await getCurrentUser();
+  if (!user) return { status: "error", error: "Not signed in." };
+
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return { status: "error", error: "AI is not configured." };
+  }
+
+  let dateKey: string;
+  try {
+    dateKey = formatDateKey(parseDate(`${input.date}T12:00:00`));
+  } catch {
+    return { status: "error", error: "Invalid date." };
+  }
+
+  const ent = await currentUserCanGenerateDayStrategy(input.tripId);
+  if (ent === "tier_blocked") return { status: "tier_blocked" };
+
+  const trip = await getTripById(input.tripId);
+  if (!trip || trip.owner_id !== user.id) {
+    return { status: "error", error: "Trip not found." };
+  }
+
+  const allowed = allowedDateKeys(trip.start_date, trip.end_date);
+  if (!allowed.has(dateKey)) {
+    return { status: "error", error: "Date outside trip." };
+  }
+
+  const rid =
+    trip.region_id ??
+    (trip.destination !== "custom" ? trip.destination : null);
+  if (!rid) return { status: "error", error: "Trip needs a region." };
+
+  const region = await getRegionById(rid);
+  if (!region) return { status: "error", error: "Could not load region." };
+
+  const builtInParks = await getParksForRegion(rid);
+  const customTileRows = await getCustomTilesForRegion(user.id, rid);
+  const customAsParks = customTileRows.map(customTileToPark);
+  const builtFiltered = trip.has_cruise
+    ? builtInParks
+    : builtInParks.filter((p) => !requiresCruiseSegment(p));
+  const customFiltered = trip.has_cruise
+    ? customAsParks
+    : customAsParks.filter((p) => !requiresCruiseSegment(p));
+  const parksForPrompt = [...builtFiltered, ...customFiltered];
+  const parkById = new Map(parksForPrompt.map((p) => [p.id, p] as const));
+
+  const dom = dominantThemeParkForDayStrategy(trip, dateKey, parkById);
+  if (!dom) return { status: "no_park_assigned" };
+
+  const line = classifyThemeParkLine(dom.park);
+  const missing = missingDayStrategyPlanningFields(trip.planning_preferences, line);
+  if (missing.length > 0) {
+    return { status: "missing_data", missingDataFields: missing };
+  }
+
+  const prefs = trip.planning_preferences;
+  if (!prefs) {
+    return { status: "missing_data", missingDataFields: ["mobility"] };
+  }
+
+  const attractions = await getAttractionsForPark(dom.id);
+  const ridesBlock = formatAttractionsBlockForDayStrategy(attractions);
+  const rideNamesLower = new Set(
+    attractions.map((a) => a.name.trim().toLowerCase()),
+  );
+
+  const allDayKeys = eachDateKeyInRange(trip.start_date, trip.end_date);
+  const dayIndex = allDayKeys.indexOf(dateKey) + 1;
+  const totalDays = allDayKeys.length;
+  const dow = parseDate(`${dateKey}T12:00:00`).toLocaleDateString("en-GB", {
+    weekday: "long",
+  });
+
+  const childBits =
+    prefs.childHeights?.length && prefs.children > 0
+      ? prefs.childHeights.map((h, i) => `child ${i + 1}: ~${h.heightCm} cm`).join("; ")
+      : "no height data";
+
+  let disneyPassSection = "";
+  if (line === "disney" && prefs.disneyLightningLane) {
+    const d = prefs.disneyLightningLane;
+    disneyPassSection = `Disney — Multi Pass: ${d.multiPassStatus}; Single Pass willing to pay: ${d.singlePassWillingToPay}; Memory Maker: ${d.memoryMaker}`;
+  }
+  let universalPassSection = "";
+  if (line === "universal" && prefs.universalExpress) {
+    const u = prefs.universalExpress;
+    universalPassSection = `Universal — Express: ${u.status}; Single rider OK: ${u.singleRiderOk}`;
+  }
+  const passSection =
+    [disneyPassSection, universalPassSection].filter(Boolean).join("\n") ||
+    "General theme park queues";
+
+  const userMsg = [
+    `PARK: ${dom.park.name} (${dom.id})`,
+    `DATE: ${dateKey} (${dow})`,
+    `DAY OF TRIP: Day ${dayIndex} of ${totalDays}`,
+    "",
+    "FAMILY:",
+    `- ${prefs.adults} adult(s), ${prefs.children} child(ren); ${childBits}`,
+    `- Mobility: ${prefs.mobility ?? "none"}`,
+    "",
+    "PASS STATUS:",
+    passSection,
+    "",
+    "PRIORITIES:",
+    `- Pace: ${prefs.pace}`,
+    `- Family priorities: ${(prefs.priorities ?? []).join(", ") || "—"}`,
+    `- Trip type: ${prefs.tripType ?? "—"}`,
+    `- Must-do experiences: ${(prefs.mustDoExperiences ?? []).join(", ") || "—"}`,
+    "",
+    `ALL RIDES AT THIS PARK (with min heights and skip-line metadata):\n${ridesBlock}`,
+    "",
+    `ALREADY ASSIGNED ON OTHER DAYS (do not duplicate must-dos):\n${buildOtherDaysStrategySummary(trip, dateKey)}`,
+    "",
+    "Generate an optimal day strategy.",
+  ].join("\n");
+
+  const brief = collectUserBrief(trip, {});
+  const userBlock = brief ? `${userMsg}\n\nUSER CONSTRAINTS:\n${brief}` : userMsg;
+
+  const model = SMART_PLAN_MODEL;
+  const promptKey = `day_strategy:${dateKey}:${dom.id}`;
+
+  let inputTokens = 0;
+  let outputTokens = 0;
+  type AiSt = "pending" | "success" | "failed" | "cancelled";
+  let aiGenStatus: AiSt = "pending";
+  let aiGenError: string | null = null;
+  let aiGenLogged = false;
+
+  try {
+    const msg = await anthropic.messages.create({
+      model,
+      max_tokens: 3000,
+      system: [
+        {
+          type: "text",
+          text: DAY_STRATEGY_SYSTEM,
+          cache_control: { type: "ephemeral" },
+        },
+        {
+          type: "text",
+          text: ridesBlock,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: userBlock }],
+    });
+
+    const block0 = msg.content[0];
+    const rawText = block0?.type === "text" ? block0.text : "";
+    const usage = msg.usage as AnthropicMessageUsage | undefined;
+    inputTokens = inputTokensFromUsage(usage);
+    outputTokens = usage?.output_tokens ?? 0;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(stripCodeFences(rawText));
+    } catch {
+      aiGenStatus = "failed";
+      aiGenError = "Invalid JSON (day_strategy)";
+      await recordAiGeneration({
+        userId: user.id,
+        tripId: input.tripId,
+        prompt: promptKey,
+        model,
+        inputTokens,
+        outputTokens,
+        success: false,
+        status: "failed",
+        error: aiGenError,
+      });
+      aiGenLogged = true;
+      return { status: "error", error: "Could not read AI response." };
+    }
+
+    const strategy = parseAndValidateDayStrategy(parsed, dateKey, dom.id, model);
+    if (!strategy) {
+      aiGenStatus = "failed";
+      aiGenError = "day_strategy validation failed";
+      await recordAiGeneration({
+        userId: user.id,
+        tripId: input.tripId,
+        prompt: promptKey,
+        model,
+        inputTokens,
+        outputTokens,
+        success: false,
+        status: "failed",
+        error: aiGenError,
+      });
+      aiGenLogged = true;
+      return { status: "error", error: "Plan was incomplete. Try again." };
+    }
+
+    const unknownRides: string[] = [];
+    for (const r of strategy.ride_sequence) {
+      const name = r.ride_or_event.trim().toLowerCase();
+      const generic = /meal|break|parade|fireworks|rest|walk|lunch|dinner|snack|pool|breakfast/i.test(
+        name,
+      );
+      if (generic) continue;
+      if (!rideNamesLower.has(name)) {
+        const fuzzy = [...rideNamesLower].some(
+          (n) => n.includes(name) || name.includes(n),
+        );
+        if (!fuzzy) unknownRides.push(r.ride_or_event);
+      }
+    }
+    const warnExtra =
+      unknownRides.length > 0
+        ? `unknown_ride: ${unknownRides.slice(0, 8).join("; ")}`
+        : null;
+
+    const prevPrefs =
+      trip.preferences && typeof trip.preferences === "object"
+        ? { ...trip.preferences }
+        : ({} as Record<string, unknown>);
+    const existingStrat = prevPrefs.ai_day_strategy;
+    const stratMap: Record<string, AIDayStrategy> =
+      existingStrat &&
+      typeof existingStrat === "object" &&
+      !Array.isArray(existingStrat)
+        ? { ...(existingStrat as Record<string, AIDayStrategy>) }
+        : {};
+
+    const before: DaySnapshot["before"] = {
+      assignments_for_day: trip.assignments[dateKey] ?? {},
+      preferences_subset: readDayPreferencesSubset(
+        trip.preferences ?? {},
+        dateKey,
+      ),
+    };
+
+    stratMap[dateKey] = strategy;
+    const nextPrefs = { ...prevPrefs, ai_day_strategy: stratMap };
+    const after: DaySnapshot["after"] = {
+      assignments_for_day: trip.assignments[dateKey] ?? {},
+      preferences_subset: readDayPreferencesSubset(nextPrefs, dateKey),
+    };
+
+    const daySnapshots = nextDaySnapshots(
+      trip.day_snapshots,
+      dateKey,
+      before,
+      after,
+      "ai_day_strategy",
+      model,
+    );
+
+    const admin = createServiceRoleClient();
+    const { error: upErr } = await admin
+      .from("trips")
+      .update({
+        preferences: nextPrefs,
+        day_snapshots: daySnapshots,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", input.tripId)
+      .eq("owner_id", user.id);
+
+    if (upErr) {
+      aiGenStatus = "failed";
+      aiGenError = upErr.message.slice(0, 900);
+      await recordAiGeneration({
+        userId: user.id,
+        tripId: input.tripId,
+        prompt: promptKey,
+        model,
+        inputTokens,
+        outputTokens,
+        success: false,
+        status: "failed",
+        error: aiGenError,
+      });
+      aiGenLogged = true;
+      return { status: "error", error: upErr.message };
+    }
+
+    aiGenStatus = "success";
+    try {
+      await recordAiGeneration({
+        userId: user.id,
+        tripId: input.tripId,
+        prompt: promptKey,
+        model,
+        inputTokens,
+        outputTokens,
+        success: true,
+        status: "success",
+        error: warnExtra,
+      });
+    } catch {
+      /* non-fatal */
+    }
+    aiGenLogged = true;
+
+    const approxGbp = (inputTokens + outputTokens * 4) * 0.000001 * 0.79;
+    console.info("[ai] day_strategy cost_est_gbp_approx", {
+      tripId: input.tripId,
+      dateKey,
+      inputTokens,
+      outputTokens,
+      approxGbp: approxGbp.toFixed(4),
+    });
+
+    revalidatePath("/planner");
+    revalidatePath(`/trip/${input.tripId}`);
+    return { status: "success", strategy };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    aiGenStatus = "failed";
+    aiGenError = msg.slice(0, 1000);
+    if (!aiGenLogged) {
+      try {
+        await recordAiGeneration({
+          userId: user.id,
+          tripId: input.tripId,
+          prompt: promptKey,
+          model,
+          inputTokens,
+          outputTokens,
+          success: false,
+          status: "failed",
+          error: aiGenError,
+        });
+      } catch {
+        /* ignore */
+      }
+      aiGenLogged = true;
+    }
+    return { status: "error", error: msg };
+  } finally {
+    if (!aiGenLogged && aiGenStatus !== "pending") {
+      try {
+        await recordAiGeneration({
+          userId: user.id,
+          tripId: input.tripId,
+          prompt: promptKey,
+          model,
+          inputTokens,
+          outputTokens,
+          status: aiGenStatus,
+          error: aiGenError,
+        });
+      } catch {
+        /* ignore */
+      }
     }
   }
 }

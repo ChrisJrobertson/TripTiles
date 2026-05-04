@@ -38,12 +38,14 @@ import { buildSkipLineDayTimelineRows } from "@/lib/skip-line-day-timeline";
 import { isThemePark } from "@/lib/park-categories";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import type { Tier } from "@/lib/tier";
+import { AIDayStrategyPanel } from "@/components/planner/AIDayStrategyPanel";
 import type {
   Assignment,
   Park,
   TemperatureUnit,
   Trip,
   TripPlanningPreferences,
+  AIDayStrategy,
 } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
 import { useRouter } from "next/navigation";
@@ -128,6 +130,9 @@ export type DayDetailLayerProps = {
   cataloguedParkIdSet: ReadonlySet<string>;
   /** All days’ ride rows for this trip (duplicate / template replace guards). */
   ridePrioritiesByDayForTrip: Record<string, TripRidePriority[]>;
+  /** Pro/Family AI Day Strategy trigger (day scope uses `dayDate`). */
+  onDayStrategy?: () => void;
+  dayStrategyLoading?: boolean;
 };
 
 export function DayDetailLayer({
@@ -152,6 +157,8 @@ export function DayDetailLayer({
   rideCountsForDay = null,
   onTripPatch,
   ridePrioritiesByDayForTrip,
+  onDayStrategy,
+  dayStrategyLoading = false,
 }: DayDetailLayerProps) {
   const router = useRouter();
   const titleId = useId();
@@ -273,6 +280,25 @@ export function DayDetailLayer({
       amPmThemeIdsForRides.length === 0 || expandedPanelParkIds.length > 0,
     [amPmThemeIdsForRides.length, expandedPanelParkIds.length],
   );
+
+  const dayStrategyRow = useMemo((): AIDayStrategy | null => {
+    const raw = trip.preferences?.ai_day_strategy;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const s = (raw as Record<string, unknown>)[dayDate];
+    if (!s || typeof s !== "object" || Array.isArray(s)) return null;
+    return s as AIDayStrategy;
+  }, [trip.preferences, dayDate]);
+
+  const domPark = useMemo(() => {
+    const ids = parkIdsAmPmForDay(trip, dayDate);
+    for (const id of ids) {
+      const p = parkById.get(id);
+      if (p && isThemePark(p.park_group)) return p;
+    }
+    return null;
+  }, [trip, dayDate, parkById]);
+
+  const dayStrategyDisabled = !domPark;
 
   const dayConflicts = useMemo(
     () =>
@@ -763,6 +789,27 @@ export function DayDetailLayer({
               <span aria-hidden>✨</span>
               AI tweak this day
             </button>
+            {onDayStrategy ? (
+              <button
+                type="button"
+                disabled={dayStrategyDisabled || dayStrategyLoading}
+                title={
+                  dayStrategyDisabled
+                    ? "Assign a theme park day to use AI Day Strategy"
+                    : undefined
+                }
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gold/40 bg-white px-3 py-2 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-cream disabled:cursor-not-allowed disabled:opacity-55"
+                onClick={() => queueAction(() => onDayStrategy())}
+              >
+                <span aria-hidden>🗺️</span>
+                {dayStrategyLoading ? "Planning…" : "AI Day Strategy"}
+                {productTier === "free" ? (
+                  <span className="rounded bg-gold/35 px-1.5 py-0.5 text-[0.6rem] font-bold text-royal">
+                    Pro
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
             {daySnapshotCount > 0 && latestDaySnapshot ? (
               <button
                 type="button"
@@ -887,7 +934,16 @@ export function DayDetailLayer({
             <SkipLineLegend />
           </div>
 
-          {showExpandedDayPanel ? (
+          {dayStrategyRow ? (
+            <AIDayStrategyPanel
+              strategy={dayStrategyRow}
+              onRegenerate={
+                onDayStrategy
+                  ? () => queueAction(() => onDayStrategy())
+                  : undefined
+              }
+            />
+          ) : showExpandedDayPanel ? (
             <ExpandedDayPanel
               embedded
               tripId={trip.id}

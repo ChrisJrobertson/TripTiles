@@ -99,7 +99,7 @@ function planningPrefsPaceToSequencer(
     return pace;
   }
   const p = prefs?.pace;
-  if (p === "relaxed" || p === "balanced" || p === "intense") {
+  if (p === "relaxed" || p === "balanced" || p === "intense" || p === "go_go_go") {
     return planningPaceToSequencerPace(p as PlanningPace);
   }
   return "balanced";

@@ -151,7 +151,7 @@ export function SmartPlanModal({
     if (!isOpen || !trip) return;
     const p = trip.planning_preferences;
     if (p) {
-      setPace(p.pace);
+      setPace(p.pace === "intense" ? "go_go_go" : p.pace);
       setMustDoParks(new Set(p.mustDoParks ?? []));
       setPriorities(new Set(p.priorities ?? []));
       setAdditionalNotes(p.additionalNotes ?? "");

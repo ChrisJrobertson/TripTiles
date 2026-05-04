@@ -5,7 +5,7 @@ import {
 } from "@/lib/supabase/profile-read";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { countActiveTripsForUser, getUserTier, maxActiveTripsForUser } from "@/lib/tier";
-import type { UserTier } from "@/lib/types";
+import type { AIDayStrategyEntitlement, UserTier } from "@/lib/types";
 
 const AI_GENERATIONS_TOTAL_COLUMN = "ai_generations_life" + "time";
 
@@ -59,6 +59,31 @@ export async function currentUserCanUseAIDayPlanner(): Promise<boolean> {
   if (!user) return false;
   const rt = await getUserTier(user.id);
   return getTierConfig(rt).features.ai_day_planner;
+}
+
+/**
+ * Pro/Family (and equivalent retail tier) on-trip AI Day Strategy;
+ * `limit_reached` reserved for future per-tier caps.
+ */
+export async function currentUserCanGenerateDayStrategy(
+  tripId: string,
+): Promise<AIDayStrategyEntitlement> {
+  const user = await getCurrentUser();
+  if (!user) return "tier_blocked";
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("trips")
+    .select("id")
+    .eq("id", tripId)
+    .eq("owner_id", user.id)
+    .eq("is_archived", false)
+    .maybeSingle();
+  if (error || !data) return "tier_blocked";
+
+  const rt = await getUserTier(user.id);
+  if (getTierConfig(rt).features.ai_day_planner) return "allowed";
+  return "tier_blocked";
 }
 
 export async function currentUserCanCreateCustomTile(): Promise<boolean> {

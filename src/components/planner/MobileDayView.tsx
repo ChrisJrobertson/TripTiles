@@ -26,12 +26,14 @@ import {
   type ThemeKey,
 } from "@/lib/themes";
 import type {
+  AIDayStrategy,
   Assignments,
   Park,
   SlotType,
   TemperatureUnit,
   Trip,
 } from "@/lib/types";
+import type { Tier } from "@/lib/tier";
 import type { TripRidePriority } from "@/types/attractions";
 import Link from "next/link";
 import {
@@ -50,6 +52,7 @@ import { MobileBottomBar } from "./MobileBottomBar";
 import { MobileParksDrawer } from "./MobileParksDrawer";
 import { DayTimelinePanel } from "@/components/planner/DayTimelinePanel";
 import { DayParkMustDosSection } from "@/components/planner/DayParkMustDosSection";
+import { AIDayStrategyPanel } from "@/components/planner/AIDayStrategyPanel";
 
 const SWIPE_THRESHOLD = 50;
 
@@ -187,6 +190,10 @@ export type MobileDayViewProps = {
   ) => void;
   /** Set of `parks.id` with catalogue data — for catalogue vs AI must-do gating. */
   cataloguedParkIdSet?: ReadonlySet<string>;
+  /** Stripe-derived tier — for AI Day Strategy Pro gating. */
+  productTier?: Tier;
+  onDayStrategy?: (dateKey: string) => void;
+  dayStrategyBusyDateKey?: string | null;
 };
 
 function buildTripDays(
@@ -400,6 +407,9 @@ export function MobileDayView({
   mustDosGenLoading = null,
   onToggleMustDoDone,
   cataloguedParkIdSet: cataloguedParkIdSetProp = EMPTY_CATALOGUED_PARK_ID_SET,
+  productTier,
+  onDayStrategy,
+  dayStrategyBusyDateKey = null,
 }: MobileDayViewProps) {
   void _crowdSummary;
   const notesPanelId = useId();
@@ -501,6 +511,16 @@ export function MobileDayView({
       trip.preferences,
     ],
   );
+
+  const activeDayStrategy = useMemo((): AIDayStrategy | null => {
+    const raw = trip.preferences?.ai_day_strategy;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const s = (raw as Record<string, unknown>)[activeDay.dateKey];
+    if (!s || typeof s !== "object" || Array.isArray(s)) return null;
+    return s as AIDayStrategy;
+  }, [trip.preferences, activeDay.dateKey]);
+
+  const dayStrategyDisabledMobile = themeParkIdsAmPm.length === 0;
 
   const parkNameById = useMemo(
     () => new Map(parks.map((p) => [p.id, p.name] as const)),
@@ -734,6 +754,32 @@ export function MobileDayView({
                 Undo last AI change
               </button>
             ) : null}
+            {!readOnly && onDayStrategy ? (
+              <button
+                type="button"
+                disabled={
+                  dayStrategyDisabledMobile ||
+                  dayStrategyBusyDateKey === activeDay.dateKey
+                }
+                title={
+                  dayStrategyDisabledMobile
+                    ? "Assign a theme park day to use AI Day Strategy"
+                    : undefined
+                }
+                className="mt-2 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg border border-gold/40 bg-white px-4 py-3 font-sans text-sm font-semibold text-royal shadow-sm transition active:bg-cream focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 disabled:cursor-not-allowed disabled:opacity-55"
+                onClick={() => onDayStrategy(activeDay.dateKey)}
+              >
+                <span aria-hidden>🗺️</span>
+                {dayStrategyBusyDateKey === activeDay.dateKey
+                  ? "Planning AI Day Strategy…"
+                  : "AI Day Strategy"}
+                {productTier === "free" ? (
+                  <span className="rounded bg-gold/35 px-1.5 py-0.5 text-[0.55rem] font-bold text-royal">
+                    Pro
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
           </div>
 
           <div className="mb-3 flex gap-1 rounded-lg bg-cream/80 p-0.5">
@@ -806,6 +852,19 @@ export function MobileDayView({
                 onSlotTimeChange(activeDay.dateKey, slot, time)
               }
             />
+          ) : null}
+
+          {activeDayStrategy ? (
+            <div className="mt-4">
+              <AIDayStrategyPanel
+                strategy={activeDayStrategy}
+                onRegenerate={
+                  onDayStrategy
+                    ? () => onDayStrategy(activeDay.dateKey)
+                    : undefined
+                }
+              />
+            </div>
           ) : null}
 
           {!readOnly && onRideDayPrioritiesUpdated && showRidesSheetButton ? (
@@ -914,7 +973,8 @@ export function MobileDayView({
 
           {onGenerateMustDosForPark &&
           onToggleMustDoDone &&
-          hasAiMustDosForActiveDay ? (
+          hasAiMustDosForActiveDay &&
+          !activeDayStrategy ? (
             <button
               type="button"
               onClick={() => setMustDosSheetOpen(true)}
@@ -1151,7 +1211,8 @@ export function MobileDayView({
 
       {onGenerateMustDosForPark &&
       onToggleMustDoDone &&
-      hasAiMustDosForActiveDay ? (
+      hasAiMustDosForActiveDay &&
+      !activeDayStrategy ? (
         <div
           className={`fixed inset-0 z-[41] md:hidden ${mustDosSheetOpen ? "" : "pointer-events-none"}`}
           aria-hidden={!mustDosSheetOpen}

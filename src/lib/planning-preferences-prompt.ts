@@ -7,6 +7,8 @@ const PACE_COPY: Record<TripPlanningPreferences["pace"], string> = {
     "Balanced pace — a sensible mix of park days and downtime.",
   intense:
     "High energy — maximise park time; family accepts longer days.",
+  go_go_go:
+    "High energy — maximise park time; family accepts longer days.",
 };
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -85,6 +87,7 @@ const PACE_LABEL: Record<TripPlanningPreferences["pace"], string> = {
   relaxed: "Relaxed",
   balanced: "Balanced",
   intense: "High energy",
+  go_go_go: "High energy",
 };
 
 /**

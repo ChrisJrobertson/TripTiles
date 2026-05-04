@@ -142,7 +142,12 @@ function parsePlanningPreferences(
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const o = raw as Record<string, unknown>;
   const pace = o.pace;
-  if (pace !== "relaxed" && pace !== "balanced" && pace !== "intense") {
+  if (
+    pace !== "relaxed" &&
+    pace !== "balanced" &&
+    pace !== "intense" &&
+    pace !== "go_go_go"
+  ) {
     return null;
   }
   const mustRaw = o.mustDoParks;
@@ -183,6 +188,119 @@ function parsePlanningPreferences(
     typeof o.includeUniversalSkipTips === "boolean"
       ? o.includeUniversalSkipTips
       : undefined;
+
+  const mobilityVals = [
+    "none",
+    "stroller",
+    "wheelchair",
+    "prefer_shorter_walks",
+  ] as const;
+  const mobility = mobilityVals.includes(o.mobility as (typeof mobilityVals)[number])
+    ? (o.mobility as TripPlanningPreferences["mobility"])
+    : undefined;
+
+  const tripTypeVals = [
+    "first_timer",
+    "repeat_visitor",
+    "milestone",
+    "honeymoon",
+    "multi_generational",
+    "unsure",
+  ] as const;
+  const tripType = tripTypeVals.includes(o.tripType as (typeof tripTypeVals)[number])
+    ? (o.tripType as TripPlanningPreferences["tripType"])
+    : undefined;
+
+  const expVals = [
+    "character_meals",
+    "fireworks",
+    "parades",
+    "dessert_party",
+    "rope_drop",
+    "evening_extra",
+  ] as const;
+  const mustDoExperiencesRaw = o.mustDoExperiences;
+  const mustDoExperiences = Array.isArray(mustDoExperiencesRaw)
+    ? mustDoExperiencesRaw.filter((x): x is (typeof expVals)[number] =>
+        expVals.includes(x as (typeof expVals)[number]),
+      )
+    : undefined;
+
+  const childHeightsRaw = o.childHeights;
+  const childHeights = Array.isArray(childHeightsRaw)
+    ? childHeightsRaw
+        .map((row) => {
+          if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+          const r2 = row as Record<string, unknown>;
+          const ageOrIndex = Number(r2.ageOrIndex);
+          const heightCm = Number(r2.heightCm);
+          if (Number.isNaN(ageOrIndex) || Number.isNaN(heightCm)) return null;
+          return { ageOrIndex, heightCm };
+        })
+        .filter((x): x is { ageOrIndex: number; heightCm: number } => x != null)
+    : undefined;
+
+  const dlp = o.disneyLightningLane;
+  let disneyLightningLane: TripPlanningPreferences["disneyLightningLane"];
+  if (dlp && typeof dlp === "object" && !Array.isArray(dlp)) {
+    const d = dlp as Record<string, unknown>;
+    const multiPassStatus =
+      d.multiPassStatus === "all_park_days" ||
+      d.multiPassStatus === "some_park_days" ||
+      d.multiPassStatus === "none" ||
+      d.multiPassStatus === "not_sure"
+        ? d.multiPassStatus
+        : "not_sure";
+    const singlePassWillingToPay =
+      d.singlePassWillingToPay === "yes" ||
+      d.singlePassWillingToPay === "no" ||
+      d.singlePassWillingToPay === "not_sure"
+        ? d.singlePassWillingToPay
+        : "not_sure";
+    const memoryMaker =
+      d.memoryMaker === "yes" ||
+      d.memoryMaker === "no" ||
+      d.memoryMaker === "not_sure"
+        ? d.memoryMaker
+        : "not_sure";
+    disneyLightningLane = {
+      multiPassStatus,
+      singlePassWillingToPay,
+      memoryMaker,
+    };
+  }
+
+  const uxp = o.universalExpress;
+  let universalExpress: TripPlanningPreferences["universalExpress"];
+  if (uxp && typeof uxp === "object" && !Array.isArray(uxp)) {
+    const u = uxp as Record<string, unknown>;
+    const status =
+      u.status === "included_with_hotel" ||
+      u.status === "paid" ||
+      u.status === "no" ||
+      u.status === "not_sure"
+        ? u.status
+        : "not_sure";
+    const singleRiderOk =
+      u.singleRiderOk === "yes" ||
+      u.singleRiderOk === "no" ||
+      u.singleRiderOk === "sometimes"
+        ? u.singleRiderOk
+        : "sometimes";
+    universalExpress = { status, singleRiderOk };
+  }
+
+  const parkHoppingVals = ["yes", "no", "undecided"] as const;
+  const parkHopping = parkHoppingVals.includes(
+    o.parkHopping as (typeof parkHoppingVals)[number],
+  )
+    ? (o.parkHopping as TripPlanningPreferences["parkHopping"])
+    : undefined;
+
+  const efpd = Number(o.expectedFullParkDays);
+  const expectedFullParkDays =
+    Number.isFinite(efpd) && efpd >= 1 && efpd <= 366 ? Math.floor(efpd) : undefined;
+
   return {
     pace,
     mustDoParks,
@@ -197,6 +315,16 @@ function parsePlanningPreferences(
     ...(includeUniversalSkipTips !== undefined
       ? { includeUniversalSkipTips }
       : {}),
+    ...(mobility ? { mobility } : {}),
+    ...(tripType ? { tripType } : {}),
+    ...(mustDoExperiences && mustDoExperiences.length > 0
+      ? { mustDoExperiences }
+      : {}),
+    ...(childHeights && childHeights.length > 0 ? { childHeights } : {}),
+    ...(disneyLightningLane ? { disneyLightningLane } : {}),
+    ...(universalExpress ? { universalExpress } : {}),
+    ...(parkHopping ? { parkHopping } : {}),
+    ...(expectedFullParkDays != null ? { expectedFullParkDays } : {}),
   };
 }
 

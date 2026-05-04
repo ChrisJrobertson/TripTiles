@@ -83,15 +83,103 @@ export type Assignment = Partial<Record<SlotType, SlotAssignmentValue>>;
 /** Date keys: zero-padded `YYYY-MM-DD` (matches `formatDateISO`). */
 export type Assignments = Record<string, Assignment>;
 
+/** Wizard / Smart Plan pacing choice. */
+export type PlanningPace = "relaxed" | "balanced" | "intense" | "go_go_go";
+
+/** Pro/Family AI Day Strategy gate (reserved `limit_reached` for future caps). */
+export type AIDayStrategyEntitlement = "allowed" | "tier_blocked" | "limit_reached";
+
+export type PlanningMobility =
+  | "none"
+  | "stroller"
+  | "wheelchair"
+  | "prefer_shorter_walks";
+
+export type PlanningTripType =
+  | "first_timer"
+  | "repeat_visitor"
+  | "milestone"
+  | "honeymoon"
+  | "multi_generational"
+  | "unsure";
+
+export type PlanningMustDoExperience =
+  | "character_meals"
+  | "fireworks"
+  | "parades"
+  | "dessert_party"
+  | "rope_drop"
+  | "evening_extra";
+
+export type PlanningChildHeight = {
+  ageOrIndex: number;
+  heightCm: number;
+};
+
+export type PlanningDisneyLightningLane = {
+  multiPassStatus: "all_park_days" | "some_park_days" | "none" | "not_sure";
+  singlePassWillingToPay: "yes" | "no" | "not_sure";
+  memoryMaker: "yes" | "no" | "not_sure";
+};
+
+export type PlanningUniversalExpress = {
+  status: "included_with_hotel" | "paid" | "no" | "not_sure";
+  singleRiderOk: "yes" | "no" | "sometimes";
+};
+
+export type AIDayStrategyRideStepType =
+  | "rope_drop"
+  | "standby"
+  | "lightning_lane"
+  | "single_rider"
+  | "meal"
+  | "show"
+  | "rest";
+
+export type AIDayStrategyArrival = "rope_drop" | "mid_morning" | "afternoon";
+
+/** Paid Pro/Family output keyed by date under `trips.preferences.ai_day_strategy`. */
+export type AIDayStrategy = {
+  date: string;
+  park: string;
+  generated_at: string;
+  model: string;
+  arrival_recommendation: AIDayStrategyArrival;
+  arrival_reason: string;
+  ride_sequence: Array<{
+    time: string;
+    type: AIDayStrategyRideStepType;
+    ride_or_event: string;
+    notes: string;
+    height_warning?: string;
+  }>;
+  lightning_lane_strategy?: {
+    multi_pass_bookings: Array<{
+      ride: string;
+      book_for_time: string;
+      reason: string;
+    }>;
+    single_pass_recommendations?: string[];
+  };
+  express_pass_strategy?: {
+    priority_rides: string[];
+    skip_with_express: string[];
+  };
+  warnings: string[];
+};
+
 export type DaySnapshotSource =
   | "ai_day_tweak"
   | "ai_day_smart_suggest"
-  | "ai_day_freetext";
+  | "ai_day_freetext"
+  | "ai_day_strategy";
 
 export type DaySnapshotPreferencesSubset = {
   ai_day_timeline?: unknown;
   ai_day_crowd_notes?: string;
   day_notes?: string;
+  /** Single-day value merged into `preferences.ai_day_strategy[date]`. */
+  ai_day_strategy?: AIDayStrategy | null;
 };
 
 export type DaySnapshot = {
@@ -108,9 +196,6 @@ export type DaySnapshot = {
   created_at: string;
   source: DaySnapshotSource;
 };
-
-/** Wizard / Smart Plan pacing choice. */
-export type PlanningPace = "relaxed" | "balanced" | "intense";
 
 /** Stored on `trips.planning_preferences` for Smart Plan context and modal pre-fill. */
 export interface TripPlanningPreferences {
@@ -131,6 +216,21 @@ export interface TripPlanningPreferences {
    * Default true when omitted.
    */
   includeUniversalSkipTips?: boolean;
+
+  /** Wizard Step 3 — heights per child for ride warnings. */
+  childHeights?: PlanningChildHeight[];
+  mobility?: PlanningMobility;
+  /** Wizard Step 4. */
+  tripType?: PlanningTripType;
+  /** Wizard Step 5 — structured must-dos beyond priority tags. */
+  mustDoExperiences?: PlanningMustDoExperience[];
+  /** Wizard Step 6 — Disney regions only. */
+  disneyLightningLane?: PlanningDisneyLightningLane;
+  /** Wizard Step 6 — Universal regions only. */
+  universalExpress?: PlanningUniversalExpress;
+  /** Wizard Step 7. */
+  parkHopping?: "yes" | "no" | "undecided";
+  expectedFullParkDays?: number;
 }
 
 /** Per-day AI hour-by-hour plan (stored under `trips.preferences.ai_day_timeline[dateKey]`). */
@@ -178,6 +278,8 @@ export type TripPreferences = {
     Array<{ attraction_id: string; hhmm: string }>
   >;
   ai_day_timeline?: Record<string, AiDayTimeline>;
+  /** Pro/Family sequenced ride strategy per calendar day (`YYYY-MM-DD`). */
+  ai_day_strategy?: Record<string, AIDayStrategy>;
   day_notes?: Record<string, string>;
   must_dos?: unknown;
   must_dos_snapshot?: unknown;

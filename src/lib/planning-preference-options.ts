@@ -31,7 +31,7 @@ export const PACE_OPTIONS: {
     body: "A good mix of parks and downtime",
   },
   {
-    id: "intense",
+    id: "go_go_go",
     emoji: "🏃",
     title: "Go go go!",
     body: "Maximise every minute — we will sleep on the plane",

@@ -18,7 +18,7 @@ const DISNEY_PARK_IDS = new Set(["mk", "ep", "hs", "ak"]);
 
 export function planningPaceToSequencerPace(pace: PlanningPace): SequencerPace {
   if (pace === "relaxed") return "relaxed";
-  if (pace === "intense") return "go-go-go";
+  if (pace === "intense" || pace === "go_go_go") return "go-go-go";
   return "balanced";
 }
 
