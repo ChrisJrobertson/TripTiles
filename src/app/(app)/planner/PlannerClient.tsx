@@ -3060,6 +3060,7 @@ export function PlannerClient({
                               trip={activeTrip}
                               tripRouteBase={tripRouteBase}
                               dayNotes={mobilePlannerNoteMaps.ai}
+                              userDayNotes={mobilePlannerNoteMaps.user}
                             />
                           ) : null}
                         </>

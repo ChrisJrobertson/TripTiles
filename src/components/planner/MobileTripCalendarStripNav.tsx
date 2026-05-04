@@ -64,7 +64,7 @@ function buildStripDays(
     const rawUser = userDayNotes[dateKey];
     const userSan =
       typeof rawUser === "string" && rawUser.trim()
-        ? rawUser.trim()
+        ? sanitizeDayNote(rawUser.trim())
         : null;
     const tone = heuristicCrowdToneFromNoteText(aiSan);
     out.push({
