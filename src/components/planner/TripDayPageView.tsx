@@ -100,7 +100,7 @@ function formatHeaderShort(dateKey: string): string {
   });
 }
 
-export type DayDetailLayerProps = {
+export type TripDayPageViewProps = {
   trip: Trip;
   dayDate: string;
   tripBasePath: string;
@@ -114,11 +114,8 @@ export type DayDetailLayerProps = {
   onSaveDayNote: (dateKey: string, text: string) => void;
   onOpenSmartPlan: () => void;
   /** Consolidated AI for this day (slots + ride strategy). */
-  onOpenDayPlanner: (options?: {
-    tab?: "adjust" | "strategy";
-    autoRunStrategy?: boolean;
-  }) => void;
-  /** Direct entry to AI Day Strategy from day header (paid: generate or planner; free: parent opens upgrade). */
+  onOpenDayPlanner: (options?: { tab?: "adjust" | "strategy" }) => void;
+  /** Opens the AI Day Strategy flow (e.g. upgrade / strategy sheet on mobile). */
   onOpenDayStrategy?: () => void;
   onUndoDayTweak: (dateKey: string) => void;
   onGenerateMustDosForPark: (parkId: string) => void;
@@ -138,7 +135,10 @@ export type DayDetailLayerProps = {
   ridePrioritiesByDayForTrip: Record<string, TripRidePriority[]>;
 };
 
-export function DayDetailLayer({
+/**
+ * Canonical desktop day planner for `/trip/[id]/day/[date]` — embedded in the planner layout (not an overlay).
+ */
+export function TripDayPageView({
   trip,
   dayDate,
   tripBasePath,
@@ -161,17 +161,11 @@ export function DayDetailLayer({
   rideCountsForDay = null,
   onTripPatch,
   ridePrioritiesByDayForTrip,
-}: DayDetailLayerProps) {
+}: TripDayPageViewProps) {
   const router = useRouter();
   const titleId = useId();
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const swipeRef = useRef<{
-    x: number;
-    y: number;
-    t: number;
-    pointerId: number;
-  } | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [saveTplOpen, setSaveTplOpen] = useState(false);
   const [applyTplOpen, setApplyTplOpen] = useState(false);
@@ -210,7 +204,9 @@ export function DayDetailLayer({
     (dk: string | null) => {
       if (!dk) return;
       const seg = formatDateISO(parseDate(dk));
-      router.push(`${tripBasePath}/day/${seg}`, { scroll: false });
+      startTransition(() => {
+        router.push(`${tripBasePath}/day/${seg}`, { scroll: false });
+      });
     },
     [router, tripBasePath],
   );
@@ -250,7 +246,7 @@ export function DayDetailLayer({
     runPendingAction();
   }, [trip, dayDate, runPendingAction]);
 
-  const closeLayer = useCallback(() => {
+  const closeToCalendar = useCallback(() => {
     queueAction(() => {
       setMoreOpen(false);
       onClose();
@@ -336,10 +332,11 @@ export function DayDetailLayer({
   const crowdLevel = tone ? crowdLevelFromHeuristicTone(tone) : null;
 
   const parksById = useMemo(
-    () => Object.fromEntries(parks.map((p) => [p.id, p])) as Record<
-      string,
-      (typeof parks)[0]
-    >,
+    () =>
+      Object.fromEntries(parks.map((p) => [p.id, p])) as Record<
+        string,
+        (typeof parks)[0]
+      >,
     [parks],
   );
 
@@ -370,10 +367,10 @@ export function DayDetailLayer({
     const raw = (trip.preferences as { ai_skip_line_return_echo?: unknown } | null)
       ?.ai_skip_line_return_echo;
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-    const day = (raw as Record<string, unknown>)[dayDate];
-    if (!Array.isArray(day) || day.length === 0) return null;
+    const dayEcho = (raw as Record<string, unknown>)[dayDate];
+    if (!Array.isArray(dayEcho) || dayEcho.length === 0) return null;
     const out: { attraction_id: string; hhmm: string }[] = [];
-    for (const r of day) {
+    for (const r of dayEcho) {
       if (!r || typeof r !== "object" || Array.isArray(r)) continue;
       const o = r as Record<string, unknown>;
       if (typeof o.attraction_id === "string" && typeof o.hhmm === "string")
@@ -395,7 +392,9 @@ export function DayDetailLayer({
 
   const todayK = todayKey();
   const showJumpToday =
-    isTodayInTrip(trip) && dayDate !== todayK && eachDateKeyInRange(trip.start_date, trip.end_date).includes(todayK);
+    isTodayInTrip(trip) &&
+    dayDate !== todayK &&
+    eachDateKeyInRange(trip.start_date, trip.end_date).includes(todayK);
   const daySnapshotCount = (trip.day_snapshots ?? []).filter(
     (snap) => snap.date === dayDate,
   ).length;
@@ -427,7 +426,7 @@ export function DayDetailLayer({
   }, [moreOpen]);
 
   useEffect(() => {
-    const el = dialogRef.current;
+    const el = rootRef.current;
     if (!el) return;
     const focusables = el.querySelectorAll<HTMLElement>(
       'button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])',
@@ -438,7 +437,7 @@ export function DayDetailLayer({
       if (e.key === "Escape") {
         e.preventDefault();
         setMoreOpen(false);
-        onClose();
+        closeToCalendar();
         return;
       }
       if (!deskKb) return;
@@ -464,41 +463,7 @@ export function DayDetailLayer({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [deskKb, onClose, prev, next, navigateTo]);
-
-  const onSwipePointerDown = (e: React.PointerEvent) => {
-    if (typeof window !== "undefined" && window.innerWidth >= 768) return;
-    const target = e.target as HTMLElement | null;
-    if (!target) return;
-    if (
-      target.closest(
-        'input,textarea,button,[contenteditable="true"],[contenteditable],[data-no-swipe]',
-      )
-    ) {
-      return;
-    }
-    swipeRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      t: Date.now(),
-      pointerId: e.pointerId,
-    };
-  };
-
-  const onSwipePointerUp = (e: React.PointerEvent) => {
-    const start = swipeRef.current;
-    swipeRef.current = null;
-    if (!start || start.pointerId !== e.pointerId) return;
-    if (typeof window !== "undefined" && window.innerWidth >= 768) return;
-    const dx = e.clientX - start.x;
-    const dy = e.clientY - start.y;
-    const dt = Date.now() - start.t;
-    if (dt > 500) return;
-    if (Math.abs(dx) <= 60) return;
-    if (Math.abs(dy) >= 40) return;
-    if (dx > 60 && prev) navigateTo(prev);
-    else if (dx < -60 && next) navigateTo(next);
-  };
+  }, [deskKb, closeToCalendar, prev, next, navigateTo]);
 
   const parkLabels = useMemo(() => {
     const ids = parkIdsAmPmForDay(trip, dayDate);
@@ -637,27 +602,19 @@ export function DayDetailLayer({
 
   return (
     <>
-      <button
-        type="button"
-        className="fixed inset-0 z-[95] hidden bg-black/40 md:block"
-        aria-label="Close day detail"
-        onClick={closeLayer}
-      />
       <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
+        ref={rootRef}
+        className="hidden min-h-0 w-full min-w-0 flex-col rounded-xl border border-royal/15 bg-cream shadow-sm md:flex"
         aria-labelledby={titleId}
-        className="fixed inset-0 z-[100] flex flex-col bg-cream shadow-2xl transition-transform duration-200 ease-out md:inset-y-0 md:left-auto md:right-0 md:w-[480px] md:max-w-[100vw] md:border-l md:border-royal/15"
       >
-        <header className="flex shrink-0 flex-col gap-2 border-b border-royal/10 bg-cream px-3 py-3 safe-area-inset-top">
+        <header className="flex shrink-0 flex-col gap-2 border-b border-royal/10 bg-cream px-3 py-3">
           <div className="flex items-start justify-between gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <button
                 type="button"
                 className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-royal/15 bg-white text-lg text-royal shadow-sm transition hover:bg-cream"
-                aria-label="Back to trip overview"
-                onClick={closeLayer}
+                aria-label="Back to calendar"
+                onClick={closeToCalendar}
               >
                 ←
               </button>
@@ -673,7 +630,7 @@ export function DayDetailLayer({
                 </p>
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-1">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
               {prev ? (
                 <button
                   type="button"
@@ -758,14 +715,25 @@ export function DayDetailLayer({
                         </span>
                       ) : null}
                     </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full min-h-11 px-3 py-2 text-left font-sans text-sm text-royal hover:bg-cream"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        closeToCalendar();
+                      }}
+                    >
+                      Back to calendar
+                    </button>
                   </div>
                 ) : null}
               </div>
               <button
                 type="button"
-                className="hidden min-h-11 min-w-11 items-center justify-center rounded-lg border border-royal/15 bg-white text-sm text-royal md:flex"
-                aria-label="Close"
-                onClick={closeLayer}
+                className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-royal/15 bg-white text-sm text-royal"
+                aria-label="Back to calendar"
+                onClick={closeToCalendar}
               >
                 ✕
               </button>
@@ -843,10 +811,7 @@ export function DayDetailLayer({
 
         <div
           ref={scrollRef}
-          className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-3 py-4 pb-28 md:pb-20"
-          onPointerDown={onSwipePointerDown}
-          onPointerUp={onSwipePointerUp}
-          onPointerCancel={onSwipePointerUp}
+          className="min-h-[min(70vh,32rem)] max-h-[calc(100vh-12rem)] flex-1 overflow-y-auto overscroll-y-contain px-3 py-4 md:pb-12"
         >
           <DayConflictBanners
             tripId={trip.id}
@@ -931,13 +896,8 @@ export function DayDetailLayer({
           </div>
 
           {dayStrategyRow ? (
-            <AIDayStrategyPanel
-              strategy={dayStrategyRow}
-              onRegenerate={() =>
-                queueAction(() => onOpenDayPlanner({ tab: "strategy" }))
-              }
-            />
-          ) : !dayStrategyRow && showExpandedDayPanel ? (
+            <AIDayStrategyPanel strategy={dayStrategyRow} />
+          ) : showExpandedDayPanel ? (
             <ExpandedDayPanel
               embedded
               tripId={trip.id}
@@ -954,7 +914,7 @@ export function DayDetailLayer({
               childAges={trip.child_ages ?? []}
               ridePriorities={ridePriorities}
               parks={parks}
-              onClose={closeLayer}
+              onClose={closeToCalendar}
               onPrioritiesUpdated={onPrioritiesUpdated}
               includeDisneySkipTips={
                 trip.planning_preferences?.includeDisneySkipTips !== false
@@ -998,7 +958,7 @@ export function DayDetailLayer({
             </ul>
           </section>
 
-          <section id="day-notes" className="mt-6 border-t border-royal/10 pt-4">
+          <section id="day-notes" className="mt-6 border-t border-royal/10 pb-10 pt-4">
             <h2 className="font-sans text-xs font-semibold uppercase tracking-wide text-royal/70">
               Day note
             </h2>
@@ -1018,31 +978,6 @@ export function DayDetailLayer({
               aria-label="Day note"
             />
           </section>
-
-          <div className="mt-10 flex items-center justify-between gap-3 pb-6 md:hidden">
-            {prev ? (
-              <button
-                type="button"
-                className="min-h-12 flex-1 rounded-xl border border-royal/20 bg-white py-3 font-sans text-sm font-semibold text-royal shadow-sm"
-                onClick={() => navigateTo(prev)}
-              >
-                ← Previous day
-              </button>
-            ) : (
-              <span className="flex-1" />
-            )}
-            {next ? (
-              <button
-                type="button"
-                className="min-h-12 flex-1 rounded-xl border border-royal/20 bg-white py-3 font-sans text-sm font-semibold text-royal shadow-sm"
-                onClick={() => navigateTo(next)}
-              >
-                Next day →
-              </button>
-            ) : (
-              <span className="flex-1" />
-            )}
-          </div>
         </div>
       </div>
 

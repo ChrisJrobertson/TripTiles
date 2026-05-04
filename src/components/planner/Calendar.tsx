@@ -587,8 +587,8 @@ export function Calendar({
                         data-day-note-toggle
                         title={
                           hasInsight
-                            ? "Quick tips and timeline (full day planner: tap the date above or a park tile)"
-                            : "Quick tips and timeline (full day planner: tap the date above or a park tile)"
+                            ? "Quick tips and timeline (open a day: tap the date above or a park tile)"
+                            : "Quick tips and timeline (open a day: tap the date above or a park tile)"
                         }
                         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-lg leading-none shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${
                           hasInsight
@@ -996,19 +996,6 @@ export function Calendar({
                 </span>
               </button>
             </div>
-            {onOpenDayDetail && useDayDetailShell ? (
-              <button
-                type="button"
-                className="mb-2 flex w-full min-h-11 items-center justify-center gap-1.5 rounded-lg border-2 border-royal/20 bg-royal/5 px-3 py-2 font-sans text-sm font-semibold text-royal transition hover:border-royal/35 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
-                onClick={() => {
-                  onOpenDayDetail(notePopover.dateKey);
-                  closeNotePopover();
-                }}
-              >
-                <span aria-hidden>📋</span>
-                Open full day planner
-              </button>
-            ) : null}
             {dayPopoverTab === "details" ? (
               <>
                 {notePopover.crowdLine ? (
@@ -1027,11 +1014,10 @@ export function Calendar({
                 ) : null}
                 {!notePopover.crowdLine && !notePopover.dayNote ? (
                   <p className="mb-1 font-sans text-xs leading-relaxed text-royal/70">
-                    No crowd tips or notes in this popover yet. You can also open
-                    the full{" "}
-                    <span className="font-semibold text-royal">day planner</span>{" "}
-                    from the date row or by tapping a park tile on the calendar.
-                    Use <span className="font-semibold text-royal">Add note…</span>{" "}
+                    No crowd tips or notes in this popover yet. Open this day
+                    from the date row or by tapping a park tile on the calendar
+                    to use the full planner. Use{" "}
+                    <span className="font-semibold text-royal">Add note…</span>{" "}
                     on the day card, or the{" "}
                     <span className="font-semibold text-royal">Timeline</span>{" "}
                     tab when available.

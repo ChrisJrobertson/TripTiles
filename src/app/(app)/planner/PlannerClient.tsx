@@ -51,11 +51,12 @@ import { Calendar } from "@/components/planner/Calendar";
 import { CompareDaysPanel } from "@/components/planner/CompareDaysPanel";
 import { CrowdStrategyBanner } from "@/components/planner/CrowdStrategyBanner";
 import { DayStrategyUpgradeModal } from "@/components/planner/DayStrategyUpgradeModal";
+import { MobileTripCalendarStripNav } from "@/components/planner/MobileTripCalendarStripNav";
 import { MobileDayView } from "@/components/planner/MobileDayView";
 import { PlanningSections } from "@/components/planner/PlanningSections";
 import { Countdown } from "@/components/planner/Countdown";
 import { CustomTileModal } from "@/components/planner/CustomTileModal";
-import { DayDetailLayer } from "@/components/planner/DayDetailLayer";
+import { TripDayPageView } from "@/components/planner/TripDayPageView";
 import { DayPlannerModal } from "@/components/planner/DayPlannerModal";
 import { DayNotesPanel } from "@/components/planner/DayNotesPanel";
 import { AdventureTitleColorControl } from "@/components/planner/AdventureTitleColorControl";
@@ -2902,19 +2903,21 @@ export function PlannerClient({
                   />
                 ) : (
                   <>
-                    <TripStatsCard
-                      trip={activeTrip}
-                      parks={calendarParks}
-                      payments={paymentsByTripId[activeTrip.id] ?? []}
-                      destinationLabel={activeRegionLabel}
-                      onToast={showToast}
-                      onViewAllPayments={() => {
-                        startTransition(() => {
-                          router.push(`${tripRouteBase ?? "/planner"}?tab=payments`);
-                        });
-                      }}
-                    />
-                    {!hasAnyAssignment ? (
+                    {!dayDetailOpen ? (
+                      <TripStatsCard
+                        trip={activeTrip}
+                        parks={calendarParks}
+                        payments={paymentsByTripId[activeTrip.id] ?? []}
+                        destinationLabel={activeRegionLabel}
+                        onToast={showToast}
+                        onViewAllPayments={() => {
+                          startTransition(() => {
+                            router.push(`${tripRouteBase ?? "/planner"}?tab=payments`);
+                          });
+                        }}
+                      />
+                    ) : null}
+                    {!hasAnyAssignment && !dayDetailOpen ? (
                       <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-3 sm:p-4">
                         <div className="pointer-events-auto w-full max-w-md">
                           <EmptyCalendarCta
@@ -2933,78 +2936,160 @@ export function PlannerClient({
                       </div>
                     ) : null}
                     <div className="relative min-w-0">
-                      <div className="hidden md:block">
-                        <Calendar
-                          trip={activeTrip}
-                          parks={calendarParks}
-                          selectedParkId={selectedParkId}
-                          onAssign={onAssign}
-                          onClear={onClear}
-                          onNeedParkFirst={() =>
-                            showHint("Pick a park first")
-                          }
-                          onAfterSlotClear={() => showToast("Slot cleared")}
-                          plannerRegionId={resolvePaletteRegionId(activeTrip)}
-                          temperatureUnit={temperatureUnit}
-                          onSaveDayNote={onSaveDayNote}
-                          timelineUnlocked={timelineUnlocked}
-                          onSlotTimeChange={onSlotTimeChange}
-                          ridePrioritiesByDay={
-                            ridePrioritiesByDayForActiveTrip
-                          }
-                          rideCountsByDay={rideCountsByDayForActiveTrip}
-                          dayConflictDots={calendarConflictDotsForCalendar}
-                          highlightDateKey={goToTodayRingDateKey}
-                          onRideDayPrioritiesUpdated={
-                            handleRideDayPrioritiesUpdated
-                          }
-                          onOpenDayDetail={
-                            tripRouteBase ? openDayDetail : undefined
-                          }
-                        />
-                      </div>
-                    <MobileDayView
-                      trip={activeTrip}
-                      parks={calendarParks}
-                      assignments={activeTrip.assignments ?? {}}
-                      dayNotes={mobilePlannerNoteMaps.ai}
-                      userDayNotes={mobilePlannerNoteMaps.user}
-                      onAssign={onAssign}
-                      onClear={onClear}
-                      crowdSummary={mobileCrowdSummaryText}
-                      readOnly={false}
-                      productTier={productTier}
-                      onOpenDayStrategy={openMobileDayStrategy}
-                      ridePrioritiesByDay={ridePrioritiesByDayForActiveTrip}
-                      rideCountsByDay={rideCountsByDayForActiveTrip}
-                      onRideDayPrioritiesUpdated={
-                        handleRideDayPrioritiesUpdated
-                      }
-                      onOpenDayDetail={
-                        tripRouteBase ? openDayDetail : undefined
-                      }
-                      onOpenDayPlanner={openDayPlanner}
-                      onUndoDayTweak={handleUndoDayTweak}
-                      cataloguedParkIdSet={cataloguedParkIdSet}
-                      onGenerateMustDosForPark={runMustDosGen}
-                      mustDosGenLoading={mustDosGenLoading}
-                      onToggleMustDoDone={handleToggleMustDoDone}
-                      onSelectPark={setSelectedParkId}
-                      onMenuExportPdf={() =>
-                        document.getElementById("planner-pdf-export-btn")?.click()
-                      }
-                      onMenuShare={handleMobileMenuShare}
-                      onMenuSettings={() => undefined}
-                      smartPlanUndoSnapshotAt={
-                        activeTrip.previous_assignments_snapshot_at ?? null
-                      }
-                      onMenuUndoSmartPlan={() => setSmartPlanUndoOpen(true)}
-                      plannerRegionId={resolvePaletteRegionId(activeTrip)}
-                      temperatureUnit={temperatureUnit}
-                      onSaveUserDayNote={onSaveDayNote}
-                      timelineUnlocked={timelineUnlocked}
-                      onSlotTimeChange={onSlotTimeChange}
-                    />
+                      {dayDetailOpen &&
+                      tripRouteBase &&
+                      dayCanonicalForDetail &&
+                      activeTrip ? (
+                        <>
+                          <TripDayPageView
+                            trip={activeTrip}
+                            dayDate={dayCanonicalForDetail}
+                            tripBasePath={tripRouteBase}
+                            parks={calendarParks}
+                            cataloguedParkIdSet={cataloguedParkIdSet}
+                            ridePriorities={
+                              ridePrioritiesByDayForActiveTrip[
+                                dayCanonicalForDetail
+                              ] ?? []
+                            }
+                            productTier={productTier}
+                            plannerRegionId={resolvePaletteRegionId(activeTrip)}
+                            temperatureUnit={temperatureUnit}
+                            onClose={closeDayDetail}
+                            onPrioritiesUpdated={(items) =>
+                              handleRideDayPrioritiesUpdated(
+                                dayCanonicalForDetail,
+                                items,
+                              )
+                            }
+                            onSaveDayNote={onSaveDayNote}
+                            onOpenSmartPlan={() => setSmartOpen(true)}
+                            onOpenDayPlanner={(opts) => {
+                              openDayPlanner(dayCanonicalForDetail, opts);
+                            }}
+                            onOpenDayStrategy={() =>
+                              openMobileDayStrategy(dayCanonicalForDetail)
+                            }
+                            onUndoDayTweak={handleUndoDayTweak}
+                            onGenerateMustDosForPark={(parkId) => {
+                              void runMustDosGen(dayCanonicalForDetail, parkId);
+                            }}
+                            generatingMustDosParkId={
+                              mustDosGenLoading?.dateKey === dayCanonicalForDetail
+                                ? mustDosGenLoading.parkId
+                                : null
+                            }
+                            onToggleMustDoDone={(parkId, mustDoId, next) => {
+                              void handleToggleMustDoDone(
+                                dayCanonicalForDetail,
+                                parkId,
+                                mustDoId,
+                                next,
+                              );
+                            }}
+                            rideCountsForDay={
+                              dayCanonicalForDetail
+                                ? (rideCountsByDayForActiveTrip[
+                                    dayCanonicalForDetail
+                                  ] ?? null)
+                                : null
+                            }
+                            onTripPatch={(patch) =>
+                              applyLocalPatch(activeTrip.id, patch)
+                            }
+                            ridePrioritiesByDayForTrip={
+                              ridePrioritiesByDayForActiveTrip
+                            }
+                          />
+                          <MobileDayView
+                            trip={activeTrip}
+                            parks={calendarParks}
+                            assignments={activeTrip.assignments ?? {}}
+                            dayNotes={mobilePlannerNoteMaps.ai}
+                            userDayNotes={mobilePlannerNoteMaps.user}
+                            onAssign={onAssign}
+                            onClear={onClear}
+                            crowdSummary={mobileCrowdSummaryText}
+                            readOnly={false}
+                            productTier={productTier}
+                            onOpenDayStrategy={openMobileDayStrategy}
+                            ridePrioritiesByDay={
+                              ridePrioritiesByDayForActiveTrip
+                            }
+                            rideCountsByDay={rideCountsByDayForActiveTrip}
+                            onRideDayPrioritiesUpdated={
+                              handleRideDayPrioritiesUpdated
+                            }
+                            onOpenDayPlanner={openDayPlanner}
+                            onUndoDayTweak={handleUndoDayTweak}
+                            cataloguedParkIdSet={cataloguedParkIdSet}
+                            onGenerateMustDosForPark={runMustDosGen}
+                            mustDosGenLoading={mustDosGenLoading}
+                            onToggleMustDoDone={handleToggleMustDoDone}
+                            onSelectPark={setSelectedParkId}
+                            onMenuExportPdf={() =>
+                              document
+                                .getElementById("planner-pdf-export-btn")
+                                ?.click()
+                            }
+                            onMenuShare={handleMobileMenuShare}
+                            onMenuSettings={() => undefined}
+                            smartPlanUndoSnapshotAt={
+                              activeTrip.previous_assignments_snapshot_at ?? null
+                            }
+                            onMenuUndoSmartPlan={() =>
+                              setSmartPlanUndoOpen(true)
+                            }
+                            plannerRegionId={resolvePaletteRegionId(activeTrip)}
+                            temperatureUnit={temperatureUnit}
+                            onSaveUserDayNote={onSaveDayNote}
+                            timelineUnlocked={timelineUnlocked}
+                            onSlotTimeChange={onSlotTimeChange}
+                            tripRouteBase={tripRouteBase}
+                            urlSyncedDayDate={dayCanonicalForDetail}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <div className="hidden md:block">
+                            <Calendar
+                              trip={activeTrip}
+                              parks={calendarParks}
+                              selectedParkId={selectedParkId}
+                              onAssign={onAssign}
+                              onClear={onClear}
+                              onNeedParkFirst={() =>
+                                showHint("Pick a park first")
+                              }
+                              onAfterSlotClear={() => showToast("Slot cleared")}
+                              plannerRegionId={resolvePaletteRegionId(activeTrip)}
+                              temperatureUnit={temperatureUnit}
+                              onSaveDayNote={onSaveDayNote}
+                              timelineUnlocked={timelineUnlocked}
+                              onSlotTimeChange={onSlotTimeChange}
+                              ridePrioritiesByDay={
+                                ridePrioritiesByDayForActiveTrip
+                              }
+                              rideCountsByDay={rideCountsByDayForActiveTrip}
+                              dayConflictDots={calendarConflictDotsForCalendar}
+                              highlightDateKey={goToTodayRingDateKey}
+                              onRideDayPrioritiesUpdated={
+                                handleRideDayPrioritiesUpdated
+                              }
+                              onOpenDayDetail={
+                                tripRouteBase ? openDayDetail : undefined
+                              }
+                            />
+                          </div>
+                          {tripRouteBase ? (
+                            <MobileTripCalendarStripNav
+                              trip={activeTrip}
+                              tripRouteBase={tripRouteBase}
+                              dayNotes={mobilePlannerNoteMaps.ai}
+                            />
+                          ) : null}
+                        </>
+                      )}
                     </div>
                   </>
                 )}
@@ -3228,7 +3313,7 @@ export function PlannerClient({
         }}
       />
 
-      {activeTrip && dayPlannerDate ? (
+      {activeTrip && dayDetailOpen && dayPlannerDate ? (
         <DayPlannerModal
           open={true}
           trip={activeTrip}
@@ -3389,60 +3474,6 @@ export function PlannerClient({
             )}
           </div>
         </div>
-      ) : null}
-
-      {dayDetailOpen &&
-      activeTrip &&
-      dayCanonicalForDetail &&
-      tripRouteBase ? (
-        <DayDetailLayer
-          trip={activeTrip}
-          dayDate={dayCanonicalForDetail}
-          tripBasePath={tripRouteBase}
-          parks={calendarParks}
-          cataloguedParkIdSet={cataloguedParkIdSet}
-          ridePriorities={
-            ridePrioritiesByDayForActiveTrip[dayCanonicalForDetail] ?? []
-          }
-          productTier={productTier}
-          onOpenDayStrategy={() => openMobileDayStrategy(dayCanonicalForDetail)}
-          plannerRegionId={resolvePaletteRegionId(activeTrip)}
-          temperatureUnit={temperatureUnit}
-          onClose={closeDayDetail}
-          onPrioritiesUpdated={(items) =>
-            handleRideDayPrioritiesUpdated(dayCanonicalForDetail, items)
-          }
-          onSaveDayNote={onSaveDayNote}
-          onOpenSmartPlan={() => setSmartOpen(true)}
-          onOpenDayPlanner={(opts) => {
-            if (!dayCanonicalForDetail) return;
-            openDayPlanner(dayCanonicalForDetail, opts);
-          }}
-          onUndoDayTweak={handleUndoDayTweak}
-          onGenerateMustDosForPark={(parkId) => {
-            void runMustDosGen(dayCanonicalForDetail, parkId);
-          }}
-          generatingMustDosParkId={
-            mustDosGenLoading?.dateKey === dayCanonicalForDetail
-              ? mustDosGenLoading.parkId
-              : null
-          }
-          onToggleMustDoDone={(parkId, mustDoId, next) => {
-            void handleToggleMustDoDone(
-              dayCanonicalForDetail,
-              parkId,
-              mustDoId,
-              next,
-            );
-          }}
-          rideCountsForDay={
-            dayCanonicalForDetail
-              ? (rideCountsByDayForActiveTrip[dayCanonicalForDetail] ?? null)
-              : null
-          }
-          onTripPatch={(patch) => applyLocalPatch(activeTrip.id, patch)}
-          ridePrioritiesByDayForTrip={ridePrioritiesByDayForActiveTrip}
-        />
       ) : null}
 
       <BookingConflictModal

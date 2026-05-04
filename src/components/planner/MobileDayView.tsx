@@ -4,6 +4,7 @@ import {
   MONTHS_LONG,
   addDays,
   formatDateKey,
+  formatDateISO,
   formatUndoSnapshotHint,
   parseDate,
 } from "@/lib/date-helpers";
@@ -36,7 +37,9 @@ import type {
 } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
+  startTransition,
   useCallback,
   useEffect,
   useId,
@@ -198,6 +201,10 @@ export type MobileDayViewProps = {
   ) => void;
   /** Set of `parks.id` with catalogue data — for catalogue vs AI must-do gating. */
   cataloguedParkIdSet?: ReadonlySet<string>;
+  /** `/trip/[id]` when swipe/strip should follow `/day/[date]` URLs (mobile day route). */
+  tripRouteBase?: string | null;
+  /** Current path day yyyy-mm-dd; pair with tripRouteBase for URL-linked navigation. */
+  urlSyncedDayDate?: string | null;
 };
 
 function buildTripDays(
@@ -234,12 +241,15 @@ function MobileDayStrip({
   days,
   activeIndex,
   onJumpTo,
+  dayLinkHref,
 }: {
   days: MobilePlannerDay[];
   activeIndex: number;
   onJumpTo: (i: number) => void;
+  /** When set, chips navigate as `<Link>` to day URLs instead of updating local index. */
+  dayLinkHref?: (dateKey: string) => string;
 }) {
-  const chipRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const chipRefs = useRef<(HTMLButtonElement | HTMLAnchorElement | null)[]>([]);
 
   useEffect(() => {
     const el = chipRefs.current[activeIndex];
@@ -249,40 +259,76 @@ function MobileDayStrip({
   return (
     <div className="scrollbar-hide relative overflow-x-auto border-b border-gold/20 bg-white/50">
       <div className="flex min-w-max gap-2 px-4 py-3">
-        {days.map((day, i) => (
-          <button
-            key={day.dateKey}
-            ref={(el) => {
-              chipRefs.current[i] = el;
-            }}
-            type="button"
-            onClick={() => onJumpTo(i)}
-            aria-label={`Day ${i + 1}: ${formatDateLong(day.date)}`}
-            aria-pressed={activeIndex === i}
-            className={
-              activeIndex === i
-                ? "flex min-w-[56px] flex-col items-center rounded-lg bg-royal px-3 py-2 font-bold text-cream shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
-                : "flex min-w-[56px] flex-col items-center rounded-lg border border-gold/30 bg-white px-3 py-2 text-royal transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 active:bg-cream"
-            }
-          >
-            <span
-              className={`text-[10px] font-semibold uppercase tracking-wider ${
-                activeIndex === i ? "text-cream/80" : "text-royal/60"
-              }`}
+        {days.map((day, i) =>
+          dayLinkHref ? (
+            <Link
+              key={day.dateKey}
+              ref={(el) => {
+                chipRefs.current[i] = el;
+              }}
+              href={dayLinkHref(day.dateKey)}
+              scroll={false}
+              prefetch={false}
+              aria-label={`Day ${i + 1}: ${formatDateLong(day.date)}`}
+              aria-current={activeIndex === i ? "date" : undefined}
+              className={
+                activeIndex === i
+                  ? "flex min-w-[56px] flex-col items-center rounded-lg bg-royal px-3 py-2 font-bold text-cream shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                  : "flex min-w-[56px] flex-col items-center rounded-lg border border-gold/30 bg-white px-3 py-2 text-royal transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 active:bg-cream"
+              }
             >
-              {dayOfWeekShort(day.date)}
-            </span>
-            <span className="text-lg font-bold leading-none">{day.date.getDate()}</span>
-            {day.crowdDot ? (
-              <span className="mt-0.5 inline-flex">
-                <CrowdLevelIndicator
-                  level={crowdLevelFromHeuristicTone(day.crowdDot)}
-                  size="sm"
-                />
+              <span
+                className={`text-[10px] font-semibold uppercase tracking-wider ${
+                  activeIndex === i ? "text-cream/80" : "text-royal/60"
+                }`}
+              >
+                {dayOfWeekShort(day.date)}
               </span>
-            ) : null}
-          </button>
-        ))}
+              <span className="text-lg font-bold leading-none">{day.date.getDate()}</span>
+              {day.crowdDot ? (
+                <span className="mt-0.5 inline-flex">
+                  <CrowdLevelIndicator
+                    level={crowdLevelFromHeuristicTone(day.crowdDot)}
+                    size="sm"
+                  />
+                </span>
+              ) : null}
+            </Link>
+          ) : (
+            <button
+              key={day.dateKey}
+              ref={(el) => {
+                chipRefs.current[i] = el;
+              }}
+              type="button"
+              onClick={() => onJumpTo(i)}
+              aria-label={`Day ${i + 1}: ${formatDateLong(day.date)}`}
+              aria-pressed={activeIndex === i}
+              className={
+                activeIndex === i
+                  ? "flex min-w-[56px] flex-col items-center rounded-lg bg-royal px-3 py-2 font-bold text-cream shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                  : "flex min-w-[56px] flex-col items-center rounded-lg border border-gold/30 bg-white px-3 py-2 text-royal transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 active:bg-cream"
+              }
+            >
+              <span
+                className={`text-[10px] font-semibold uppercase tracking-wider ${
+                  activeIndex === i ? "text-cream/80" : "text-royal/60"
+                }`}
+              >
+                {dayOfWeekShort(day.date)}
+              </span>
+              <span className="text-lg font-bold leading-none">{day.date.getDate()}</span>
+              {day.crowdDot ? (
+                <span className="mt-0.5 inline-flex">
+                  <CrowdLevelIndicator
+                    level={crowdLevelFromHeuristicTone(day.crowdDot)}
+                    size="sm"
+                  />
+                </span>
+              ) : null}
+            </button>
+          ),
+        )}
       </div>
     </div>
   );
@@ -413,8 +459,30 @@ export function MobileDayView({
   mustDosGenLoading = null,
   onToggleMustDoDone,
   cataloguedParkIdSet: cataloguedParkIdSetProp = EMPTY_CATALOGUED_PARK_ID_SET,
+  tripRouteBase = null,
+  urlSyncedDayDate = null,
 }: MobileDayViewProps) {
   void _crowdSummary;
+  const router = useRouter();
+  const useUrlDayNav = Boolean(tripRouteBase && urlSyncedDayDate);
+  const pushTripDay = useCallback(
+    (dateKey: string) => {
+      if (!tripRouteBase) return;
+      const seg = formatDateISO(parseDate(dateKey));
+      startTransition(() => {
+        router.push(`${tripRouteBase}/day/${seg}`, { scroll: false });
+      });
+    },
+    [router, tripRouteBase],
+  );
+  const dayLinkHref = useMemo(
+    () =>
+      tripRouteBase
+        ? (dateKey: string) =>
+            `${tripRouteBase}/day/${formatDateISO(parseDate(dateKey))}`
+        : undefined,
+    [tripRouteBase],
+  );
   const notesPanelId = useId();
   const mustDosPanelId = useId();
   const regionForConditions = plannerRegionId ?? trip.region_id;
@@ -443,11 +511,18 @@ export function MobileDayView({
 
   useEffect(() => {
     if (days.length === 0) return;
+    if (tripRouteBase && urlSyncedDayDate) return;
     const ti = days.findIndex((d) => isSameDay(d.date, new Date()));
     setActiveIndex(ti >= 0 ? ti : 0);
     setMobileDayLayout("grid");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset when switching trips
-  }, [trip.id]);
+  }, [trip.id, tripRouteBase, urlSyncedDayDate]);
+
+  useEffect(() => {
+    if (!useUrlDayNav || !urlSyncedDayDate || days.length === 0) return;
+    const idx = days.findIndex((d) => d.dateKey === urlSyncedDayDate);
+    if (idx >= 0) setActiveIndex(idx);
+  }, [useUrlDayNav, urlSyncedDayDate, days]);
 
   const [parksDrawerOpen, setParksDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -585,12 +660,24 @@ export function MobileDayView({
     lastTouchX.current = null;
     if (start == null || end == null) return;
     const distance = start - end;
+    if (useUrlDayNav) {
+      if (distance > SWIPE_THRESHOLD) {
+        const ni = Math.min(days.length - 1, safeIndex + 1);
+        const nk = days[ni]?.dateKey;
+        if (nk) pushTripDay(nk);
+      } else if (distance < -SWIPE_THRESHOLD) {
+        const ni = Math.max(0, safeIndex - 1);
+        const nk = days[ni]?.dateKey;
+        if (nk) pushTripDay(nk);
+      }
+      return;
+    }
     if (distance > SWIPE_THRESHOLD) {
       setActiveIndex((i) => Math.min(days.length - 1, i + 1));
     } else if (distance < -SWIPE_THRESHOLD) {
       setActiveIndex((i) => Math.max(0, i - 1));
     }
-  }, [days.length]);
+  }, [days, pushTripDay, safeIndex, useUrlDayNav]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -617,22 +704,38 @@ export function MobileDayView({
         return;
       if (e.key === "ArrowRight") {
         e.preventDefault();
+        if (useUrlDayNav) {
+          const ni = Math.min(days.length - 1, safeIndex + 1);
+          const nk = days[ni]?.dateKey;
+          if (nk) pushTripDay(nk);
+          return;
+        }
         setActiveIndex((i) => Math.min(days.length - 1, i + 1));
       }
       if (e.key === "ArrowLeft") {
         e.preventDefault();
+        if (useUrlDayNav) {
+          const ni = Math.max(0, safeIndex - 1);
+          const nk = days[ni]?.dateKey;
+          if (nk) pushTripDay(nk);
+          return;
+        }
         setActiveIndex((i) => Math.max(0, i - 1));
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [
+    days,
     days.length,
     parksDrawerOpen,
     menuOpen,
     dayNotesOpen,
     ridesSheetOpen,
     mustDosSheetOpen,
+    useUrlDayNav,
+    safeIndex,
+    pushTripDay,
   ]);
 
   const openParksForSlot = useCallback((dateKey: string, slot: SlotType) => {
@@ -677,6 +780,7 @@ export function MobileDayView({
         days={days}
         activeIndex={safeIndex}
         onJumpTo={setActiveIndex}
+        dayLinkHref={useUrlDayNav ? dayLinkHref : undefined}
       />
 
       <div
@@ -863,17 +967,7 @@ export function MobileDayView({
 
           {activeDayStrategy ? (
             <div className="mt-4">
-              <AIDayStrategyPanel
-                strategy={activeDayStrategy}
-                onRegenerate={
-                  onOpenDayPlanner
-                    ? () =>
-                        onOpenDayPlanner(activeDay.dateKey, {
-                          tab: "strategy",
-                        })
-                    : undefined
-                }
-              />
+              <AIDayStrategyPanel strategy={activeDayStrategy} />
             </div>
           ) : null}
 
@@ -999,7 +1093,15 @@ export function MobileDayView({
             {safeIndex > 0 ? (
               <button
                 type="button"
-                onClick={() => setActiveIndex((i) => Math.max(0, i - 1))}
+                onClick={() => {
+                  const ni = safeIndex - 1;
+                  if (useUrlDayNav) {
+                    const nk = days[ni]?.dateKey;
+                    if (nk) pushTripDay(nk);
+                  } else {
+                    setActiveIndex(ni);
+                  }
+                }}
                 className="flex min-h-[44px] items-center gap-2 rounded-lg px-4 py-3 font-sans text-sm text-royal/70 transition active:bg-royal/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
               >
                 ← {dayOfWeekShort(days[safeIndex - 1]!.date)}
@@ -1010,9 +1112,15 @@ export function MobileDayView({
             {safeIndex < days.length - 1 ? (
               <button
                 type="button"
-                onClick={() =>
-                  setActiveIndex((i) => Math.min(days.length - 1, i + 1))
-                }
+                onClick={() => {
+                  const ni = safeIndex + 1;
+                  if (useUrlDayNav) {
+                    const nk = days[ni]?.dateKey;
+                    if (nk) pushTripDay(nk);
+                  } else {
+                    setActiveIndex(ni);
+                  }
+                }}
                 className="flex min-h-[44px] items-center gap-2 rounded-lg px-4 py-3 font-sans text-sm text-royal/70 transition active:bg-royal/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
               >
                 {dayOfWeekShort(days[safeIndex + 1]!.date)} →
@@ -1026,11 +1134,18 @@ export function MobileDayView({
 
       {isTodayInRange &&
       safeIndex !== todayIndex &&
-      !onOpenDayDetail ? (
+      (useUrlDayNav ? Boolean(tripRouteBase) : !onOpenDayDetail) ? (
         <button
           type="button"
-          onClick={() => setActiveIndex(todayIndex)}
-          className="fixed bottom-24 right-4 z-30 flex items-center gap-2 rounded-full bg-gold px-4 py-3 font-sans font-medium text-royal shadow-lg transition active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-royal/40 md:hidden"
+          onClick={() => {
+            if (useUrlDayNav && tripRouteBase) {
+              const nk = days[todayIndex]?.dateKey;
+              if (nk) pushTripDay(nk);
+              return;
+            }
+            setActiveIndex(todayIndex);
+          }}
+          className="fixed bottom-24 right-4 z-30 flex min-h-[48px] min-w-[48px] items-center gap-2 rounded-full bg-gold px-4 py-3 font-sans font-medium text-royal shadow-lg transition active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-royal/40 md:hidden"
           aria-label="Jump to today"
         >
           <span aria-hidden>📍</span>
