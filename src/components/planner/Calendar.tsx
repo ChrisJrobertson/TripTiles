@@ -243,11 +243,18 @@ export function Calendar({
     left: number;
   } | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  /** Restore keyboard focus to the 💡 control after the dialog closes. */
+  const noteToggleTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const closeNotePopover = useCallback(() => {
     setNotePopover(null);
     setPopoverDeskPos(null);
     setDayPopoverTab("details");
+    queueMicrotask(() => {
+      const el = noteToggleTriggerRef.current;
+      noteToggleTriggerRef.current = null;
+      el?.focus();
+    });
   }, []);
 
   useEffect(() => {
@@ -268,10 +275,41 @@ export function Calendar({
   useEffect(() => {
     if (!notePopover) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeNotePopover();
+      if (e.key === "Escape") {
+        closeNotePopover();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const root = popoverRef.current;
+      if (!root) return;
+      const nodes = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (nodes.length === 0) return;
+      const first = nodes[0]!;
+      const last = nodes[nodes.length - 1]!;
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    const frame = window.requestAnimationFrame(() => {
+      const root = popoverRef.current;
+      const closeBtn = root?.querySelector<HTMLElement>('[aria-label="Close"]');
+      (closeBtn ?? root?.querySelector("button"))?.focus();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [notePopover, closeNotePopover]);
 
   useEffect(() => {
@@ -580,30 +618,28 @@ export function Calendar({
                         ) : null}
                       </div>
                     )}
-                    {!readOnly ? (
+                    {!readOnly || hasInsight ? (
                       <button
                         type="button"
-                        data-day-interactive
+                        {...(!readOnly ? { "data-day-interactive": true as const } : {})}
                         data-day-note-toggle
                         title={
                           hasInsight
-                            ? "Quick tips and timeline (open a day: tap the date above or a park tile)"
-                            : "Quick tips and timeline (open a day: tap the date above or a park tile)"
+                            ? "Day tips and notes — tap to read"
+                            : "Day tips and timeline — tap to open"
                         }
-                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-lg leading-none shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${
+                        className={`flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-md border text-lg leading-none text-royal transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white md:min-h-9 md:min-w-9 ${
                           hasInsight
-                            ? "border-amber-500/90 bg-amber-50 text-amber-950 hover:bg-amber-100"
-                            : "border-royal/25 bg-cream text-amber-900 hover:border-amber-400/70 hover:bg-amber-50/90"
+                            ? "border-gold/40 bg-gold/15 hover:bg-gold/30"
+                            : "border-gold/25 bg-gold/10 text-royal/75 hover:bg-gold/20"
                         }`}
-                        aria-label={
-                          hasInsight
-                            ? `Day tips and notes for ${headingDate}`
-                            : `Day tips and timeline for ${headingDate}`
-                        }
+                        aria-label={`Show day note for ${headingDate}`}
                         aria-expanded={notePopoverOpenThisDay}
                         aria-controls={`${popoverId}-note-panel`}
                         onClick={(e) => {
                           e.stopPropagation();
+                          e.preventDefault();
+                          noteToggleTriggerRef.current = e.currentTarget;
                           const r = (
                             e.currentTarget as HTMLButtonElement
                           ).getBoundingClientRect();
@@ -616,16 +652,11 @@ export function Calendar({
                       >
                         <span aria-hidden>💡</span>
                       </button>
-                    ) : hasInsight ? (
-                      <span
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/50 bg-amber-50/90 text-lg leading-none text-amber-950"
-                        title="Tips for this day"
-                        aria-hidden
-                      >
-                        💡
-                      </span>
                     ) : (
-                      <span className="w-9 shrink-0" aria-hidden />
+                      <span
+                        className="min-h-11 min-w-11 shrink-0 md:min-h-9 md:min-w-9"
+                        aria-hidden
+                      />
                     )}
                   </div>
                   <div className="planner-slot-grid flex-1 p-0.5">
