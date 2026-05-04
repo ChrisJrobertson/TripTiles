@@ -17,6 +17,11 @@ export function BookTripAffiliatePanel({
   endDate,
   siteUrl,
 }: Props) {
+  /** Post-launch: set `NEXT_PUBLIC_AFFILIATES_ENABLED=true` when real partner IDs exist. */
+  if (process.env.NEXT_PUBLIC_AFFILIATES_ENABLED !== "true") {
+    return null;
+  }
+
   const base = siteUrl.replace(/\/$/, "");
 
   const hotelsPath = buildAffiliateUrl({
