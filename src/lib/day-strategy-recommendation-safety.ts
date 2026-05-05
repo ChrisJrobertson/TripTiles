@@ -446,11 +446,35 @@ function lineImpliesConfirmedPaidQueueAccess(line: string): boolean {
   return patterns.some((re) => re.test(t));
 }
 
+/** Echoes trip wizard skip-line enum / profile — confusing when day intent is not_sure/no/decide_later. */
+function lineSurfacesTripLevelSkipLineProfile(line: string): boolean {
+  const t = line.trim();
+  if (!t) return false;
+  const patterns: RegExp[] = [
+    /\bincluded_with_hotel\b/i,
+    /\bincluded\s+with\s+hotel\b/i,
+    /\bmulti_pass_status\b/i,
+    /\bsingle_pass_willing\b/i,
+    /\bpaid\s+queue\s+access.{0,160}noted\s+as/i,
+    /\bnoted\s+as\s+['"][^'"]*(included|express|lightning|multi_pass|hotel)/i,
+    /\(express\s+pass\)[^.;]{0,120}\bnoted\b/i,
+    /\(lightning\s+lane\)[^.;]{0,120}\bnoted\b/i,
+  ];
+  return patterns.some((re) => re.test(t));
+}
+
+function sentenceConflictsWithUnconfirmedPaidIntent(sentence: string): boolean {
+  return (
+    lineImpliesConfirmedPaidQueueAccess(sentence) ||
+    lineSurfacesTripLevelSkipLineProfile(sentence)
+  );
+}
+
 function scrubProseRemovingPaidQueueClaims(text: string): string {
   const t = text.trim();
   if (!t) return t;
   const parts = t.split(/(?<=[.!?])\s+/);
-  const kept = parts.filter((p) => !lineImpliesConfirmedPaidQueueAccess(p));
+  const kept = parts.filter((p) => !sentenceConflictsWithUnconfirmedPaidIntent(p));
   const out = kept.join(" ").trim();
   return out.length >= 8
     ? out
@@ -459,7 +483,10 @@ function scrubProseRemovingPaidQueueClaims(text: string): string {
 
 function filterWarningLinesDroppingPaidClaims(lines: string[]): string[] {
   return lines.filter(
-    (l) => typeof l === "string" && !lineImpliesConfirmedPaidQueueAccess(l),
+    (l) =>
+      typeof l === "string" &&
+      !lineImpliesConfirmedPaidQueueAccess(l) &&
+      !lineSurfacesTripLevelSkipLineProfile(l),
   );
 }
 
@@ -516,7 +543,7 @@ export function applyPaidAccessIntentSafety(
       }
       return {
         ...step,
-        notes: lineImpliesConfirmedPaidQueueAccess(step.notes)
+        notes: sentenceConflictsWithUnconfirmedPaidIntent(step.notes)
           ? scrubProseRemovingPaidQueueClaims(step.notes)
           : step.notes,
       };
