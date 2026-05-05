@@ -247,6 +247,16 @@ Rules:
 - Honour family notes (young children / teens / queue patience).
 - When the user message includes a day’s slot **block start times** (~HH:mm) and/or a **ride pick list** for a single date: use them only to shape a *rough* plan. Those times are informal pacing (which park when), not exact show, restaurant, or attraction times. The ride list is a wish list with guest ordering — put suggested touring order in **planner_day_notes** as a flexible draft, never in JSON "assignments" (assignments are park/dining slot IDs only). Do not state times as Lightning Lane, Genie+, Virtual Queue, or ADR bookings.
 
+CLOSURE AWARENESS: Some major attractions are permanently closed or unavailable for the foreseeable future. Do not build plans around these as headline experiences:
+- Hollywood Rip Ride Rockit (USF) — closed Aug 2025
+- Splash Mountain (Magic Kingdom) — closed 2023, replaced by Tiana's Bayou Adventure
+- DINOSAUR / DinoLand U.S.A. (Animal Kingdom) — closed Feb 2026
+- Rivers of America area attractions (Magic Kingdom) — closed July 2025
+- Jurassic Park River Adventure (Islands of Adventure) — closed 5 Jan – 19 Nov 2026
+- Rock 'n' Roller Coaster (Hollywood Studios) — closed from 2 March 2026, no reopen date
+
+If a trip date falls within an extended closure window, do not centre the day on the closed attraction.
+
 Return ONLY the JSON.`;
 
 const SLOT_SET = new Set<SlotType>(["am", "pm", "lunch", "dinner"]);
@@ -3643,9 +3653,9 @@ Output JSON only — no commentary, no preamble, no markdown fencing.
 
 6. NEVER suggest Single Rider lines for rides that don't have them. Single Rider availability is ride-specific and limited. Confirmed Single Rider rides at major US parks include (non-exhaustive):
    - Disney: Test Track at EPCOT, Millennium Falcon: Smugglers Run at Hollywood Studios, Matterhorn at Disneyland (DLR), Indiana Jones Adventure at DLR, Goofy's Sky School at DCA, Soarin' at DCA, Radiator Springs Racers at DCA
-   - Universal Orlando: Hagrid's Magical Creatures Motorbike Adventure, The Incredible Hulk Coaster, Hollywood Rip Ride Rockit, Revenge of the Mummy, VelociCoaster, Pteranodon Flyers
+   - Universal Orlando: Hagrid's Magical Creatures Motorbike Adventure, The Incredible Hulk Coaster, Revenge of the Mummy, VelociCoaster, Pteranodon Flyers
    - Universal Hollywood: Mummy, Jurassic World, Transformers
-   The following major rides DO NOT have Single Rider lines: TRON Lightcycle Run, Space Mountain, Big Thunder Mountain, Seven Dwarfs Mine Train, Splash Mountain / Tiana's Bayou Adventure, Pirates of the Caribbean, Haunted Mansion, Peter Pan's Flight, Avatar Flight of Passage, Frozen Ever After. If you're unsure whether a ride has Single Rider, do not mention it for that ride. Say "check the park app for queue options" instead.
+   The following major rides DO NOT have Single Rider lines: TRON Lightcycle Run, Space Mountain, Big Thunder Mountain, Seven Dwarfs Mine Train, Tiana's Bayou Adventure, Pirates of the Caribbean, Haunted Mansion, Peter Pan's Flight, Avatar Flight of Passage, Frozen Ever After. If you're unsure whether a ride has Single Rider, do not mention it for that ride. Say "check the park app for queue options" instead.
 
 7. NEVER use minute-precise times in ride_sequence. Time entries must be either:
    - Round 15-minute or 30-minute slots: "09:00", "09:30", "10:00", "10:30", "11:00" — not "09:35" or "10:15"
@@ -3663,6 +3673,22 @@ Output JSON only — no commentary, no preamble, no markdown fencing.
    This lets families with children of any age see height info at a glance without us needing to ask.
 
 10. NEVER suggest Lightning Lane Multi Pass for known high-throughput rides (Pirates of the Caribbean, Haunted Mansion, it's a small world, Spaceship Earth, Living with the Land, Carousel of Progress, Country Bear Jamboree, Pooh's Adventure, Buzz Lightyear's Space Ranger Spin, Monsters Inc Laugh Floor). These rides have continuous loading and short standby waits — Multi Pass slots should target high-demand headliners with longer waits (Slinky Dog Dash, Seven Dwarfs Mine Train, Peter Pan's Flight, Tron, etc.). For high-throughput rides, suggest standby only.
+
+11. NEVER recommend any of the following attractions, which are permanently closed or unavailable for the foreseeable future. If a user mentions one, briefly acknowledge it has closed and suggest a comparable alternative at the same park.
+
+   PERMANENTLY CLOSED:
+   - Hollywood Rip Ride Rockit (Universal Studios Florida) — closed 18 Aug 2025; site being redeveloped for Fast & Furious: Hollywood Drift, target 2027
+   - Splash Mountain (Magic Kingdom) — closed 2023; replaced by Tiana's Bayou Adventure (recommend Tiana's instead)
+   - The Great Movie Ride (Hollywood Studios) — closed 2017
+   - Star Wars Launch Bay (Hollywood Studios) — closed Sept 2025
+   - DINOSAUR and DinoLand U.S.A. (Animal Kingdom) — closed Feb 2026; area being redeveloped
+   - Rivers of America, Tom Sawyer Island, Liberty Square Riverboat (Magic Kingdom) — closed July 2025; site being redeveloped for Cars-themed land
+
+   EXTENDED CLOSURES THAT MAY AFFECT 2026 TRIPS:
+   - Jurassic Park River Adventure (Islands of Adventure) — closed 5 Jan – 19 Nov 2026 for major refurbishment
+   - Rock 'n' Roller Coaster Starring Aerosmith (Hollywood Studios) — closed from 2 March 2026, no reopen date confirmed at time of writing
+
+   If unsure whether a ride is currently operating, say "check the official park app for current ride status" rather than guessing. Park operations change — always defer to the official source for closures within 6 months of the trip date.
 
 ==== STRATEGIC PRINCIPLES ====
 
