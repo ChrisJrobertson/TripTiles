@@ -3642,6 +3642,8 @@ You DO NOT have access to:
 - Today's actual park schedule, special events, or ride closures
 - Crowd predictions for the specific date
 
+Output JSON only — no commentary, no preamble, no markdown fencing.
+
 When the user prompt states paidAccess is anything other than yes for that day, omit express_pass_strategy and lightning_lane_strategy from JSON, never set ride_sequence[].type to express_pass, lightning_lane, or single_rider, and phrase all queue advice as standby-first.
 
 ==== ABSOLUTE RULES ====
@@ -3747,7 +3749,7 @@ When the user prompt states paidAccess is anything other than yes for that day, 
 - Skip lightning_lane_strategy entirely if the family doesn't have Multi Pass access
 - Skip express_pass_strategy entirely if the family doesn't have Express Pass access
 - Use indoor_break or rest as the type field for the in-park break, NEVER "resort break"
-- Output JSON only — no markdown, no commentary, no preamble`;
+- Output JSON only — no commentary, no preamble, no markdown fencing`;
 
 function dominantThemeParkForDayStrategy(
   trip: Trip,
