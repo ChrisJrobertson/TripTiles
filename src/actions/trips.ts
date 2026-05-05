@@ -25,14 +25,22 @@ import {
   isDayPlanningIntent,
   isValidDateYmd,
 } from "@/lib/day-planning-intent";
+import {
+  isBehaviourSignal,
+  isDayPlanFeedback,
+  isTripPlanningProfile,
+} from "@/lib/trip-intelligence";
 import { readMustDosMap } from "@/lib/must-dos";
 import type {
   Assignments,
   Assignment,
+  BehaviourSignal,
+  DayPlanFeedback,
   DayPlanningIntent,
   Destination,
   SlotAssignmentValue,
   TripPlanningPreferences,
+  TripPlanningProfile,
 } from "@/lib/types";
 import type { TripMustDosMap } from "@/types/must-dos";
 import { revalidatePath } from "next/cache";
@@ -1483,6 +1491,199 @@ export async function saveDayPlanningIntentAction(input: {
 
     revalidatePlanner();
     return { ok: true, intent: candidateIntent };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
+  }
+}
+
+function unwrapTripIntelligenceRpc(
+  data: unknown,
+  rpcName:
+    | "save_trip_planning_profile"
+    | "save_day_plan_feedback"
+    | "append_trip_behaviour_signal",
+): unknown {
+  if (Array.isArray(data)) return data[0];
+  if (data && typeof data === "object") {
+    const rec = data as Record<string, unknown>;
+    return rec[rpcName] ?? data;
+  }
+  return data;
+}
+
+export async function saveTripPlanningProfileAction(input: {
+  tripId: string;
+  profile: TripPlanningProfile;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    if (!isTripPlanningProfile(input.profile)) {
+      return { ok: false, error: "Invalid trip planning profile." };
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) return { ok: false, error: "Not signed in." };
+
+    const { data: tripRow, error: tripErr } = await supabase
+      .from("trips")
+      .select("id")
+      .eq("id", input.tripId)
+      .eq("owner_id", user.id)
+      .maybeSingle();
+
+    if (tripErr) return { ok: false, error: tripErr.message };
+    if (!tripRow) return { ok: false, error: "Trip not found." };
+
+    const { data, error } = await supabase.rpc("save_trip_planning_profile", {
+      p_trip_id: input.tripId,
+      p_user_id: user.id,
+      p_profile: input.profile,
+    });
+
+    if (error) return { ok: false, error: error.message };
+
+    const rpcUnwrapped = unwrapTripIntelligenceRpc(
+      data,
+      "save_trip_planning_profile",
+    );
+    if (rpcUnwrapped == null) {
+      return { ok: false, error: "Could not save trip planning profile." };
+    }
+    if (!isTripPlanningProfile(rpcUnwrapped)) {
+      return { ok: false, error: "Saved trip planning profile shape was invalid." };
+    }
+
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
+  }
+}
+
+export async function saveDayPlanFeedbackAction(input: {
+  tripId: string;
+  date: string;
+  feedback: Omit<DayPlanFeedback, "tripId" | "date"> & Partial<
+    Pick<DayPlanFeedback, "tripId" | "date">
+  >;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    if (!isValidDateYmd(input.date)) {
+      return { ok: false, error: "Date must be YYYY-MM-DD." };
+    }
+
+    const feedback: DayPlanFeedback = {
+      ...input.feedback,
+      tripId: input.tripId,
+      date: input.date,
+    };
+
+    if (!isDayPlanFeedback(feedback)) {
+      return { ok: false, error: "Invalid day plan feedback." };
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) return { ok: false, error: "Not signed in." };
+
+    const { data: tripRow, error: tripErr } = await supabase
+      .from("trips")
+      .select("id")
+      .eq("id", input.tripId)
+      .eq("owner_id", user.id)
+      .maybeSingle();
+
+    if (tripErr) return { ok: false, error: tripErr.message };
+    if (!tripRow) return { ok: false, error: "Trip not found." };
+
+    const { data, error } = await supabase.rpc("save_day_plan_feedback", {
+      p_trip_id: input.tripId,
+      p_user_id: user.id,
+      p_date: input.date,
+      p_feedback: feedback,
+    });
+
+    if (error) return { ok: false, error: error.message };
+
+    const rpcUnwrapped = unwrapTripIntelligenceRpc(data, "save_day_plan_feedback");
+    if (rpcUnwrapped == null) {
+      return { ok: false, error: "Could not save day plan feedback." };
+    }
+    if (!isDayPlanFeedback(rpcUnwrapped)) {
+      return { ok: false, error: "Saved feedback shape was invalid." };
+    }
+
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
+  }
+}
+
+export async function appendTripBehaviourSignalAction(input: {
+  tripId: string;
+  signal: Omit<BehaviourSignal, "tripId"> & Partial<Pick<BehaviourSignal, "tripId">>;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const signal: BehaviourSignal = {
+      ...input.signal,
+      tripId: input.tripId,
+    };
+
+    if (!isBehaviourSignal(signal)) {
+      return { ok: false, error: "Invalid behaviour signal." };
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) return { ok: false, error: "Not signed in." };
+
+    const { data: tripRow, error: tripErr } = await supabase
+      .from("trips")
+      .select("id")
+      .eq("id", input.tripId)
+      .eq("owner_id", user.id)
+      .maybeSingle();
+
+    if (tripErr) return { ok: false, error: tripErr.message };
+    if (!tripRow) return { ok: false, error: "Trip not found." };
+
+    const { data, error } = await supabase.rpc("append_trip_behaviour_signal", {
+      p_trip_id: input.tripId,
+      p_user_id: user.id,
+      p_signal: signal,
+    });
+
+    if (error) return { ok: false, error: error.message };
+
+    const rpcUnwrapped = unwrapTripIntelligenceRpc(
+      data,
+      "append_trip_behaviour_signal",
+    );
+    if (rpcUnwrapped == null) {
+      return { ok: false, error: "Could not append behaviour signal." };
+    }
+    if (!Array.isArray(rpcUnwrapped)) {
+      return { ok: false, error: "Behaviour signals response was invalid." };
+    }
+
+    return { ok: true };
   } catch (e) {
     return {
       ok: false,

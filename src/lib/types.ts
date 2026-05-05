@@ -143,6 +143,103 @@ export type DayPlanningChangePermission =
   | "replace_ai_only"
   | "start_again";
 
+/** Trip Intelligence — `trips.preferences.trip_planning_profile` (learned planner context). */
+export type TripPlanningPartyType =
+  | "solo"
+  | "couple"
+  | "family"
+  | "friends"
+  | "multi_generational"
+  | "unknown";
+
+/** How far the party wants to push ride intensity versus comfort. */
+export type TripRideTolerance =
+  | "thrill_seeker"
+  | "moderate_thrills"
+  | "mostly_gentle"
+  | "minimal_motion"
+  | "unknown";
+
+export type TripIntelligenceWalkingPreference =
+  | "prefer_less_walking"
+  | "balanced"
+  | "happy_to_walk"
+  | "unknown";
+
+export type TripIntelligencePacePreference =
+  | PlanningPace
+  | "unknown";
+
+export type TripIntelligenceMealPreference =
+  | "do_not_plan"
+  | "quick_service"
+  | "table_service"
+  | "mixed"
+  | "snacks"
+  | "unknown";
+
+export type TripIntelligenceQueuePreference =
+  | "avoid_long_queues"
+  | "balanced"
+  | "willing_to_wait"
+  | "unknown";
+
+export type TripPlanningProfile = {
+  partyType: TripPlanningPartyType;
+  rideTolerance: TripRideTolerance;
+  avoidances: string[];
+  walkingPreference: TripIntelligenceWalkingPreference;
+  pacePreference: TripIntelligencePacePreference;
+  mealPreference: TripIntelligenceMealPreference;
+  queuePreference: TripIntelligenceQueuePreference;
+  /** Compact keys or tags the system has picked up from behaviour (kept small for JSONB). */
+  learnedSignals: string[];
+  updatedAt: string;
+};
+
+export type DayPlanFeedbackReason =
+  | "too_packed"
+  | "too_relaxed"
+  | "wrong_park_mix"
+  | "missed_priorities"
+  | "not_accurate"
+  | "other"
+  | "unspecified";
+
+/** One rating after viewing a generated day plan — `trips.preferences.day_plan_feedback[date]`. */
+export type DayPlanFeedback = {
+  tripId: string;
+  date: string;
+  generatedAt: string;
+  rating: 1 | 2 | 3 | 4 | 5;
+  feedbackReason: DayPlanFeedbackReason;
+  freeText: string;
+  createdAt: string;
+};
+
+export type BehaviourSignalType =
+  | "planner_opened"
+  | "planner_submitted"
+  | "day_plan_viewed"
+  | "day_plan_regenerated"
+  | "day_plan_exported"
+  | "feedback_submitted"
+  | "attraction_excluded"
+  | "attraction_priority_set"
+  | "other";
+
+export type BehaviourSignalSource = "ui" | "server" | "ai" | "system";
+
+/** Single discrete signal — stored in `trips.preferences.behaviour_signals` (array). */
+export type BehaviourSignal = {
+  tripId: string;
+  date: string | null;
+  signalType: BehaviourSignalType;
+  source: BehaviourSignalSource;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+};
+
 export type DayPlanningIntent = {
   parkAction: DayPlanningParkAction;
   selectedParkIds: string[];
@@ -362,6 +459,12 @@ export type TripPreferences = {
   must_dos_snapshot?: unknown;
   /** Hex color for the editable “adventure” segment of the trip title; null/omitted = default royal. */
   adventure_title_color?: string | null;
+  /** Learned / curated planner profile for recommendations (Trip Intelligence Layer). */
+  trip_planning_profile?: TripPlanningProfile;
+  /** Guest feedback on generated day plans keyed by `YYYY-MM-DD`. */
+  day_plan_feedback?: Record<string, DayPlanFeedback>;
+  /** Append-only style behaviour signals (bounded in app code when sampling). */
+  behaviour_signals?: BehaviourSignal[];
 };
 
 export interface Region {
