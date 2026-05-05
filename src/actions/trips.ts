@@ -1435,7 +1435,15 @@ export async function saveDayPlanningIntentAction(input: {
       : data && typeof data === "object"
         ? (data as Record<string, unknown>).set_trip_day_planning_intent ?? data
         : data;
-    const candidateIntent = rpcUnwrapped ?? normalisedIntent;
+    if (rpcUnwrapped == null) {
+      console.error("[saveDayPlanningIntentAction] rpc returned null intent", {
+        tripId: input.tripId,
+        date: input.date,
+        rpcDataType: Array.isArray(data) ? "array" : typeof data,
+      });
+      return { ok: false, error: "Could not save day planning intent." };
+    }
+    const candidateIntent = rpcUnwrapped;
 
     if (!isDayPlanningIntent(candidateIntent)) {
       const issues = getDayPlanningIntentValidationIssues(candidateIntent);
