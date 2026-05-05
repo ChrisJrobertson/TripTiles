@@ -339,6 +339,11 @@ export type AIDayStrategy = {
   warnings: string[];
   /** Populated when output was normalised or degraded — show a gentle banner in UI. */
   quality_warnings?: string[];
+  /**
+   * Suggestions that could not be tied to catalogue rows (wrong park / unknown name).
+   * Not part of the main sequenced plan.
+   */
+  optional_sequence_notes?: string[];
 };
 
 export type DaySnapshotSource =

@@ -144,6 +144,20 @@ export function AIDayStrategyPanel({
         </ul>
       </div>
 
+      {strategy.optional_sequence_notes &&
+      strategy.optional_sequence_notes.length > 0 ? (
+        <div className="mt-4 rounded-lg border border-dashed border-royal/25 bg-royal/5 p-3">
+          <p className="font-sans text-xs font-semibold uppercase tracking-wide text-royal/70">
+            Optional notes (not in sequenced plan)
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-4 font-sans text-xs text-royal/75">
+            {strategy.optional_sequence_notes.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {strategy.lightning_lane_strategy &&
       strategy.lightning_lane_strategy.multi_pass_bookings.length > 0 ? (
         <div className="mt-4 rounded-lg border border-royal/10 bg-white/90 p-3">

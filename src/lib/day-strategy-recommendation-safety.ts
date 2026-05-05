@@ -1,0 +1,457 @@
+import type {
+  AIDayStrategy,
+  Assignment,
+  DayPlanningIntent,
+  Park,
+  TripPlanningPreferences,
+} from "@/lib/types";
+import type { Attraction } from "@/types/attractions";
+import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
+import { isThemePark } from "@/lib/park-categories";
+
+const RIDELIKE_STEP_TYPES = new Set<string>([
+  "rope_drop",
+  "standby",
+  "lightning_lane",
+  "single_rider",
+  "express_pass",
+]);
+
+const HEIGHT_IN_LABEL_RE =
+  /\(\s*(?:no\s*)?min(?:imum)?\s*\d+\s*cm[^)]*\)|\(\s*no\s*min(?:imum|\s+height)?[^)]*\)/gi;
+
+/** Theme-park IDs assigned on slots for one calendar day. */
+export function collectThemeParkSlotIdsForDay(
+  assignmentForDay: Assignment | undefined | null,
+  parkById: Map<string, Park>,
+): Set<string> {
+  const out = new Set<string>();
+  if (!assignmentForDay) return out;
+  for (const slot of ["am", "pm", "lunch", "dinner"] as const) {
+    const id = getParkIdFromSlotValue(assignmentForDay[slot]);
+    if (!id) continue;
+    const p = parkById.get(id);
+    if (p && isThemePark(p.park_group)) out.add(id);
+  }
+  return out;
+}
+
+function themeParkIdsFromIntent(
+  intent: DayPlanningIntent,
+  parkById: Map<string, Park>,
+): string[] {
+  return (intent.selectedParkIds ?? []).filter((id) => {
+    const p = parkById.get(id);
+    return p !== undefined && isThemePark(p.park_group);
+  });
+}
+
+export function resolvePrimaryAndAllowedParkIdsForDayStrategy(input: {
+  intent: DayPlanningIntent;
+  assignmentForDay: Assignment | undefined | null;
+  dominant: { id: string; park: Park } | null;
+  /** Must be the anchored park row used when calendar + intent omit parks. */
+  fallbackAnchorParkId: string;
+  parkById: Map<string, Park>;
+}): { primaryParkId: string; allowedParkIds: string[] } {
+  const assignmentIds = collectThemeParkSlotIdsForDay(
+    input.assignmentForDay ?? undefined,
+    input.parkById,
+  );
+  const intentIds = themeParkIdsFromIntent(input.intent, input.parkById);
+
+  let allowed: string[];
+  if (intentIds.length > 0) {
+    const narrowed = intentIds.filter((id) =>
+      assignmentIds.size === 0 ? true : assignmentIds.has(id),
+    );
+    allowed = narrowed.length > 0 ? narrowed : [...intentIds];
+  } else {
+    allowed =
+      assignmentIds.size > 0
+        ? [...assignmentIds]
+        : input.dominant
+          ? [input.dominant.id]
+          : [];
+  }
+
+  const dedupe = [...new Set(allowed)];
+
+  if (dedupe.length === 0) {
+    const id = input.fallbackAnchorParkId;
+    return { primaryParkId: id, allowedParkIds: [id] };
+  }
+
+  const primaryParkId =
+    input.dominant && dedupe.includes(input.dominant.id)
+      ? input.dominant.id
+      : dedupe[0]!;
+
+  return {
+    primaryParkId,
+    allowedParkIds: dedupe,
+  };
+}
+
+export function dominantFromIntentThemeParksOnly(
+  intent: DayPlanningIntent | null | undefined,
+  parkById: Map<string, Park>,
+): { id: string; park: Park } | null {
+  if (!intent) return null;
+  const ids = themeParkIdsFromIntent(intent, parkById);
+  if (ids.length === 0) return null;
+  const first = ids[0]!;
+  const p = parkById.get(first);
+  return p ? { id: first, park: p } : null;
+}
+
+function stripFabricatedHeightFromLabel(raw: string): string {
+  return raw.replace(HEIGHT_IN_LABEL_RE, "").replace(/\s{2,}/g, " ").trim();
+}
+
+function baseRideLabel(raw: string): string {
+  return stripFabricatedHeightFromLabel(raw.trim());
+}
+
+/**
+ * Prefer matches in `preferredParkIds` ordering when duplicate names exist.
+ */
+export function findAttractionMatchForRideLabel(
+  rideOrEvent: string,
+  catalogue: Attraction[],
+  preferredParkOrder: readonly string[],
+): Attraction | null {
+  const base = baseRideLabel(rideOrEvent);
+  const lower = base.toLowerCase();
+  if (!lower) return null;
+
+  const prefIndex = new Map(preferredParkOrder.map((id, i) => [id, i] as const));
+  const sorted = [...catalogue].sort((a, b) => {
+    const pa = prefIndex.get(a.park_id) ?? 999;
+    const pb = prefIndex.get(b.park_id) ?? 999;
+    if (pa !== pb) return pa - pb;
+    return b.name.length - a.name.length;
+    });
+
+  const exact = sorted.find((a) => a.name.trim().toLowerCase() === lower);
+  if (exact) return exact;
+
+  for (const a of sorted.sort((x, y) => y.name.length - x.name.length)) {
+    const n = a.name.trim().toLowerCase();
+    if (lower.includes(n) || n.includes(lower)) return a;
+  }
+  return null;
+}
+
+function matchExpressLightningRideName(
+  name: string,
+  catalogue: Attraction[],
+  allowedParkIds: Set<string>,
+  preferredParkOrder: readonly string[],
+): Attraction | null {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const all = catalogue.filter((a) => allowedParkIds.has(a.park_id));
+  const m = findAttractionMatchForRideLabel(trimmed, all, preferredParkOrder);
+  if (m && allowedParkIds.has(m.park_id)) return m;
+  return null;
+}
+
+function synthesiseHeightWarning(
+  att: Attraction,
+  prefs: TripPlanningPreferences | null | undefined,
+): string | undefined {
+  if (
+    prefs == null ||
+    prefs.children <= 0 ||
+    att.height_requirement_cm == null ||
+    typeof att.height_requirement_cm !== "number"
+  ) {
+    return undefined;
+  }
+  const min = Math.round(att.height_requirement_cm);
+  const heights = prefs.childHeights ?? [];
+  if (heights.length < prefs.children) return undefined;
+  const smallest = heights.reduce(
+    (acc, ch) =>
+      typeof ch.heightCm === "number" ? Math.min(acc, ch.heightCm) : acc,
+    Infinity,
+  );
+  if (!Number.isFinite(smallest)) return undefined;
+  if (smallest >= min - 1) return undefined;
+  return `Catalogue minimum height ~${min} cm for "${att.name}" — smallest child logged ~${Math.round(smallest)} cm. Confirm in the official park app before queueing.`;
+}
+
+function isLikelyStructuralDescriptor(rideLower: string): boolean {
+  return /(^|\s)(lunch|dinner|meal|quick[-\s]?service|table\s*service|snack|break|rest\b|rope\s+drop\b|browse|meet\b|shopping|photos?|castle|explore)(\s|$)/i.test(
+    rideLower,
+  );
+}
+
+function ensureRideSequenceContinuity(strategy: AIDayStrategy): AIDayStrategy {
+  if (strategy.ride_sequence.length > 0) return strategy;
+  return {
+    ...strategy,
+    ride_sequence: [
+      {
+        time: "10:00",
+        type: "rest",
+        ride_or_event: "Plan from verified list",
+        notes:
+          "No sequenced attraction steps survived safety checks — use optional notes below and your park checklist, then regenerate if needed.",
+      },
+    ],
+    quality_warnings: [
+      ...(strategy.quality_warnings ?? []),
+      "The ride sequence could not include unknown or off-list attractions.",
+    ],
+  };
+}
+
+export type RecommendationSafetyCtx = {
+  allowedParkIds: Set<string>;
+  catalogue: Attraction[];
+  planningPreferences: TripPlanningPreferences | null | undefined;
+};
+
+/**
+ * Filters AI output against structured attractions: wrong-park / unknown thrills removed
+ * from the main sequence (moved to optional notes). Drops fabricated height warnings when
+ * we cannot anchor them on catalogue geometry + child heights.
+ */
+export function applyDayStrategyRecommendationSafety(
+  strategy: AIDayStrategy,
+  ctx: RecommendationSafetyCtx,
+): { strategy: AIDayStrategy; logTags: string[] } {
+  const logTags: string[] = [];
+  const allowed = ctx.allowedParkIds;
+  const preferredOrder = [...allowed];
+  const optionalNotes = [...(strategy.optional_sequence_notes ?? [])];
+  const nextSeq: AIDayStrategy["ride_sequence"] = [];
+
+  const catLimited = ctx.catalogue.filter((a) => allowed.has(a.park_id));
+
+  for (const step of strategy.ride_sequence) {
+    const rideLike = RIDELIKE_STEP_TYPES.has(step.type);
+
+    if (!rideLike) {
+      nextSeq.push({
+        ...step,
+        ride_or_event: stripFabricatedHeightFromLabel(step.ride_or_event.trim()),
+        notes: stripFabricatedHeightFromLabel(step.notes),
+        height_warning: undefined,
+      });
+      continue;
+    }
+
+    const trimmed = step.ride_or_event.trim();
+    const lower = baseRideLabel(trimmed).toLowerCase();
+    const match = findAttractionMatchForRideLabel(trimmed, catLimited, preferredOrder);
+
+    if (!match) {
+      if (isLikelyStructuralDescriptor(lower)) {
+        logTags.push("safety:kept_ridelike_semantic_descriptor");
+        nextSeq.push({
+          ...step,
+          ride_or_event: stripFabricatedHeightFromLabel(trimmed),
+          height_warning: undefined,
+        });
+        continue;
+      }
+      logTags.push("safety:demoted_unknown_ride");
+      optionalNotes.push(
+        `[Uncatalogued attraction — not verified] ${trimmed} @ ${step.time} (${step.type})`,
+      );
+      continue;
+    }
+
+    if (!allowed.has(match.park_id)) {
+      logTags.push("safety:demoted_wrong_park");
+      optionalNotes.push(
+        `[Wrong park for this plan] "${trimmed}" matched "${match.name}" outside allowed parks.`,
+      );
+      continue;
+    }
+
+    const hw =
+      synthesiseHeightWarning(match, ctx.planningPreferences) ??
+      undefined;
+
+    logTags.push("safety:canonicalised_attraction");
+
+    nextSeq.push({
+      ...step,
+      ride_or_event: match.name,
+      notes: stripFabricatedHeightFromLabel(step.notes),
+      ...(hw ? { height_warning: hw } : {}),
+    });
+  }
+
+  let lightning =
+    strategy.lightning_lane_strategy == null
+      ? undefined
+      : { ...strategy.lightning_lane_strategy };
+
+  if (lightning?.multi_pass_bookings?.length) {
+    const kept: typeof lightning.multi_pass_bookings = [];
+    for (const b of lightning.multi_pass_bookings) {
+      const m = matchExpressLightningRideName(
+        b.ride,
+        ctx.catalogue,
+        allowed,
+        preferredOrder,
+      );
+      if (m) kept.push({ ...b, ride: m.name });
+      else {
+        logTags.push("safety:stripped_unknown_ll_booking");
+        optionalNotes.push(
+          `[Unverified Lightning Lane target] "${b.ride}" — dropped from bookings list.`,
+        );
+      }
+    }
+    lightning.multi_pass_bookings = kept;
+  }
+
+  if (lightning?.single_pass_recommendations?.length) {
+    const next: string[] = [];
+    for (const nm of lightning.single_pass_recommendations) {
+      const m = matchExpressLightningRideName(
+        nm,
+        ctx.catalogue,
+        allowed,
+        preferredOrder,
+      );
+      if (m) next.push(m.name);
+      else {
+        logTags.push("safety:stripped_unknown_single_pass");
+        optionalNotes.push(`[Unverified Single Pass idea] "${nm}"`);
+      }
+    }
+    lightning = { ...lightning, single_pass_recommendations: next };
+  }
+
+  let express =
+    strategy.express_pass_strategy == null
+      ? undefined
+      : { ...strategy.express_pass_strategy };
+
+  if (express) {
+    const pr: string[] = [];
+    for (const nm of express.priority_rides) {
+      const m = matchExpressLightningRideName(
+        nm,
+        ctx.catalogue,
+        allowed,
+        preferredOrder,
+      );
+      if (m) pr.push(m.name);
+      else {
+        logTags.push("safety:stripped_unknown_express_priority");
+        optionalNotes.push(`[Unverified Express priority] "${nm}"`);
+      }
+    }
+    const sk: string[] = [];
+    for (const nm of express.skip_with_express) {
+      const m = matchExpressLightningRideName(
+        nm,
+        ctx.catalogue,
+        allowed,
+        preferredOrder,
+      );
+      if (m) sk.push(m.name);
+      else logTags.push("safety:stripped_unknown_express_skip");
+    }
+    express =
+      pr.length === 0 && sk.length === 0
+        ? undefined
+        : {
+            priority_rides: pr,
+            skip_with_express: sk,
+          };
+  }
+
+  const hasLl =
+    lightning != null &&
+    (lightning.multi_pass_bookings.length > 0 ||
+      (lightning.single_pass_recommendations?.length ?? 0) > 0);
+
+  const outBase: AIDayStrategy = {
+    ...strategy,
+    ride_sequence: nextSeq,
+  };
+
+  if (optionalNotes.length > 0) {
+    outBase.optional_sequence_notes = [...new Set(optionalNotes)].slice(0, 24);
+  } else if (strategy.optional_sequence_notes) {
+    delete outBase.optional_sequence_notes;
+  }
+
+  if (hasLl) {
+    outBase.lightning_lane_strategy = lightning;
+  } else {
+    delete outBase.lightning_lane_strategy;
+  }
+
+  if (express) {
+    outBase.express_pass_strategy = express;
+  } else {
+    delete outBase.express_pass_strategy;
+  }
+
+  let finalStrategy = ensureRideSequenceContinuity(outBase);
+
+  if (logTags.some((t) => t.startsWith("safety:demoted"))) {
+    finalStrategy = {
+      ...finalStrategy,
+      quality_warnings: [
+        ...(finalStrategy.quality_warnings ?? []),
+        "Items that could not be matched to this park catalogue were moved to Optional notes.",
+      ],
+    };
+    const qw = [...new Set(finalStrategy.quality_warnings ?? [])];
+    finalStrategy = {
+      ...finalStrategy,
+      quality_warnings: qw,
+    };
+  }
+
+  return { strategy: finalStrategy, logTags };
+}
+
+export function formatAllowedAttractionsSectionsForPrompt(
+  allowedParkIds: readonly string[],
+  parkById: Map<string, Park>,
+  catalogue: Attraction[],
+): string {
+  const lines: string[] = [];
+  for (const pid of allowedParkIds) {
+    const p = parkById.get(pid);
+    const subset = catalogue
+      .filter((a) => a.park_id === pid)
+      .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+
+    lines.push(`## ${p?.name ?? pid}`);
+    lines.push("");
+    lines.push(formatAttractionsBlockForDayStrategy(subset));
+    lines.push("");
+  }
+  return lines.join("\n").trimEnd();
+}
+
+function formatAttractionsBlockForDayStrategy(
+  attractions: import("@/types/attractions").Attraction[],
+): string {
+  return attractions
+    .map((a) => {
+      const h =
+        a.height_requirement_cm != null && Number.isFinite(a.height_requirement_cm)
+          ? `${Math.round(a.height_requirement_cm)} cm catalogue minimum`
+          : "no minimum height recorded in catalogue";
+      const thrill = `thrill: ${a.thrill_level}`;
+      const sk = a.skip_line_system
+        ? `${a.skip_line_system}${a.skip_line_tier ? ` (${a.skip_line_tier})` : ""}`
+        : "standby / variable skip-line offering";
+      return `- ${a.name} | ${h} | ${thrill} | skip-line: ${sk}`;
+    })
+    .join("\n");
+}

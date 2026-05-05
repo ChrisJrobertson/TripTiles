@@ -27,6 +27,12 @@ import {
   correctHeightInRideName,
   type ParkRideConstraints,
 } from "@/lib/park-ride-constraints";
+import {
+  applyDayStrategyRecommendationSafety,
+  dominantFromIntentThemeParksOnly,
+  formatAllowedAttractionsSectionsForPrompt,
+  resolvePrimaryAndAllowedParkIdsForDayStrategy,
+} from "@/lib/day-strategy-recommendation-safety";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { applyAiTimelineToAssignmentSlotTimes } from "@/lib/ai-timeline-to-slot-times";
 import type {
@@ -3669,17 +3675,18 @@ Output JSON only — no commentary, no preamble, no markdown fencing.
 
 8. NEVER assume the family has Memory Maker, Genie+, Park Hopper, dining reservations, or any paid add-on unless they explicitly mentioned it in their preferences. Mention these as opportunities only ("if you have Memory Maker, this is a good photo spot") not defaults ("use Memory Maker here").
 
-9. ALWAYS include the minimum height for any ride with a height restriction, even when child height data is missing from the user's preferences. Format: "[Ride Name] (min XXX cm)". Examples:
-   - "TRON Lightcycle / Run (min 122 cm)"
-   - "Tiana's Bayou Adventure (min 102 cm)"
-   - "Space Mountain (min 112 cm)"
-   - "Seven Dwarfs Mine Train (min 97 cm)"
-   - "Peter Pan's Flight (no minimum)" — only state explicitly if it's unusual to lack one
-   This lets families with children of any age see height info at a glance without us needing to ask.
+9. RIDE NAMES AND HEIGHTS MUST COME ONLY FROM THE CATALOGUE appended to your system prompt.
+   Use each attraction's row exactly as authoritative for name, minimum height, thrill level, and skip-line system.
+   - In ride_sequence[*].ride_or_event, quote the catalogue attraction name verbatim for rides/coasters you sequence.
+   - Do NOT invent, guess, or copy minimum heights from training data — only replicate numbers that appear in the catalogue rows for that exact ride.
+   - If the catalogue lists "no minimum height recorded in catalogue", do not imply a numeric minimum elsewhere.
+   - Use ride_sequence[*].height_warning only sparingly after you cite the catalogue minimum in notes; TripTiles verifies child heights downstream.
 
-10. NEVER suggest Lightning Lane Multi Pass for known high-throughput rides (Pirates of the Caribbean, Haunted Mansion, it's a small world, Spaceship Earth, Living with the Land, Carousel of Progress, Country Bear Jamboree, Pooh's Adventure, Buzz Lightyear's Space Ranger Spin, Monsters Inc Laugh Floor). These rides have continuous loading and short standby waits — Multi Pass slots should target high-demand headliners with longer waits (Slinky Dog Dash, Seven Dwarfs Mine Train, Peter Pan's Flight, Tron, etc.). For high-throughput rides, suggest standby only.
+10. HARD EXCLUSIVITY: Recommend ONLY rides and headline experiences that appear in the catalogue appended to your system prompt. Do not propose attractions from other parks, retired names, training-data guesses, or unlisted substitutes.
 
-11. NEVER recommend any of the following attractions, which are permanently closed or unavailable for the foreseeable future. If a user mentions one, briefly acknowledge it has closed and suggest a comparable alternative at the same park.
+11. NEVER suggest Lightning Lane Multi Pass for known high-throughput rides (Pirates of the Caribbean, Haunted Mansion, it's a small world, Spaceship Earth, Living with the Land, Carousel of Progress, Country Bear Jamboree, Pooh's Adventure, Buzz Lightyear's Space Ranger Spin, Monsters Inc Laugh Floor). These rides have continuous loading and short standby waits — Multi Pass slots should target high-demand headliners with longer waits (Slinky Dog Dash, Seven Dwarfs Mine Train, Peter Pan's Flight, Tron, etc.). For high-throughput rides, suggest standby only.
+
+12. NEVER recommend any of the following attractions, which are permanently closed or unavailable for the foreseeable future. If a user mentions one, briefly acknowledge it has closed and suggest a comparable alternative at the same park.
 
    PERMANENTLY CLOSED:
    - Hollywood Rip Ride Rockit (Universal Studios Florida) — closed 18 Aug 2025; site being redeveloped for Fast & Furious: Hollywood Drift, target 2027
@@ -3756,21 +3763,14 @@ function dominantThemeParkForDayStrategy(
   return null;
 }
 
-function formatAttractionsBlockForDayStrategy(
-  attractions: import("@/types/attractions").Attraction[],
-): string {
-  return attractions
-    .map((a) => {
-      const h =
-        a.height_requirement_cm != null
-          ? `${a.height_requirement_cm} cm min`
-          : "no min height in catalogue";
-      const sk = a.skip_line_system
-        ? `${a.skip_line_system}${a.skip_line_tier ? ` (${a.skip_line_tier})` : ""}`
-        : "standby/variable";
-      return `- ${a.name} | ${h} | skip-line: ${sk}`;
-    })
-    .join("\n");
+function dedupeAttractionsForDayStrategy(
+  rows: import("@/types/attractions").Attraction[],
+): import("@/types/attractions").Attraction[] {
+  const map = new Map<string, import("@/types/attractions").Attraction>();
+  for (const r of rows) {
+    map.set(r.id, r);
+  }
+  return [...map.values()];
 }
 
 function buildOtherDaysStrategySummary(trip: Trip, excludeDate: string): string {
@@ -4395,12 +4395,17 @@ export async function generateDayStrategy(input: {
   const parksForPrompt = [...builtFiltered, ...customFiltered];
   const parkById = new Map(parksForPrompt.map((p) => [p.id, p] as const));
 
-  const dom = dominantThemeParkForDayStrategy(trip, dateKey, parkById);
-  if (!dom) return { status: "no_park_assigned" };
-
-  const line = classifyThemeParkLine(dom.park);
   const existingDayAssignments = trip.assignments[dateKey] ?? {};
   const dayIntent = readDayPlanningIntent(trip.preferences, dateKey);
+  const dom = dominantThemeParkForDayStrategy(trip, dateKey, parkById);
+  const anchorPark =
+    dom ??
+    (dayIntent && hasRequiredDayPlanningIntent(dayIntent)
+      ? dominantFromIntentThemeParksOnly(dayIntent, parkById)
+      : null);
+  if (!anchorPark) return { status: "no_park_assigned" };
+
+  const line = classifyThemeParkLine(anchorPark.park);
   const isDayIntentComplete =
     dayIntent != null && hasRequiredDayPlanningIntent(dayIntent);
   const missing = missingDayStrategyPlanningFields(
@@ -4421,11 +4426,29 @@ export async function generateDayStrategy(input: {
     return { status: "missing_data", missingDataFields: ["mobility"] };
   }
 
-  const attractions = await getAttractionsForPark(dom.id);
-  const ridesBlock = formatAttractionsBlockForDayStrategy(attractions);
-  const rideNamesLower = new Set(
-    attractions.map((a) => a.name.trim().toLowerCase()),
+  const { primaryParkId, allowedParkIds } =
+    resolvePrimaryAndAllowedParkIdsForDayStrategy({
+      intent: requiredDayIntent,
+      assignmentForDay: existingDayAssignments,
+      dominant: dom,
+      fallbackAnchorParkId: anchorPark.id,
+      parkById,
+    });
+
+  const attractionsNested = await Promise.all(
+    allowedParkIds.map((pid) => getAttractionsForPark(pid)),
   );
+  const attractions = dedupeAttractionsForDayStrategy(attractionsNested.flat());
+
+  const ridesBlock = formatAllowedAttractionsSectionsForPrompt(
+    allowedParkIds,
+    parkById,
+    attractions,
+  );
+
+  const parksPlanLabel = allowedParkIds
+    .map((id) => `${parkById.get(id)?.name ?? id} (${id})`)
+    .join("; ");
 
   const allDayKeys = eachDateKeyInRange(trip.start_date, trip.end_date);
   const dayIndex = allDayKeys.indexOf(dateKey) + 1;
@@ -4495,7 +4518,7 @@ export async function generateDayStrategy(input: {
 
   const intentPromptBlock = formatDayPlanningIntentForPrompt(requiredDayIntent, {
     date: dateKey,
-    existingParkName: dom.park.name,
+    existingParkName: dom?.park.name ?? anchorPark.park.name,
     selectedParkNames,
     existingMeals,
     currentAssignments: existingDayAssignments as Record<string, unknown>,
@@ -4561,9 +4584,15 @@ export async function generateDayStrategy(input: {
   }
 
   const userMsg = [
-    `PARK: ${dom.park.name} (${dom.id})`,
+    `PARK(S) FOR THIS PLAN: ${parksPlanLabel}`,
+    `PRIMARY PARK ID (stored with strategy): ${primaryParkId}`,
     `DATE: ${dateKey} (${dow})`,
     `DAY OF TRIP: Day ${dayIndex} of ${totalDays}`,
+    "",
+    "CATALOGUE SAFETY — HARD RULE:",
+    "- Sequence ONLY attractions that appear verbatim in the ALLOWED ATTRACTION LIST below (correct park section).",
+    "- Do NOT recommend rides from parks that are not listed above for this plan.",
+    "- Do NOT invent minimum heights; copy height facts only from each catalogue line.",
     "",
     intentPromptBlock,
     "",
@@ -4590,7 +4619,7 @@ export async function generateDayStrategy(input: {
     `- Trip type: ${prefs.tripType ?? "—"}`,
     `- Must-do experiences: ${(prefs.mustDoExperiences ?? []).join(", ") || "—"}`,
     "",
-    `ALL RIDES AT THIS PARK (with min heights and skip-line metadata):\n${ridesBlock}`,
+    `ALLOWED ATTRACTION LIST — AUTHORITATIVE NAMES AND METADATA ONLY:\n${ridesBlock}`,
     "",
     `ALREADY ASSIGNED ON OTHER DAYS (do not duplicate must-dos):\n${buildOtherDaysStrategySummary(trip, dateKey)}`,
     "",
@@ -4601,7 +4630,7 @@ export async function generateDayStrategy(input: {
   const userBlock = brief ? `${userMsg}\n\nUSER CONSTRAINTS:\n${brief}` : userMsg;
 
   const model = SMART_PLAN_MODEL;
-  const promptKey = `day_strategy:${dateKey}:${dom.id}`;
+  const promptKey = `day_strategy:${dateKey}:${primaryParkId}`;
 
   let inputTokens = 0;
   let outputTokens = 0;
@@ -4662,7 +4691,7 @@ export async function generateDayStrategy(input: {
       parsed,
       {
         dateKey,
-        parkId: dom.id,
+        parkId: primaryParkId,
         model,
         parkLine: line,
         allowLightningMultiBookings:
@@ -4674,40 +4703,20 @@ export async function generateDayStrategy(input: {
       },
     );
 
-    const unknownRides: string[] = [];
-    for (const r of strategyNorm.ride_sequence) {
-      const name = r.ride_or_event.trim().toLowerCase();
-      const generic = /meal|break|parade|fireworks|rest|walk|lunch|dinner|snack|pool|breakfast/i.test(
-        name,
-      );
-      if (generic) continue;
-      if (!rideNamesLower.has(name)) {
-        const fuzzy = [...rideNamesLower].some(
-          (n) => n.includes(name) || name.includes(n),
-        );
-        if (!fuzzy) unknownRides.push(r.ride_or_event);
-      }
-    }
-    const validationPipe =
-      logTags.length > 0 ? logTags.join("|").slice(0, 700) : null;
-    const warnExtra =
-      unknownRides.length > 0
-        ? `unknown_ride:${unknownRides.slice(0, 8).join(";")}`.slice(0, 200)
-        : null;
-    const recordDetail =
-      [validationPipe, warnExtra].filter(Boolean).join("|").slice(0, 950) ||
-      null;
+    const { strategy: strategySafe, logTags: safetyLogTags } =
+      applyDayStrategyRecommendationSafety(strategyNorm, {
+        allowedParkIds: new Set(allowedParkIds),
+        catalogue: attractions,
+        planningPreferences: prefs,
+      });
 
-    let strategy = strategyNorm;
-    if (unknownRides.length > 0) {
-      strategy = {
-        ...strategyNorm,
-        warnings: filterUserFacingAiWarningLines([
-          ...strategyNorm.warnings,
-          "A few suggested experiences could not be matched to this park's official list — verify names in the park app.",
-        ]),
-      };
-    }
+    const combinedLogTags = [...logTags, ...safetyLogTags];
+    const recordDetail =
+      combinedLogTags.length > 0
+        ? combinedLogTags.join("|").slice(0, 950)
+        : null;
+
+    const strategy = strategySafe;
 
     const prevPrefs =
       trip.preferences && typeof trip.preferences === "object"
