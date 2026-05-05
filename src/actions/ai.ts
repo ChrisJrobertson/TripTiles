@@ -4411,6 +4411,10 @@ export async function generateDayStrategy(input: {
   if (missing.length > 0) {
     return { status: "missing_data", missingDataFields: missing };
   }
+  const requiredDayIntent = dayIntent;
+  if (!requiredDayIntent) {
+    return { status: "missing_data", missingDataFields: ["dayIntent"] };
+  }
 
   const prefs = trip.planning_preferences;
   if (!prefs) {
@@ -4449,8 +4453,9 @@ export async function generateDayStrategy(input: {
     [disneyPassSection, universalPassSection].filter(Boolean).join("\n") ||
     "General theme park queues";
 
-  const selectedParkNames =
-    dayIntent?.selectedParkIds.map((id) => parkById.get(id)?.name ?? id) ?? [];
+  const selectedParkNames = requiredDayIntent.selectedParkIds.map(
+    (id) => parkById.get(id)?.name ?? id,
+  );
   const existingMeals: string[] = [];
   for (const slot of ["lunch", "dinner"] as const) {
     const slotVal = existingDayAssignments[slot];
@@ -4488,7 +4493,7 @@ export async function generateDayStrategy(input: {
         )[dateKey]
       : null;
 
-  const intentPromptBlock = formatDayPlanningIntentForPrompt(dayIntent!, {
+  const intentPromptBlock = formatDayPlanningIntentForPrompt(requiredDayIntent, {
     date: dateKey,
     existingParkName: dom.park.name,
     selectedParkNames,
@@ -4497,44 +4502,47 @@ export async function generateDayStrategy(input: {
   });
 
   const intentSpecificRules: string[] = [];
-  if (dayIntent!.paidAccess === "no" || dayIntent!.paidAccess === "not_sure") {
+  if (
+    requiredDayIntent.paidAccess === "no" ||
+    requiredDayIntent.paidAccess === "not_sure"
+  ) {
     intentSpecificRules.push(
       "PAID ACCESS RULE: Do not assume paid queue access. Do not base the main ride sequence on Express, Lightning Lane, Premier Pass, Single Rider, or equivalent products. You may mention them only as optional future advice.",
     );
   }
-  if (dayIntent!.mealPreference === "do_not_plan") {
+  if (requiredDayIntent.mealPreference === "do_not_plan") {
     intentSpecificRules.push(
       "MEALS RULE: Do not add meal stops unless a meal slot already exists on this day.",
     );
   }
-  if (dayIntent!.mealPreference === "existing_only") {
+  if (requiredDayIntent.mealPreference === "existing_only") {
     intentSpecificRules.push(
       existingMeals.length > 0
         ? `MEALS RULE: Existing meal slots are ${existingMeals.join("; ")}. Use only these slots and do not add further meal stops.`
         : "MEALS RULE: No existing lunch/dinner meal slots were found. Do not invent or add meal bookings.",
     );
   }
-  if (dayIntent!.startPreference !== "rope_drop") {
+  if (requiredDayIntent.startPreference !== "rope_drop") {
     intentSpecificRules.push(
       "START RULE: Do not assume rope drop timing for this plan.",
     );
   }
-  if (dayIntent!.finishPreference !== "close") {
+  if (requiredDayIntent.finishPreference !== "close") {
     intentSpecificRules.push(
       "FINISH RULE: Do not create an open-to-close or stay-until-close plan.",
     );
   }
   if (
-    dayIntent!.dayType !== "thrill_heavy" &&
-    dayIntent!.rideLevel !== "big_thrills"
+    requiredDayIntent.dayType !== "thrill_heavy" &&
+    requiredDayIntent.rideLevel !== "big_thrills"
   ) {
     intentSpecificRules.push(
       "THRILL RULE: Do not assume a thrill-heavy touring style for this day.",
     );
   }
-  if (dayIntent!.avoid.length > 0) {
+  if (requiredDayIntent.avoid.length > 0) {
     intentSpecificRules.push(
-      `AVOID RULE: Do not recommend experiences that match these avoidances: ${dayIntent!.avoid.join(", ")}.`,
+      `AVOID RULE: Do not recommend experiences that match these avoidances: ${requiredDayIntent.avoid.join(", ")}.`,
     );
   }
 
