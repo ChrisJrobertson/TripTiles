@@ -33,6 +33,7 @@ import {
   dominantFromIntentThemeParksOnly,
   formatAllowedAttractionsSectionsForPrompt,
   resolvePrimaryAndAllowedParkIdsForDayStrategy,
+  scrubAmbiguousPaidQueueProse,
 } from "@/lib/day-strategy-recommendation-safety";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { applyAiTimelineToAssignmentSlotTimes } from "@/lib/ai-timeline-to-slot-times";
@@ -66,6 +67,12 @@ import { getMonthlyConditions } from "@/data/destination-conditions";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { filterUserFacingAiWarningLines } from "@/lib/ai-user-facing-warnings";
 import { softTruncateToMax } from "@/lib/truncate-text";
+import {
+  buildDefaultDayIntentForSmartPlan,
+  buildTripPlanningContextForAI,
+  collectThemeParkSlotIdsFromAssignment,
+  readTripPlanningProfile,
+} from "@/lib/trip-intelligence";
 import { formatRegionalDiningForPrompt } from "@/data/regional-dining";
 import {
   formatPlanningPreferencesForPrompt,
@@ -86,13 +93,7 @@ import {
 import { classifyThemeParkLine } from "@/lib/wizard-queue-step-region";
 import { isThemePark } from "@/lib/park-categories";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import {
-  filterMustDosToAssignedParks,
-  mergeMustDosMap,
-  normaliseMustDoItems,
-  parseMustDosMapFromAI,
-  readMustDosMap,
-} from "@/lib/must-dos";
+import { normaliseMustDoItems, readMustDosMap } from "@/lib/must-dos";
 import type { ParkMustDo, TripMustDosMap } from "@/types/must-dos";
 import { buildAiParkIdResolver, type AiParkIdResolver } from "@/lib/ai-park-id-coerce";
 import {
@@ -206,8 +207,19 @@ async function reportAiGenAutoError(params: {
 
 const SYSTEM_PROMPT = `You are Smart Plan, TripTiles' warm and practical theme park planner. Output ONLY valid JSON — no markdown, no preamble, no text outside the JSON object.
 
-Shape:
-{ "assignments": { "2026-07-09": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-07-14": "…" }, "planner_day_notes": { "2026-07-09": "…" }, "skip_line_return_echo": { "2026-07-09": [ { "attraction_id": "id_from_ride_list", "hhmm": "14:15" } ] }, "must_dos": { "2026-07-09": { "mk": [ { "id": "any-uuid", "title": "Seven Dwarfs Mine Train", "timing": "morning", "why": "Shorter queues before 11:00 on lighter crowd days.", "done": false } ] } } }
+TRIPTILES STRUCTURAL DISCIPLINE (non-negotiable):
+- Your job is DAY-LEVEL STRUCTURE only: which park or rest/dining tile IDs go in calendar slots (am, pm, lunch, dinner), plus short prose notes. You do NOT output final sequenced ride-by-ride touring plans.
+- Detailed ride/show sequencing, catalogue-backed attractions, height rules, and standby vs paid-queue tactics are generated ONLY by the in-app "AI Day Strategy" step after you save day structure. Do not try to replace it.
+- Omit the key "must_dos" entirely — do not emit ride-level wish lists, bullet touring orders, or invented attraction names for this JSON. The app records safe default day intents for AI Day Strategy separately.
+- Never invent height restrictions, rider requirements, or rider minimums in any string field.
+- Use only park/dining tile IDs from the allowed list in the following system message — never recommend "cross-parking" a specific ride (staying in one park catalogue per park day for ride talk). In prose, do not describe hopping between two theme parks for different headline rides unless the guest's assignments already show a hop day; keep notes high-level.
+- Do not assume Lightning Lane, Genie+, Individual Lightning Lane, Express Pass, Quick Queue, Virtual Queue returns, or Single Rider as part of the guest's entitlements unless the user-message context clearly states they have them. For trip-wide copy, prefer standby and general pacing; never present paid products as decided.
+- Respect closed or unavailable major attractions (see CLOSURE AWARENESS below) — do not centre a day on them in prose.
+- When the guest chose to keep existing calendar tiles, repeat their filled slot IDs exactly and only fill empty slots.
+- Do not overwrite or contradict locked guest tiles in assignment JSON. Other days' calendars stay unchanged unless this run is explicitly day-scoped.
+
+Shape (must_dos omitted on purpose):
+{ "assignments": { "2026-07-09": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-07-14": "…" }, "planner_day_notes": { "2026-07-09": "…" }, "skip_line_return_echo": { "2026-07-09": [ { "attraction_id": "id_from_ride_list", "hhmm": "14:15" } ] } }
 
 Optional skip_line_return_echo: ONLY if the user message already lists guest BOOKED return times. Repeat those times here as structured { attraction_id, hhmm } for the correct trip date. Use the exact attraction_id strings from the ride list in the user message. Never invent return times, attraction ids, or hhmm values that the guest did not supply.
 
@@ -216,34 +228,26 @@ BOOKED RETURN CONSTRAINTS
 Rides prefixed with "🔒 BOOKED RETURN HH:MM" have confirmed real-world return windows. These are immovable:
 
 - DO NOT suggest removing, replacing, or rescheduling a booked ride.
-- DO sequence other activities around the booked return time. The guest must be physically able to reach the ride for the window.
+- DO schedule other day structure so the guest can plausibly reach the ride for the window (parks, pacing, meals).
 - DO acknowledge each booked return in the "skip_line_return_echo" field of your JSON response, matching the exact HH:mm and the same ride as in the user list (use the "attraction_id" from the ride list for that date, plus "hhmm").
 - If a booked return conflicts with the rest of the plan (e.g. a dining reservation at the same time), raise it in "planner_day_notes" for that date so the guest can decide — do not silently resolve it.
 
-Booked returns are often paid (Single Pass / Individual Lightning Lane) or time-limited (Multi Pass / Genie+). Protecting them is the single most important job of this plan.
+Protect guest-supplied return windows — they are authoritative even when your other copy stays standby-first.
 
 USER CONSTRAINTS RULES
 
 - The "USER CONSTRAINTS" user-message block (when present) contains the guest's own words about bookings, preferences, and commitments.
-- Treat every time-specific statement as an immovable anchor, equivalent in importance to a booked Lightning Lane return. Example: a stated time for a named attraction must be sequenced to match that window, not shuffled to generic rope drop unless the note allows flexibility.
-- Treat every park-specific preference as a hard requirement. Example: "We want to do Hollywood Studios on Tuesday" means Tuesday must match that request for AM/PM slots.
+- Treat every time-specific statement as an immovable anchor for day structure. Example: a stated time for a named experience should be reflected in pacing notes for that date, not overridden by generic crowd heuristics unless the note allows flexibility.
+- Treat every park-specific preference as a hard requirement for assignment IDs. Example: "We want to do Hollywood Studios on Tuesday" means Tuesday's slots must honour that request with the correct park id.
 - If a user constraint conflicts with your crowd-pattern reasoning, the guest's constraint wins. Mention the tradeoff in planner_day_notes so they can decide.
-- You may echo honoured constraints in "skip_line_return_echo" and/or a short "user_constraints_echo" string (UK English) listing what you respected.
-
-MUST_DOS (full-trip mode):
-- For each date key under "must_dos", include an entry ONLY for each park id you place in that day's am/pm/lunch/dinner slots (the same id strings as in "assignments").
-- Each park: 4–6 objects in rough chronological order (rope drop → morning → … → evening). "timing" must be one of: rope_drop, morning, midday, afternoon, evening.
-- "title": a real, specific attraction or show name at that park. Do not invent attractions that are not in that park.
-- "why": one short UK-English sentence (≤120 chars) on crowd or timing; no score arithmetic.
-- "id": a unique string per row; "done": always false in your output.
-- If you cannot name concrete attractions, omit that park from must_dos.
+- You may echo honoured constraints in "skip_line_return_echo" (only for real supplied returns) and/or a short "user_constraints_echo" string (UK English) listing what you respected.
 
 Limits: crowd_reasoning ≤400 chars, one paragraph. Each day_crowd_notes value ≤150 chars, one sentence.
-Each planner_day_notes value ≤350 chars: practical tips for THAT day only (hours, virtual queues, rest-day ideas). Omit keys with no specific tip.
+Each planner_day_notes value ≤350 chars: THAT day only — park-hours-level pacing, neighbourhood flow, rest-day ideas, generic dining rhythm. No numbered ride checklists, no land-by-land ride name sequences, no invented show times. Omit keys with no specific tip.
 
 DAY NOTES RULES (CRITICAL):
 - Sound like a knowledgeable friend. NEVER raw crowd scores, arithmetic, formulas, bracketed maths, "score N", "crowd index N", or how you calculated anything.
-- Good: "Arrive early — Magic Kingdom is quietest before 10am on weekdays." Bad: "Tuesday (score 6+7=13/2=6.5)."
+- Good: "Keep morning energy for the headliner land you care about most — midsummer crowds build from late morning." Bad: "Ride A, then B, then C before 11:00" or invented height advice.
 
 CROWD_PATTERNS (when in user message): 0–10 heuristics per park/weekday/month — use internally only. Never put numeric score workings in user-facing strings. Never claim live waits or exact attendance.
 
@@ -257,7 +261,7 @@ Rules:
 - True rest = restful tiles in AM and PM both; no half-rest + full park split.
 - Dining: owl, tsr, char, specd, villa as documented.
 - Honour family notes (young children / teens / queue patience).
-- When the user message includes a day’s slot **block start times** (~HH:mm) and/or a **ride pick list** for a single date: use them only to shape a *rough* plan. Those times are informal pacing (which park when), not exact show, restaurant, or attraction times. The ride list is a wish list with guest ordering — put suggested touring order in **planner_day_notes** as a flexible draft, never in JSON "assignments" (assignments are park/dining slot IDs only). Do not state times as Lightning Lane, Genie+, Virtual Queue, or ADR bookings.
+- When the user message includes slot **block start times** (~HH:mm) and/or a **ride pick list** for a single date: infer which park IDs belong in which half of the day only. Do not transcribe ride picks into ordered touring JSON. Mention at most one or two *general* pacing ideas in planner_day_notes (e.g. favour morning for the busiest land) without listing individual ride names or assuming paid return products.
 
 CLOSURE AWARENESS: Some major attractions are permanently closed or unavailable for the foreseeable future. Do not build plans around these as headline experiences:
 - Hollywood Rip Ride Rockit (USF) — closed Aug 2025
@@ -495,6 +499,30 @@ function parseCrowdMetadata(
         ? skip_line_return_echo
         : undefined,
   };
+}
+
+function applySmartPlanCrowdMetadataScrub(
+  meta: ReturnType<typeof parseCrowdMetadata>,
+): ReturnType<typeof parseCrowdMetadata> {
+  const out: ReturnType<typeof parseCrowdMetadata> = { ...meta };
+  if (out.crowd_reasoning) {
+    out.crowd_reasoning = scrubAmbiguousPaidQueueProse(out.crowd_reasoning);
+  }
+  if (out.day_crowd_notes) {
+    const next: Record<string, string> = {};
+    for (const [k, v] of Object.entries(out.day_crowd_notes)) {
+      next[k] = scrubAmbiguousPaidQueueProse(v);
+    }
+    out.day_crowd_notes = next;
+  }
+  if (out.planner_day_notes) {
+    const next: Record<string, string> = {};
+    for (const [k, v] of Object.entries(out.planner_day_notes)) {
+      next[k] = scrubAmbiguousPaidQueueProse(v);
+    }
+    out.planner_day_notes = next;
+  }
+  return out;
 }
 
 type AnthropicMessageUsage = {
@@ -1425,6 +1453,8 @@ function buildPlannerUserMessage(params: {
   /** Must-do / if-time ride list for the day (day scope). */
   dayRidePicksLines: string | null;
   preserveExistingSlots: boolean;
+  /** Read-only trip intelligence + assignments digest for the model. */
+  tripPlanningContextSummary: string;
 }): string {
   const {
     mode,
@@ -1444,6 +1474,7 @@ function buildPlannerUserMessage(params: {
     existingDayPlanLines,
     dayRidePicksLines,
     preserveExistingSlots,
+    tripPlanningContextSummary,
   } = params;
 
   const userConstraintsBlock =
@@ -1486,11 +1517,6 @@ Generate a complete fresh itinerary that:
       ? `${fullTripAssignmentsBlock.trim()}\n\n`
       : "";
 
-  const crowdSection =
-    crowdJson === "{}"
-      ? "CROWD_PATTERNS: {} (no hand-tuned rows for these park IDs — still favour mid-week for headline parks when possible.)"
-      : `CROWD_PATTERNS (relative scores — not real-time crowds):\n${crowdJson}`;
-
   const coreTrip = `Trip details:
 - Region: ${regionName}
 - Dates: ${trip.start_date} to ${trip.end_date}
@@ -1499,6 +1525,16 @@ Generate a complete fresh itinerary that:
 - ${cruiseInstruction}`;
 
   const wiz = wizardContext?.trim();
+
+  const crowdSection =
+    crowdJson === "{}"
+      ? "CROWD_PATTERNS: {} (no hand-tuned rows for these park IDs — still favour mid-week for headline parks when possible.)"
+      : `CROWD_PATTERNS (relative scores — not real-time crowds):\n${crowdJson}`;
+
+  const tripCtx =
+    tripPlanningContextSummary.trim().length > 0
+      ? `${tripPlanningContextSummary.trim()}\n\n`
+      : "";
   const wizBlock = wiz ? `\n${wiz}\n` : "";
   const dine = diningHint?.trim();
   const dineBlock = dine ? `\n${dine}\n` : "";
@@ -1506,7 +1542,7 @@ Generate a complete fresh itinerary that:
   const namedRestBlock = namedRest ? `\n${namedRest}\n` : "";
   const dayScopeBlock =
     dateKey && dateKey.trim().length > 0
-      ? `\nDAY-SCOPED MODE: Plan ONLY for calendar date ${dateKey}. Your JSON MUST have a top-level "assignments" object (same shape as full-trip Smart Plan). Under "assignments" include exactly ONE date entry: the key must be "${dateKey}" character-for-character (YYYY-MM-DD, zero-padded). The value is that day's slots object using lowercase keys only: am, pm, lunch, dinner — each a park ID from the list or omit empty slots. Do NOT return a bare slots object at the root; do NOT use other date keys under "assignments".\n\nUnder "must_dos", include at most ONE date key ("${dateKey}") with 4–6 specific attractions per park you assign in that day's slots (same shape as the system prompt). Omit must_dos if you cannot name real attractions.\n`
+      ? `\nDAY-SCOPED MODE: Plan ONLY for calendar date ${dateKey}. Your JSON MUST have a top-level "assignments" object (same shape as full-trip Smart Plan). Under "assignments" include exactly ONE date entry: the key must be "${dateKey}" character-for-character (YYYY-MM-DD, zero-padded). The value is that day's slots object using lowercase keys only: am, pm, lunch, dinner — each a park ID from the list or omit empty slots. Do NOT return a bare slots object at the root; do NOT use other date keys under "assignments".\n\nDo NOT emit "must_dos" or ride-name touring lists — day structure and high-level notes only (see system prompt).\n`
       : "";
   const calendarAlreadyBlock =
     dateKey &&
@@ -1514,7 +1550,7 @@ Generate a complete fresh itinerary that:
     existingDayPlanLines.trim().length > 0
       ? `\nCALENDAR ALREADY SET FOR ${dateKey} — the guest chose these tiles on their trip calendar (each line includes the ~block start time for that slot — 24h, for pacing, not individual ride times):\n${existingDayPlanLines}\n${
           preserveExistingSlots
-            ? `These slots are LOCKED for this run: keep the SAME park IDs in those keys in your JSON output (repeat them exactly). Only add or change slots that are still empty on the guest's calendar. In crowd_reasoning, day_crowd_notes, and planner_day_notes, ONLY discuss parks that match this day after merge — the headline parks above plus any parks you assign in empty slots. Do NOT recommend a different headline water park or theme park for AM/PM when those slots are already filled. Dining tips must match the dining tiles if lunch/dinner are already set. Use the block start times to reason about *order* of the day and when to be in which park, as a draft plan.\n`
+            ? `These slots are LOCKED for this run: keep the SAME park IDs in those keys in your JSON output (repeat them exactly). Only add or change slots that are still empty on the guest's calendar. In crowd_reasoning, day_crowd_notes, and planner_day_notes, ONLY discuss parks that match this day after merge — the headline parks above plus any parks you assign in empty slots. Do NOT recommend a different headline water park or theme park for AM/PM when those slots are already filled. Dining tips must match the dining tiles if lunch/dinner are already set. Block start times indicate which half of the day belongs to which park tile — not ride-level timing.\n`
             : `The guest enabled overwrite — you may replace slots, but their current picks and times above reflect intent; only change a filled slot if your plan clearly improves their day while respecting their notes.\n`
         }`
       : "";
@@ -1528,15 +1564,15 @@ Generate a complete fresh itinerary that:
   );
   const dayPacingAndRidesBlock =
     dateKey && (hasDaySlots || hasDayRides)
-      ? `\nDAY PACING & RIDE DRAFT (rough plan — not a fixed schedule, not reservations):\n${
+      ? `\nDAY PACING (structure only — see system prompt; no ride sequencing here):\n${
           hasDayRides
-            ? `GUEST RIDE/SHOW PICKS for ${dateKey} — list order is the guest’s order in the planner; tags show must-do vs if-time:\n${dayRidePicksLines}\n\n`
+            ? `GUEST RIDE/SHOW PICKS for ${dateKey} — the guest’s wish list for AI Day Strategy later, not a catalogue for you to transcribe into JSON.\n${dayRidePicksLines}\n\n`
             : ""
         }${
           hasDaySlots
-            ? `The ~HH:mm times are in "CALENDAR ALREADY SET" above. They are *block* start times (AM / lunch / PM / dinner) for pacing and which park when — not exact ride, show, or meal times.\n`
-            : "Park slot tiles for this day are not filled (or all empty) — you may place parks in empty slots; use the ride list to infer which parks to assign and a reasonable flow in planner_day_notes.\n"
-        }- Use CROWD_PATTERNS in **planner_day_notes** for ${dateKey} to suggest a *rough* touring order when helpful (especially when ride picks exist: e.g. which must-dos to hit first, or a land-by-land flow). Keep wording flexible; suggest swaps if waits spike. JSON "assignments" must stay park/dining slot IDs only — all ride order detail lives in planner_day_notes.\n`
+            ? `The ~HH:mm times are in "CALENDAR ALREADY SET" above. They are *block* start times (AM / lunch / PM / dinner) for pacing and which park tile when — never exact ride or show times.\n`
+            : "Park slot tiles for this day are not filled (or all empty) — you may place parks in empty slots using the ride pick *regions* only to infer which catalogue park ids fit; do not output ride names or order.\n"
+        }- In planner_day_notes for ${dateKey}, give at most 1–2 **general** pacing sentences (e.g. favour morning for the busiest themed area). No bullet lists of attraction names, no height talk, no Lightning Lane / Express / Single Rider assumptions.\n`
       : "";
   const cruiseTilePolicy = trip.has_cruise
     ? "CRUISE TILES: This trip includes a cruise segment. Include cruise embark/disembark and ship activities where appropriate when they fit the dates."
@@ -1544,40 +1580,40 @@ Generate a complete fresh itinerary that:
 
   if (mode === "smart") {
     const smartIntro = dateKey
-      ? "DAY-SCOPED SMART PLAN — refine this single calendar day using crowd patterns, slot block times, and (if any) the guest ride list. Respect locked calendar slots and notes above. Treat the day as a draft plan from historic patterns, not a guarantee."
+      ? "DAY-SCOPED SMART PLAN — assign the correct park/dining tile IDs for this calendar day, keep locked slots, and add short structural notes only. Guest ride picks are context for which park matters — not JSON sequencing."
       : overwriteMode
       ? `SMART PLAN MODE — FRESH GENERATION
 
-Your job is to design a fresh itinerary from scratch based on the USER PRIORITIES above. Do not preserve or annotate prior rest/pool/dining assignments — replace them with park days where appropriate. Anchor only the arrival, departure, and cruise dates if present. For every other slot, choose what best serves the user's priorities.`
-      : `SMART PLAN MODE
+Your job is fresh DAY STRUCTURE from the USER PRIORITIES above — park/rest/dining assignments and trip-wide crowd copy only. Do not preserve old rest/pool/dining picks as mandatory; replace with a better mix when it serves the guest. Anchor only arrival, departure, and cruise dates. Do not output must_dos or sequenced rides.`
+      : `SMART PLAN MODE — DAY STRUCTURE ONLY
 
-Your job is to annotate and complete the guest's existing plan:
-- For dates with assigned parks: generate day_crowd_notes, planner_day_notes, and must_dos for THOSE parks.
-- For dates with empty slots: recommend parks using crowd patterns and the guest's stated preferences, then write matching notes.
-- Generate a trip-wide crowd_reasoning summary that accounts for the actual assignments.
-- Populate must_dos from the parks the guest has assigned, not an idealised plan of your own.`;
+Your job is to annotate and complete the guest's calendar tile choices:
+- For dates with assigned parks: add day_crowd_notes and concise planner_day_notes for THOSE parks (no ride-level lists).
+- For dates with empty slots: recommend park/dining IDs from the catalogue, then add matching notes.
+- Generate a trip-wide crowd_reasoning summary that matches the assignments you output.
+- Omit "must_dos" entirely — sequenced attractions are handled later by AI Day Strategy from safe day intents.`;
 
     return `${userConstraintsBlock}${overwriteIntro}${fullTripBlock}${coreTrip}
 
-${crowdSection}
+${tripCtx}${crowdSection}
 ${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}${dayPacingAndRidesBlock}
 
 ${smartIntro}
-${dateKey ? `For this date only (${dateKey}), add planner_day_notes with 1–2 practical tips tied to that date and the parks in CALENDAR / assignments.` : "For each trip day, add planner_day_notes with 1–2 practical tips tied to that date and the parks you use in assignments (rope drop, virtual queues, rest-day ideas, dining). Keep each value concise. Skip generic advice that applies to every day."}
+${dateKey ? `For this date only (${dateKey}), add planner_day_notes with 1–2 high-level tips (no ride name lists; no paid-queue tactics) for the parks in CALENDAR / assignments.` : "For each trip day, add planner_day_notes with 1–2 high-level tips tied to that date and the parks in assignments (timing bands, rest breaks, dining rhythm). Skip generic advice that applies to every day. No rope-drop or paid-line product assumptions unless the TRIP PLANNING CONTEXT clearly confirms them."}
 
-Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and planner_day_notes when possible).`;
+Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and planner_day_notes when possible — no must_dos).`;
   }
 
   return `${userConstraintsBlock}${overwriteIntro}${fullTripBlock}${coreTrip}
 
-${crowdSection}
+${tripCtx}${crowdSection}
 ${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}${dayPacingAndRidesBlock}
 
-CUSTOM PROMPT MODE — apply the USER CONSTRAINTS block and TRIP WIZARD PREFERENCES first, then use crowd patterns to improve date choices.
+CUSTOM PROMPT MODE — apply USER CONSTRAINTS and TRIP WIZARD PREFERENCES first, then crowd patterns. Respect the system prompt: assignments + notes only; omit must_dos; no ride sequencing JSON; no invented heights; no paid-queue assumptions unless explicitly confirmed in context.
 ${!userConstraintsBlock.trim() ? `\n(The guest did not add a freeform brief — use structured preferences above and trip defaults.)\n` : ""}
-${dateKey ? `For this date only (${dateKey}), add planner_day_notes with 1–2 practical tips tied to that date and assigned parks.` : "For each trip day, add planner_day_notes with 1–2 practical tips tied to that date and the parks you assign. Keep each value concise."}
+${dateKey ? `For this date only (${dateKey}), planner_day_notes stay high-level — no ride bullet lists.` : "For each trip day, planner_day_notes stay high-level (no ride bullet lists)."}
 
-Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and planner_day_notes when possible).`;
+Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and planner_day_notes when possible — no must_dos).`;
 }
 
 export async function runGenerateAIPlan(
@@ -1808,7 +1844,6 @@ export async function runGenerateAIPlan(
   }
 
   const parkResolver = buildAiParkIdResolver(parksForPrompt, input.tripId);
-  const allowedParkIds = parkResolver.allowedSet;
   const fullDateAllow = allowedDateKeys(trip.start_date, trip.end_date);
   const dateAllow = normalizedDateKey
     ? new Set(fullDateAllow.has(normalizedDateKey) ? [normalizedDateKey] : [])
@@ -1821,6 +1856,7 @@ export async function runGenerateAIPlan(
     };
   }
   const sortedDateKeys = sortDateKeysFromSet(dateAllow);
+  const sortedAllTripDateKeys = sortDateKeysFromSet(fullDateAllow);
   const parksById = new Map(parksForPrompt.map((p) => [p.id, p]));
 
   const childAges = trip.child_ages?.length
@@ -1904,6 +1940,11 @@ export async function runGenerateAIPlan(
       ? `NAMED_RESTAURANT_TILES: The following named restaurants are available as dining tiles for this region: ${namedRestaurantNames.join(", ")}. You may assign 1–2 of these to Lunch or Dinner slots where appropriate, using their exact names. Prefer named restaurants over generic "Table Service" or "Quick Service" tiles where a specific restaurant fits the day's location and vibe.`
       : null;
 
+  const tripPlanningContextSummary = buildTripPlanningContextForAI(trip, {
+    parksById,
+    sortedDateKeys: sortedAllTripDateKeys,
+  });
+
   let dayRidePicksLines: string | null = null;
   if (normalizedDateKey) {
     const rideRows = await getRidePrioritiesForDay(
@@ -1929,6 +1970,7 @@ export async function runGenerateAIPlan(
     wizardContext,
     diningHint,
     namedRestaurantHint,
+    tripPlanningContextSummary,
     existingDayPlanLines: formatDaySlotLinesWithTimesForPrompt(
       trip,
       normalizedDateKey,
@@ -1969,7 +2011,6 @@ export async function runGenerateAIPlan(
     type MetaShape = ReturnType<typeof parseCrowdMetadata>;
     let currentUserMessage = composedUserMessage;
     let lastMeta: MetaShape = {};
-    let finalParsed: unknown;
     let finalSanitized: Assignments | null = null;
     let lastRawText = "";
 
@@ -2240,7 +2281,6 @@ export async function runGenerateAIPlan(
 
       if (sanitized && Object.keys(sanitized).length > 0) {
         lastMeta = meta;
-        finalParsed = parsed;
         finalSanitized = sanitized;
         lastRawText = rawText;
         inputTokens = localInputTokens;
@@ -2331,8 +2371,7 @@ export async function runGenerateAIPlan(
       };
     }
 
-    const meta = lastMeta;
-    const parsed = finalParsed;
+    const meta = applySmartPlanCrowdMetadataScrub(lastMeta ?? {});
     const sanitized = finalSanitized;
     if (AI_GEN_DEBUG && lastRawText.length > 0) {
       logAiGen({
@@ -2409,25 +2448,53 @@ export async function runGenerateAIPlan(
       regionId: rid,
       assignments: merged,
       parksById,
-      days: sortedDateKeys.length,
+      days:
+        normalizedDateKey == null ? sortedAllTripDateKeys.length : sortedDateKeys.length,
     });
 
-    const rawMustTop = (parsed as Record<string, unknown>).must_dos;
-    const parsedMust = parseMustDosMapFromAI(
-      rawMustTop,
-      dateAllow,
-      allowedParkIds,
-      parkResolver.resolve,
-    );
-    const filteredMust = filterMustDosToAssignedParks(
-      parsedMust,
-      merged,
-      dateAllow,
-    );
-    const existingMust = readMustDosMap(trip.preferences);
-    const nextMustMap = mergeMustDosMap(existingMust, filteredMust);
-
     const now = new Date().toISOString();
+
+    const prefsRoot = trip.preferences ?? {};
+    const aiIntentLayer: Record<string, unknown> =
+      prefsRoot.ai_day_intent &&
+      typeof prefsRoot.ai_day_intent === "object" &&
+      prefsRoot.ai_day_intent !== null &&
+      !Array.isArray(prefsRoot.ai_day_intent)
+        ? { ...(prefsRoot.ai_day_intent as Record<string, unknown>) }
+        : {};
+
+    const datesForIntentScan = (
+      normalizedDateKey ? [normalizedDateKey] : sortedAllTripDateKeys
+    ).filter((dk) => merged[dk]);
+
+    const profileForIntent = readTripPlanningProfile(prefsRoot);
+
+    for (const dk of datesForIntentScan) {
+      const parkIds = collectThemeParkSlotIdsFromAssignment(
+        merged[dk],
+        parksById,
+      );
+      if (parkIds.length === 0) continue;
+
+      const existingIntent = readDayPlanningIntent(prefsRoot, dk);
+      if (
+        preserve &&
+        existingIntent != null &&
+        hasRequiredDayPlanningIntent(existingIntent)
+      ) {
+        continue;
+      }
+
+      aiIntentLayer[dk] = buildDefaultDayIntentForSmartPlan({
+        completedAtISO: now,
+        selectedParkIds: parkIds,
+        tripPlanningProfile: profileForIntent,
+        tripPlanningWizard: trip.planning_preferences,
+        regionId: trip.region_id,
+        parksForRegionalQueueInference: parksForPrompt,
+        smartPlanPreserveExistingTiles: preserve,
+      });
+    }
 
     const nextPrefs: Record<string, unknown> = {
       ...(trip.preferences ?? {}),
@@ -2447,9 +2514,7 @@ export async function runGenerateAIPlan(
       (nextPrefs as Record<string, unknown>).ai_skip_line_return_echo =
         meta.skip_line_return_echo;
     }
-    if (Object.keys(nextMustMap).length > 0) {
-      nextPrefs.must_dos = nextMustMap;
-    }
+    nextPrefs.ai_day_intent = aiIntentLayer;
 
     logAiGen({
       step: "db_write_start",
@@ -2568,7 +2633,7 @@ export async function runGenerateAIPlan(
       dayCrowdNotes: meta.day_crowd_notes ?? null,
       generationsUsedForTrip,
       undoSnapshotAt: now,
-      mustDos: Object.keys(nextMustMap).length > 0 ? nextMustMap : null,
+      mustDos: null,
     };
   } catch (e) {
     if (isAbortLikeError(e)) {

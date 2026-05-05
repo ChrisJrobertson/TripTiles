@@ -542,6 +542,11 @@ function scrubProseRemovingPaidQueueClaims(text: string): string {
     : "Use standby queues unless you confirm paid skip-line options in the official app.";
 }
 
+/** Smart Plan / whole-trip notes when paid queue access is not confirmed on the day intent. */
+export function scrubAmbiguousPaidQueueProse(text: string): string {
+  return scrubProseRemovingPaidQueueClaims(text);
+}
+
 function paidQueueOptionalAdviceNotes(strategy: AIDayStrategy): string[] {
   const out: string[] = [];
   const e = strategy.express_pass_strategy;

@@ -1,15 +1,35 @@
-import { isValidDateYmd } from "@/lib/day-planning-intent";
+import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
+import { eachDateKeyInRange } from "@/lib/date-helpers";
+import { isDayPlanningIntent, isValidDateYmd } from "@/lib/day-planning-intent";
+import { isThemePark } from "@/lib/park-categories";
+import {
+  regionHasDisneyQueueParks,
+  regionHasUniversalQueueParks,
+} from "@/lib/wizard-queue-step-region";
 import type {
+  Assignment,
   BehaviourSignal,
   BehaviourSignalSource,
   BehaviourSignalType,
   DayPlanFeedback,
   DayPlanFeedbackReason,
+  DayPlanningChangePermission,
+  DayPlanningDayType,
+  DayPlanningIntent,
+  DayPlanningMealPreference,
+  DayPlanningPaidAccess,
+  DayPlanningPace,
+  DayPlanningRideLevel,
+  DayPlanningStartPreference,
+  DayPlanningFinishPreference,
+  Park,
+  Trip,
   TripIntelligenceMealPreference,
   TripIntelligencePacePreference,
   TripIntelligenceQueuePreference,
   TripIntelligenceWalkingPreference,
   TripPlanningPartyType,
+  TripPlanningPreferences,
   TripPlanningProfile,
   TripRideTolerance,
 } from "@/lib/types";
@@ -315,4 +335,376 @@ export function summariseTripIntelligenceForPrompt(preferences: unknown): string
   }
 
   return parts.join("\n");
+}
+
+const ASSIGNMENT_SLOTS = ["am", "pm", "lunch", "dinner"] as const;
+
+/**
+ * Theme-park tile ids actually placed on a calendar day (AM/PM/lunch/dinner),
+ * in slot order, de-duplicated.
+ */
+export function collectThemeParkSlotIdsFromAssignment(
+  dayAssignment: Assignment | undefined,
+  parksById: Map<string, Park>,
+): string[] {
+  if (!dayAssignment || typeof dayAssignment !== "object") return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const slot of ASSIGNMENT_SLOTS) {
+    const raw = dayAssignment[slot];
+    const pid = getParkIdFromSlotValue(raw);
+    if (!pid) continue;
+    const p = parksById.get(pid);
+    if (!p || !isThemePark(p.park_group)) continue;
+    if (seen.has(pid)) continue;
+    seen.add(pid);
+    out.push(pid);
+  }
+  return out;
+}
+
+/**
+ * Default `paidAccess` for Smart Plan–authored day intents: only `yes` when the
+ * trip wizard records a clear paid skip-line commitment for this region.
+ */
+export function inferPaidAccessDefaultForSmartPlanIntent(
+  regionId: string | null | undefined,
+  parksForInference: Park[],
+  wizard: TripPlanningPreferences | null,
+): DayPlanningPaidAccess {
+  if (!regionId || !wizard) return "not_sure";
+
+  const hasDisney = regionHasDisneyQueueParks(parksForInference, regionId);
+  const hasUniversal = regionHasUniversalQueueParks(parksForInference, regionId);
+
+  if (hasDisney) {
+    const d = wizard.disneyLightningLane;
+    if (d?.multiPassStatus === "all_park_days") return "yes";
+    if (
+      d?.multiPassStatus === "none" &&
+      d.singlePassWillingToPay === "no"
+    ) {
+      return "no";
+    }
+  }
+
+  if (hasUniversal) {
+    const u = wizard.universalExpress?.status;
+    if (u === "included_with_hotel" || u === "paid") return "yes";
+    if (u === "no") return "no";
+  }
+
+  return "not_sure";
+}
+
+function mapIntelligenceMealToDayMeal(
+  p: TripIntelligenceMealPreference,
+): DayPlanningMealPreference {
+  switch (p) {
+    case "do_not_plan":
+      return "do_not_plan";
+    case "quick_service":
+      return "quick_service";
+    case "table_service":
+      return "table_service";
+    case "mixed":
+      return "mixed";
+    case "snacks":
+      return "snacks";
+    default:
+      return "suggest";
+  }
+}
+
+function mapIntelligencePaceToDayPace(
+  p: TripIntelligencePacePreference,
+): DayPlanningPace {
+  switch (p) {
+    case "relaxed":
+      return "relaxed";
+    case "intense":
+    case "go_go_go":
+      return "packed";
+    default:
+      return "balanced";
+  }
+}
+
+function rideLevelFromTolerance(tol: TripRideTolerance): DayPlanningRideLevel {
+  switch (tol) {
+    case "thrill_seeker":
+      return "big_thrills";
+    case "moderate_thrills":
+      return "some_thrills";
+    case "mostly_gentle":
+    case "minimal_motion":
+      return "gentle";
+    default:
+      return "some_thrills";
+  }
+}
+
+function dayTypeFromProfile(
+  profile: TripPlanningProfile | null,
+): DayPlanningDayType {
+  if (!profile) return "balanced_family";
+  if (profile.rideTolerance === "thrill_seeker") return "thrill_heavy";
+  if (
+    profile.rideTolerance === "mostly_gentle" ||
+    profile.rideTolerance === "minimal_motion"
+  ) {
+    return "lower_thrill";
+  }
+  if (profile.partyType === "couple" && profile.rideTolerance === "moderate_thrills") {
+    return "balanced_family";
+  }
+  return "balanced_family";
+}
+
+function startPreferenceFromWizard(
+  wizard: TripPlanningPreferences | null,
+): DayPlanningStartPreference {
+  const exp = wizard?.mustDoExperiences;
+  if (Array.isArray(exp) && exp.includes("rope_drop")) return "rope_drop";
+  return "normal_morning";
+}
+
+function finishPreferenceFromProfile(
+  profile: TripPlanningProfile | null,
+): DayPlanningFinishPreference {
+  if (profile?.pacePreference === "go_go_go" || profile?.pacePreference === "intense") {
+    return "night_atmosphere";
+  }
+  return "early_evening";
+}
+
+export type BuildDefaultDayIntentForSmartPlanArgs = {
+  completedAtISO: string;
+  /** Canonical theme-park ids for this calendar day (see {@link collectThemeParkSlotIdsFromAssignment}). */
+  selectedParkIds: string[];
+  tripPlanningProfile: TripPlanningProfile | null;
+  tripPlanningWizard: TripPlanningPreferences | null;
+  regionId: string | null;
+  /** Region parks list (built-in + custom-as-park) used only for Disney/Universal paid-access inference. */
+  parksForRegionalQueueInference: Park[];
+  /** Matches Smart Plan "keep existing tiles" — tighter downstream edit scope. */
+  smartPlanPreserveExistingTiles: boolean;
+};
+
+/**
+ * Produces a valid {@link DayPlanningIntent} for a park day assigned by Smart Plan.
+ * Does not persist; callers merge into `trips.preferences.ai_day_intent` when appropriate.
+ */
+export function buildDefaultDayIntentForSmartPlan(
+  args: BuildDefaultDayIntentForSmartPlanArgs,
+): DayPlanningIntent {
+  const profile = args.tripPlanningProfile;
+  const wizard = args.tripPlanningWizard;
+  const paidAccess = inferPaidAccessDefaultForSmartPlanIntent(
+    args.regionId,
+    args.parksForRegionalQueueInference,
+    wizard,
+  );
+
+  const mealPreference = profile
+    ? mapIntelligenceMealToDayMeal(profile.mealPreference)
+    : "suggest";
+
+  const pace = profile
+    ? mapIntelligencePaceToDayPace(profile.pacePreference)
+    : "balanced";
+
+  const rideLevel = profile
+    ? rideLevelFromTolerance(profile.rideTolerance)
+    : "some_thrills";
+
+  const dayType = dayTypeFromProfile(profile);
+  const avoid = profile?.avoidances?.length ? [...profile.avoidances] : [];
+
+  const changePermission: DayPlanningChangePermission =
+    args.smartPlanPreserveExistingTiles ? "add_around_existing" : "reorder_unlocked";
+
+  const selected = [...args.selectedParkIds];
+  const parkAction = selected.length > 0 ? "keep_existing" : "suggest";
+
+  return {
+    parkAction,
+    selectedParkIds: selected,
+    dayType,
+    rideLevel,
+    avoid,
+    mealPreference,
+    pace,
+    startPreference: startPreferenceFromWizard(wizard),
+    finishPreference: finishPreferenceFromProfile(profile),
+    paidAccess,
+    mustInclude: "",
+    mustAvoid: "",
+    changePermission,
+    completedAt: args.completedAtISO,
+  };
+}
+
+export type TripPlanningContextForAIArgs = {
+  /** When set, assignment lines use park display names. */
+  parksById?: Map<string, Park>;
+  /** Trip date keys in order; defaults to each day from `trip.start_date`–`trip.end_date`. */
+  sortedDateKeys?: string[];
+  maxBehaviourSignals?: number;
+};
+
+/**
+ * Read-only briefing for whole-trip / Smart Plan models (assignments + saved intelligence).
+ * Safe with empty or partial `trip.preferences`.
+ */
+export function buildTripPlanningContextForAI(
+  trip: Trip,
+  args?: TripPlanningContextForAIArgs,
+): string {
+  const prefs = trip.preferences;
+  const profile = readTripPlanningProfile(prefs);
+  const wizard = trip.planning_preferences;
+
+  const dateKeys =
+    args?.sortedDateKeys?.length
+      ? args.sortedDateKeys
+      : eachDateKeyInRange(trip.start_date, trip.end_date);
+
+  const lines: string[] = [
+    "TRIP PLANNING CONTEXT (read-only — follow Smart Plan structural rules in the system prompt):",
+  ];
+
+  lines.push(
+    profile
+      ? `- trip_planning_profile: party ${profile.partyType}; ride_tolerance ${profile.rideTolerance}; walking ${profile.walkingPreference}; pace ${profile.pacePreference}; meal ${profile.mealPreference}; queue ${profile.queuePreference}; avoidances: ${profile.avoidances.length ? profile.avoidances.join(", ") : "(none)"}; learnedSignals: ${profile.learnedSignals.length ? profile.learnedSignals.join(", ") : "(none)"}`
+      : "- trip_planning_profile: (none saved)",
+  );
+
+  if (wizard) {
+    lines.push(
+      `- planning_wizard: pace ${wizard.pace}; park_hopping ${wizard.parkHopping ?? "—"}; expected_full_park_days ${wizard.expectedFullParkDays ?? "—"}; include_disney_skip_tips ${String(wizard.includeDisneySkipTips !== false)}; include_universal_skip_tips ${String(wizard.includeUniversalSkipTips !== false)}`,
+    );
+  } else {
+    lines.push("- planning_wizard: (none)");
+  }
+
+  if (isMetadataObject(prefs)) {
+    const intentMap = prefs.ai_day_intent;
+    if (isMetadataObject(intentMap)) {
+      const keys = Object.keys(intentMap).filter((k) => isValidDateYmd(k));
+      const sample = keys.slice(0, 8).map((k) => {
+        const v = intentMap[k];
+        if (!isDayPlanningIntent(v)) return `${k}: (invalid shape)`;
+        return `${k}: parks=${v.selectedParkIds.join("|")} paidAccess=${v.paidAccess} change=${v.changePermission}`;
+      });
+      lines.push(
+        keys.length
+          ? `- ai_day_intent: ${keys.length} day(s)${sample.length ? ` — sample: ${sample.join("; ")}` : ""}`
+          : "- ai_day_intent: (none)",
+      );
+    } else {
+      lines.push("- ai_day_intent: (none)");
+    }
+
+    const fb = prefs.day_plan_feedback;
+    if (isMetadataObject(fb)) {
+      const fk = Object.keys(fb).filter((k) => isValidDateYmd(k));
+      lines.push(
+        fk.length
+          ? `- day_plan_feedback: ${fk.length} day(s) with notes`
+          : "- day_plan_feedback: (none)",
+      );
+    } else {
+      lines.push("- day_plan_feedback: (none)");
+    }
+
+    const rawSignals = prefs.behaviour_signals;
+    const maxSig = args?.maxBehaviourSignals ?? 8;
+    if (Array.isArray(rawSignals)) {
+      const signals = rawSignals.filter((s): s is BehaviourSignal =>
+        isBehaviourSignal(s),
+      );
+      const tail = signals.slice(-maxSig);
+      if (tail.length === 0) {
+        lines.push("- behaviour_signals: (none)");
+      } else {
+        const brief = tail
+          .map(
+            (s) =>
+              `${s.createdAt.slice(0, 10)} ${s.signalType}${s.date ? ` @${s.date}` : ""}`,
+          )
+          .join("; ");
+        lines.push(`- behaviour_signals (last ${tail.length}): ${brief}`);
+      }
+    } else {
+      lines.push("- behaviour_signals: (none)");
+    }
+
+    const mustDos = prefs.must_dos;
+    const hasMust =
+      mustDos &&
+      typeof mustDos === "object" &&
+      !Array.isArray(mustDos) &&
+      Object.keys(mustDos as object).length > 0;
+    lines.push(hasMust ? "- must_dos: present on trip preferences" : "- must_dos: (none)");
+
+    const strategies = prefs.ai_day_strategy;
+    if (isMetadataObject(strategies)) {
+      const sk = Object.keys(strategies).filter((k) => isValidDateYmd(k));
+      lines.push(
+        sk.length
+          ? `- ai_day_strategy: saved for ${sk.length} day(s) (do not replace from Smart Plan)`
+          : "- ai_day_strategy: (none)",
+      );
+    }
+  }
+
+  let parkDays = 0;
+  let restHeavyDays = 0;
+  for (const d of dateKeys) {
+    const slots = trip.assignments[d];
+    if (!slots || typeof slots !== "object") continue;
+    const pMap = args?.parksById;
+    const themeIds = pMap
+      ? collectThemeParkSlotIdsFromAssignment(slots, pMap)
+      : [];
+    if (themeIds.length > 0) parkDays += 1;
+    const rawAm = slots.am;
+    const rawPm = slots.pm;
+    const amId = getParkIdFromSlotValue(rawAm);
+    const pmId = getParkIdFromSlotValue(rawPm);
+    if (amId === "rest" && pmId === "rest") restHeavyDays += 1;
+  }
+  lines.push(
+    `- trip rhythm (approx from current calendar): theme-park days ${parkDays}, full rest AM+PM days ${restHeavyDays}, trip length ${dateKeys.length} night(s)`,
+  );
+
+  const parkIdToName = args?.parksById;
+  lines.push("- existing assignments (do not contradict explicit guest tiles when preserve mode is on):");
+  for (const d of dateKeys) {
+    const slots = trip.assignments[d];
+    if (!slots || typeof slots !== "object" || Object.keys(slots).length === 0) {
+      continue;
+    }
+    const parts: string[] = [];
+    for (const slot of ASSIGNMENT_SLOTS) {
+      const v = slots[slot];
+      const pid = getParkIdFromSlotValue(v);
+      if (!pid) continue;
+      const label =
+        parkIdToName?.get(pid)?.name ??
+        pid;
+      parts.push(`${slot}=${label}`);
+    }
+    if (parts.length > 0) lines.push(`  • ${d}: ${parts.join(", ")}`);
+  }
+
+  lines.push(
+    "- Locked / user-created tiles: when the guest keeps existing tiles, only fill empty AM/PM/lunch/dinner slots; never overwrite filled park or dining picks in JSON assignments.",
+  );
+  lines.push(
+    "- Paid queue defaults: do not assume Lightning Lane, Genie+, Express Pass, Virtual Queue entitlement, or Single Rider shortcuts unless the wizard profile above clearly confirms paid/included skip-line products for this region.",
+  );
+
+  return lines.join("\n");
 }
