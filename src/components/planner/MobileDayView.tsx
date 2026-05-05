@@ -329,11 +329,12 @@ function MobileDayStrip({
   );
 }
 
-const MOBILE_REST_DAY_TITLE = "Rest day";
-const MOBILE_REST_DAY_SUBTITLE = "Pool / downtime";
+const MOBILE_AMPM_REST_PRIMARY = "Rest / Pool";
+const MOBILE_AMPM_LABEL_FULL_DAY = "Full day";
+const MOBILE_AMPM_LABEL_TRAVEL_DAY = "Travel day";
 
 function MobileAmPmHalfRow({
-  label,
+  halfPrefix,
   slot,
   display,
   dateKey,
@@ -342,7 +343,7 @@ function MobileAmPmHalfRow({
   onClear,
   onTapAdd,
 }: {
-  label: string;
+  halfPrefix: "AM" | "PM";
   slot: "am" | "pm";
   display: HalfDayDisplay;
   dateKey: string;
@@ -358,36 +359,33 @@ function MobileAmPmHalfRow({
 
   return (
     <div
-      className={`flex min-h-[56px] items-center gap-3 px-4 py-2.5 ${
+      className={`flex min-h-[52px] items-center gap-3 px-4 py-2 ${
         park ? "hover:brightness-[1.03]" : ""
       }`}
       style={shellStyle}
     >
       <div className="min-w-0 flex-1">
-        <div
-          className={`text-[11px] font-semibold uppercase tracking-wider ${
-            park ? "opacity-75" : "text-royal/60"
-          }`}
-          style={park ? { color: "inherit" } : undefined}
-        >
-          {label}
-        </div>
         {park ? (
           <div style={{ color: "inherit" }}>
-            <div className="truncate font-sans text-lg font-medium">
+            <div className="truncate font-sans text-base font-medium leading-snug">
+              <span className="text-[11px] font-bold opacity-80">{halfPrefix}</span>{" "}
               {park.icon ? `${park.icon} ` : ""}
               {park.name}
             </div>
           </div>
         ) : readOnly ? (
-          <p className="font-sans text-sm italic text-royal/45">Flexible</p>
+          <p className="font-sans text-sm text-royal/55">
+            <span className="font-semibold text-royal/50">{halfPrefix}</span>{" "}
+            <span className="italic text-royal/45">Flexible</span>
+          </p>
         ) : (
           <button
             type="button"
             onClick={() => onTapAdd(slot)}
-            className="font-sans text-sm italic text-royal/50 transition active:text-royal focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+            className="w-full text-left font-sans text-sm text-royal/60 transition active:text-royal focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
           >
-            Tap to add
+            <span className="font-semibold text-royal/55">{halfPrefix}</span>{" "}
+            <span className="italic">Tap to add</span>
           </button>
         )}
       </div>
@@ -397,7 +395,7 @@ function MobileAmPmHalfRow({
           onClick={() => onClear(dateKey, slot)}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl opacity-50 transition hover:opacity-80 active:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
           style={{ color: "inherit" }}
-          aria-label={`Clear ${label}`}
+          aria-label={`Clear ${halfPrefix}`}
         >
           ×
         </button>
@@ -429,7 +427,7 @@ function MobileAmPmSection({
     return (
       <div className="divide-y divide-royal/10 overflow-hidden rounded-lg border border-royal/10 shadow-sm">
         <MobileAmPmHalfRow
-          label="Morning"
+          halfPrefix="AM"
           slot="am"
           display={p.morning}
           dateKey={dateKey}
@@ -439,7 +437,7 @@ function MobileAmPmSection({
           onTapAdd={onTapAdd}
         />
         <MobileAmPmHalfRow
-          label="Afternoon"
+          halfPrefix="PM"
           slot="pm"
           display={p.afternoon}
           dateKey={dateKey}
@@ -465,12 +463,19 @@ function MobileAmPmSection({
           colourTheme,
         );
 
-  const bannerLabel =
-    p.mode === "unified_rest_day" ? MOBILE_REST_DAY_TITLE : p.bannerLabel;
-  const detailLine =
-    p.mode === "unified_rest_day"
-      ? MOBILE_REST_DAY_SUBTITLE
-      : `${p.park.icon ? `${p.park.icon} ` : ""}${p.park.name}`;
+  let primaryLine: string;
+  let secondaryLine: string;
+
+  if (p.mode === "unified_rest_day") {
+    primaryLine = MOBILE_AMPM_REST_PRIMARY;
+    secondaryLine = MOBILE_AMPM_LABEL_FULL_DAY;
+  } else if (p.mode === "unified_travel_day") {
+    primaryLine = `${p.park.icon ? `${p.park.icon} ` : ""}${p.park.name}`;
+    secondaryLine = MOBILE_AMPM_LABEL_TRAVEL_DAY;
+  } else {
+    primaryLine = `${p.park.icon ? `${p.park.icon} ` : ""}${p.park.name}`;
+    secondaryLine = MOBILE_AMPM_LABEL_FULL_DAY;
+  }
 
   return (
     <div
@@ -479,16 +484,16 @@ function MobileAmPmSection({
     >
       <div className="min-w-0 flex-1">
         <div
-          className="text-[11px] font-semibold uppercase tracking-wider opacity-80"
+          className="truncate font-sans text-lg font-medium leading-snug"
           style={{ color: "inherit" }}
         >
-          {bannerLabel}
+          {primaryLine}
         </div>
         <div
-          className="truncate font-sans text-lg font-medium"
+          className="mt-0.5 text-[11px] font-semibold uppercase tracking-wider opacity-75"
           style={{ color: "inherit" }}
         >
-          {detailLine}
+          {secondaryLine}
         </div>
       </div>
       {!readOnly ? (

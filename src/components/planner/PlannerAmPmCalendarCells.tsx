@@ -5,6 +5,7 @@ import { themedEmptySlotSurfaceStyle, type ThemeKey } from "@/lib/themes";
 import {
   buildAmPmPresentation,
   type AmPmCalendarPresentation,
+  type HalfDayDisplay,
 } from "@/lib/planner-am-pm-display";
 import type { Assignment, Park, SlotType } from "@/lib/types";
 import type { CSSProperties } from "react";
@@ -24,8 +25,9 @@ type Props = {
   onOpenDayDetail?: (dateKey: string) => void;
 };
 
-const REST_DAY_TITLE = "Rest day";
-const REST_DAY_SUBTITLE = "Pool / downtime";
+const REST_UNIFIED_PRIMARY = "Rest / Pool";
+const LABEL_FULL_DAY = "Full day";
+const LABEL_TRAVEL_DAY = "Travel day";
 
 function clearBothAmPm(
   dateKey: string,
@@ -49,14 +51,10 @@ function unifiedShellStyle(
   return parkChromaTileStyle(mode.park.bg_colour, mode.park.fg_colour, themeKey);
 }
 
-type HalfDisplay =
-  | { state: "flexible" }
-  | { state: "park"; park: Park };
-
 function SplitHalfSlot({
   dateKey,
   slot,
-  halfLabel,
+  halfPrefix,
   display,
   areaClass,
   themeKey,
@@ -71,8 +69,8 @@ function SplitHalfSlot({
 }: {
   dateKey: string;
   slot: "am" | "pm";
-  halfLabel: string;
-  display: HalfDisplay;
+  halfPrefix: "AM" | "PM";
+  display: HalfDayDisplay;
   areaClass: string;
   themeKey: ThemeKey;
   readOnly: boolean;
@@ -86,8 +84,8 @@ function SplitHalfSlot({
 }) {
   const park = display.state === "park" ? display.park : undefined;
   const slotAria = park
-    ? `${halfLabel}: ${park.name}`
-    : `${halfLabel}: Flexible`;
+    ? `${halfPrefix} ${park.name}`
+    : `${halfPrefix} Flexible`;
   const emptySlotStyle: CSSProperties | undefined = park
     ? undefined
     : themedEmptySlotSurfaceStyle();
@@ -168,10 +166,9 @@ function SplitHalfSlot({
         }
       }}
     >
-      <span className="planner-slot-morning-afternoon-label">{halfLabel}</span>
       {park ? (
         <div
-          className="relative mt-2 flex min-h-0 flex-1 flex-row items-center gap-0.5 pl-0.5 pr-1 md:mt-1.5 md:items-stretch md:pl-1 md:pr-1"
+          className="relative flex min-h-0 flex-1 flex-row items-center gap-0.5 pl-0.5 pr-1 pt-3 md:min-h-[1.75rem] md:pl-1 md:pr-1 md:pt-2"
           onDoubleClick={(e) => {
             e.stopPropagation();
             if (readOnly) return;
@@ -193,15 +190,17 @@ function SplitHalfSlot({
               ×
             </button>
           ) : null}
-          <span className="line-clamp-3 min-w-0 flex-1 self-center font-sans text-[0.6rem] font-medium leading-tight sm:text-[0.65rem] md:self-center md:py-0.5">
+          <span className="line-clamp-3 min-w-0 flex-1 font-sans text-[0.6rem] font-medium leading-snug sm:text-[0.62rem] md:leading-tight">
+            <span className="font-semibold opacity-80">{halfPrefix}</span>{" "}
             {park.icon ? `${park.icon} ` : ""}
             {park.name}
           </span>
         </div>
       ) : (
-        <div className="mt-auto flex min-h-0 flex-1 flex-col justify-end pb-0.5 pl-0.5 pr-1 md:mt-1.5 md:justify-center">
-          <span className="font-sans text-[0.58rem] font-medium italic text-royal/50 sm:text-[0.6rem]">
-            Flexible
+        <div className="flex min-h-0 flex-1 flex-col justify-center pb-0.5 pl-0.5 pr-1 pt-3 md:min-h-[1.75rem] md:justify-center md:pt-2">
+          <span className="font-sans text-[0.58rem] font-medium leading-snug text-royal/55 sm:text-[0.6rem]">
+            <span className="font-semibold text-royal/50">{halfPrefix}</span>{" "}
+            <span className="italic">Flexible</span>
           </span>
         </div>
       )}
@@ -233,22 +232,25 @@ function UnifiedSpanSlot({
     !readOnly && useDayDetailShell && onOpenDayDetail,
   );
 
-  const bannerLabel =
-    presentation.mode === "unified_rest_day"
-      ? REST_DAY_TITLE
-      : presentation.bannerLabel;
+  let primaryLine: string;
+  let secondaryLine: string;
 
-  const parkLabel =
-    presentation.mode === "unified_rest_day"
-      ? null
-      : `${presentation.park.icon ? `${presentation.park.icon} ` : ""}${
-          presentation.park.name
-        }`;
+  if (presentation.mode === "unified_rest_day") {
+    primaryLine = REST_UNIFIED_PRIMARY;
+    secondaryLine = LABEL_FULL_DAY;
+  } else if (presentation.mode === "unified_travel_day") {
+    primaryLine = `${
+      presentation.park.icon ? `${presentation.park.icon} ` : ""
+    }${presentation.park.name}`;
+    secondaryLine = LABEL_TRAVEL_DAY;
+  } else {
+    primaryLine = `${
+      presentation.park.icon ? `${presentation.park.icon} ` : ""
+    }${presentation.park.name}`;
+    secondaryLine = LABEL_FULL_DAY;
+  }
 
-  const ariaUnified =
-    presentation.mode === "unified_rest_day"
-      ? `${REST_DAY_TITLE}: ${REST_DAY_SUBTITLE}`
-      : `${bannerLabel}: ${presentation.park.name}`;
+  const ariaUnified = `${primaryLine}. ${secondaryLine}.`;
 
   return (
     <div
@@ -288,7 +290,7 @@ function UnifiedSpanSlot({
       }}
     >
       <div
-        className="relative flex min-h-0 flex-1 flex-row items-start gap-0.5 px-1 pb-0.5 pt-1 md:px-1 md:pb-0.5 md:pt-0.5"
+        className="relative flex min-h-0 flex-1 flex-row items-center gap-0.5 px-1 py-0.5 md:px-1 md:py-0.5"
         onDoubleClick={(e) => {
           e.stopPropagation();
           if (readOnly) return;
@@ -311,17 +313,11 @@ function UnifiedSpanSlot({
           </button>
         ) : null}
         <div className="min-w-0 flex-1 text-left">
-          <div className="planner-slot-am-pm-banner font-sans text-[0.55rem] font-semibold uppercase leading-none tracking-wide opacity-80">
-            {bannerLabel}
+          <div className="line-clamp-3 font-sans text-[0.64rem] font-medium leading-snug sm:text-[0.66rem] md:leading-tight">
+            {primaryLine}
           </div>
-          <div className="line-clamp-4 font-sans text-[0.64rem] font-medium leading-snug sm:text-[0.68rem] md:leading-tight">
-            {presentation.mode === "unified_rest_day" ? (
-              <span className="block text-[0.62rem] opacity-90">
-                {REST_DAY_SUBTITLE}
-              </span>
-            ) : (
-              <span>{parkLabel}</span>
-            )}
+          <div className="planner-slot-am-pm-banner mt-0.5 font-sans text-[0.5rem] font-semibold uppercase leading-none tracking-wide opacity-75 sm:text-[0.52rem]">
+            {secondaryLine}
           </div>
         </div>
       </div>
@@ -338,7 +334,7 @@ export function PlannerAmPmCalendarCells(props: Props) {
         <SplitHalfSlot
           dateKey={props.dateKey}
           slot="am"
-          halfLabel="Morning"
+          halfPrefix="AM"
           display={presentation.morning}
           areaClass="planner-slot-am"
           themeKey={props.themeKey}
@@ -354,7 +350,7 @@ export function PlannerAmPmCalendarCells(props: Props) {
         <SplitHalfSlot
           dateKey={props.dateKey}
           slot="pm"
-          halfLabel="Afternoon"
+          halfPrefix="PM"
           display={presentation.afternoon}
           areaClass="planner-slot-pm"
           themeKey={props.themeKey}

@@ -36,8 +36,8 @@ export type HalfDayDisplay =
  * assignment model is unchanged).
  */
 export type AmPmCalendarPresentation =
-  | { mode: "unified_full_day"; park: Park; bannerLabel: "Full day" }
-  | { mode: "unified_travel_day"; park: Park; bannerLabel: "Travel" }
+  | { mode: "unified_full_day"; park: Park }
+  | { mode: "unified_travel_day"; park: Park }
   | { mode: "unified_rest_day"; stylePark: Park }
   | { mode: "split"; morning: HalfDayDisplay; afternoon: HalfDayDisplay };
 
@@ -59,6 +59,9 @@ export function buildAmPmPresentation(
   const amId = getParkIdFromSlotValue(ass.am);
   const pmId = getParkIdFromSlotValue(ass.pm);
 
+  const amTravel = Boolean(amId && isTravelParkId(amId));
+  const pmTravel = Boolean(pmId && isTravelParkId(pmId));
+
   if (amId && pmId) {
     if (isRestParkId(amId) && isRestParkId(pmId)) {
       const stylePark =
@@ -66,17 +69,24 @@ export function buildAmPmPresentation(
       return { mode: "unified_rest_day", stylePark };
     }
     if (amId === pmId && isTravelParkId(amId)) {
-      const park = lookupPark(amId, parkById);
-      if (park) {
-        return { mode: "unified_travel_day", park, bannerLabel: "Travel" };
-      }
+      const park = lookupPark(amId, parkById) ?? fallbackPark(amId);
+      return { mode: "unified_travel_day", park };
     }
     if (amId === pmId && !isRestParkId(amId) && !isTravelParkId(amId)) {
       const park = lookupPark(amId, parkById);
       if (park) {
-        return { mode: "unified_full_day", park, bannerLabel: "Full day" };
+        return { mode: "unified_full_day", park };
       }
     }
+  }
+
+  if (amTravel && !pmId) {
+    const park = lookupPark(amId!, parkById) ?? fallbackPark(amId!);
+    return { mode: "unified_travel_day", park };
+  }
+  if (pmTravel && !amId) {
+    const park = lookupPark(pmId!, parkById) ?? fallbackPark(pmId!);
+    return { mode: "unified_travel_day", park };
   }
 
   const toHalf = (id: string | undefined): HalfDayDisplay => {
