@@ -105,6 +105,74 @@ export function isDayPlanningIntent(value: unknown): value is DayPlanningIntent 
   );
 }
 
+export function getDayPlanningIntentValidationIssues(value: unknown): string[] {
+  const issues: string[] = [];
+  if (!isObjectRecord(value)) return ["intent is not an object"];
+
+  const selectedParkIds = asStringArray(value.selectedParkIds);
+  const avoid = asStringArray(value.avoid);
+  if (!selectedParkIds) issues.push("selectedParkIds must be string[]");
+  if (!avoid) issues.push("avoid must be string[]");
+  if (!(typeof value.parkAction === "string" && PARK_ACTIONS.has(value.parkAction))) {
+    issues.push("parkAction invalid");
+  }
+  if (!(typeof value.dayType === "string" && DAY_TYPES.has(value.dayType))) {
+    issues.push("dayType invalid");
+  }
+  if (!(typeof value.rideLevel === "string" && RIDE_LEVELS.has(value.rideLevel))) {
+    issues.push("rideLevel invalid");
+  }
+  if (
+    !(
+      typeof value.mealPreference === "string" &&
+      MEAL_PREFERENCES.has(value.mealPreference)
+    )
+  ) {
+    issues.push("mealPreference invalid");
+  }
+  if (!(typeof value.pace === "string" && PACES.has(value.pace))) {
+    issues.push("pace invalid");
+  }
+  if (
+    !(
+      typeof value.startPreference === "string" &&
+      START_PREFERENCES.has(value.startPreference)
+    )
+  ) {
+    issues.push("startPreference invalid");
+  }
+  if (
+    !(
+      typeof value.finishPreference === "string" &&
+      FINISH_PREFERENCES.has(value.finishPreference)
+    )
+  ) {
+    issues.push("finishPreference invalid");
+  }
+  if (
+    !(
+      typeof value.paidAccess === "string" &&
+      PAID_ACCESS_VALUES.has(value.paidAccess)
+    )
+  ) {
+    issues.push("paidAccess invalid");
+  }
+  if (
+    !(
+      typeof value.changePermission === "string" &&
+      CHANGE_PERMISSIONS.has(value.changePermission)
+    )
+  ) {
+    issues.push("changePermission invalid");
+  }
+  if (typeof value.mustInclude !== "string") issues.push("mustInclude must be string");
+  if (typeof value.mustAvoid !== "string") issues.push("mustAvoid must be string");
+  if (!(value.completedAt === undefined || typeof value.completedAt === "string")) {
+    issues.push("completedAt must be string when present");
+  }
+  return issues;
+}
+
 export function readDayPlanningIntent(
   preferences: unknown,
   date: string,

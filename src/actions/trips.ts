@@ -21,6 +21,7 @@ import { normaliseThemeKey, type ThemeKey } from "@/lib/themes";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import {
+  getDayPlanningIntentValidationIssues,
   isDayPlanningIntent,
   isValidDateYmd,
 } from "@/lib/day-planning-intent";
@@ -1387,9 +1388,27 @@ export async function saveDayPlanningIntentAction(input: {
       return { ok: false, error: "Invalid day planning intent." };
     }
 
-    const intent: DayPlanningIntent = {
+    const normalisedIntent: DayPlanningIntent = {
       ...input.intent,
-      completedAt: input.intent.completedAt ?? new Date().toISOString(),
+      selectedParkIds: Array.isArray(input.intent.selectedParkIds)
+        ? input.intent.selectedParkIds.filter((v) => typeof v === "string")
+        : [],
+      avoid: Array.isArray(input.intent.avoid)
+        ? input.intent.avoid.filter((v) => typeof v === "string")
+        : [],
+      mustInclude:
+        typeof input.intent.mustInclude === "string"
+          ? input.intent.mustInclude.trim()
+          : "",
+      mustAvoid:
+        typeof input.intent.mustAvoid === "string"
+          ? input.intent.mustAvoid.trim()
+          : "",
+      completedAt:
+        typeof input.intent.completedAt === "string" &&
+        input.intent.completedAt.trim()
+          ? input.intent.completedAt
+          : new Date().toISOString(),
     };
 
     const supabase = await createClient();
@@ -1406,16 +1425,51 @@ export async function saveDayPlanningIntentAction(input: {
     const { data, error } = await supabase.rpc("set_trip_day_planning_intent", {
       p_trip_id: input.tripId,
       p_date: input.date,
-      p_intent: intent,
+      p_intent: normalisedIntent,
     });
 
     if (error) return { ok: false, error: error.message };
-    if (!isDayPlanningIntent(data)) {
+
+    const rpcUnwrapped: unknown = Array.isArray(data)
+      ? data[0]
+      : data && typeof data === "object"
+        ? (data as Record<string, unknown>).set_trip_day_planning_intent ?? data
+        : data;
+    const candidateIntent = rpcUnwrapped ?? normalisedIntent;
+
+    if (!isDayPlanningIntent(candidateIntent)) {
+      const issues = getDayPlanningIntentValidationIssues(candidateIntent);
+      const obj = candidateIntent as Record<string, unknown> | null;
+      console.error("[saveDayPlanningIntentAction] invalid saved intent shape", {
+        tripId: input.tripId,
+        date: input.date,
+        issues,
+        rpcDataType: Array.isArray(data) ? "array" : typeof data,
+        candidateType: typeof candidateIntent,
+        selectedParkIdsIsArray: Array.isArray(obj?.selectedParkIds),
+        avoidIsArray: Array.isArray(obj?.avoid),
+        fieldTypes: obj
+          ? {
+              parkAction: typeof obj.parkAction,
+              dayType: typeof obj.dayType,
+              rideLevel: typeof obj.rideLevel,
+              mealPreference: typeof obj.mealPreference,
+              pace: typeof obj.pace,
+              startPreference: typeof obj.startPreference,
+              finishPreference: typeof obj.finishPreference,
+              paidAccess: typeof obj.paidAccess,
+              changePermission: typeof obj.changePermission,
+              mustInclude: typeof obj.mustInclude,
+              mustAvoid: typeof obj.mustAvoid,
+              completedAt: typeof obj.completedAt,
+            }
+          : null,
+      });
       return { ok: false, error: "Saved intent shape was invalid." };
     }
 
     revalidatePlanner();
-    return { ok: true, intent: data };
+    return { ok: true, intent: candidateIntent };
   } catch (e) {
     return {
       ok: false,
