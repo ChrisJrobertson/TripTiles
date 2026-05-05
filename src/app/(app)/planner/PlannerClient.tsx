@@ -133,6 +133,7 @@ import type {
   Assignment,
   Assignments,
   CustomTile,
+  DayPlanningIntent,
   Park,
   Region,
   SlotType,
@@ -1369,11 +1370,32 @@ export function PlannerClient({
   );
 
   const handlePlanPrefsSavedContinueStrategy = useCallback(
-    async (prefs: TripPlanningPreferences) => {
+    async (prefs: TripPlanningPreferences, intent: DayPlanningIntent) => {
       if (!activeTrip || !dayPlannerDate) {
         return { ok: false, error: "No day selected." };
       }
-      applyLocalPatch(activeTrip.id, { planning_preferences: prefs });
+      const prevPrefs =
+        activeTrip.preferences &&
+        typeof activeTrip.preferences === "object" &&
+        !Array.isArray(activeTrip.preferences)
+          ? { ...activeTrip.preferences }
+          : {};
+      const prevDayIntentMap =
+        prevPrefs.ai_day_intent &&
+        typeof prevPrefs.ai_day_intent === "object" &&
+        !Array.isArray(prevPrefs.ai_day_intent)
+          ? ({ ...prevPrefs.ai_day_intent } as Record<string, unknown>)
+          : {};
+      applyLocalPatch(activeTrip.id, {
+        planning_preferences: prefs,
+        preferences: {
+          ...prevPrefs,
+          ai_day_intent: {
+            ...prevDayIntentMap,
+            [dayPlannerDate]: intent,
+          },
+        },
+      });
       return runDayStrategyGenerate(dayPlannerDate, {
         suppressErrorToast: true,
       });

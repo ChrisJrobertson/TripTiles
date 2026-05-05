@@ -96,6 +96,7 @@ export type DayPlannerModalProps = {
    */
   onPlanPrefsSavedContinueStrategy: (
     prefs: TripPlanningPreferences,
+    intent: DayPlanningIntent,
   ) => Promise<{ ok: true } | { ok: false; error: string }>;
   /** Retry strategy generate from the mini-wizard error UI (parent-owned; typically `runDayStrategyGenerate` only). */
   onRetryStrategyFromMiniWizard: () => Promise<
@@ -350,8 +351,10 @@ export function DayPlannerModal({
       prefs: TripPlanningPreferences;
       intent: DayPlanningIntent;
     }) => {
-      void payload.intent;
-      const r = await onPlanPrefsSavedContinueStrategy(payload.prefs);
+      const r = await onPlanPrefsSavedContinueStrategy(
+        payload.prefs,
+        payload.intent,
+      );
       if (r.ok) onClose();
       return r;
     },
