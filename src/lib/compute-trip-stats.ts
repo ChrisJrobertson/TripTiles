@@ -1,7 +1,7 @@
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { isNamedRestaurantPark } from "@/lib/named-restaurant-tiles";
 import { THEME_PARK_GROUP_SET } from "@/lib/park-categories";
-import type { Park, SlotType, Trip } from "@/lib/types";
+import type { Assignment, Park, SlotType, Trip } from "@/lib/types";
 import { addDays, formatDateKey, parseDate } from "@/lib/date-helpers";
 
 const THEME_GROUPS = THEME_PARK_GROUP_SET;
@@ -22,6 +22,21 @@ function isRestStylePark(p: Park | undefined): boolean {
   const n = p.name.toLowerCase();
   if (/\brest\b|\bpool\b|lazy|hotel day|shopping day/i.test(n)) return true;
   return p.park_group === "activities" && /\brest\b|\bpool\b/i.test(n);
+}
+
+/** Canonical `"rest"` slot id has no Park row — still counts as a rest/resort intent. */
+function slotIdIndicatesRest(pid: string | undefined): boolean {
+  return Boolean(pid && pid.trim().toLowerCase() === "rest");
+}
+
+function amPmHintsRestFocusedDay(
+  v: Assignment["am"] | Assignment["pm"] | undefined,
+  parkById: Map<string, Park>,
+): boolean {
+  const pid = getParkIdFromSlotValue(v);
+  if (!pid) return true;
+  if (slotIdIndicatesRest(pid)) return true;
+  return isRestStylePark(parkById.get(pid));
 }
 
 export type TripStatsSummary = {
@@ -77,15 +92,20 @@ export function computeTripStats(
 
     if (dayHasTheme) parkDays += 1;
     else {
+      const amPmRestDay =
+        amPmHintsRestFocusedDay(day.am, parkById) &&
+        amPmHintsRestFocusedDay(day.pm, parkById);
+
       let onlyRestOrEmpty = !anyAssignment;
       if (anyAssignment) {
         onlyRestOrEmpty = slots.every((s) => {
           const id = getParkIdFromSlotValue(day[s]);
           if (!id) return true;
+          if (slotIdIndicatesRest(id)) return true;
           return isRestStylePark(parkById.get(id));
         });
       }
-      if (onlyRestOrEmpty) restDays += 1;
+      if (amPmRestDay || onlyRestOrEmpty) restDays += 1;
     }
   }
 

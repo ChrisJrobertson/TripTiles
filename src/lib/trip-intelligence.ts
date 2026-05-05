@@ -404,6 +404,21 @@ export function inferPaidAccessDefaultForSmartPlanIntent(
   return "not_sure";
 }
 
+/** When false, Smart Plan must not place generic/named dining tile IDs in lunch/dinner. */
+export function tripProfileAllowsStructuralMealSlots(
+  pref: TripIntelligenceMealPreference | null | undefined,
+): boolean {
+  if (
+    pref == null ||
+    pref === "unknown" ||
+    pref === "do_not_plan" ||
+    pref === "existing_only"
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function mapIntelligenceMealToDayMeal(
   p: TripIntelligenceMealPreference,
 ): DayPlanningMealPreference {
@@ -420,6 +435,8 @@ function mapIntelligenceMealToDayMeal(
       return "snacks";
     case "existing_only":
       return "existing_only";
+    case "unknown":
+      return "do_not_plan";
     default:
       return "suggest";
   }
@@ -446,8 +463,9 @@ function rideLevelFromTolerance(tol: TripRideTolerance): DayPlanningRideLevel {
     case "moderate_thrills":
       return "some_thrills";
     case "mostly_gentle":
-    case "minimal_motion":
       return "gentle";
+    case "minimal_motion":
+      return "shows_lands_food";
     default:
       return "some_thrills";
   }
@@ -458,11 +476,11 @@ function dayTypeFromProfile(
 ): DayPlanningDayType {
   if (!profile) return "balanced_family";
   if (profile.rideTolerance === "thrill_seeker") return "thrill_heavy";
-  if (
-    profile.rideTolerance === "mostly_gentle" ||
-    profile.rideTolerance === "minimal_motion"
-  ) {
+  if (profile.rideTolerance === "mostly_gentle") {
     return "lower_thrill";
+  }
+  if (profile.rideTolerance === "minimal_motion") {
+    return "shows_food_exploring";
   }
   if (profile.partyType === "couple" && profile.rideTolerance === "moderate_thrills") {
     return "balanced_family";

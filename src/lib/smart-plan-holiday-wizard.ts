@@ -82,11 +82,11 @@ export type HolidaySmartWizardState = {
 export const holidayWizardDefaults = (): HolidaySmartWizardState => ({
   scope: null,
   holidayStyle: "balanced_family_holiday",
-  wizardParty: "mixed_family",
+  wizardParty: "unknown",
   paceStyle: "balanced",
   rideComfort: "some_thrills",
   avoidances: [],
-  mealChoice: "mixed",
+  mealChoice: "unknown",
   paidAccessDefault: "not_sure",
   restRhythm: "rest_every_3_to_4_days",
   parkPriorities: [],
@@ -101,6 +101,23 @@ const ORLANDO_PRIORITY_TO_PARK_IDS: Partial<Record<SmartParkPriorityToken, strin
   uf: "usf",
   eu: "eu",
 };
+
+function inferPartyTypeFromTripDemographics(trip: Trip): TripPlanningPartyType {
+  if (trip.adults <= 0 && trip.children <= 0) return "unknown";
+  if (trip.adults === 1 && trip.children === 0) return "solo";
+  if (trip.children > 0) return "family";
+  return "couple";
+}
+
+function resolveWizardPartyType(params: {
+  wizardParty: SmartPlanWizardParty;
+  trip: Trip;
+}): TripPlanningPartyType {
+  if (params.wizardParty !== "unknown") {
+    return mapWizardPartyToPartyType(params.wizardParty);
+  }
+  return inferPartyTypeFromTripDemographics(params.trip);
+}
 
 function mapWizardPartyToPartyType(w: SmartPlanWizardParty): TripPlanningPartyType {
   switch (w) {
@@ -267,12 +284,16 @@ function priorityTokenMatchesPark(
 export function buildTripPlanningProfileFromHolidayWizard(params: {
   wizard: HolidaySmartWizardState;
   tripParks: Park[];
+  trip: Trip;
 }): TripPlanningProfile {
-  const { wizard, tripParks } = params;
+  const { wizard, tripParks, trip } = params;
   const nowIso = new Date().toISOString();
   const parkIds = resolveParkPriorityIds(wizard.parkPriorities, tripParks);
   return {
-    partyType: mapWizardPartyToPartyType(wizard.wizardParty),
+    partyType: resolveWizardPartyType({
+      wizardParty: wizard.wizardParty,
+      trip,
+    }),
     rideTolerance: mapRideComfortToTolerance(wizard.rideComfort),
     avoidances: [...wizard.avoidances],
     walkingPreference: walkingFromAvoidances(wizard.avoidances),

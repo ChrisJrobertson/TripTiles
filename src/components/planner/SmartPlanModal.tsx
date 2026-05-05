@@ -390,6 +390,7 @@ export function SmartPlanModal({
           const profile = buildTripPlanningProfileFromHolidayWizard({
             wizard: holidayWizard,
             tripParks: parks,
+            trip,
           });
           const profRes = await saveTripPlanningProfileAction({
             tripId: trip.id,

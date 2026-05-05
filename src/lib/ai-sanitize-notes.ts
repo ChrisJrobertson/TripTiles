@@ -34,3 +34,20 @@ export function sanitizeDayNote(raw: string): string {
   }
   return text;
 }
+
+const LIKELY_CROSS_PARK_RIDE_CHUNK =
+  /\b(?:velocicoaster|veloci\s*coaster|hagrid'?s\b|hogwarts\s*express|mistaken\s+rides\b)[^.;]*(?:[.;]|$)/gi;
+
+/**
+ * Structural Smart Plan prose only — removes common cross-park ride analogies and filler.
+ */
+export function sanitizeStructuralSmartPlanPlannerNote(raw: string): string {
+  if (!raw?.trim()) return raw;
+  let t = raw;
+  t = t.replace(/\b([\w'-]+\s+){0,8}analog(?:ue|)\b[^.;]*/gi, "");
+  t = t.replace(/\banalog(?:ue|)\s+for\b[^.;]*/gi, "");
+  t = t.replace(LIKELY_CROSS_PARK_RIDE_CHUNK, "");
+  t = t.replace(/\s*[;,]\s*;/g, ";");
+  t = t.replace(/\s{2,}/g, " ");
+  return t.trim();
+}

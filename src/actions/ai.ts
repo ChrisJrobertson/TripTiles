@@ -8,6 +8,7 @@ import { getTripById, mapTripRow } from "@/lib/db/trips";
 import {
   applyArrivalDayNoThemeParks,
   enforceAiPlanGuardrails,
+  stripStructuralMealSlotsWhenDeclined,
   requiresCruiseSegment,
   sortDateKeysFromSet,
 } from "@/lib/ai-plan-guardrails";
@@ -64,7 +65,7 @@ import {
 import { getSuccessfulAiGenerationCountForTrip } from "@/lib/db/ai-generations";
 import { getCrowdPatternsForParkIds } from "@/lib/data/crowd-patterns";
 import { getMonthlyConditions } from "@/data/destination-conditions";
-import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { sanitizeDayNote, sanitizeStructuralSmartPlanPlannerNote } from "@/lib/ai-sanitize-notes";
 import { filterUserFacingAiWarningLines } from "@/lib/ai-user-facing-warnings";
 import { softTruncateToMax } from "@/lib/truncate-text";
 import {
@@ -72,6 +73,7 @@ import {
   buildTripPlanningContextForAI,
   collectThemeParkSlotIdsFromAssignment,
   readTripPlanningProfile,
+  tripProfileAllowsStructuralMealSlots,
 } from "@/lib/trip-intelligence";
 import { formatRegionalDiningForPrompt } from "@/data/regional-dining";
 import {
@@ -213,13 +215,14 @@ TRIPTILES STRUCTURAL DISCIPLINE (non-negotiable):
 - Omit the key "must_dos" entirely — do not emit ride-level wish lists, bullet touring orders, or invented attraction names for this JSON. The app records safe default day intents for AI Day Strategy separately.
 - Never invent height restrictions, rider requirements, or rider minimums in any string field.
 - Use only park/dining tile IDs from the allowed list in the following system message — never recommend "cross-parking" a specific ride (staying in one park catalogue per park day for ride talk). In prose, do not describe hopping between two theme parks for different headline rides unless the guest's assignments already show a hop day; keep notes high-level.
+- Do not name specific rides, coasters, or walkthrough attractions in planner_day_notes or day_crowd_notes unless the user message explicitly lists that exact experience for that same date (e.g. a booked return). Prefer park- or land-level pacing ("prioritise headliners", "busiest themed area", "high-demand attractions"). Never use "analogue" or compare one park's day to another park's signature rides.
 - Do not assume Lightning Lane, Genie+, Individual Lightning Lane, Express Pass, Quick Queue, Virtual Queue returns, or Single Rider as part of the guest's entitlements unless the user-message context clearly states they have them. For trip-wide copy, prefer standby and general pacing; never present paid products as decided.
 - Respect closed or unavailable major attractions (see CLOSURE AWARENESS below) — do not centre a day on them in prose.
 - When the guest chose to keep existing calendar tiles, repeat their filled slot IDs exactly and only fill empty slots.
 - Do not overwrite or contradict locked guest tiles in assignment JSON. Other days' calendars stay unchanged unless this run is explicitly day-scoped.
 
-Shape (must_dos omitted on purpose):
-{ "assignments": { "2026-07-09": { "am": "mk", "pm": "mk", "lunch": "owl", "dinner": "tsr" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-07-14": "…" }, "planner_day_notes": { "2026-07-09": "…" }, "skip_line_return_echo": { "2026-07-09": [ { "attraction_id": "id_from_ride_list", "hhmm": "14:15" } ] } }
+Shape (must_dos omitted on purpose; lunch/dinner optional — see user message rules when structural meals are declined):
+{ "assignments": { "2026-07-09": { "am": "mk", "pm": "mk" } }, "crowd_reasoning": "…", "day_crowd_notes": { "2026-07-14": "…" }, "planner_day_notes": { "2026-07-09": "…" }, "skip_line_return_echo": { "2026-07-09": [ { "attraction_id": "id_from_ride_list", "hhmm": "14:15" } ] } }
 
 Optional skip_line_return_echo: ONLY if the user message already lists guest BOOKED return times. Repeat those times here as structured { attraction_id, hhmm } for the correct trip date. Use the exact attraction_id strings from the ride list in the user message. Never invent return times, attraction ids, or hhmm values that the guest did not supply.
 
@@ -248,6 +251,10 @@ Each planner_day_notes value ≤350 chars: THAT day only — park-hours-level pa
 DAY NOTES RULES (CRITICAL):
 - Sound like a knowledgeable friend. NEVER raw crowd scores, arithmetic, formulas, bracketed maths, "score N", "crowd index N", or how you calculated anything.
 - Good: "Keep morning energy for the headliner land you care about most — midsummer crowds build from late morning." Bad: "Ride A, then B, then C before 11:00" or invented height advice.
+- When a STRUCTURAL MEALS — HARD RULE block appears in the user message, you must leave lunch and dinner slots empty/omitted (no owl, tsr, char, specd, villa, no named-restaurant tile ids). Meal ideas belong only in a single short generic sentence in planner_day_notes if helpful.
+
+STRUCTURAL MEALS DEFAULT:
+- Only assign lunch/dinner to dining tile IDs (owl, tsr, char, specd, villa) or named-restaurant catalogue ids when the guest's trip profile explicitly allows meal planning or the user message says those slots are already set and must be kept. If unsure, omit lunch/dinner rather than filling them.
 
 CROWD_PATTERNS (when in user message): 0–10 heuristics per park/weekday/month — use internally only. Never put numeric score workings in user-facing strings. Never claim live waits or exact attendance.
 
@@ -259,7 +266,7 @@ Rules:
 - Cruise tiles only between embark/disembark when cruise=yes.
 - No same headline park on consecutive calendar days.
 - True rest = restful tiles in AM and PM both; no half-rest + full park split.
-- Dining: owl, tsr, char, specd, villa as documented.
+- Dining: owl, tsr, char, specd, villa as documented — only when the guest profile allows meal tiles (see user message); otherwise leave meal slots empty.
 - Honour family notes (young children / teens / queue patience).
 - When the user message includes slot **block start times** (~HH:mm) and/or a **ride pick list** for a single date: infer which park IDs belong in which half of the day only. Do not transcribe ride picks into ordered touring JSON. Mention at most one or two *general* pacing ideas in planner_day_notes (e.g. favour morning for the busiest land) without listing individual ride names or assuming paid return products.
 
@@ -460,7 +467,12 @@ function parseCrowdMetadata(
       if (!allowedDates.has(k)) continue;
       if (typeof v !== "string") continue;
       const s = v.trim();
-      if (s) planner_day_notes[k] = sanitizeDayNote(softTruncateToMax(s, 350));
+      if (s) {
+        const cleaned = sanitizeStructuralSmartPlanPlannerNote(
+          sanitizeDayNote(softTruncateToMax(s, 350)),
+        ).trimEnd();
+        if (cleaned) planner_day_notes[k] = cleaned;
+      }
     }
   }
   const skip_line_return_echo: Record<
@@ -518,7 +530,9 @@ function applySmartPlanCrowdMetadataScrub(
   if (out.planner_day_notes) {
     const next: Record<string, string> = {};
     for (const [k, v] of Object.entries(out.planner_day_notes)) {
-      next[k] = scrubAmbiguousPaidQueueProse(v);
+      next[k] = sanitizeStructuralSmartPlanPlannerNote(
+        scrubAmbiguousPaidQueueProse(v),
+      );
     }
     out.planner_day_notes = next;
   }
@@ -1455,6 +1469,8 @@ function buildPlannerUserMessage(params: {
   preserveExistingSlots: boolean;
   /** Read-only trip intelligence + assignments digest for the model. */
   tripPlanningContextSummary: string;
+  /** Hard meal-slot rules for Smart Plan when profile declines dining tiles. */
+  structuralMealPolicyBlock?: string | null;
 }): string {
   const {
     mode,
@@ -1475,6 +1491,7 @@ function buildPlannerUserMessage(params: {
     dayRidePicksLines,
     preserveExistingSlots,
     tripPlanningContextSummary,
+    structuralMealPolicyBlock,
   } = params;
 
   const userConstraintsBlock =
@@ -1534,6 +1551,10 @@ Generate a complete fresh itinerary that:
   const tripCtx =
     tripPlanningContextSummary.trim().length > 0
       ? `${tripPlanningContextSummary.trim()}\n\n`
+      : "";
+  const mealPolicy =
+    mode === "smart" && structuralMealPolicyBlock?.trim()
+      ? `${structuralMealPolicyBlock.trim()}\n\n`
       : "";
   const wizBlock = wiz ? `\n${wiz}\n` : "";
   const dine = diningHint?.trim();
@@ -1595,7 +1616,7 @@ Your job is to annotate and complete the guest's calendar tile choices:
 
     return `${userConstraintsBlock}${overwriteIntro}${fullTripBlock}${coreTrip}
 
-${tripCtx}${crowdSection}
+${tripCtx}${mealPolicy}${crowdSection}
 ${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}${dayPacingAndRidesBlock}
 
 ${smartIntro}
@@ -1606,7 +1627,7 @@ Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and p
 
   return `${userConstraintsBlock}${overwriteIntro}${fullTripBlock}${coreTrip}
 
-${tripCtx}${crowdSection}
+${tripCtx}${mealPolicy}${crowdSection}
 ${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}${dayPacingAndRidesBlock}
 
 CUSTOM PROMPT MODE — apply USER CONSTRAINTS and TRIP WIZARD PREFERENCES first, then crowd patterns. Respect the system prompt: assignments + notes only; omit must_dos; no ride sequencing JSON; no invented heights; no paid-queue assumptions unless explicitly confirmed in context.
@@ -1928,6 +1949,13 @@ export async function runGenerateAIPlan(
         )
       : null;
 
+  const tripProfileForStructuralMeals = readTripPlanningProfile(
+    trip.preferences ?? {},
+  );
+  const allowsStructuralMealTiles = tripProfileAllowsStructuralMealSlots(
+    tripProfileForStructuralMeals?.mealPreference,
+  );
+
   const diningHint = formatRegionalDiningForPrompt(trip.region_id);
 
   const namedRestaurantNames = builtFiltered
@@ -1936,8 +1964,13 @@ export async function runGenerateAIPlan(
     .filter(Boolean)
     .sort((a, b) => a.localeCompare(b));
   const namedRestaurantHint =
-    namedRestaurantNames.length > 0
+    allowsStructuralMealTiles && namedRestaurantNames.length > 0
       ? `NAMED_RESTAURANT_TILES: The following named restaurants are available as dining tiles for this region: ${namedRestaurantNames.join(", ")}. You may assign 1–2 of these to Lunch or Dinner slots where appropriate, using their exact names. Prefer named restaurants over generic "Table Service" or "Quick Service" tiles where a specific restaurant fits the day's location and vibe.`
+      : null;
+
+  const structuralMealPolicyUserBlock =
+    input.mode === "smart" && !allowsStructuralMealTiles
+      ? `STRUCTURAL MEALS — HARD RULE: Trip profile mealPreference is "${tripProfileForStructuralMeals?.mealPreference ?? "unset — treat as declined"}". Do NOT output lunch or dinner keys with dining tile IDs (owl, tsr, char, specd, villa) or any named-restaurant tile id from the catalogue. Omit lunch and dinner slots entirely unless the CALENDAR ALREADY SET block shows that slot locked with an existing meal tile (preserve-existing mode). Use at most one short generic sentence in planner_day_notes about leaving flexibility for meals — no venue names or cuisine specifics.`
       : null;
 
   const tripPlanningContextSummary = buildTripPlanningContextForAI(trip, {
@@ -1978,6 +2011,7 @@ export async function runGenerateAIPlan(
     ),
     dayRidePicksLines,
     preserveExistingSlots: input.preserveExistingSlots !== false,
+    structuralMealPolicyBlock: structuralMealPolicyUserBlock,
   });
   // Diagnostic preview so we can verify in Vercel runtime logs that the
   // OVERWRITE branch is producing a different prompt structure than the
@@ -2414,13 +2448,20 @@ export async function runGenerateAIPlan(
     /** After overwrite mode, strip headline parks from day 1 AM/PM. In preserve
      * mode, do not run this on the merged calendar — it would remove the guest's
      * manual day-1 picks even when they asked not to overwrite. */
-    const merged = preserve
+    const mergedAfterArrival = preserve
       ? mergedRaw
       : applyArrivalDayNoThemeParks(
           mergedRaw,
           sortedDateKeys,
           parksById,
         );
+    const merged = stripStructuralMealSlotsWhenDeclined({
+      merged: mergedAfterArrival,
+      prior: trip.assignments,
+      mealPreference: tripProfileForStructuralMeals?.mealPreference,
+      parksById,
+      preserveExistingSlots: preserve,
+    });
 
     // Validate day notes against the post-generation, post-merge, post-sanitise
     // assignments — `merged` — not `trip.assignments` (the pre-generation state).

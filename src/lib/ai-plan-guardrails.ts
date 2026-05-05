@@ -2,7 +2,15 @@ import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { formatDateKey, parseDate } from "@/lib/date-helpers";
 import { isCruisePaletteTileName } from "@/lib/cruise-tiles";
 import { THEME_PARK_GROUP_SET } from "@/lib/park-categories";
-import type { Assignment, Assignments, Park, Trip } from "@/lib/types";
+import { isNamedRestaurantPark } from "@/lib/named-restaurant-tiles";
+import { tripProfileAllowsStructuralMealSlots } from "@/lib/trip-intelligence";
+import type {
+  Assignment,
+  Assignments,
+  Park,
+  Trip,
+  TripIntelligenceMealPreference,
+} from "@/lib/types";
 
 const DINING_IDS = new Set(["owl", "tsr", "char", "specd", "villa"]);
 const FLYOUT_IDS = new Set(["flyout"]);
@@ -330,6 +338,51 @@ function pruneEmptyDays(assignments: Assignments): Assignments {
     if (v && Object.keys(v).length > 0) out[k] = v;
   }
   return out;
+}
+
+function isStructuralSmartPlanMealSlot(
+  slotId: string | undefined,
+  parksById: Map<string, Park>,
+): boolean {
+  if (!slotId) return false;
+  if (DINING_IDS.has(slotId)) return true;
+  const p = parksById.get(slotId);
+  return p ? isNamedRestaurantPark(p) : false;
+}
+
+/**
+ * Drops generic QS/TS tiles and bespoke named-restaurant placements when the
+ * trip profile does not consent to structured meal scheduling.
+ */
+export function stripStructuralMealSlotsWhenDeclined(params: {
+  merged: Assignments;
+  prior: Assignments;
+  mealPreference: TripIntelligenceMealPreference | null | undefined;
+  parksById: Map<string, Park>;
+  preserveExistingSlots: boolean;
+}): Assignments {
+  const { merged, prior, mealPreference, parksById, preserveExistingSlots } =
+    params;
+  if (tripProfileAllowsStructuralMealSlots(mealPreference)) return merged;
+
+  const out = cloneAssignments(merged);
+  for (const [dk, day] of Object.entries(out)) {
+    if (!day) continue;
+    for (const slot of ["lunch", "dinner"] as const) {
+      const mid = getParkIdFromSlotValue(day[slot]);
+      if (!mid || !isStructuralSmartPlanMealSlot(mid, parksById)) continue;
+
+      const prevId = getParkIdFromSlotValue(prior[dk]?.[slot]);
+      if (!preserveExistingSlots) {
+        delete day[slot];
+        continue;
+      }
+      if (!prevId) delete day[slot];
+    }
+    if (Object.keys(day).length === 0) delete out[dk];
+  }
+
+  return pruneEmptyDays(out);
 }
 
 export type GuardrailContext = {
