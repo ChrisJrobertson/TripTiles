@@ -1,6 +1,8 @@
 "use client";
 
+import { filterUserFacingAiWarningLinesForUi } from "@/lib/ai-user-facing-warnings";
 import type { AIDayStrategy, AIDayStrategyRideStepType } from "@/lib/types";
+import { useMemo } from "react";
 
 function rideTypeEmoji(t: AIDayStrategyRideStepType): string {
   switch (t) {
@@ -51,6 +53,22 @@ export function AIDayStrategyPanel({
   onViewParks?: () => void;
 }) {
   const rel = formatRelativeTime(strategy.generated_at);
+  const qualityWarningsUi = useMemo(
+    () =>
+      filterUserFacingAiWarningLinesForUi(
+        strategy.quality_warnings,
+        "ai_day_strategy.quality_warnings",
+      ),
+    [strategy.quality_warnings],
+  );
+  const topWarningsUi = useMemo(
+    () =>
+      filterUserFacingAiWarningLinesForUi(
+        strategy.warnings,
+        "ai_day_strategy.warnings",
+      ),
+    [strategy.warnings],
+  );
   return (
     <section className="mt-4 rounded-xl border border-gold/35 bg-cream p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -67,7 +85,7 @@ export function AIDayStrategyPanel({
         </div>
       </div>
 
-      {strategy.quality_warnings && strategy.quality_warnings.length > 0 ? (
+      {qualityWarningsUi.length > 0 ? (
         <div
           className="mt-4 rounded-lg border border-gold/50 bg-gold/15 p-3"
           role="status"
@@ -76,7 +94,7 @@ export function AIDayStrategyPanel({
             Some details may be incomplete
           </p>
           <ul className="mt-2 list-disc space-y-1 pl-4 font-sans text-xs text-royal/85">
-            {strategy.quality_warnings.map((w, i) => (
+            {qualityWarningsUi.map((w, i) => (
               <li key={i}>{w}</li>
             ))}
           </ul>
@@ -165,11 +183,11 @@ export function AIDayStrategyPanel({
         </div>
       ) : null}
 
-      {strategy.warnings.length > 0 ? (
+      {topWarningsUi.length > 0 ? (
         <div className="mt-4 rounded-lg border border-gold/40 bg-gold/10 p-3">
           <p className="font-sans text-xs font-semibold text-royal">⚠️ Heads up</p>
           <ul className="mt-1 list-disc space-y-1 pl-4 font-sans text-sm text-royal/85">
-            {strategy.warnings.map((w, i) => (
+            {topWarningsUi.map((w, i) => (
               <li key={i}>{w}</li>
             ))}
           </ul>

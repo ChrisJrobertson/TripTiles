@@ -1,9 +1,11 @@
 "use client";
 
+import { filterUserFacingAiWarningLinesForUi } from "@/lib/ai-user-facing-warnings";
 import type {
   ParkDaySequenceItem,
   ParkDaySequenceOutput,
 } from "@/lib/day-sequencer";
+import { useMemo } from "react";
 
 export interface SequenceTimelineProps {
   sequence: ParkDaySequenceOutput;
@@ -23,6 +25,14 @@ export function SequenceTimeline({
   attractionNameById,
   onRegenerate,
 }: SequenceTimelineProps) {
+  const warningsUi = useMemo(
+    () =>
+      filterUserFacingAiWarningLinesForUi(
+        sequence.warnings,
+        "park_day_sequence.warnings",
+      ),
+    [sequence.warnings],
+  );
   const rope = sequence.rope_drop_recommendation?.trim();
 
   return (
@@ -106,13 +116,13 @@ export function SequenceTimeline({
         </div>
       ) : null}
 
-      {sequence.warnings.length > 0 ? (
+      {warningsUi.length > 0 ? (
         <div className="rounded-lg border-2 border-amber-400/90 bg-amber-50/90 px-3 py-3">
           <h4 className="font-sans text-sm font-semibold text-amber-950">
             Heads up
           </h4>
           <ul className="mt-2 list-inside list-disc space-y-1 font-sans text-sm text-amber-950/90">
-            {sequence.warnings.map((line, i) => (
+            {warningsUi.map((line, i) => (
               <li key={i}>{line}</li>
             ))}
           </ul>

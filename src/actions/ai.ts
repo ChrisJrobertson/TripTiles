@@ -57,6 +57,7 @@ import { getSuccessfulAiGenerationCountForTrip } from "@/lib/db/ai-generations";
 import { getCrowdPatternsForParkIds } from "@/lib/data/crowd-patterns";
 import { getMonthlyConditions } from "@/data/destination-conditions";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { filterUserFacingAiWarningLines } from "@/lib/ai-user-facing-warnings";
 import { softTruncateToMax } from "@/lib/truncate-text";
 import { formatRegionalDiningForPrompt } from "@/data/regional-dining";
 import {
@@ -3987,7 +3988,6 @@ function validateAndNormaliseDayStrategy(
 ): { strategy: AIDayStrategy; logTags: string[] } {
   const logTags: string[] = [];
   const qualityWarnings: string[] = [];
-  const sanitiserWarnings = new Set<string>();
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     logTags.push("validation_error:root_not_object");
@@ -4104,18 +4104,15 @@ function validateAndNormaliseDayStrategy(
       if (dayStrategyFieldContainsBannedPhrasing(ride_or_event)) {
         ride_or_event = DAY_STRATEGY_INDOOR_BREAK_REPLACEMENT;
         logTags.push("sanitised:resort_break_phrase");
-        sanitiserWarnings.add("sanitised:resort_break_phrase");
       }
       if (dayStrategyFieldContainsBannedPhrasing(notes)) {
         notes = DAY_STRATEGY_INDOOR_BREAK_REPLACEMENT;
         logTags.push("sanitised:resort_break_phrase");
-        sanitiserWarnings.add("sanitised:resort_break_phrase");
       }
       const waitSan = sanitiseDayStrategyFabricatedWaitTimesInNotes(notes);
       notes = waitSan.text;
       if (waitSan.hit) {
         logTags.push("sanitised:fabricated_wait_time");
-        sanitiserWarnings.add("sanitised:fabricated_wait_time");
       }
 
       const step: AIDayStrategy["ride_sequence"][number] = {
@@ -4146,21 +4143,14 @@ function validateAndNormaliseDayStrategy(
     const tc = coerceTimeToHalfHour(step.time);
     if (tc.wasChanged) {
       step.time = tc.coerced;
-      const tag = `sanitised:non_round_time:${originalTime}_to_${tc.coerced}`;
-      qualityWarnings.push(tag);
-      logTags.push(tag);
+      logTags.push(
+        `sanitised:non_round_time:${originalTime}_to_${tc.coerced}`,
+      );
     }
 
-    const beforeRide = step.ride_or_event;
     const hc = correctHeightInRideName(step.ride_or_event, ctx.rideConstraints);
     if (hc.wasChanged) {
       step.ride_or_event = hc.corrected;
-      const rideShort = beforeRide.split("(")[0]!.trim().slice(0, 50);
-      const hwarn = `sanitised:height_mismatch:${rideShort}:${hc.detail ?? "corrected"}`.slice(
-        0,
-        220,
-      );
-      qualityWarnings.push(hwarn);
       logTags.push("sanitised:height_mismatch");
     }
   }
@@ -4196,7 +4186,6 @@ function validateAndNormaliseDayStrategy(
       (lightning_lane_strategy.single_pass_recommendations?.length ?? 0) > 0;
     if (had) {
       logTags.push("validation_strip:lightning_lane_wrong_operator");
-      sanitiserWarnings.add("sanitised:wrong_operator_lightning_lane_dropped");
     }
     lightning_lane_strategy = undefined;
   }
@@ -4219,7 +4208,6 @@ function validateAndNormaliseDayStrategy(
         : {}),
     };
     logTags.push("sanitised:multi_pass_bookings_removed");
-    sanitiserWarnings.add("sanitised:multi_pass_bookings_removed");
   }
 
   if (
@@ -4247,7 +4235,6 @@ function validateAndNormaliseDayStrategy(
 
   if (ctx.parkLine !== "universal" && express_pass_strategy) {
     logTags.push("validation_strip:express_pass_wrong_operator");
-    sanitiserWarnings.add("sanitised:wrong_operator_express_pass_dropped");
     express_pass_strategy = undefined;
   }
 
@@ -4257,7 +4244,6 @@ function validateAndNormaliseDayStrategy(
     !ctx.allowUniversalExpress
   ) {
     logTags.push("sanitised:express_pass_strategy_removed");
-    sanitiserWarnings.add("sanitised:express_pass_strategy_removed");
     express_pass_strategy = undefined;
   }
 
@@ -4289,12 +4275,12 @@ function validateAndNormaliseDayStrategy(
     );
   }
 
-  topWarnings = [...sanitiserWarnings, ...topWarnings];
+  topWarnings = filterUserFacingAiWarningLines(topWarnings);
 
   if (qualityWarnings.length > 0) {
-    const unique = [...new Set(qualityWarnings)];
+    const deduped = [...new Set(filterUserFacingAiWarningLines(qualityWarnings))];
     qualityWarnings.length = 0;
-    qualityWarnings.push(...unique);
+    qualityWarnings.push(...deduped);
   }
 
   const strategy: AIDayStrategy = {
@@ -4569,10 +4555,10 @@ export async function generateDayStrategy(input: {
     if (unknownRides.length > 0) {
       strategy = {
         ...strategyNorm,
-        warnings: [
+        warnings: filterUserFacingAiWarningLines([
           ...strategyNorm.warnings,
-          `unknown_ride: ${unknownRides.slice(0, 8).join("; ")}`,
-        ],
+          "A few suggested experiences could not be matched to this park's official list — verify names in the park app.",
+        ]),
       };
     }
 
