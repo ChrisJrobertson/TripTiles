@@ -424,6 +424,64 @@ const PAID_QUEUE_STEP_TYPES = new Set([
   "single_rider",
 ]);
 
+const STANDBY_ASSUMPTIONS_BANNER =
+  "Paid queue access was not confirmed, so this plan uses standby assumptions.";
+
+function isStandbyAssumptionsBannerLine(line: string): boolean {
+  return line.trim() === STANDBY_ASSUMPTIONS_BANNER;
+}
+
+/** Model-sounding park hours — not grounded in TripTiles structured hours here. */
+function lineReferencesUnsupportedParkHoursClaim(line: string): boolean {
+  const t = line.trim();
+  return (
+    /\btypically\s+closes\b/i.test(t) ||
+    /\bpark\s+closes\b/i.test(t) ||
+    /\bcloses\s+at\b/i.test(t)
+  );
+}
+
+/**
+ * Any mention of paid/skip-line products or trip-level pass hooks — drop from
+ * warnings when day intent is not `yes`, except the intentional standby banner.
+ */
+function lineReferencesPaidQueueOrSkipLineTopic(line: string): boolean {
+  const t = line.trim();
+  if (!t) return false;
+  if (isStandbyAssumptionsBannerLine(t)) return false;
+  const patterns: RegExp[] = [
+    /\bexpress\s+pass\b/i,
+    /\blightning\s+lane\b/i,
+    /\bmulti[\s-]?pass\b/i,
+    /\bpremier\s+pass\b/i,
+    /\bsingle\s+rider\b/i,
+    /\bpaid\s+queue\s+access\b/i,
+    /\bskip[-\s]?the[-\s]?line\b/i,
+    /\bskip[-\s]?line\b/i,
+    /\bincluded\s+with\s+(your\s+)?hotel\b/i,
+    /\bincluded_with_hotel\b/i,
+    /\bhotel.{0,50}express\b/i,
+    /\bguests?\s+with\s+express\b/i,
+    /\bwith\s+your\s+express\b/i,
+    /\busing\s+express\b/i,
+    /\bgenie\+\b/i,
+    /\bquick\s+queue\b/i,
+  ];
+  return patterns.some((re) => re.test(t));
+}
+
+function filterStandbyIntentWarningLines(lines: string[]): string[] {
+  return lines.filter((l) => {
+    if (typeof l !== "string") return false;
+    const t = l.trim();
+    if (!t) return false;
+    if (isStandbyAssumptionsBannerLine(t)) return true;
+    if (lineReferencesPaidQueueOrSkipLineTopic(l)) return false;
+    if (lineReferencesUnsupportedParkHoursClaim(l)) return false;
+    return true;
+  });
+}
+
 /** Confirms or assumes the guest already has / is using paid skip-line products. */
 function lineImpliesConfirmedPaidQueueAccess(line: string): boolean {
   const t = line.trim();
@@ -463,31 +521,25 @@ function lineSurfacesTripLevelSkipLineProfile(line: string): boolean {
   return patterns.some((re) => re.test(t));
 }
 
-function sentenceConflictsWithUnconfirmedPaidIntent(sentence: string): boolean {
-  return (
-    lineImpliesConfirmedPaidQueueAccess(sentence) ||
-    lineSurfacesTripLevelSkipLineProfile(sentence)
-  );
+function sentenceFailsStandbyCopyGuards(sentence: string): boolean {
+  const t = sentence.trim();
+  if (!t) return false;
+  if (lineReferencesUnsupportedParkHoursClaim(t)) return true;
+  if (lineReferencesPaidQueueOrSkipLineTopic(t)) return true;
+  if (lineSurfacesTripLevelSkipLineProfile(t)) return true;
+  if (lineImpliesConfirmedPaidQueueAccess(t)) return true;
+  return false;
 }
 
 function scrubProseRemovingPaidQueueClaims(text: string): string {
   const t = text.trim();
   if (!t) return t;
   const parts = t.split(/(?<=[.!?])\s+/);
-  const kept = parts.filter((p) => !sentenceConflictsWithUnconfirmedPaidIntent(p));
+  const kept = parts.filter((p) => !sentenceFailsStandbyCopyGuards(p));
   const out = kept.join(" ").trim();
   return out.length >= 8
     ? out
     : "Use standby queues unless you confirm paid skip-line options in the official app.";
-}
-
-function filterWarningLinesDroppingPaidClaims(lines: string[]): string[] {
-  return lines.filter(
-    (l) =>
-      typeof l === "string" &&
-      !lineImpliesConfirmedPaidQueueAccess(l) &&
-      !lineSurfacesTripLevelSkipLineProfile(l),
-  );
 }
 
 function paidQueueOptionalAdviceNotes(strategy: AIDayStrategy): string[] {
@@ -510,6 +562,15 @@ function paidQueueOptionalAdviceNotes(strategy: AIDayStrategy): string[] {
     );
   }
   return out;
+}
+
+function filterOptionalNotesForNoOrNotSure(notes: string[]): string[] {
+  return notes.filter((n) => {
+    if (typeof n !== "string" || !n.trim()) return false;
+    if (lineReferencesPaidQueueOrSkipLineTopic(n)) return false;
+    if (lineReferencesUnsupportedParkHoursClaim(n)) return false;
+    return true;
+  });
 }
 
 /**
@@ -543,34 +604,38 @@ export function applyPaidAccessIntentSafety(
       }
       return {
         ...step,
-        notes: sentenceConflictsWithUnconfirmedPaidIntent(step.notes)
+        notes: sentenceFailsStandbyCopyGuards(step.notes)
           ? scrubProseRemovingPaidQueueClaims(step.notes)
           : step.notes,
       };
     },
   );
 
-  const qualityBase = filterWarningLinesDroppingPaidClaims(
+  const qualityBase = filterStandbyIntentWarningLines(
     strategy.quality_warnings ?? [],
   );
   const qualityWithBanner = [
-    ...qualityBase,
-    "Paid queue access was not confirmed, so this plan uses standby assumptions.",
+    ...new Set([...qualityBase, STANDBY_ASSUMPTIONS_BANNER]),
   ];
+
+  let optionalNotesOut = optionalAdd;
+  if (intent.paidAccess === "no" || intent.paidAccess === "not_sure") {
+    optionalNotesOut = filterOptionalNotesForNoOrNotSure(optionalNotesOut);
+  }
 
   const out: AIDayStrategy = {
     ...strategy,
     ride_sequence: nextSeq,
     arrival_reason: scrubProseRemovingPaidQueueClaims(strategy.arrival_reason),
-    warnings: filterWarningLinesDroppingPaidClaims([...strategy.warnings]),
-    quality_warnings: [...new Set(qualityWithBanner)],
+    warnings: filterStandbyIntentWarningLines([...strategy.warnings]),
+    quality_warnings: qualityWithBanner,
   };
 
   delete out.lightning_lane_strategy;
   delete out.express_pass_strategy;
 
-  if (optionalAdd.length > 0) {
-    out.optional_sequence_notes = [...new Set(optionalAdd)].slice(0, 28);
+  if (optionalNotesOut.length > 0) {
+    out.optional_sequence_notes = [...new Set(optionalNotesOut)].slice(0, 28);
   } else {
     delete out.optional_sequence_notes;
   }
