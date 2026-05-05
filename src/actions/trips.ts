@@ -1379,14 +1379,19 @@ export async function saveDayPlanningIntentAction(input: {
   { ok: true; intent: DayPlanningIntent } | { ok: false; error: string }
 > {
   try {
-    const user = await getCurrentUser();
-    if (!user) return { ok: false, error: "Not signed in." };
     if (!isValidDateYmd(input.date)) {
       return { ok: false, error: "Date must be YYYY-MM-DD." };
     }
     if (!isDayPlanningIntent(input.intent)) {
       return { ok: false, error: "Invalid day planning intent." };
     }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) return { ok: false, error: "Not signed in." };
 
     const normalisedIntent: DayPlanningIntent = {
       ...input.intent,
@@ -1411,7 +1416,6 @@ export async function saveDayPlanningIntentAction(input: {
           : new Date().toISOString(),
     };
 
-    const supabase = await createClient();
     const { data: tripRow, error: tripErr } = await supabase
       .from("trips")
       .select("id")
