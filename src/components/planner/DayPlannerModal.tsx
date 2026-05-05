@@ -16,11 +16,16 @@ import {
 import { LogoSpinner } from "@/components/ui/LogoSpinner";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { formatUndoSnapshotHint, parseDate } from "@/lib/date-helpers";
+import {
+  hasRequiredDayPlanningIntent,
+  readDayPlanningIntent,
+} from "@/lib/day-planning-intent";
 import { dominantThemeParkForAssignments } from "@/lib/dominant-theme-park";
 import { showToast } from "@/lib/toast";
 import type {
   AIDayStrategy,
   Assignments,
+  DayPlanningIntent,
   DaySnapshot,
   Park,
   SlotAssignmentValue,
@@ -237,6 +242,15 @@ export function DayPlannerModal({
     : `${dayTitle} · No theme park assigned`;
 
   const afterDay = proposed?.assignments_for_day ?? {};
+  const existingDayIntent = useMemo(
+    () => readDayPlanningIntent(trip.preferences, date),
+    [trip.preferences, date],
+  );
+  const hasCompleteDayIntent = useMemo(
+    () =>
+      existingDayIntent ? hasRequiredDayPlanningIntent(existingDayIntent) : false,
+    [existingDayIntent],
+  );
 
   const runStrategyGenerateCore = useCallback(async (): Promise<
     { ok: true } | { ok: false; error: string }
@@ -289,6 +303,10 @@ export function DayPlannerModal({
       onRequestStrategyUpgrade?.();
       return;
     }
+    if (!hasCompleteDayIntent) {
+      setMiniWizardOpen(true);
+      return;
+    }
     setStrategyBusy(true);
     try {
       const r = await runStrategyGenerateCore();
@@ -301,6 +319,7 @@ export function DayPlannerModal({
     tweakBusy,
     miniWizardOpen,
     productTier,
+    hasCompleteDayIntent,
     onRequestStrategyUpgrade,
     runStrategyGenerateCore,
     onClose,
@@ -327,8 +346,12 @@ export function DayPlannerModal({
   ]);
 
   const handleMiniWizardSaved = useCallback(
-    async (prefs: TripPlanningPreferences) => {
-      const r = await onPlanPrefsSavedContinueStrategy(prefs);
+    async (payload: {
+      prefs: TripPlanningPreferences;
+      intent: DayPlanningIntent;
+    }) => {
+      void payload.intent;
+      const r = await onPlanPrefsSavedContinueStrategy(payload.prefs);
       if (r.ok) onClose();
       return r;
     },
@@ -476,7 +499,7 @@ export function DayPlannerModal({
               }`}
               onClick={() => setTab("adjust")}
             >
-              Adjust parks &amp; slots
+              Quick plan
             </button>
             <button
               type="button"
@@ -485,7 +508,7 @@ export function DayPlannerModal({
               }`}
               onClick={() => setTab("strategy")}
             >
-              Full ride strategy
+              Build day strategy
               {productTier === "free" ? (
                 <span className="ml-1 rounded bg-royal/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-royal">
                   Pro
@@ -510,8 +533,13 @@ export function DayPlannerModal({
               open
               presentation="embedded"
               helpCtaLabel="Plan this day"
+              date={date}
               tripId={trip.id}
               initialPrefs={trip.planning_preferences}
+              existingIntent={existingDayIntent}
+              dominantParkId={domPark?.id ?? null}
+              availableParks={parks}
+              currentDayAssignments={currentDay}
               tripAdults={trip.adults}
               tripChildren={trip.children}
               tripChildAges={trip.child_ages ?? []}
@@ -538,7 +566,7 @@ export function DayPlannerModal({
                     }`}
                     onClick={() => setTweakMode("smart_suggest")}
                   >
-                    Smart suggest
+                    Suggest a day
                   </button>
                   <button
                     type="button"
@@ -549,7 +577,7 @@ export function DayPlannerModal({
                     }`}
                     onClick={() => setTweakMode("freetext")}
                   >
-                    Tell the AI
+                    Custom instructions
                   </button>
                 </div>
                 <label className="mt-3 flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-royal/12 bg-white/80 px-3 py-2 font-sans text-sm font-medium text-royal">
@@ -567,7 +595,7 @@ export function DayPlannerModal({
                   {tweakMode === "smart_suggest" ? (
                     <>
                       <h3 className="font-serif text-lg font-semibold text-royal">
-                        Smart suggest
+                        Suggest a day
                       </h3>
                       <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
                         The AI proposes refreshed AM / PM / meal slots for{" "}
@@ -577,7 +605,7 @@ export function DayPlannerModal({
                   ) : (
                     <label className="block">
                       <span className="font-serif text-lg font-semibold text-royal">
-                        Tell the AI what to change
+                        Custom instructions
                       </span>
                       <textarea
                         value={text}
@@ -723,7 +751,7 @@ export function DayPlannerModal({
                     Upgrade to <span className="font-semibold">Pro</span> or{" "}
                     <span className="font-semibold">Family</span> to generate a
                     strategy here. You can still use{" "}
-                    <span className="font-semibold">Adjust parks &amp; slots</span>{" "}
+                    <span className="font-semibold">Quick plan</span>{" "}
                     on any plan.
                   </p>
                   <button
@@ -747,7 +775,7 @@ export function DayPlannerModal({
                       Generating…
                     </span>
                   ) : (
-                    "Generate ride strategy"
+                    "Preview day strategy"
                   )}
                 </button>
               )}
