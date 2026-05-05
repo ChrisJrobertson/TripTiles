@@ -67,6 +67,10 @@ import { getSuccessfulAiGenerationCountForTrip } from "@/lib/db/ai-generations";
 import { getCrowdPatternsForParkIds } from "@/lib/data/crowd-patterns";
 import { getMonthlyConditions } from "@/data/destination-conditions";
 import { sanitizeDayNote, sanitizeStructuralSmartPlanPlannerNote } from "@/lib/ai-sanitize-notes";
+import {
+  formatSmartPlanTripCalendarAuthorityBlock,
+  stripWrongWeekdaysFromTripDateNote,
+} from "@/lib/ai-note-weekdays";
 import { filterUserFacingAiWarningLines } from "@/lib/ai-user-facing-warnings";
 import { softTruncateToMax } from "@/lib/truncate-text";
 import {
@@ -252,6 +256,11 @@ Each planner_day_notes value ≤350 chars: THAT day only — park-hours-level pa
 DAY NOTES RULES (CRITICAL):
 - Sound like a knowledgeable friend. NEVER raw crowd scores, arithmetic, formulas, bracketed maths, "score N", "crowd index N", or how you calculated anything.
 - Good: "Keep morning energy for the headliner land you care about most — midsummer crowds build from late morning." Bad: "Ride A, then B, then C before 11:00" or invented height advice.
+
+WEEKDAY SAFETY FOR planner_day_notes AND day_crowd_notes:
+- When the user message includes AUTHORITATIVE TRIP CALENDAR lines, weekdays for each YYYY-MM-DD key MUST exactly match that table. Never derive weekdays from guesses, Crowd_patterns, seasonal habits, or model memory.
+- If you are not copying the weekday from that table character-for-character, omit weekday wording altogether (prefer "EPCOT-focused day", "Universal combo day").
+- Inventing wrong weekday labels is unacceptable — when in doubt omit the weekday clause.
 - When a STRUCTURAL MEALS — HARD RULE block appears in the user message, you must leave lunch and dinner slots empty/omitted (no owl, tsr, char, specd, villa, no named-restaurant tile ids). Meal ideas belong only in a single short generic sentence in planner_day_notes if helpful.
 
 STRUCTURAL MEALS DEFAULT:
@@ -525,18 +534,28 @@ function applySmartPlanCrowdMetadataScrub(
   if (out.day_crowd_notes) {
     const next: Record<string, string> = {};
     for (const [k, v] of Object.entries(out.day_crowd_notes)) {
-      next[k] = scrubAmbiguousPaidQueueProse(v);
+      const t = stripWrongWeekdaysFromTripDateNote(
+        k,
+        scrubAmbiguousPaidQueueProse(v),
+      ).trim();
+      if (t) next[k] = t;
     }
-    out.day_crowd_notes = next;
+    out.day_crowd_notes =
+      Object.keys(next).length > 0 ? next : undefined;
   }
   if (out.planner_day_notes) {
     const next: Record<string, string> = {};
     for (const [k, v] of Object.entries(out.planner_day_notes)) {
-      next[k] = sanitizeStructuralSmartPlanPlannerNote(
-        scrubAmbiguousPaidQueueProse(v),
-      );
+      const t = stripWrongWeekdaysFromTripDateNote(
+        k,
+        sanitizeStructuralSmartPlanPlannerNote(
+          scrubAmbiguousPaidQueueProse(v),
+        ),
+      ).trim();
+      if (t) next[k] = t;
     }
-    out.planner_day_notes = next;
+    out.planner_day_notes =
+      Object.keys(next).length > 0 ? next : undefined;
   }
   return out;
 }
@@ -1473,6 +1492,7 @@ function buildPlannerUserMessage(params: {
   tripPlanningContextSummary: string;
   /** Hard meal-slot rules for Smart Plan when profile declines dining tiles. */
   structuralMealPolicyBlock?: string | null;
+  tripCalendarAuthorityBlock?: string | null;
 }): string {
   const {
     mode,
@@ -1494,6 +1514,7 @@ function buildPlannerUserMessage(params: {
     preserveExistingSlots,
     tripPlanningContextSummary,
     structuralMealPolicyBlock,
+    tripCalendarAuthorityBlock,
   } = params;
 
   const userConstraintsBlock =
@@ -1558,6 +1579,10 @@ Generate a complete fresh itinerary that:
     mode === "smart" && structuralMealPolicyBlock?.trim()
       ? `${structuralMealPolicyBlock.trim()}\n\n`
       : "";
+  const calendarAuthority =
+    mode === "smart" && tripCalendarAuthorityBlock?.trim()
+      ? `${tripCalendarAuthorityBlock.trim()}\n\n`
+      : "";
   const wizBlock = wiz ? `\n${wiz}\n` : "";
   const dine = diningHint?.trim();
   const dineBlock = dine ? `\n${dine}\n` : "";
@@ -1618,7 +1643,7 @@ Your job is to annotate and complete the guest's calendar tile choices:
 
     return `${userConstraintsBlock}${overwriteIntro}${fullTripBlock}${coreTrip}
 
-${tripCtx}${mealPolicy}${crowdSection}
+${calendarAuthority}${tripCtx}${mealPolicy}${crowdSection}
 ${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}${dayPacingAndRidesBlock}
 
 ${smartIntro}
@@ -1629,7 +1654,7 @@ Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and p
 
   return `${userConstraintsBlock}${overwriteIntro}${fullTripBlock}${coreTrip}
 
-${tripCtx}${mealPolicy}${crowdSection}
+${calendarAuthority}${tripCtx}${mealPolicy}${crowdSection}
 ${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}${dayPacingAndRidesBlock}
 
 CUSTOM PROMPT MODE — apply USER CONSTRAINTS and TRIP WIZARD PREFERENCES first, then crowd patterns. Respect the system prompt: assignments + notes only; omit must_dos; no ride sequencing JSON; no invented heights; no paid-queue assumptions unless explicitly confirmed in context.
@@ -2006,6 +2031,14 @@ export async function runGenerateAIPlan(
     dayRidePicksLines = formatDayRidePicksForPrompt(rideRows);
   }
 
+  const tripCalendarAuthorityPrompt =
+    input.mode === "smart"
+      ? formatSmartPlanTripCalendarAuthorityBlock(
+          trip.start_date,
+          trip.end_date,
+        )
+      : null;
+
   const composedUserMessage = buildPlannerUserMessage({
     mode: input.mode,
     userPrompt: input.userPrompt,
@@ -2031,6 +2064,7 @@ export async function runGenerateAIPlan(
     dayRidePicksLines,
     preserveExistingSlots: input.preserveExistingSlots !== false,
     structuralMealPolicyBlock: structuralMealPolicyUserBlock,
+    tripCalendarAuthorityBlock: tripCalendarAuthorityPrompt,
   });
   // Diagnostic preview so we can verify in Vercel runtime logs that the
   // OVERWRITE branch is producing a different prompt structure than the
