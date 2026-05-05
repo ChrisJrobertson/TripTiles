@@ -12,6 +12,7 @@ import {
 import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
 import { displayDayForTimelinePanel } from "@/lib/ai-timeline-to-slot-times";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
+import { PlannerAmPmCalendarCells } from "@/components/planner/PlannerAmPmCalendarCells";
 import { truncateForPreview } from "@/lib/truncate-text";
 import { DayTimelinePanel } from "@/components/planner/DayTimelinePanel";
 import { ExpandedDayPanel } from "@/components/planner/ExpandedDayPanel";
@@ -85,9 +86,7 @@ type Props = {
   onOpenDayDetail?: (dateKey: string, options?: { focusNotes?: boolean }) => void;
 };
 
-const SLOTS: { key: SlotType; label: string; area: string }[] = [
-  { key: "am", label: "AM", area: "planner-slot-am" },
-  { key: "pm", label: "PM", area: "planner-slot-pm" },
+const MEAL_SLOTS: { key: SlotType; label: string; area: string }[] = [
   { key: "lunch", label: "LUN", area: "planner-slot-lunch" },
   { key: "dinner", label: "DIN", area: "planner-slot-dinner" },
 ];
@@ -660,7 +659,21 @@ export function Calendar({
                     )}
                   </div>
                   <div className="planner-slot-grid flex-1 p-0.5">
-                    {SLOTS.map(({ key: slot, label, area }) => {
+                    <PlannerAmPmCalendarCells
+                      dateKey={key}
+                      assignment={ass}
+                      parkById={parkById}
+                      themeKey={themeKey}
+                      readOnly={readOnly}
+                      selectedParkId={selectedParkId}
+                      onAssign={onAssign}
+                      onClear={onClear}
+                      onNeedParkFirst={onNeedParkFirst}
+                      onAfterSlotClear={onAfterSlotClear}
+                      useDayDetailShell={useDayDetailShell}
+                      onOpenDayDetail={onOpenDayDetail}
+                    />
+                    {MEAL_SLOTS.map(({ key: slot, label, area }) => {
                       const pid = getParkIdFromSlotValue(ass[slot]);
                       const park = pid ? parkById.get(pid) : undefined;
                       const isMeal = slot === "lunch" || slot === "dinner";

@@ -18,6 +18,35 @@
   grid-row: 1;
 }
 
+/* AM+PM merged into one top row (full day, rest day, or same travel tile). */
+.planner-slot-am-pm-span {
+  grid-column: 1 / span 2;
+  grid-row: 1;
+}
+
+.planner-slot-morning-afternoon-label {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  max-width: calc(100% - 1.5rem);
+  font-size: 0.52rem;
+  font-weight: 600;
+  opacity: 0.5;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+}
+
+.planner-slot-am-pm-banner {
+  margin-bottom: 1px;
+}
+
+@media (min-width: 640px) {
+  .planner-slot-morning-afternoon-label {
+    font-size: 0.55rem;
+  }
+}
+
 .planner-slot-lunch {
   grid-column: 1;
   grid-row: 2;

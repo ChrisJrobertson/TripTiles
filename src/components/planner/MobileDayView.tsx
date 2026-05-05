@@ -11,6 +11,7 @@ import {
 import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
 import { displayDayForTimelinePanel } from "@/lib/ai-timeline-to-slot-times";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
+import { buildAmPmPresentation, type HalfDayDisplay } from "@/lib/planner-am-pm-display";
 import { MobileRidesSheet } from "@/components/planner/MobileRidesSheet";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
@@ -28,6 +29,7 @@ import {
 } from "@/lib/themes";
 import type {
   AIDayStrategy,
+  Assignment,
   Assignments,
   Park,
   SlotType,
@@ -67,8 +69,6 @@ const CROWD_DOT: Record<"quiet" | "moderate" | "busy", string> = {
 };
 
 const SLOTS: { key: SlotType; label: string }[] = [
-  { key: "am", label: "AM" },
-  { key: "pm", label: "PM" },
   { key: "lunch", label: "LUNCH" },
   { key: "dinner", label: "DINNER" },
 ];
@@ -325,6 +325,186 @@ function MobileDayStrip({
           ),
         )}
       </div>
+    </div>
+  );
+}
+
+const MOBILE_REST_DAY_TITLE = "Rest day";
+const MOBILE_REST_DAY_SUBTITLE = "Pool / downtime";
+
+function MobileAmPmHalfRow({
+  label,
+  slot,
+  display,
+  dateKey,
+  colourTheme,
+  readOnly,
+  onClear,
+  onTapAdd,
+}: {
+  label: string;
+  slot: "am" | "pm";
+  display: HalfDayDisplay;
+  dateKey: string;
+  colourTheme: ThemeKey;
+  readOnly: boolean;
+  onClear: (dateKey: string, slot: SlotType) => void;
+  onTapAdd: (slot: SlotType) => void;
+}) {
+  const park = display.state === "park" ? display.park : undefined;
+  const shellStyle = park
+    ? parkChromaTileStyle(park.bg_colour, park.fg_colour, colourTheme)
+    : themedEmptySlotSurfaceStyle();
+
+  return (
+    <div
+      className={`flex min-h-[56px] items-center gap-3 px-4 py-2.5 ${
+        park ? "hover:brightness-[1.03]" : ""
+      }`}
+      style={shellStyle}
+    >
+      <div className="min-w-0 flex-1">
+        <div
+          className={`text-[11px] font-semibold uppercase tracking-wider ${
+            park ? "opacity-75" : "text-royal/60"
+          }`}
+          style={park ? { color: "inherit" } : undefined}
+        >
+          {label}
+        </div>
+        {park ? (
+          <div style={{ color: "inherit" }}>
+            <div className="truncate font-sans text-lg font-medium">
+              {park.icon ? `${park.icon} ` : ""}
+              {park.name}
+            </div>
+          </div>
+        ) : readOnly ? (
+          <p className="font-sans text-sm italic text-royal/45">Flexible</p>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onTapAdd(slot)}
+            className="font-sans text-sm italic text-royal/50 transition active:text-royal focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+          >
+            Tap to add
+          </button>
+        )}
+      </div>
+      {park && !readOnly ? (
+        <button
+          type="button"
+          onClick={() => onClear(dateKey, slot)}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl opacity-50 transition hover:opacity-80 active:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+          style={{ color: "inherit" }}
+          aria-label={`Clear ${label}`}
+        >
+          ×
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function MobileAmPmSection({
+  dateKey,
+  assignment,
+  parkById,
+  colourTheme,
+  readOnly,
+  onClear,
+  onTapAdd,
+}: {
+  dateKey: string;
+  assignment: Assignment;
+  parkById: Map<string, Park>;
+  colourTheme: ThemeKey;
+  readOnly: boolean;
+  onClear: (dateKey: string, slot: SlotType) => void;
+  onTapAdd: (slot: SlotType) => void;
+}) {
+  const p = buildAmPmPresentation(assignment, parkById);
+
+  if (p.mode === "split") {
+    return (
+      <div className="divide-y divide-royal/10 overflow-hidden rounded-lg border border-royal/10 shadow-sm">
+        <MobileAmPmHalfRow
+          label="Morning"
+          slot="am"
+          display={p.morning}
+          dateKey={dateKey}
+          colourTheme={colourTheme}
+          readOnly={readOnly}
+          onClear={onClear}
+          onTapAdd={onTapAdd}
+        />
+        <MobileAmPmHalfRow
+          label="Afternoon"
+          slot="pm"
+          display={p.afternoon}
+          dateKey={dateKey}
+          colourTheme={colourTheme}
+          readOnly={readOnly}
+          onClear={onClear}
+          onTapAdd={onTapAdd}
+        />
+      </div>
+    );
+  }
+
+  const shellStyle =
+    p.mode === "unified_rest_day"
+      ? parkChromaTileStyle(
+          p.stylePark.bg_colour,
+          p.stylePark.fg_colour,
+          colourTheme,
+        )
+      : parkChromaTileStyle(
+          p.park.bg_colour,
+          p.park.fg_colour,
+          colourTheme,
+        );
+
+  const bannerLabel =
+    p.mode === "unified_rest_day" ? MOBILE_REST_DAY_TITLE : p.bannerLabel;
+  const detailLine =
+    p.mode === "unified_rest_day"
+      ? MOBILE_REST_DAY_SUBTITLE
+      : `${p.park.icon ? `${p.park.icon} ` : ""}${p.park.name}`;
+
+  return (
+    <div
+      className="flex min-h-[64px] items-center gap-3 rounded-lg px-4 py-3 shadow-sm hover:brightness-[1.03]"
+      style={shellStyle}
+    >
+      <div className="min-w-0 flex-1">
+        <div
+          className="text-[11px] font-semibold uppercase tracking-wider opacity-80"
+          style={{ color: "inherit" }}
+        >
+          {bannerLabel}
+        </div>
+        <div
+          className="truncate font-sans text-lg font-medium"
+          style={{ color: "inherit" }}
+        >
+          {detailLine}
+        </div>
+      </div>
+      {!readOnly ? (
+        <button
+          type="button"
+          onClick={() => {
+            onClear(dateKey, "am");
+            onClear(dateKey, "pm");
+          }}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl opacity-50 transition hover:opacity-80 active:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+          style={{ color: "inherit" }}
+          aria-label="Clear morning and afternoon"
+        >
+          ×
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -904,23 +1084,42 @@ export function MobileDayView({
 
           {activeDayStrategy || mobileDayLayout === "grid" ? (
             <div className="space-y-3">
-              {SLOTS.map(({ key: slot }) => {
+              {(() => {
                 const ass = assignments[activeDay.dateKey] ?? {};
-                const id = getParkIdFromSlotValue(ass[slot]);
                 return (
-                  <MobileSlotCard
-                    key={slot}
-                    slot={slot}
-                    dateKey={activeDay.dateKey}
-                    assignmentId={id}
-                    parkById={parkById}
-                    readOnly={readOnly}
-                    onClear={onClear}
-                    onTapAdd={() => openParksForSlot(activeDay.dateKey, slot)}
-                    colourTheme={colourTheme}
-                  />
+                  <>
+                    <MobileAmPmSection
+                      dateKey={activeDay.dateKey}
+                      assignment={ass}
+                      parkById={parkById}
+                      colourTheme={colourTheme}
+                      readOnly={readOnly}
+                      onClear={onClear}
+                      onTapAdd={(slot) =>
+                        openParksForSlot(activeDay.dateKey, slot)
+                      }
+                    />
+                    {SLOTS.map(({ key: slot }) => {
+                      const id = getParkIdFromSlotValue(ass[slot]);
+                      return (
+                        <MobileSlotCard
+                          key={slot}
+                          slot={slot}
+                          dateKey={activeDay.dateKey}
+                          assignmentId={id}
+                          parkById={parkById}
+                          readOnly={readOnly}
+                          onClear={onClear}
+                          onTapAdd={() =>
+                            openParksForSlot(activeDay.dateKey, slot)
+                          }
+                          colourTheme={colourTheme}
+                        />
+                      );
+                    })}
+                  </>
                 );
-              })}
+              })()}
             </div>
           ) : onSlotTimeChange ? (
             <DayTimelinePanel
