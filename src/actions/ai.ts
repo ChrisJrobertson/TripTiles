@@ -71,6 +71,11 @@ import {
   tierErrorToClientPayload,
 } from "@/lib/tier";
 import { missingDayStrategyPlanningFields } from "@/lib/day-strategy-planning";
+import {
+  formatDayPlanningIntentForPrompt,
+  hasRequiredDayPlanningIntent,
+  readDayPlanningIntent,
+} from "@/lib/day-planning-intent";
 import { classifyThemeParkLine } from "@/lib/wizard-queue-step-region";
 import { isThemePark } from "@/lib/park-categories";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
@@ -4394,7 +4399,15 @@ export async function generateDayStrategy(input: {
   if (!dom) return { status: "no_park_assigned" };
 
   const line = classifyThemeParkLine(dom.park);
-  const missing = missingDayStrategyPlanningFields(trip.planning_preferences, line);
+  const existingDayAssignments = trip.assignments[dateKey] ?? {};
+  const dayIntent = readDayPlanningIntent(trip.preferences, dateKey);
+  const isDayIntentComplete =
+    dayIntent != null && hasRequiredDayPlanningIntent(dayIntent);
+  const missing = missingDayStrategyPlanningFields(
+    trip.planning_preferences,
+    line,
+    isDayIntentComplete ? dayIntent : null,
+  );
   if (missing.length > 0) {
     return { status: "missing_data", missingDataFields: missing };
   }
@@ -4436,6 +4449,95 @@ export async function generateDayStrategy(input: {
     [disneyPassSection, universalPassSection].filter(Boolean).join("\n") ||
     "General theme park queues";
 
+  const selectedParkNames =
+    dayIntent?.selectedParkIds.map((id) => parkById.get(id)?.name ?? id) ?? [];
+  const existingMeals: string[] = [];
+  for (const slot of ["lunch", "dinner"] as const) {
+    const slotVal = existingDayAssignments[slot];
+    const slotParkId = getParkIdFromSlotValue(slotVal);
+    if (slotParkId) {
+      existingMeals.push(`${slot}: ${parkById.get(slotParkId)?.name ?? slotParkId}`);
+    }
+  }
+  const mustDosMap = readMustDosMap(trip.preferences ?? {});
+  const mustDosForDate = mustDosMap[dateKey];
+  const existingMustDosSummary = mustDosForDate
+    ? Object.entries(mustDosForDate)
+        .map(([parkId, items]) => {
+          const names = (items ?? [])
+            .map((item) => String(item?.title ?? "").trim())
+            .filter(Boolean);
+          if (names.length === 0) return null;
+          return `${parkById.get(parkId)?.name ?? parkId}: ${names.slice(0, 6).join(", ")}`;
+        })
+        .filter(Boolean)
+        .join(" | ")
+    : "";
+  const existingStratForDate =
+    trip.preferences &&
+    typeof trip.preferences === "object" &&
+    !Array.isArray(trip.preferences) &&
+    (trip.preferences as Record<string, unknown>).ai_day_strategy &&
+    typeof (trip.preferences as Record<string, unknown>).ai_day_strategy === "object" &&
+    !Array.isArray((trip.preferences as Record<string, unknown>).ai_day_strategy)
+      ? (
+          (trip.preferences as Record<string, unknown>).ai_day_strategy as Record<
+            string,
+            unknown
+          >
+        )[dateKey]
+      : null;
+
+  const intentPromptBlock = formatDayPlanningIntentForPrompt(dayIntent!, {
+    date: dateKey,
+    existingParkName: dom.park.name,
+    selectedParkNames,
+    existingMeals,
+    currentAssignments: existingDayAssignments as Record<string, unknown>,
+  });
+
+  const intentSpecificRules: string[] = [];
+  if (dayIntent!.paidAccess === "no" || dayIntent!.paidAccess === "not_sure") {
+    intentSpecificRules.push(
+      "PAID ACCESS RULE: Do not assume paid queue access. Do not base the main ride sequence on Express, Lightning Lane, Premier Pass, Single Rider, or equivalent products. You may mention them only as optional future advice.",
+    );
+  }
+  if (dayIntent!.mealPreference === "do_not_plan") {
+    intentSpecificRules.push(
+      "MEALS RULE: Do not add meal stops unless a meal slot already exists on this day.",
+    );
+  }
+  if (dayIntent!.mealPreference === "existing_only") {
+    intentSpecificRules.push(
+      existingMeals.length > 0
+        ? `MEALS RULE: Existing meal slots are ${existingMeals.join("; ")}. Use only these slots and do not add further meal stops.`
+        : "MEALS RULE: No existing lunch/dinner meal slots were found. Do not invent or add meal bookings.",
+    );
+  }
+  if (dayIntent!.startPreference !== "rope_drop") {
+    intentSpecificRules.push(
+      "START RULE: Do not assume rope drop timing for this plan.",
+    );
+  }
+  if (dayIntent!.finishPreference !== "close") {
+    intentSpecificRules.push(
+      "FINISH RULE: Do not create an open-to-close or stay-until-close plan.",
+    );
+  }
+  if (
+    dayIntent!.dayType !== "thrill_heavy" &&
+    dayIntent!.rideLevel !== "big_thrills"
+  ) {
+    intentSpecificRules.push(
+      "THRILL RULE: Do not assume a thrill-heavy touring style for this day.",
+    );
+  }
+  if (dayIntent!.avoid.length > 0) {
+    intentSpecificRules.push(
+      `AVOID RULE: Do not recommend experiences that match these avoidances: ${dayIntent!.avoid.join(", ")}.`,
+    );
+  }
+
   const passInstructionTail: string[] = [];
   if (line === "disney" && prefs.disneyLightningLane?.multiPassStatus === "none") {
     passInstructionTail.push(
@@ -4454,6 +4556,17 @@ export async function generateDayStrategy(input: {
     `PARK: ${dom.park.name} (${dom.id})`,
     `DATE: ${dateKey} (${dow})`,
     `DAY OF TRIP: Day ${dayIndex} of ${totalDays}`,
+    "",
+    intentPromptBlock,
+    "",
+    "EXISTING DAY CONTEXT:",
+    `- Current AM/PM/lunch/dinner assignments: ${JSON.stringify(existingDayAssignments)}`,
+    `- Existing lunch/dinner slots: ${existingMeals.join(", ") || "None"}`,
+    `- Existing must-dos on this day: ${existingMustDosSummary || "None"}`,
+    `- Existing ai_day_strategy for this day: ${existingStratForDate ? "present" : "none"}`,
+    ...(intentSpecificRules.length > 0
+      ? ["", "INTENT-SPECIFIC ENFORCEMENT:", ...intentSpecificRules]
+      : []),
     "",
     "FAMILY:",
     `- ${prefs.adults} adult(s), ${prefs.children} child(ren); ${childBits}`,
