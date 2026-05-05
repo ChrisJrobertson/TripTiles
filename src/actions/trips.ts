@@ -1424,6 +1424,7 @@ export async function saveDayPlanningIntentAction(input: {
 
     const { data, error } = await supabase.rpc("set_trip_day_planning_intent", {
       p_trip_id: input.tripId,
+      p_user_id: user.id,
       p_date: input.date,
       p_intent: normalisedIntent,
     });
