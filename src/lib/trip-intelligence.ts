@@ -76,6 +76,7 @@ const MEAL: TripIntelligenceMealPreference[] = [
   "table_service",
   "mixed",
   "snacks",
+  "existing_only",
   "unknown",
 ];
 
@@ -371,7 +372,13 @@ export function inferPaidAccessDefaultForSmartPlanIntent(
   regionId: string | null | undefined,
   parksForInference: Park[],
   wizard: TripPlanningPreferences | null,
+  tripProfile: TripPlanningProfile | null | undefined = null,
 ): DayPlanningPaidAccess {
+  const dpa = tripProfile?.defaultPaidQueueAccess;
+  if (dpa === "yes" || dpa === "no" || dpa === "not_sure" || dpa === "decide_later") {
+    return dpa;
+  }
+
   if (!regionId || !wizard) return "not_sure";
 
   const hasDisney = regionHasDisneyQueueParks(parksForInference, regionId);
@@ -411,6 +418,8 @@ function mapIntelligenceMealToDayMeal(
       return "mixed";
     case "snacks":
       return "snacks";
+    case "existing_only":
+      return "existing_only";
     default:
       return "suggest";
   }
@@ -504,6 +513,7 @@ export function buildDefaultDayIntentForSmartPlan(
     args.regionId,
     args.parksForRegionalQueueInference,
     wizard,
+    profile,
   );
 
   const mealPreference = profile

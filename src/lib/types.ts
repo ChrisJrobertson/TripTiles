@@ -176,6 +176,7 @@ export type TripIntelligenceMealPreference =
   | "table_service"
   | "mixed"
   | "snacks"
+  | "existing_only"
   | "unknown";
 
 export type TripIntelligenceQueuePreference =
@@ -184,6 +185,46 @@ export type TripIntelligenceQueuePreference =
   | "willing_to_wait"
   | "unknown";
 
+/** ── Smart Plan holiday wizard (`trips.preferences.trip_planning_profile` extensions) ── */
+
+export type SmartPlanScopeChoice =
+  | "plan_this_day_only"
+  | "fill_empty_days_only"
+  | "improve_whole_trip"
+  | "suggest_changes_first";
+
+export type SmartPlanHolidayStyle =
+  | "first_time_theme_park_trip"
+  | "big_rides_and_headlines"
+  | "balanced_family_holiday"
+  | "food_shows_and_atmosphere"
+  | "relaxed_with_some_parks"
+  | "special_occasion"
+  | "unknown";
+
+export type SmartPlanWizardParty =
+  | "adults_only"
+  | "family_with_small_children"
+  | "family_with_teens"
+  | "mixed_family"
+  | "accessibility_sensitive"
+  | "unknown";
+
+export type SmartPlanPaceStyle =
+  | "relaxed"
+  | "balanced"
+  | "packed"
+  | "half_day"
+  | "unknown";
+
+export type SmartPlanRestRhythm =
+  | "rest_every_2_days"
+  | "rest_every_3_to_4_days"
+  | "weekends_lighter"
+  | "first_and_last_day_light"
+  | "no_preference";
+
+/** Holiday-level trip intelligence row (persisted JSONB). */
 export type TripPlanningProfile = {
   partyType: TripPlanningPartyType;
   rideTolerance: TripRideTolerance;
@@ -192,9 +233,20 @@ export type TripPlanningProfile = {
   pacePreference: TripIntelligencePacePreference;
   mealPreference: TripIntelligenceMealPreference;
   queuePreference: TripIntelligenceQueuePreference;
-  /** Compact keys or tags the system has picked up from behaviour (kept small for JSONB). */
   learnedSignals: string[];
   updatedAt: string;
+
+  holidayStyle?: SmartPlanHolidayStyle;
+  wizardParty?: SmartPlanWizardParty;
+  restRhythm?: SmartPlanRestRhythm;
+  /** Canonical park ids (`mk`, etc.) inferred from wizard tokens. */
+  parkPriorityParkIds?: string[];
+  /** Raw wizard tokens incl. non-park focus like `shopping_downtime`. */
+  experiencePriorityTokens?: string[];
+  /** Wizard pace row (distinct from legacy pacePreference coercion). */
+  paceStyle?: SmartPlanPaceStyle;
+  /** Default paid-queue stance for Smart Plan copy + seeded day intents — aligned with DayPlanningPaidAccess. */
+  defaultPaidQueueAccess?: DayPlanningPaidAccess;
 };
 
 export type DayPlanFeedbackReason =

@@ -1,7 +1,10 @@
 "use client";
 
 import { generateDaySequenceAction } from "@/actions/day-sequencer";
-import { updateTripPlanningPreferencesAction } from "@/actions/trips";
+import {
+  saveTripPlanningProfileAction,
+  updateTripPlanningPreferencesAction,
+} from "@/actions/trips";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { daysBetween, parseDate } from "@/lib/date-helpers";
 import {
@@ -13,20 +16,24 @@ import type { ParkDaySequenceOutput } from "@/lib/day-sequencer";
 import { planningPaceToSequencerPace } from "@/lib/day-sequencer";
 import type { SequencerPace } from "@/lib/day-sequencer";
 import { showToast } from "@/lib/toast";
-import {
-  PACE_OPTIONS,
-  PRIORITY_OPTIONS,
-} from "@/lib/planning-preference-options";
 import { sortPrioritiesForDay } from "@/lib/ride-plan-display";
-import type {
-  Park,
-  PlanningPace,
-  Trip,
-  TripPlanningPreferences,
-} from "@/lib/types";
+import type { Park, PlanningPace, Trip, TripPlanningPreferences } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
 import { LogoSpinner } from "@/components/ui/LogoSpinner";
 import { SequenceTimeline } from "@/components/planner/SequenceTimeline";
+import {
+  SmartPlanHolidayWizardSteps,
+  holidayWizardStepCount,
+} from "@/components/planner/SmartPlanHolidayWizardSteps";
+import {
+  buildHolidayWizardSupplementPrompt,
+  buildTripPlanningProfileFromHolidayWizard,
+  computeHolidayAssignmentsPreview,
+  holidayWizardDefaults,
+  mapWizardToPlanningPreferences,
+  smartPlanOverwriteFromScope,
+  type HolidaySmartWizardState,
+} from "@/lib/smart-plan-holiday-wizard";
 import {
   useCallback,
   useEffect,
@@ -124,13 +131,14 @@ export function SmartPlanModal({
   ridePrioritiesForDay = [],
 }: Props) {
   const [mode, setMode] = useState<"smart" | "custom">("smart");
-  const [pace, setPace] = useState<PlanningPace>("balanced");
-  const [mustDoParks, setMustDoParks] = useState<Set<string>>(new Set());
-  const [priorities, setPriorities] = useState<Set<string>>(new Set());
-  const [additionalNotes, setAdditionalNotes] = useState("");
-  const [customText, setCustomText] = useState("");
   const [replaceExistingTiles, setReplaceExistingTiles] = useState(false);
   const [skipPrefsSaving, setSkipPrefsSaving] = useState(false);
+  const [holidayWizard, setHolidayWizard] = useState<HolidaySmartWizardState>(
+    () => holidayWizardDefaults(),
+  );
+  const [holidayStep, setHolidayStep] = useState(0);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [customText, setCustomText] = useState("");
 
   const [dayPlannerSource, setDayPlannerSource] = useState<"touring" | "ai">(
     "ai",
@@ -150,17 +158,13 @@ export function SmartPlanModal({
   useEffect(() => {
     if (!isOpen || !trip) return;
     const p = trip.planning_preferences;
-    if (p) {
-      setPace(p.pace === "intense" ? "go_go_go" : p.pace);
-      setMustDoParks(new Set(p.mustDoParks ?? []));
-      setPriorities(new Set(p.priorities ?? []));
-      setAdditionalNotes(p.additionalNotes ?? "");
-    } else {
-      setPace("balanced");
-      setMustDoParks(new Set());
-      setPriorities(new Set());
-      setAdditionalNotes("");
+    const hw = holidayWizardDefaults();
+    if (scope === "day" && dayDateKey) {
+      hw.scope = "plan_this_day_only";
     }
+    setHolidayWizard(hw);
+    setHolidayStep(0);
+
     setCustomText("");
     setMode("smart");
     setReplaceExistingTiles(false);
@@ -338,6 +342,143 @@ export function SmartPlanModal({
     return () => window.clearInterval(id);
   }, [sequencerBusy]);
 
+  const holidayPreview = useMemo(
+    () => (trip ? computeHolidayAssignmentsPreview(trip) : null),
+    [trip],
+  );
+
+  const holidayLastIndex = holidayWizardStepCount(isDayScope) - 1;
+
+  const handleWizardNext = useCallback(() => {
+    if (!isDayScope && holidayStep === 0 && holidayWizard.scope === null) {
+      showToast("Choose what Smart Plan should do first.");
+      return;
+    }
+    setHolidayStep((s) => Math.min(holidayLastIndex, s + 1));
+  }, [
+    isDayScope,
+    holidayStep,
+    holidayWizard.scope,
+    holidayLastIndex,
+  ]);
+
+  const handleSubmit = useCallback(
+    async (e: FormEvent) => {
+      e.preventDefault();
+      if (!trip) return;
+      if (isGenerating || sequencerBusy || profileSaving) return;
+      if (showTouringPlanToggle && dayPlannerSource === "touring") {
+        await runTouringGenerate();
+        return;
+      }
+      if (mode === "custom" && !customText.trim()) return;
+
+      const touringAiPath =
+        !(showTouringPlanToggle && dayPlannerSource === "touring");
+      const smartUsingWizard = mode === "smart" && touringAiPath;
+      if (smartUsingWizard && holidayStep < holidayLastIndex) return;
+
+      const base = trip.planning_preferences;
+      const skipDisney =
+        trip.planning_preferences?.includeDisneySkipTips !== false;
+      const skipUniversal =
+        trip.planning_preferences?.includeUniversalSkipTips !== false;
+
+      if (mode === "smart" && smartUsingWizard) {
+        setProfileSaving(true);
+        try {
+          const profile = buildTripPlanningProfileFromHolidayWizard({
+            wizard: holidayWizard,
+            tripParks: parks,
+          });
+          const profRes = await saveTripPlanningProfileAction({
+            tripId: trip.id,
+            profile,
+          });
+          if (!profRes.ok) {
+            showToast(profRes.error);
+            return;
+          }
+          const prevPrefs = (trip.preferences ?? {}) as Record<string, unknown>;
+          onTripPatch?.({
+            preferences: {
+              ...prevPrefs,
+              trip_planning_profile: profile,
+            },
+          });
+          const planningPreferences = mapWizardToPlanningPreferences({
+            trip,
+            wizard: holidayWizard,
+            tripParks: parks,
+          });
+          const supplement = buildHolidayWizardSupplementPrompt(holidayWizard);
+          const userPrompt = [supplement, holidayWizard.freeText.trim()]
+            .filter(Boolean)
+            .join("\n\n");
+          const scopeForTiles =
+            holidayWizard.scope ?? "fill_empty_days_only";
+          const replaceTiles = smartPlanOverwriteFromScope(scopeForTiles);
+          await onGenerate({
+            mode: "smart",
+            userPrompt,
+            replaceExistingTiles: replaceTiles,
+            dateKey: isDayScope ? (dayDateKey ?? undefined) : undefined,
+            planningPreferences,
+          });
+        } finally {
+          setProfileSaving(false);
+        }
+        return;
+      }
+
+      const planningPreferences: TripPlanningPreferences = base
+        ? {
+            ...base,
+            includeDisneySkipTips: skipDisney,
+            includeUniversalSkipTips: skipUniversal,
+          }
+        : {
+            pace: "balanced",
+            mustDoParks: [],
+            priorities: [],
+            additionalNotes: null,
+            adults: trip.adults,
+            children: trip.children,
+            childAges: trip.child_ages ?? [],
+            includeDisneySkipTips: skipDisney,
+            includeUniversalSkipTips: skipUniversal,
+          };
+
+      await onGenerate({
+        mode,
+        userPrompt: customText.trim(),
+        replaceExistingTiles,
+        dateKey: isDayScope ? (dayDateKey ?? undefined) : undefined,
+        planningPreferences,
+      });
+    },
+    [
+      trip,
+      isGenerating,
+      sequencerBusy,
+      profileSaving,
+      showTouringPlanToggle,
+      dayPlannerSource,
+      runTouringGenerate,
+      mode,
+      customText,
+      holidayStep,
+      holidayLastIndex,
+      holidayWizard,
+      parks,
+      onTripPatch,
+      onGenerate,
+      isDayScope,
+      dayDateKey,
+      replaceExistingTiles,
+    ],
+  );
+
   if (!isOpen || !trip) return null;
 
   const dayLabel = isDayScope
@@ -353,71 +494,25 @@ export function SmartPlanModal({
       ? daysBetween(parseDate(trip.start_date), parseDate(trip.end_date)) + 1
       : 0;
 
+  const touringSubmitReady =
+    showTouringPlanToggle && dayPlannerSource === "touring";
+
+  const smartUsingWizard = mode === "smart" && !touringSubmitReady;
+  const smartOnPreviewStep =
+    smartUsingWizard && holidayStep === holidayLastIndex;
+
+  const smartWillOverwriteWholeTrip =
+    smartOnPreviewStep && holidayWizard.scope === "improve_whole_trip";
+
   const smartSummary = isDayScope
-    ? `Trip will plan AM, PM, lunch, and dinner for ${dayLabel ?? "this day"}, using your preferences and historical crowd patterns.${
+    ? `You’re shaping how TripTiles plans ${dayLabel ?? "this day"} — park days, rest rhythm, and meal posture, not ride-by-ride micromanagement.${
         dayHasCalendarTiles
-          ? " Your calendar already has parks or meals for this day — Trip will treat them as your plan, fill only empty slots by default, and keep written tips consistent with those picks."
+          ? " Your calendar already has tiles for this day — the scope you pick on step 1 decides how much can change."
           : ""
       }`
     : tripDays > 0
-      ? `I'll build a ${tripDays}-day plan for ${trip.adults} adult${trip.adults === 1 ? "" : "s"}${trip.children ? ` and ${trip.children} child${trip.children === 1 ? "" : "ren"}` : ""} in ${regionLabel}, optimising park days using historical crowd patterns for your dates.`
-      : `I'll build a plan for ${regionLabel} using historical crowd patterns for your trip dates.`;
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (!trip) return;
-    if (isGenerating || sequencerBusy) return;
-    if (showTouringPlanToggle && dayPlannerSource === "touring") {
-      await runTouringGenerate();
-      return;
-    }
-    if (mode === "custom" && !customText.trim()) return;
-    const base = trip.planning_preferences;
-    const skipDisney =
-      trip.planning_preferences?.includeDisneySkipTips !== false;
-    const skipUniversal =
-      trip.planning_preferences?.includeUniversalSkipTips !== false;
-    const planningPreferences: TripPlanningPreferences =
-      mode === "smart"
-        ? {
-            pace,
-            mustDoParks: Array.from(mustDoParks),
-            priorities: Array.from(priorities).slice(0, 3),
-            additionalNotes: additionalNotes.trim() || null,
-            adults: trip.adults,
-            children: trip.children,
-            childAges: trip.child_ages ?? [],
-            includeDisneySkipTips: skipDisney,
-            includeUniversalSkipTips: skipUniversal,
-          }
-        : base
-          ? {
-              ...base,
-              includeDisneySkipTips: skipDisney,
-              includeUniversalSkipTips: skipUniversal,
-            }
-          : {
-              pace: "balanced",
-              mustDoParks: [],
-              priorities: [],
-              additionalNotes: null,
-              adults: trip.adults,
-              children: trip.children,
-              childAges: trip.child_ages ?? [],
-              includeDisneySkipTips: skipDisney,
-              includeUniversalSkipTips: skipUniversal,
-            };
-    await onGenerate({
-      mode,
-      userPrompt:
-        mode === "smart"
-          ? additionalNotes.trim()
-          : customText.trim(),
-      replaceExistingTiles,
-      dateKey: isDayScope ? (dayDateKey ?? undefined) : undefined,
-      planningPreferences,
-    });
-  }
+      ? `TripTiles will use your answers to structure all ${tripDays} days in ${regionLabel} — parks, rest days, meal windows, and day notes — while detailed ride order still comes from AI Day Strategy later.`
+      : `TripTiles will use your answers to structure this trip in ${regionLabel}.`;
 
   const skipTheLineSection = (
     <section className="rounded-lg border border-royal/15 bg-white/80 px-4 py-3">
@@ -474,13 +569,11 @@ export function SmartPlanModal({
   );
 
   const customOver = customText.length > MAX_CHARS;
-  const touringSubmitReady =
-    showTouringPlanToggle && dayPlannerSource === "touring";
   const canSubmit = touringSubmitReady
     ? true
-    : mode === "smart"
-      ? true
-      : Boolean(customText.trim()) && !customOver;
+    : mode === "custom"
+      ? Boolean(customText.trim()) && !customOver
+      : smartOnPreviewStep;
 
   return (
     <div
@@ -494,9 +587,11 @@ export function SmartPlanModal({
           id="smart-plan-title"
           className="font-serif text-xl font-semibold text-royal"
         >
-          {isDayScope
-            ? `Let Trip plan ${dayLabel ?? "this day"}`
-            : "Smart Plan: your whole trip"}
+        {isDayScope
+          ? dayLabel
+            ? `Smart Plan · ${dayLabel}`
+            : "Smart Plan this day"
+          : "Smart Plan your holiday"}
         </h2>
 
         {showTouringPlanToggle ? (
@@ -553,13 +648,12 @@ export function SmartPlanModal({
         ) : !touringSubmitReady ? (
           <>
             <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
-              {isDayScope
-                ? "Tell Trip your priorities — Trip will fill this day with the best parks, dining, and activities for your family."
-                : `This generates a plan across all ${tripDays} days of your trip. Existing tiles you've placed are protected unless you check "Overwrite" below.`}
+              {smartSummary}
             </p>
             <p className="mt-1 font-sans text-xs leading-relaxed text-royal/60">
-              Crowd-aware scheduling uses patterns we ship in-app — not live
-              park data.
+              Crowd-aware scheduling uses patterns we ship in-app — not live park
+              data. Smart Plan shapes days and intents; AI Day Strategy still
+              builds ride-level detail when you open a day.
             </p>
           </>
         ) : null}
@@ -586,11 +680,22 @@ export function SmartPlanModal({
             you travel.
           </div>
         )}
-        {!touringSubmitReady ? (
+        {!touringSubmitReady && mode === "custom" ? (
           <p className="mt-2 font-sans text-[0.7rem] leading-snug text-royal/55">
             <strong className="text-royal/70">Tip:</strong> leave &quot;Overwrite
             existing tiles&quot; off to keep what you&apos;ve placed; use{" "}
             <strong>↶ Undo Smart Plan</strong> after a run if you want to revert.
+          </p>
+        ) : !touringSubmitReady && smartUsingWizard && smartOnPreviewStep ? (
+          <p className="mt-2 font-sans text-[0.7rem] leading-snug text-royal/55">
+            <strong className="text-royal/70">Ready:</strong> applying saves your{" "}
+            <strong className="text-royal/80">trip planning profile</strong> and runs
+            Smart Plan with the scope you chose.
+          </p>
+        ) : !touringSubmitReady && smartUsingWizard ? (
+          <p className="mt-2 font-sans text-[0.7rem] leading-snug text-royal/55">
+            Use <strong className="text-royal/80">Next</strong> — you&apos;ll confirm
+            everything on the preview step before TripTiles changes the calendar.
           </p>
         ) : null}
 
@@ -598,9 +703,9 @@ export function SmartPlanModal({
           onSubmit={(e) => void handleSubmit(e)}
           className="mt-4 min-w-0 space-y-4"
         >
-          {!touringSubmitReady ? (
+          {!touringSubmitReady && mode === "custom" ? (
             <div className="space-y-3">{skipTheLineSection}</div>
-          ) : (
+          ) : touringSubmitReady ? (
             <div className="space-y-4 rounded-lg border border-royal/15 bg-white/85 px-4 py-4">
               <section>
                 <h3 className="font-sans text-sm font-semibold text-royal">
@@ -707,7 +812,7 @@ export function SmartPlanModal({
                 </p>
               </section>
             </div>
-          )}
+          ) : null}
 
           {!touringSubmitReady ? (
             <>
@@ -720,7 +825,10 @@ export function SmartPlanModal({
                   type="button"
                   role="radio"
                   aria-checked={mode === "smart"}
-                  onClick={() => setMode("smart")}
+                  onClick={() => {
+                    setMode("smart");
+                    setHolidayStep(0);
+                  }}
                   className={`flex-1 rounded-md px-3 py-2 text-center font-sans text-sm font-medium transition ${
                     mode === "smart"
                       ? "bg-royal text-cream"
@@ -746,138 +854,30 @@ export function SmartPlanModal({
 
               {mode === "smart" ? (
                 <>
-              <div className="rounded-lg border border-gold/40 bg-white/80 px-4 py-3 font-sans text-sm leading-relaxed text-royal">
-                {smartSummary}
-              </div>
-
-              <div className="max-h-[min(52vh,22rem)] space-y-4 overflow-y-auto pr-1">
-                <section>
-                  <h3 className="font-sans text-sm font-semibold text-royal">
-                    What&apos;s your pace?
-                  </h3>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                    {PACE_OPTIONS.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => setPace(p.id)}
-                        className={`min-h-[44px] rounded-xl border p-3 text-left text-sm transition ${
-                          pace === p.id
-                            ? "border-royal bg-white ring-2 ring-royal/20"
-                            : "border-royal/15 bg-white hover:border-royal/30"
-                        }`}
-                        disabled={isGenerating}
-                      >
-                        <span className="text-lg">{p.emoji}</span>
-                        <div className="mt-1 font-semibold text-royal">
-                          {p.title}
-                        </div>
-                        <div className="mt-1 text-xs text-royal/70">
-                          {p.body}
-                        </div>
-                      </button>
-                    ))}
+                  <div className="rounded-lg border border-gold/40 bg-white/80 px-4 py-3 font-sans text-sm leading-relaxed text-royal">
+                    {smartSummary}
                   </div>
-                </section>
-
-                <section>
-                  <h3 className="font-sans text-sm font-semibold text-royal">
-                    Any must-do parks?
-                  </h3>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setMustDoParks(new Set())}
-                      className={`min-h-[40px] rounded-full border px-3 py-2 font-sans text-xs ${
-                        mustDoParks.size === 0
-                          ? "border-royal bg-royal text-cream"
-                          : "border-royal/25 bg-white"
-                      }`}
-                      disabled={isGenerating}
-                    >
-                      No preference — surprise me!
-                    </button>
-                    {parks.map((pk) => (
-                      <button
-                        key={pk.id}
-                        type="button"
-                        onClick={() => {
-                          setMustDoParks((prev) => {
-                            const n = new Set(prev);
-                            if (n.has(pk.id)) n.delete(pk.id);
-                            else n.add(pk.id);
-                            return n;
-                          });
-                        }}
-                        className={`min-h-[40px] rounded-full border px-3 py-2 font-sans text-xs ${
-                          mustDoParks.has(pk.id)
-                            ? "border-royal bg-royal text-cream"
-                            : "border-royal/25 bg-white"
-                        }`}
-                        disabled={isGenerating}
-                      >
-                        {pk.icon ? `${pk.icon} ` : ""}
-                        {pk.name}
-                      </button>
-                    ))}
+                  <div className="max-h-[min(58vh,28rem)] min-h-[12rem] overflow-y-auto pr-1">
+                    <SmartPlanHolidayWizardSteps
+                      trip={trip}
+                      parks={parks}
+                      wizard={holidayWizard}
+                      setWizard={setHolidayWizard}
+                      stepIndex={holidayStep}
+                      isDayScope={isDayScope}
+                      preview={
+                        holidayPreview ?? {
+                          totalTripNights: 0,
+                          calendarDays: 0,
+                          daysWithFilledSlots: 0,
+                          fullyEmptyDays: 0,
+                        }
+                      }
+                      isSubmitting={isGenerating || profileSaving}
+                    />
                   </div>
-                </section>
-
-                <section>
-                  <h3 className="font-sans text-sm font-semibold text-royal">
-                    What matters most? (pick up to 3)
-                  </h3>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {PRIORITY_OPTIONS.map((p) => {
-                      const on = priorities.has(p.id);
-                      const disabled = !on && priorities.size >= 3;
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          disabled={disabled || isGenerating}
-                          onClick={() => {
-                            setPriorities((prev) => {
-                              const n = new Set(prev);
-                              if (n.has(p.id)) n.delete(p.id);
-                              else if (n.size < 3) n.add(p.id);
-                              return n;
-                            });
-                          }}
-                          className={`min-h-[40px] rounded-full border px-3 py-2 font-sans text-xs disabled:opacity-40 ${
-                            on
-                              ? "border-royal bg-royal text-cream"
-                              : "border-royal/25 bg-white"
-                          }`}
-                        >
-                          {p.emoji} {p.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-
-                <section>
-                  <h3 className="font-sans text-sm font-semibold text-royal">
-                    Anything else Trip should know? (optional)
-                  </h3>
-                  <textarea
-                    className="mt-2 min-h-[88px] w-full resize-y rounded-lg border border-royal/25 px-3 py-2 font-sans text-sm text-royal placeholder:text-royal/35"
-                    maxLength={MAX_CHARS}
-                    value={additionalNotes}
-                    onChange={(e) =>
-                      setAdditionalNotes(e.target.value.slice(0, MAX_CHARS))
-                    }
-                    placeholder="e.g. My daughter loves Frozen, we need a rest day mid-trip, we are staying at Reunion Resort…"
-                    disabled={isGenerating}
-                  />
-                  <p className="mt-1 text-right font-sans text-xs text-royal/50">
-                    {additionalNotes.length} / {MAX_CHARS}
-                  </p>
-                </section>
-              </div>
-            </>
-          ) : (
+                </>
+              ) : (
             <label className="block">
               <span className="font-sans text-sm font-medium text-royal">
                 Your trip style &amp; priorities
@@ -902,11 +902,7 @@ export function SmartPlanModal({
               </span>
             </label>
           )}
-            </>
-          ) : null}
 
-          {!touringSubmitReady ? (
-            <>
           {showFreeTierNote ? (
             <p className="font-sans text-xs text-royal/65">
               Free plan:{" "}
@@ -922,6 +918,7 @@ export function SmartPlanModal({
             </p>
           )}
 
+          {mode === "custom" ? (
           <div className="rounded-xl border-2 border-gold/30 bg-gradient-to-b from-white to-cream/90 p-4 shadow-sm">
             <p className="font-serif text-sm font-semibold tracking-tight text-royal">
               Your existing calendar
@@ -961,6 +958,7 @@ export function SmartPlanModal({
               </p>
             ) : null}
           </div>
+          ) : null}
 
           <p className="font-sans text-[0.7rem] leading-snug text-royal/55">
             Crowd predictions are based on historical patterns and general
@@ -1016,25 +1014,61 @@ export function SmartPlanModal({
             </button>
           ) : null}
 
-          <div className="flex flex-wrap gap-2 pt-2">
+          <div className="flex flex-wrap items-stretch gap-2 pt-2 sm:items-center">
             <button
               type="button"
               onClick={isGenerating ? onCancelGeneration : onClose}
-              disabled={sequencerBusy}
+              disabled={sequencerBusy || profileSaving}
               className="min-h-[44px] rounded-lg border border-royal/30 bg-white px-4 py-2.5 font-sans text-sm font-medium text-royal disabled:opacity-60"
             >
               {isGenerating ? "Stop generating" : "Cancel"}
             </button>
+            {smartUsingWizard && holidayStep > 0 ? (
+              <button
+                type="button"
+                onClick={() => setHolidayStep((s) => Math.max(0, s - 1))}
+                disabled={isGenerating || sequencerBusy || profileSaving}
+                className="min-h-[44px] rounded-lg border border-royal/30 bg-white px-4 py-2.5 font-sans text-sm font-medium text-royal disabled:opacity-60"
+              >
+                Back
+              </button>
+            ) : null}
+            {smartUsingWizard && !smartOnPreviewStep ? (
+              <button
+                type="button"
+                onClick={handleWizardNext}
+                disabled={isGenerating || sequencerBusy || profileSaving}
+                className="min-h-[44px] min-w-[10rem] flex-1 rounded-lg px-4 py-3 font-serif text-sm font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-60 sm:min-w-[12rem] bg-[color:var(--tt-ring)]"
+              >
+                Next
+              </button>
+            ) : null}
+            {!(smartUsingWizard && !smartOnPreviewStep) ? (
             <button
               type="submit"
-              disabled={isGenerating || sequencerBusy || !canSubmit}
+              disabled={
+                isGenerating || sequencerBusy || profileSaving || !canSubmit
+              }
               className={`min-h-[44px] min-w-[12rem] flex-1 rounded-lg px-4 py-3 font-serif text-sm font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-60 ${
-                replaceExistingTiles && !touringSubmitReady
+                (replaceExistingTiles &&
+                  mode === "custom" &&
+                  !touringSubmitReady) ||
+                smartWillOverwriteWholeTrip
                   ? "bg-amber-600"
                   : "bg-[color:var(--tt-ring)]"
               }`}
             >
-              {isGenerating ? (
+              {profileSaving ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <LogoSpinner
+                    size="sm"
+                    className="shrink-0"
+                    variant="onDark"
+                    decorative
+                  />
+                  Saving profile…
+                </span>
+              ) : isGenerating ? (
                 <span className="inline-flex items-center justify-center gap-2">
                   <LogoSpinner size="sm" className="shrink-0" variant="onDark" decorative />
                   Generating your plan…
@@ -1046,14 +1080,23 @@ export function SmartPlanModal({
                 </span>
               ) : touringSubmitReady ? (
                 "Generate touring plan ✨"
+              ) : smartUsingWizard ? (
+                isDayScope && dayHasAiTimeline ? (
+                  "Apply Smart Plan · Regenerate day ✨"
+                ) : (
+                  "Apply Smart Plan ✨"
+                )
               ) : isDayScope && dayHasAiTimeline ? (
                 "Regenerate ✨"
-              ) : replaceExistingTiles && !touringSubmitReady ? (
+              ) : replaceExistingTiles &&
+                  mode === "custom" &&
+                  !touringSubmitReady ? (
                 "Generate (will overwrite existing tiles)"
               ) : (
                 "Generate"
               )}
             </button>
+            ) : null}
           </div>
           {!isDayScope ? (
             <p className="mt-3 text-left font-sans text-sm leading-relaxed text-gray-400">
