@@ -89,6 +89,77 @@ export type PlanningPace = "relaxed" | "balanced" | "intense" | "go_go_go";
 /** Pro/Family AI Day Strategy gate (reserved `limit_reached` for future caps). */
 export type AIDayStrategyEntitlement = "allowed" | "tier_blocked" | "limit_reached";
 
+export type DayPlanningParkAction =
+  | "keep_existing"
+  | "change_park"
+  | "add_park"
+  | "rest_day"
+  | "suggest";
+
+export type DayPlanningDayType =
+  | "thrill_heavy"
+  | "balanced_family"
+  | "lower_thrill"
+  | "shows_food_exploring"
+  | "shorter_easier"
+  | "suggest";
+
+export type DayPlanningRideLevel =
+  | "big_thrills"
+  | "some_thrills"
+  | "gentle"
+  | "shows_lands_food";
+
+export type DayPlanningMealPreference =
+  | "do_not_plan"
+  | "quick_service"
+  | "table_service"
+  | "mixed"
+  | "snacks"
+  | "existing_only"
+  | "suggest";
+
+export type DayPlanningPace = "packed" | "balanced" | "relaxed" | "half_day";
+
+export type DayPlanningStartPreference =
+  | "rope_drop"
+  | "normal_morning"
+  | "slow_start"
+  | "afternoon";
+
+export type DayPlanningFinishPreference =
+  | "after_lunch"
+  | "mid_afternoon"
+  | "early_evening"
+  | "night_atmosphere"
+  | "close";
+
+export type DayPlanningPaidAccess = "yes" | "no" | "not_sure" | "decide_later";
+
+export type DayPlanningChangePermission =
+  | "fill_gaps_only"
+  | "add_around_existing"
+  | "reorder_unlocked"
+  | "replace_ai_only"
+  | "start_again";
+
+export type DayPlanningIntent = {
+  parkAction: DayPlanningParkAction;
+  selectedParkIds: string[];
+  dayType: DayPlanningDayType;
+  rideLevel: DayPlanningRideLevel;
+  avoid: string[];
+  mealPreference: DayPlanningMealPreference;
+  pace: DayPlanningPace;
+  startPreference: DayPlanningStartPreference;
+  finishPreference: DayPlanningFinishPreference;
+  paidAccess: DayPlanningPaidAccess;
+  mustInclude: string;
+  mustAvoid: string;
+  changePermission: DayPlanningChangePermission;
+  completedAt?: string;
+};
+
 export type PlanningMobility =
   | "none"
   | "stroller"
@@ -285,6 +356,7 @@ export type TripPreferences = {
   ai_day_timeline?: Record<string, AiDayTimeline>;
   /** Pro/Family sequenced ride strategy per calendar day (`YYYY-MM-DD`). */
   ai_day_strategy?: Record<string, AIDayStrategy>;
+  ai_day_intent?: Record<string, DayPlanningIntent>;
   day_notes?: Record<string, string>;
   must_dos?: unknown;
   must_dos_snapshot?: unknown;

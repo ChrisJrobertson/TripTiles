@@ -20,10 +20,15 @@ import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { normaliseThemeKey, type ThemeKey } from "@/lib/themes";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
+import {
+  isDayPlanningIntent,
+  isValidDateYmd,
+} from "@/lib/day-planning-intent";
 import { readMustDosMap } from "@/lib/must-dos";
 import type {
   Assignments,
   Assignment,
+  DayPlanningIntent,
   Destination,
   SlotAssignmentValue,
   TripPlanningPreferences,
@@ -1357,6 +1362,60 @@ export async function updateParkMustDoDoneAction({
     revalidatePlanner();
     revalidatePath("/plans");
     return { ok: true, nextPreferences: next as Record<string, unknown> };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
+  }
+}
+
+export async function saveDayPlanningIntentAction(input: {
+  tripId: string;
+  date: string;
+  intent: DayPlanningIntent;
+}): Promise<
+  { ok: true; intent: DayPlanningIntent } | { ok: false; error: string }
+> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { ok: false, error: "Not signed in." };
+    if (!isValidDateYmd(input.date)) {
+      return { ok: false, error: "Date must be YYYY-MM-DD." };
+    }
+    if (!isDayPlanningIntent(input.intent)) {
+      return { ok: false, error: "Invalid day planning intent." };
+    }
+
+    const intent: DayPlanningIntent = {
+      ...input.intent,
+      completedAt: input.intent.completedAt ?? new Date().toISOString(),
+    };
+
+    const supabase = await createClient();
+    const { data: tripRow, error: tripErr } = await supabase
+      .from("trips")
+      .select("id")
+      .eq("id", input.tripId)
+      .eq("owner_id", user.id)
+      .maybeSingle();
+
+    if (tripErr) return { ok: false, error: tripErr.message };
+    if (!tripRow) return { ok: false, error: "Trip not found." };
+
+    const { data, error } = await supabase.rpc("set_trip_day_planning_intent", {
+      p_trip_id: input.tripId,
+      p_date: input.date,
+      p_intent: intent,
+    });
+
+    if (error) return { ok: false, error: error.message };
+    if (!isDayPlanningIntent(data)) {
+      return { ok: false, error: "Saved intent shape was invalid." };
+    }
+
+    revalidatePlanner();
+    return { ok: true, intent: data };
   } catch (e) {
     return {
       ok: false,
