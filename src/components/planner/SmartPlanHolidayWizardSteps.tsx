@@ -179,8 +179,8 @@ const MEAL_OPTIONS: { id: HolidaySmartWizardState["mealChoice"]; title: string; 
     },
     {
       id: "mixed",
-      title: "Mix of both",
-      body: "Quick service + occasional table service.",
+      title: "Mix of quick & occasional table-service",
+      body: "Flexible breaks — TripTiles keeps sit-down dinners selective, not daily.",
     },
     { id: "snacks", title: "Snacks only", body: "Grazing style." },
     {

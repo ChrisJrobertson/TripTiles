@@ -109,20 +109,51 @@ function inferPartyTypeFromTripDemographics(trip: Trip): TripPlanningPartyType {
   return "couple";
 }
 
-function resolveWizardPartyType(params: {
+/** Seeds the holiday wizard party before the guest selects a Travel group pill. */
+export function inferDefaultWizardPartyFromTrip(trip: Trip): SmartPlanWizardParty {
+  if (trip.children > 0) {
+    const ages = trip.child_ages ?? [];
+    const allTeens =
+      ages.length > 0 && ages.every((a) => a >= 13);
+    if (allTeens) return "family_with_teens";
+    return "family_with_small_children";
+  }
+  return "adults_only";
+}
+
+/**
+ * Stale profiles sometimes carry family-shaped wizard selections that contradict
+ * a child-less trip demographics (e.g. old defaults).
+ */
+export function coerceSavedWizardPartyForTrip(
+  saved: SmartPlanWizardParty | undefined,
+  trip: Trip,
+): SmartPlanWizardParty {
+  const inferred = inferDefaultWizardPartyFromTrip(trip);
+  if (!saved || saved === "unknown") return inferred;
+  if (trip.children === 0) {
+    if (saved === "family_with_small_children" || saved === "family_with_teens") {
+      return inferred;
+    }
+    if (saved === "mixed_family" && trip.adults <= 2) {
+      return inferred;
+    }
+  }
+  return saved;
+}
+
+function resolveTripPlanningPartyType(params: {
   wizardParty: SmartPlanWizardParty;
   trip: Trip;
 }): TripPlanningPartyType {
-  if (params.wizardParty !== "unknown") {
-    return mapWizardPartyToPartyType(params.wizardParty);
+  if (params.wizardParty === "unknown" || params.wizardParty === "adults_only") {
+    return inferPartyTypeFromTripDemographics(params.trip);
   }
-  return inferPartyTypeFromTripDemographics(params.trip);
+  return mapWizardPartyToPartyType(params.wizardParty);
 }
 
 function mapWizardPartyToPartyType(w: SmartPlanWizardParty): TripPlanningPartyType {
   switch (w) {
-    case "adults_only":
-      return "couple";
     case "family_with_small_children":
     case "family_with_teens":
     case "accessibility_sensitive":
@@ -278,6 +309,113 @@ function priorityTokenMatchesPark(
   }
 }
 
+const PRIORITY_TOKEN_WHITELIST = new Set<string>([
+  "mk",
+  "ep",
+  "hs",
+  "ak",
+  "uf",
+  "ia",
+  "eu",
+  "water_parks",
+  "shopping_downtime",
+]);
+
+function tripRideToleranceToComfort(r: TripRideTolerance): SmartPlanRideComfort {
+  switch (r) {
+    case "thrill_seeker":
+      return "big_thrills";
+    case "moderate_thrills":
+      return "some_thrills";
+    case "mostly_gentle":
+      return "gentle";
+    case "minimal_motion":
+      return "shows_lands_food";
+    default:
+      return "unknown";
+  }
+}
+
+function tripMealPrefToWizardChoice(
+  m: TripIntelligenceMealPreference,
+): SmartPlanMealChoice {
+  switch (m) {
+    case "do_not_plan":
+      return "do_not_assume";
+    case "quick_service":
+      return "quick_service";
+    case "table_service":
+      return "table_service";
+    case "mixed":
+      return "mixed";
+    case "snacks":
+      return "snacks";
+    case "existing_only":
+      return "existing_only";
+    default:
+      return "unknown";
+  }
+}
+
+/**
+ * Initialise holiday Smart Plan wizard UI from demographics + persisted profile.
+ */
+export function hydrateHolidayWizardFromTripPreferences(params: {
+  trip: Trip;
+  profile: TripPlanningProfile | null;
+}): HolidaySmartWizardState {
+  const { trip, profile } = params;
+  const w = holidayWizardDefaults();
+  if (!profile) {
+    w.wizardParty = inferDefaultWizardPartyFromTrip(trip);
+    return w;
+  }
+
+  w.wizardParty = coerceSavedWizardPartyForTrip(profile.wizardParty, trip);
+  if (profile.holidayStyle) w.holidayStyle = profile.holidayStyle;
+  if (profile.paceStyle) w.paceStyle = profile.paceStyle;
+  if (profile.restRhythm) w.restRhythm = profile.restRhythm;
+  if (profile.avoidances?.length) {
+    const ALLOW: SmartPlanAvoidanceKey[] = [
+      "big_drops",
+      "spinning",
+      "water_rides",
+      "scary_rides",
+      "simulators",
+      "long_walking_days",
+      "early_starts",
+      "late_nights",
+    ];
+    const next = profile.avoidances.filter((a): a is SmartPlanAvoidanceKey =>
+      ALLOW.includes(a as SmartPlanAvoidanceKey),
+    );
+    if (next.length > 0) w.avoidances = next;
+  }
+  if (profile.mealPreference) {
+    w.mealChoice = tripMealPrefToWizardChoice(profile.mealPreference);
+  }
+  w.rideComfort = tripRideToleranceToComfort(profile.rideTolerance);
+  if (
+    profile.defaultPaidQueueAccess === "yes" ||
+    profile.defaultPaidQueueAccess === "no" ||
+    profile.defaultPaidQueueAccess === "not_sure" ||
+    profile.defaultPaidQueueAccess === "decide_later"
+  ) {
+    w.paidAccessDefault = profile.defaultPaidQueueAccess;
+  }
+
+  if (
+    Array.isArray(profile.experiencePriorityTokens) &&
+    profile.experiencePriorityTokens.length > 0
+  ) {
+    const ok = profile.experiencePriorityTokens.filter(
+      (t): t is SmartParkPriorityToken => PRIORITY_TOKEN_WHITELIST.has(t),
+    );
+    if (ok.length > 0) w.parkPriorities = ok;
+  }
+  return w;
+}
+
 /**
  * Trip Intelligence profile persisted from the holiday Smart Plan wizard (with optional tokens for non-park picks).
  */
@@ -290,7 +428,7 @@ export function buildTripPlanningProfileFromHolidayWizard(params: {
   const nowIso = new Date().toISOString();
   const parkIds = resolveParkPriorityIds(wizard.parkPriorities, tripParks);
   return {
-    partyType: resolveWizardPartyType({
+    partyType: resolveTripPlanningPartyType({
       wizardParty: wizard.wizardParty,
       trip,
     }),

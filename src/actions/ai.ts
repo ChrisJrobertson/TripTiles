@@ -8,6 +8,7 @@ import { getTripById, mapTripRow } from "@/lib/db/trips";
 import {
   applyArrivalDayNoThemeParks,
   enforceAiPlanGuardrails,
+  rebalanceStructuralMealsForProfile,
   stripStructuralMealSlotsWhenDeclined,
   requiresCruiseSegment,
   sortDateKeysFromSet,
@@ -255,6 +256,7 @@ DAY NOTES RULES (CRITICAL):
 
 STRUCTURAL MEALS DEFAULT:
 - Only assign lunch/dinner to dining tile IDs (owl, tsr, char, specd, villa) or named-restaurant catalogue ids when the guest's trip profile explicitly allows meal planning or the user message says those slots are already set and must be kept. If unsure, omit lunch/dinner rather than filling them.
+- When the user message includes MIXED MEALS — WHOLE-TRIP SHAPE or QUICK SERVICE MEALS guidance, obey it literally: selective meal placeholders only, sparse table-service pacing, omit structural meals on Fly Out/Home days unless a slot is already locked.
 
 CROWD_PATTERNS (when in user message): 0–10 heuristics per park/weekday/month — use internally only. Never put numeric score workings in user-facing strings. Never claim live waits or exact attendance.
 
@@ -1965,13 +1967,30 @@ export async function runGenerateAIPlan(
     .sort((a, b) => a.localeCompare(b));
   const namedRestaurantHint =
     allowsStructuralMealTiles && namedRestaurantNames.length > 0
-      ? `NAMED_RESTAURANT_TILES: The following named restaurants are available as dining tiles for this region: ${namedRestaurantNames.join(", ")}. You may assign 1–2 of these to Lunch or Dinner slots where appropriate, using their exact names. Prefer named restaurants over generic "Table Service" or "Quick Service" tiles where a specific restaurant fits the day's location and vibe.`
+      ? tripProfileForStructuralMeals?.mealPreference === "mixed"
+        ? `NAMED_RESTAURANT_TILES: ${namedRestaurantNames.join(", ")}. Guest meal mode is MIXED — use named or table-service tiles sparingly (roughly a few sit-down dinners for the whole trip, weighted toward non-park or rest/off-park shopping days); do not blanket QS lunch + TS dinner across every stamina park pair. Prefer generic QS (owl) on select park-heavy days only.`
+        : `NAMED_RESTAURANT_TILES: The following named restaurants are available as dining tiles for this region: ${namedRestaurantNames.join(", ")}. You may assign 1–2 of these to Lunch or Dinner slots where appropriate, using their exact names. Prefer named restaurants over generic "Table Service" or "Quick Service" tiles where a specific restaurant fits the day's location and vibe.`
       : null;
 
+  const mealPrefHint = tripProfileForStructuralMeals?.mealPreference;
+  const structuralMealHints: string[] = [];
+  if (input.mode === "smart") {
+    if (!allowsStructuralMealTiles) {
+      structuralMealHints.push(
+        `STRUCTURAL MEALS — HARD RULE: Trip profile mealPreference is "${mealPrefHint ?? "unset — treat as declined"}". Do NOT output lunch or dinner keys with dining tile IDs (owl, tsr, char, specd, villa) or any named-restaurant tile id from the catalogue. Omit lunch and dinner slots entirely unless the CALENDAR ALREADY SET block shows that slot locked with an existing meal tile (preserve-existing mode). Use at most one short generic sentence in planner_day_notes about leaving flexibility for meals — no venue names or cuisine specifics.`,
+      );
+    } else if (mealPrefHint === "mixed") {
+      structuralMealHints.push(
+        `MIXED MEALS — WHOLE-TRIP SHAPE (honour downstream code will also prune): Aim for selective meal placeholders, NOT automatic QS lunch + sit-down dinner on every park day. Typical pattern: sparing generic QS lunches on some stamina park pairs; roughly 2–4 table-service / signature-style dinners TOTAL across the calendar (scale with trip length), prioritising rest/off-park/shopping-tone days rather than headline park pairs. Omit structural lunch AND dinner tiles on Fly Out / Fly Home days unless CALENDAR ALREADY shows those slots locked. Never fill both lunch and dinner on every gate-stamina day.`,
+      );
+    } else if (mealPrefHint === "quick_service") {
+      structuralMealHints.push(
+        `QUICK SERVICE MEALS: Use owl/specd sparingly — never pair with table-service IDs (tsr, char, villa, named-restaurant catalogue ids).`,
+      );
+    }
+  }
   const structuralMealPolicyUserBlock =
-    input.mode === "smart" && !allowsStructuralMealTiles
-      ? `STRUCTURAL MEALS — HARD RULE: Trip profile mealPreference is "${tripProfileForStructuralMeals?.mealPreference ?? "unset — treat as declined"}". Do NOT output lunch or dinner keys with dining tile IDs (owl, tsr, char, specd, villa) or any named-restaurant tile id from the catalogue. Omit lunch and dinner slots entirely unless the CALENDAR ALREADY SET block shows that slot locked with an existing meal tile (preserve-existing mode). Use at most one short generic sentence in planner_day_notes about leaving flexibility for meals — no venue names or cuisine specifics.`
-      : null;
+    structuralMealHints.length > 0 ? structuralMealHints.join("\n\n") : null;
 
   const tripPlanningContextSummary = buildTripPlanningContextForAI(trip, {
     parksById,
@@ -2455,12 +2474,20 @@ export async function runGenerateAIPlan(
           sortedDateKeys,
           parksById,
         );
-    const merged = stripStructuralMealSlotsWhenDeclined({
+    const mergedAfterStrip = stripStructuralMealSlotsWhenDeclined({
       merged: mergedAfterArrival,
       prior: trip.assignments,
       mealPreference: tripProfileForStructuralMeals?.mealPreference,
       parksById,
       preserveExistingSlots: preserve,
+    });
+    const merged = rebalanceStructuralMealsForProfile({
+      merged: mergedAfterStrip,
+      prior: trip.assignments,
+      mealPreference: tripProfileForStructuralMeals?.mealPreference,
+      parksById,
+      preserveExistingSlots: preserve,
+      sortedTripDateKeys: sortedAllTripDateKeys,
     });
 
     // Validate day notes against the post-generation, post-merge, post-sanitise

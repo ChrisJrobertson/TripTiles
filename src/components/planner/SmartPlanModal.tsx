@@ -30,10 +30,12 @@ import {
   buildTripPlanningProfileFromHolidayWizard,
   computeHolidayAssignmentsPreview,
   holidayWizardDefaults,
+  hydrateHolidayWizardFromTripPreferences,
   mapWizardToPlanningPreferences,
   smartPlanOverwriteFromScope,
   type HolidaySmartWizardState,
 } from "@/lib/smart-plan-holiday-wizard";
+import { readTripPlanningProfile } from "@/lib/trip-intelligence";
 import {
   useCallback,
   useEffect,
@@ -155,10 +157,21 @@ export function SmartPlanModal({
   const [touringError, setTouringError] = useState<string | null>(null);
   const touringRunRef = useRef(0);
 
+  const plannerProfileSeed = useMemo(() => {
+    if (!trip?.preferences) return "";
+    return (
+      readTripPlanningProfile(trip.preferences)?.updatedAt ?? "__noprofile__"
+    );
+  }, [trip?.preferences]);
+
   useEffect(() => {
     if (!isOpen || !trip) return;
     const p = trip.planning_preferences;
-    const hw = holidayWizardDefaults();
+    const savedProfile = readTripPlanningProfile(trip.preferences ?? {});
+    const hw = hydrateHolidayWizardFromTripPreferences({
+      trip,
+      profile: savedProfile,
+    });
     if (scope === "day" && dayDateKey) {
       hw.scope = "plan_this_day_only";
     }
@@ -184,11 +197,9 @@ export function SmartPlanModal({
     } else {
       setDayPlannerSource("ai");
     }
-    // Intentionally not depending on `trip` object — we only re-seed the form
-    // when the modal opens or the active trip changes, not on planning_preferences
-    // patches (e.g. skip-line toggles) to avoid resetting in-progress choices.
+    // Re-seed when the modal opens, trip changes, or saved trip_planning_profile updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, trip?.id, scope, dayDateKey]);
+  }, [isOpen, trip?.id, plannerProfileSeed, scope, dayDateKey]);
 
   const persistSkipLinePrefs = useCallback(
     async (nextDisney: boolean, nextUniversal: boolean) => {

@@ -340,6 +340,20 @@ function pruneEmptyDays(assignments: Assignments): Assignments {
   return out;
 }
 
+function classifyTableStructuralDining(
+  slotId: string | undefined,
+  parksById: Map<string, Park>,
+): boolean {
+  if (!slotId) return false;
+  if (slotId === "tsr" || slotId === "char" || slotId === "villa") return true;
+  const p = parksById.get(slotId);
+  return p ? isNamedRestaurantPark(p) : false;
+}
+
+function classifyQuickStructural(slotId: string | undefined): boolean {
+  return slotId === "owl" || slotId === "specd";
+}
+
 function isStructuralSmartPlanMealSlot(
   slotId: string | undefined,
   parksById: Map<string, Park>,
@@ -348,6 +362,218 @@ function isStructuralSmartPlanMealSlot(
   if (DINING_IDS.has(slotId)) return true;
   const p = parksById.get(slotId);
   return p ? isNamedRestaurantPark(p) : false;
+}
+
+function dayHasFlyTravelTile(day: Assignment | undefined): boolean {
+  if (!day) return false;
+  for (const s of ["am", "pm", "lunch", "dinner"] as const) {
+    const id = getParkIdFromSlotValue(day[s]);
+    if (id && (FLYOUT_IDS.has(id) || FLYHOME_IDS.has(id))) return true;
+  }
+  return false;
+}
+
+/** Both AM & PM tiles are headline theme parks → high-stamina park day. */
+function isFullMainVenueParkPairDay(
+  day: Assignment | undefined,
+  parksById: Map<string, Park>,
+): boolean {
+  const amId = getParkIdFromSlotValue(day?.am);
+  const pmId = getParkIdFromSlotValue(day?.pm);
+  const pa = amId ? parksById.get(amId) : undefined;
+  const pb = pmId ? parksById.get(pmId) : undefined;
+  return Boolean(
+    pa &&
+      MAIN_PARK_GROUPS.has(pa.park_group) &&
+      pb &&
+      MAIN_PARK_GROUPS.has(pb.park_group),
+  );
+}
+
+/** Rest / springs / softer days — better candidates for sparing table-service use. */
+function sitDownFriendlyDay(
+  day: Assignment | undefined,
+  parksById: Map<string, Park>,
+): boolean {
+  if (!day) return false;
+  if (isFullMainVenueParkPairDay(day, parksById)) return false;
+  return true;
+}
+
+function isModelStructuralMealSlot(
+  dk: string,
+  slot: "lunch" | "dinner",
+  out: Assignments,
+  prior: Assignments,
+  preserveExistingSlots: boolean,
+): boolean {
+  const mergedId = getParkIdFromSlotValue(out[dk]?.[slot]);
+  if (!mergedId) return false;
+  if (!preserveExistingSlots) return true;
+  const prevId = getParkIdFromSlotValue(prior[dk]?.[slot]);
+  return !prevId;
+}
+
+/**
+ * Lighter structural meal tiling for profiles that consent to QS/TS, without
+ * day-strategy sequencing.
+ *
+ * — `mixed`: cap ~2–4 table-style placements per trip, thin QS on heavy park days,
+ *   strip fly travel days unless the slot was guest-locked (preserve mode).
+ * — `quick_service`: drop table structural tiles the model inferred.
+ */
+export function rebalanceStructuralMealsForProfile(params: {
+  merged: Assignments;
+  prior: Assignments;
+  mealPreference: TripIntelligenceMealPreference | null | undefined;
+  parksById: Map<string, Park>;
+  preserveExistingSlots: boolean;
+  sortedTripDateKeys: string[];
+}): Assignments {
+  const {
+    merged,
+    prior,
+    mealPreference,
+    parksById,
+    preserveExistingSlots,
+    sortedTripDateKeys,
+  } = params;
+  const pref = mealPreference;
+  const takesStructural =
+    pref === "mixed" ||
+    pref === "quick_service" ||
+    pref === "table_service" ||
+    pref === "snacks";
+  if (!takesStructural) return merged;
+
+  const out = cloneAssignments(merged);
+
+  /** Fly days — omit automatic structural meals everywhere this applies. */
+  for (const dk of sortedTripDateKeys) {
+    const day = out[dk];
+    if (!day || !dayHasFlyTravelTile(day)) continue;
+    for (const slot of ["lunch", "dinner"] as const) {
+      const id = getParkIdFromSlotValue(day[slot]);
+      if (!id || !isStructuralSmartPlanMealSlot(id, parksById)) continue;
+      if (!isModelStructuralMealSlot(dk, slot, out, prior, preserveExistingSlots))
+        continue;
+      delete day[slot];
+    }
+    if (Object.keys(day).length === 0) delete out[dk];
+  }
+
+  /** quick_service preference never fabricates TS / signature dining tiles. */
+  if (pref === "quick_service") {
+    for (const dk of sortedTripDateKeys) {
+      const day = out[dk];
+      if (!day) continue;
+      for (const slot of ["lunch", "dinner"] as const) {
+        const id = getParkIdFromSlotValue(day[slot]);
+        if (
+          !id ||
+          !classifyTableStructuralDining(id, parksById) ||
+          !isModelStructuralMealSlot(dk, slot, out, prior, preserveExistingSlots)
+        ) {
+          continue;
+        }
+        delete day[slot];
+      }
+      if (Object.keys(day).length === 0) delete out[dk];
+    }
+    return pruneEmptyDays(out);
+  }
+
+  if (pref !== "mixed") return pruneEmptyDays(out);
+
+  const calendarSpan = sortedTripDateKeys.length;
+  const maxTableTouches = Math.min(
+    4,
+    Math.max(2, Math.round(calendarSpan / 5) || 2),
+  );
+
+  type Tagged = {
+    dk: string;
+    score: number;
+  };
+  const tableDinnerTags: Tagged[] = [];
+  for (const dk of sortedTripDateKeys) {
+    const day = out[dk];
+    if (!day) continue;
+    const id = getParkIdFromSlotValue(day.dinner);
+    if (
+      !id ||
+      !classifyTableStructuralDining(id, parksById) ||
+      !isModelStructuralMealSlot(dk, "dinner", out, prior, preserveExistingSlots)
+    ) {
+      continue;
+    }
+    const sd = sitDownFriendlyDay(day, parksById) ? 2 : 0;
+    tableDinnerTags.push({ dk, score: sd });
+  }
+
+  if (tableDinnerTags.length > maxTableTouches) {
+    tableDinnerTags.sort((a, b) => a.score - b.score || a.dk.localeCompare(b.dk));
+    const dropCount = tableDinnerTags.length - maxTableTouches;
+    for (let i = 0; i < dropCount; i++) {
+      const { dk } = tableDinnerTags[i]!;
+      const day = out[dk];
+      if (!day?.dinner) continue;
+      if (
+        isModelStructuralMealSlot(dk, "dinner", out, prior, preserveExistingSlots)
+      ) {
+        delete day.dinner;
+        if (Object.keys(day).length === 0) delete out[dk];
+      }
+    }
+  }
+
+  /** Remove speculative table lunches on full park-stamina days. */
+  for (const dk of sortedTripDateKeys) {
+    const day = out[dk];
+    if (!day || !isFullMainVenueParkPairDay(day, parksById)) continue;
+    const lid = getParkIdFromSlotValue(day.lunch);
+    if (
+      lid &&
+      classifyTableStructuralDining(lid, parksById) &&
+      isModelStructuralMealSlot(dk, "lunch", out, prior, preserveExistingSlots)
+    ) {
+      delete day.lunch;
+      if (Object.keys(day).length === 0) delete out[dk];
+    }
+  }
+
+  const fullParkDays = sortedTripDateKeys.filter((dk) =>
+    isFullMainVenueParkPairDay(out[dk], parksById),
+  );
+  const fpCount = fullParkDays.length;
+  const owlCap =
+    fpCount === 0 ? 0 : Math.min(fpCount, Math.max(2, Math.ceil(fpCount * 0.55)));
+  const owlLunches: string[] = [];
+  for (const dk of sortedTripDateKeys) {
+    const day = out[dk];
+    if (
+      !day ||
+      !isFullMainVenueParkPairDay(day, parksById) ||
+      !classifyQuickStructural(getParkIdFromSlotValue(day.lunch))
+    )
+      continue;
+    if (
+      !isModelStructuralMealSlot(dk, "lunch", out, prior, preserveExistingSlots)
+    )
+      continue;
+    owlLunches.push(dk);
+  }
+
+  while (owlLunches.length > owlCap) {
+    const dk = owlLunches.pop();
+    if (!dk) break;
+    const day = out[dk];
+    if (!day?.lunch) continue;
+    delete day.lunch;
+    if (Object.keys(day).length === 0) delete out[dk];
+  }
+
+  return pruneEmptyDays(out);
 }
 
 /**
