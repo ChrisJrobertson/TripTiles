@@ -418,6 +418,140 @@ export function applyDayStrategyRecommendationSafety(
   return { strategy: finalStrategy, logTags };
 }
 
+const PAID_QUEUE_STEP_TYPES = new Set([
+  "express_pass",
+  "lightning_lane",
+  "single_rider",
+]);
+
+/** Confirms or assumes the guest already has / is using paid skip-line products. */
+function lineImpliesConfirmedPaidQueueAccess(line: string): boolean {
+  const t = line.trim();
+  if (!t) return false;
+  const patterns: RegExp[] = [
+    /\bgiven\s+express/i,
+    /\bexpress\s+pass\s+access/i,
+    /\bincluded\s+express/i,
+    /\brelies\s+on.{0,80}express/i,
+    /\bqueue\s+strategy\s+relies/i,
+    /\bhotel.{0,50}express/i,
+    /\bwith\s+your\s+express/i,
+    /\busing\s+(your\s+)?express/i,
+    /\bwith\s+express\s+pass/i,
+    /\byour\s+lightning\s+lane/i,
+    /\bmulti[\s-]?pass\s+booking/i,
+    /\bpremier\s+pass/i,
+    /\bconfirmed\s+.{0,40}(express|lightning)/i,
+  ];
+  return patterns.some((re) => re.test(t));
+}
+
+function scrubProseRemovingPaidQueueClaims(text: string): string {
+  const t = text.trim();
+  if (!t) return t;
+  const parts = t.split(/(?<=[.!?])\s+/);
+  const kept = parts.filter((p) => !lineImpliesConfirmedPaidQueueAccess(p));
+  const out = kept.join(" ").trim();
+  return out.length >= 8
+    ? out
+    : "Use standby queues unless you confirm paid skip-line options in the official app.";
+}
+
+function filterWarningLinesDroppingPaidClaims(lines: string[]): string[] {
+  return lines.filter(
+    (l) => typeof l === "string" && !lineImpliesConfirmedPaidQueueAccess(l),
+  );
+}
+
+function paidQueueOptionalAdviceNotes(strategy: AIDayStrategy): string[] {
+  const out: string[] = [];
+  const e = strategy.express_pass_strategy;
+  if (e && (e.priority_rides.length > 0 || e.skip_with_express.length > 0)) {
+    out.push(
+      `If you later purchase Express Pass: possible priority rides — ${e.priority_rides.join(", ") || "—"}; rides where Express may matter less — ${e.skip_with_express.join(", ") || "—"}.`,
+    );
+  }
+  const l = strategy.lightning_lane_strategy;
+  if (l?.multi_pass_bookings?.length) {
+    out.push(
+      `If you later add Lightning Lane / Multi Pass: example booking targets (not part of this standby plan) — ${l.multi_pass_bookings.map((b) => b.ride).join(", ")}.`,
+    );
+  }
+  if (l?.single_pass_recommendations?.length) {
+    out.push(
+      `If you buy Single Pass later: ideas — ${l.single_pass_recommendations.join(", ")}.`,
+    );
+  }
+  return out;
+}
+
+/**
+ * When day intent does not confirm paid skip-line access (`paidAccess` not `yes`),
+ * strip paid-queue-dependent sequencing and strategies so the plan is standby-first.
+ */
+export function applyPaidAccessIntentSafety(
+  strategy: AIDayStrategy,
+  intent: DayPlanningIntent,
+): { strategy: AIDayStrategy; logTags: string[] } {
+  const logTags: string[] = [];
+  if (intent.paidAccess === "yes") {
+    return { strategy, logTags };
+  }
+
+  const optionalAdd = [...(strategy.optional_sequence_notes ?? [])];
+  if (intent.paidAccess === "decide_later") {
+    optionalAdd.push(...paidQueueOptionalAdviceNotes(strategy));
+    logTags.push("paid_access_intent:decide_later_optional_advice");
+  }
+
+  const nextSeq: AIDayStrategy["ride_sequence"] = strategy.ride_sequence.map(
+    (step) => {
+      if (PAID_QUEUE_STEP_TYPES.has(step.type)) {
+        logTags.push(`paid_access_intent:coerce_${step.type}_to_standby`);
+        return {
+          ...step,
+          type: "standby",
+          notes: scrubProseRemovingPaidQueueClaims(step.notes),
+        };
+      }
+      return {
+        ...step,
+        notes: lineImpliesConfirmedPaidQueueAccess(step.notes)
+          ? scrubProseRemovingPaidQueueClaims(step.notes)
+          : step.notes,
+      };
+    },
+  );
+
+  const qualityBase = filterWarningLinesDroppingPaidClaims(
+    strategy.quality_warnings ?? [],
+  );
+  const qualityWithBanner = [
+    ...qualityBase,
+    "Paid queue access was not confirmed, so this plan uses standby assumptions.",
+  ];
+
+  const out: AIDayStrategy = {
+    ...strategy,
+    ride_sequence: nextSeq,
+    arrival_reason: scrubProseRemovingPaidQueueClaims(strategy.arrival_reason),
+    warnings: filterWarningLinesDroppingPaidClaims([...strategy.warnings]),
+    quality_warnings: [...new Set(qualityWithBanner)],
+  };
+
+  delete out.lightning_lane_strategy;
+  delete out.express_pass_strategy;
+
+  if (optionalAdd.length > 0) {
+    out.optional_sequence_notes = [...new Set(optionalAdd)].slice(0, 28);
+  } else {
+    delete out.optional_sequence_notes;
+  }
+
+  logTags.push("paid_access_intent:stripped_ll_express_blocks");
+  return { strategy: out, logTags };
+}
+
 export function formatAllowedAttractionsSectionsForPrompt(
   allowedParkIds: readonly string[],
   parkById: Map<string, Park>,

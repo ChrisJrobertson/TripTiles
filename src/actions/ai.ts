@@ -29,6 +29,7 @@ import {
 } from "@/lib/park-ride-constraints";
 import {
   applyDayStrategyRecommendationSafety,
+  applyPaidAccessIntentSafety,
   dominantFromIntentThemeParksOnly,
   formatAllowedAttractionsSectionsForPrompt,
   resolvePrimaryAndAllowedParkIdsForDayStrategy,
@@ -3641,7 +3642,7 @@ You DO NOT have access to:
 - Today's actual park schedule, special events, or ride closures
 - Crowd predictions for the specific date
 
-Output JSON only — no commentary, no preamble, no markdown fencing.
+When the user prompt states paidAccess is anything other than yes for that day, omit express_pass_strategy and lightning_lane_strategy from JSON, never set ride_sequence[].type to express_pass, lightning_lane, or single_rider, and phrase all queue advice as standby-first.
 
 ==== ABSOLUTE RULES ====
 
@@ -4524,13 +4525,25 @@ export async function generateDayStrategy(input: {
     currentAssignments: existingDayAssignments as Record<string, unknown>,
   });
 
+  const intentRestrictsPaidQueues = requiredDayIntent.paidAccess !== "yes";
+
   const intentSpecificRules: string[] = [];
+  if (intentRestrictsPaidQueues) {
+    intentSpecificRules.push(
+      "PAID ACCESS RULE: Do not assume paid queue access. Do not base the main ride sequence on Express, Lightning Lane, Premier Pass, Single Rider, or equivalent products. Use only standby (and rope_drop / non-paid step types) in ride_sequence. Omit express_pass_strategy and lightning_lane_strategy from your JSON output entirely. You may mention paid options only as future decisions, not as active products.",
+    );
+  }
+  if (requiredDayIntent.paidAccess === "decide_later") {
+    intentSpecificRules.push(
+      'DECIDE-LATER PAID ACCESS: The guest selected "decide later" — treat every skip-line product as undecided. Sequence the day as standby-first. Never write copy that implies Express, Lightning Lane, or Single Rider is already included, booked, or the basis of the plan.',
+    );
+  }
   if (
     requiredDayIntent.paidAccess === "no" ||
     requiredDayIntent.paidAccess === "not_sure"
   ) {
     intentSpecificRules.push(
-      "PAID ACCESS RULE: Do not assume paid queue access. Do not base the main ride sequence on Express, Lightning Lane, Premier Pass, Single Rider, or equivalent products. You may mention them only as optional future advice.",
+      "PAID ACCESS CLARITY: paidAccess is no or not_sure — your JSON must not include express_pass_strategy or lightning_lane_strategy, and ride_sequence must not use types express_pass, lightning_lane, or single_rider.",
     );
   }
   if (requiredDayIntent.mealPreference === "do_not_plan") {
@@ -4570,13 +4583,24 @@ export async function generateDayStrategy(input: {
   }
 
   const passInstructionTail: string[] = [];
-  if (line === "disney" && prefs.disneyLightningLane?.multiPassStatus === "none") {
+  if (intentRestrictsPaidQueues && line === "disney") {
+    passInstructionTail.push(
+      "",
+      'CRITICAL — DAY INTENT: paidAccess is not "yes" for this day. Omit lightning_lane_strategy from JSON. Do not use ride_sequence types lightning_lane or single_rider.',
+    );
+  } else if (line === "disney" && prefs.disneyLightningLane?.multiPassStatus === "none") {
     passInstructionTail.push(
       "",
       "IMPORTANT: This family does NOT have Lightning Lane Multi Pass. Do not include multi_pass_bookings in your output (omit the field or use an empty array).",
     );
   }
-  if (line === "universal" && prefs.universalExpress?.status === "no") {
+
+  if (intentRestrictsPaidQueues && line === "universal") {
+    passInstructionTail.push(
+      "",
+      'CRITICAL — DAY INTENT: paidAccess is not "yes" for this day. Omit express_pass_strategy from JSON. Do not use ride_sequence types express_pass, lightning_lane, or single_rider.',
+    );
+  } else if (line === "universal" && prefs.universalExpress?.status === "no") {
     passInstructionTail.push(
       "",
       "IMPORTANT: This family does NOT have Universal Express Pass. Do not include express_pass_strategy in your output.",
@@ -4601,6 +4625,15 @@ export async function generateDayStrategy(input: {
     `- Existing lunch/dinner slots: ${existingMeals.join(", ") || "None"}`,
     `- Existing must-dos on this day: ${existingMustDosSummary || "None"}`,
     `- Existing ai_day_strategy for this day: ${existingStratForDate ? "present" : "none"}`,
+    ...(intentRestrictsPaidQueues
+      ? [
+          "",
+          "OUTPUT — PAID ACCESS LOCKED BY DAY INTENT:",
+          `- paidAccess for this calendar day is "${requiredDayIntent.paidAccess}". Only paidAccess \"yes\" allows paid-queue-based sequencing.`,
+          "- ride_sequence queue types allowed: rope_drop | standby | meal | show | indoor_break | rest | shopping only.",
+          "- Omit express_pass_strategy and lightning_lane_strategy entirely (do not emit these keys).",
+        ]
+      : []),
     ...(intentSpecificRules.length > 0
       ? ["", "INTENT-SPECIFIC ENFORCEMENT:", ...intentSpecificRules]
       : []),
@@ -4695,10 +4728,12 @@ export async function generateDayStrategy(input: {
         model,
         parkLine: line,
         allowLightningMultiBookings:
-          line !== "disney" ||
-          prefs.disneyLightningLane?.multiPassStatus !== "none",
+          !intentRestrictsPaidQueues &&
+          (line !== "disney" ||
+            prefs.disneyLightningLane?.multiPassStatus !== "none"),
         allowUniversalExpress:
-          line !== "universal" || prefs.universalExpress?.status !== "no",
+          !intentRestrictsPaidQueues &&
+          (line !== "universal" || prefs.universalExpress?.status !== "no"),
         rideConstraints,
       },
     );
@@ -4710,13 +4745,20 @@ export async function generateDayStrategy(input: {
         planningPreferences: prefs,
       });
 
-    const combinedLogTags = [...logTags, ...safetyLogTags];
+    const { strategy: strategyPaid, logTags: paidAccessLogTags } =
+      applyPaidAccessIntentSafety(strategySafe, requiredDayIntent);
+
+    const combinedLogTags = [
+      ...logTags,
+      ...safetyLogTags,
+      ...paidAccessLogTags,
+    ];
     const recordDetail =
       combinedLogTags.length > 0
         ? combinedLogTags.join("|").slice(0, 950)
         : null;
 
-    const strategy = strategySafe;
+    const strategy = strategyPaid;
 
     const prevPrefs =
       trip.preferences && typeof trip.preferences === "object"
