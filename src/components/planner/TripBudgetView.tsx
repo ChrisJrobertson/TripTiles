@@ -7,6 +7,11 @@ import {
   updateTripBudgetItemAction,
   updateTripBudgetSettingsAction,
 } from "@/actions/budget";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { MetricPill } from "@/components/ui/MetricPill";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { formatMoney } from "@/lib/format";
 import { showToast } from "@/lib/toast";
 import type { BudgetCategory, Trip, TripBudgetItem } from "@/lib/types";
@@ -249,16 +254,12 @@ export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
       className={`space-y-6 ${embedded ? "" : "mx-auto max-w-3xl pb-24"}`}
     >
       {!embedded ? (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <h2 className="font-serif text-2xl font-semibold text-royal">
-            Trip budget
-          </h2>
-        </div>
+        <SectionHeader title="Trip budget" subtitle="Track costs against your target." icon="📊" />
       ) : null}
 
-      <div className="rounded-2xl border border-royal/10 bg-white p-4 shadow-sm sm:p-6">
+      <Card variant="default" className="p-4 sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-          <label className="font-sans text-sm text-royal">
+          <label className="font-sans text-sm text-tt-ink">
             <span className="font-semibold">Budget target</span>
             <input
               type="text"
@@ -267,15 +268,15 @@ export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
               onChange={(e) => setTargetDraft(e.target.value)}
               onBlur={() => void saveTarget()}
               placeholder="Optional"
-              className="mt-1 block w-full min-h-11 max-w-xs rounded-lg border border-royal/20 px-3 py-2 font-sans text-royal sm:w-48"
+              className="mt-1 block w-full min-h-11 max-w-xs rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 font-sans text-tt-ink sm:w-48"
             />
           </label>
-          <label className="font-sans text-sm text-royal">
+          <label className="font-sans text-sm text-tt-ink">
             <span className="font-semibold">Currency</span>
             <select
               value={trip.budget_currency}
               onChange={(e) => void saveCurrency(e.target.value)}
-              className="mt-1 block w-full min-h-11 max-w-xs rounded-lg border border-royal/20 bg-white px-3 py-2 font-sans text-royal"
+              className="mt-1 block w-full min-h-11 max-w-xs rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 font-sans text-tt-ink"
             >
               {CURRENCIES.map((c) => (
                 <option key={c.code} value={c.code}>
@@ -286,20 +287,29 @@ export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
           </label>
         </div>
 
-        <p className="mt-4 font-sans text-sm text-royal/80">
-          Total:{" "}
-          <strong>{formatMoney(totals.sum, trip.budget_currency)}</strong>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <MetricPill label="Total" value={formatMoney(totals.sum, trip.budget_currency)} />
+          <MetricPill
+            label="Paid"
+            value={formatMoney(totals.paid, trip.budget_currency)}
+            variant="success"
+          />
+          <MetricPill
+            label="Outstanding"
+            value={formatMoney(totals.outstanding, trip.budget_currency)}
+            variant="warning"
+          />
           {target != null ? (
-            <>
-              {" "}
-              / {formatMoney(target, trip.budget_currency)} target
-              {pct != null ? ` · ${pct}% spent` : null}
-            </>
+            <MetricPill
+              label="Target"
+              value={`${formatMoney(target, trip.budget_currency)}${pct != null ? ` · ${pct}%` : ""}`}
+              variant="magic"
+            />
           ) : null}
-        </p>
+        </div>
         {target != null && target > 0 ? (
           <div
-            className="mt-2 h-3 w-full overflow-hidden rounded-full bg-royal/10"
+            className="mt-3 h-3 w-full overflow-hidden rounded-full bg-tt-royal-soft"
             role="progressbar"
             aria-valuenow={pct ?? 0}
             aria-valuemin={0}
@@ -311,11 +321,7 @@ export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
             />
           </div>
         ) : null}
-        <p className="mt-3 font-sans text-sm text-royal/75">
-          Paid: {formatMoney(totals.paid, trip.budget_currency)} · Outstanding:{" "}
-          {formatMoney(totals.outstanding, trip.budget_currency)}
-        </p>
-      </div>
+      </Card>
 
       {loading ? (
         <div className="space-y-3 rounded-2xl border border-royal/10 bg-white p-5">
@@ -324,22 +330,12 @@ export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
           <div className="h-20 w-full animate-pulse rounded-xl bg-royal/10" />
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-royal/20 bg-cream/60 p-8 text-center">
-          <p className="font-serif text-lg text-royal">
-            Set a total budget and break it down by category.
-          </p>
-          <p className="mt-2 font-sans text-sm text-royal/70">
-            Track your trip costs — flights, hotels, tickets, dining — and see
-            how you&apos;re doing against your target.
-          </p>
-          <button
-            type="button"
-            onClick={openNew}
-            className="mt-6 min-h-11 rounded-lg bg-royal px-5 py-2.5 font-sans text-sm font-semibold text-cream"
-          >
-            + Add your first item
-          </button>
-        </div>
+        <EmptyState
+          icon="💷"
+          title="Set a total budget and break it down"
+          description="Track flights, hotels, tickets, dining, and see how you're doing against your target."
+          action={<Button onClick={openNew}>+ Add your first item</Button>}
+        />
       ) : (
         <div className="space-y-8">
           {CATEGORIES.map((cat) => {
@@ -348,8 +344,8 @@ export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
             const sub = list.reduce((a, b) => a + b.amount, 0);
             return (
               <div key={cat}>
-                <div className="sticky top-0 z-10 -mx-1 border-b border-gold/30 bg-cream/95 px-1 py-2 backdrop-blur">
-                  <h3 className="font-sans text-sm font-bold uppercase tracking-wide text-royal">
+                <div className="sticky top-0 z-10 -mx-1 border-b border-tt-line bg-tt-bg/95 px-1 py-2 backdrop-blur">
+                  <h3 className="font-meta text-sm font-bold uppercase tracking-wide text-tt-royal">
                     {CATEGORY_LABEL[cat]} ·{" "}
                     {formatMoney(sub, trip.budget_currency)}
                   </h3>
@@ -358,40 +354,40 @@ export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
                   {list.map((it) => (
                     <li
                       key={it.id}
-                      className="flex flex-col gap-2 rounded-xl border border-royal/10 bg-white p-3 sm:flex-row sm:items-center sm:justify-between"
+                      className="flex flex-col gap-2 rounded-tt-lg border border-tt-line bg-tt-surface p-3 shadow-tt-sm sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div className="flex min-w-0 flex-1 items-start gap-3">
                         <button
                           type="button"
                           aria-label={it.is_paid ? "Mark unpaid" : "Mark paid"}
                           onClick={() => void togglePaid(it)}
-                          className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-royal/15 text-lg"
+                          className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-tt-md border border-tt-line text-lg"
                         >
                           {it.is_paid ? "✅" : "⬜"}
                         </button>
                         <div className="min-w-0">
                           <p
-                            className={`font-sans text-sm font-medium text-royal ${
+                            className={`font-sans text-sm font-medium text-tt-ink ${
                               it.is_paid ? "opacity-60 line-through" : ""
                             }`}
                           >
                             {it.label}
                           </p>
                           {it.notes ? (
-                            <p className="mt-0.5 font-sans text-xs text-royal/55">
+                            <p className="mt-0.5 font-sans text-xs text-tt-ink-soft">
                               {it.notes}
                             </p>
                           ) : null}
                         </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-2 self-end sm:self-center">
-                        <span className="font-sans text-sm font-semibold text-royal">
+                        <span className="font-sans text-sm font-semibold text-tt-royal">
                           {formatMoney(it.amount, it.currency)}
                         </span>
                         <button
                           type="button"
                           onClick={() => openEdit(it)}
-                          className="min-h-11 min-w-11 rounded-lg border border-royal/20 px-2 font-sans text-xs text-royal"
+                          className="min-h-11 min-w-11 rounded-tt-md border border-tt-line px-2 font-sans text-xs text-tt-royal"
                         >
                           Edit
                         </button>
@@ -413,13 +409,14 @@ export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
       )}
 
       {items.length > 0 ? (
-        <button
+        <Button
           type="button"
+          variant="secondary"
           onClick={openNew}
-          className="min-h-11 w-full rounded-lg border-2 border-dashed border-royal/25 py-3 font-sans text-sm font-semibold text-royal hover:bg-white"
+          className="w-full border-dashed"
         >
           + Add item
-        </button>
+        </Button>
       ) : null}
 
       {editing ? (

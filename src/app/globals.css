@@ -2,21 +2,44 @@
 @config "../../tailwind.config.ts";
 
 :root {
-  /* TripTiles magical theme park color palette */
-  --background: #fce7cc;
-  --foreground: #1a1a2e;
+  /* TripTiles hybrid design system tokens */
+  --tt-bg: #f6efe1;
+  --tt-bg-soft: #fbf3e3;
+  --tt-surface: #ffffff;
+  --tt-surface-warm: #fcf6ea;
+  --tt-ink: #15203a;
+  --tt-ink-muted: #3d4a5c;
+  --tt-ink-soft: #6c7891;
+  --tt-line: #e9ddc4;
+  --tt-line-soft: #f1e7d2;
+  --tt-royal: #1f4ea0;
+  --tt-royal-deep: #173b7d;
+  --tt-royal-soft: #e6edf9;
+  --tt-gold: #d9491a;
+  --tt-gold-soft: #fbe7dc;
+  --tt-magic: #2f93de;
+  --tt-success: #6ab832;
+  --tt-success-soft: #e8f5d8;
+  --tt-warning: #b8651a;
+  --tt-warning-soft: #fbe9cf;
+  --tt-shadow-sm: 0 1px 2px rgba(31, 40, 70, 0.05);
+  --tt-shadow-md:
+    0 4px 18px -4px rgba(31, 40, 70, 0.1),
+    0 2px 6px -2px rgba(31, 40, 70, 0.06);
+  --tt-shadow-lg:
+    0 18px 42px -16px rgba(31, 40, 70, 0.22),
+    0 6px 14px -6px rgba(31, 40, 70, 0.1);
+  --tt-radius-sm: 8px;
+  --tt-radius-md: 12px;
+  --tt-radius-lg: 18px;
+  --tt-radius-xl: 24px;
 
-  /* Primary brand colors */
-  --tt-royal: #2455ac;
-  --tt-gold: #dd4e14;
-  --tt-cream: #fce7cc;
-
-  /* Accent colors */
-  --tt-magic: #3fa2ec;
-  --tt-lime: #a2df56;
+  /* Legacy app tokens mapped to the new system for compatibility. */
+  --background: var(--tt-bg);
+  --foreground: var(--tt-ink);
+  --tt-cream: var(--tt-bg);
+  --tt-lime: var(--tt-success);
   --tt-sky: #c0d5e0;
-
-  /* Highlight colors */
   --tt-cyan: #c3f5fd;
   --tt-pink: #ffb8c2;
   --tt-lavender: #d5caf8;
@@ -25,24 +48,54 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --color-royal: #2455ac;
-  --color-royal-soft: #5c6b88;
-  --color-ink: #3d4a5c;
-  --color-gold: #dd4e14;
-  --color-cream: #fce7cc;
-  --color-magic: #3fa2ec;
-  --color-lime: #a2df56;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-fraunces), Georgia, serif;
+  --font-meta: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --color-tt-bg: var(--tt-bg);
+  --color-tt-bg-soft: var(--tt-bg-soft);
+  --color-tt-surface: var(--tt-surface);
+  --color-tt-surface-warm: var(--tt-surface-warm);
+  --color-tt-ink: var(--tt-ink);
+  --color-tt-ink-muted: var(--tt-ink-muted);
+  --color-tt-ink-soft: var(--tt-ink-soft);
+  --color-tt-line: var(--tt-line);
+  --color-tt-line-soft: var(--tt-line-soft);
+  --color-tt-royal: var(--tt-royal);
+  --color-tt-royal-deep: var(--tt-royal-deep);
+  --color-tt-royal-soft: var(--tt-royal-soft);
+  --color-tt-gold: var(--tt-gold);
+  --color-tt-gold-soft: var(--tt-gold-soft);
+  --color-tt-magic: var(--tt-magic);
+  --color-tt-success: var(--tt-success);
+  --color-tt-success-soft: var(--tt-success-soft);
+  --color-tt-warning: var(--tt-warning);
+  --color-tt-warning-soft: var(--tt-warning-soft);
+  --color-royal: var(--tt-royal);
+  --color-royal-deep: var(--tt-royal-deep);
+  --color-royal-soft: var(--tt-royal-soft);
+  --color-ink: var(--tt-ink-muted);
+  --color-gold: var(--tt-gold);
+  --color-gold-soft: var(--tt-gold-soft);
+  --color-cream: var(--tt-cream);
+  --color-magic: var(--tt-magic);
+  --color-lime: var(--tt-lime);
   --color-sky: #c0d5e0;
   --color-cyan: #c3f5fd;
   --color-pink: #ffb8c2;
   --color-lavender: #d5caf8;
+  --shadow-tt-sm: var(--tt-shadow-sm);
+  --shadow-tt-md: var(--tt-shadow-md);
+  --shadow-tt-lg: var(--tt-shadow-lg);
+  --radius-tt-sm: var(--tt-radius-sm);
+  --radius-tt-md: var(--tt-radius-md);
+  --radius-tt-lg: var(--tt-radius-lg);
+  --radius-tt-xl: var(--tt-radius-xl);
 }
 
 html {
   min-height: 100%;
-  background-color: #fce7cc;
+  background-color: var(--tt-bg);
   /* Clean background - no gradients, just the image overlay */
   background-image: none;
 }
@@ -67,7 +120,7 @@ body::before {
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #1a1a2e;
-    --foreground: #fce7cc;
+    --foreground: var(--tt-bg);
   }
 
   html {
@@ -86,7 +139,7 @@ body {
   min-height: 100dvh;
   background: transparent;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), Arial, Helvetica, sans-serif;
 }
 
 /* Header logo row: no frosted bar — let triptiles-bg show through; edge sparkles match page sides */

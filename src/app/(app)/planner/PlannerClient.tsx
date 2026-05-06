@@ -28,7 +28,9 @@ import {
   updateTripPreferencesPatchAction,
 } from "@/actions/trips";
 import { AppNavHeader } from "@/components/app/AppNavHeader";
+import { Button } from "@/components/ui/Button";
 import { InlineLoadingOverlay } from "@/components/ui/InlineLoadingOverlay";
+import { ModalShell } from "@/components/ui/ModalShell";
 import { AchievementToast } from "@/components/gamification/AchievementToast";
 import { deleteCustomTileAction } from "@/actions/custom-tiles";
 import {
@@ -157,6 +159,8 @@ import {
   useTransition,
 } from "react";
 import "./planner.css";
+
+const SHOW_BOOKING_AFFILIATE_PANEL = false;
 
 type Props = {
   initialTrips: Trip[];
@@ -2449,7 +2453,7 @@ export function PlannerClient({
       label="Smart Plan is building your itinerary"
     >
     <div
-      className="min-h-screen bg-transparent pb-28 pt-2 lg:pb-16"
+      className="min-h-screen bg-transparent pb-28 pt-2 text-tt-ink lg:pb-16"
       style={shellThemeStyle}
     >
       <AppNavHeader
@@ -2473,12 +2477,20 @@ export function PlannerClient({
       {activeTrip ? (
         <main
           ref={mainScrollRef}
-          className="mx-auto w-full max-w-screen-2xl px-4 py-4 sm:px-6 sm:py-6 lg:px-8"
+          className="mx-auto w-full max-w-screen-2xl px-3 py-3 sm:px-5 sm:py-5 lg:px-6"
         >
-          <header className="border-b border-royal/10 pb-5">
-            <div className="flex flex-col gap-1">
+          <header className="relative overflow-hidden rounded-tt-xl border border-tt-line bg-gradient-to-br from-tt-surface via-tt-surface-warm to-tt-bg-soft px-4 py-4 shadow-tt-md sm:px-5 sm:py-5">
+            <div
+              className="pointer-events-none absolute inset-0 opacity-60"
+              aria-hidden
+              style={{
+                backgroundImage:
+                  "radial-gradient(circle at 12% 18%, rgba(255,255,255,.95) 0 1px, transparent 1.5px), radial-gradient(circle at 88% 20%, rgba(217,73,26,.22) 0 1px, transparent 1.6px), radial-gradient(circle at 70% 78%, rgba(47,147,222,.2) 0 1.5px, transparent 2px)",
+              }}
+            />
+            <div className="relative flex flex-col gap-2">
               <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-                <h1 className="min-w-0 flex-1 text-balance font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
+                <h1 className="min-w-0 flex-1 text-balance font-heading text-3xl font-semibold tracking-tight text-tt-royal sm:text-4xl">
                   <EditableTitle
                     key={`${activeTrip.id}-fam`}
                     value={activeTrip.family_name}
@@ -2494,9 +2506,9 @@ export function PlannerClient({
                         if (!res.ok) setSaveError(res.error);
                       });
                     }}
-                    className="inline-block min-w-[4ch] text-royal"
+                    className="inline-block min-w-[4ch] text-tt-royal"
                   />
-                  <span className="text-royal/40"> — </span>
+                  <span className="text-tt-royal/35"> — </span>
                   <span className="inline-flex max-w-full flex-wrap items-baseline gap-1.5 sm:gap-2">
                     <EditableTitle
                       key={`${activeTrip.id}-adv`}
@@ -2555,9 +2567,11 @@ export function PlannerClient({
                 </h1>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                   {showGoToTodayPill ? (
-                    <button
+                    <Button
                       type="button"
-                      className="min-h-11 rounded-full border border-gold/40 bg-gold/90 px-3 font-serif text-xs font-semibold text-royal shadow-sm transition hover:bg-gold"
+                      variant="accent"
+                      size="sm"
+                      className="rounded-full"
                       onClick={() => {
                         const todayKey = formatDateKey(new Date());
                         const el = document.getElementById(
@@ -2572,7 +2586,7 @@ export function PlannerClient({
                       }}
                     >
                       Go to today →
-                    </button>
+                    </Button>
                   ) : null}
                   <PlannerMoreMenu
                     onOpenPanel={(panel) => {
@@ -2585,12 +2599,16 @@ export function PlannerClient({
                   />
                 </div>
               </div>
-              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
-                <Countdown
-                  startDate={activeTrip.start_date}
-                  endDate={activeTrip.end_date}
-                />
-                <TripTimeline trip={activeTrip} variant="inline" />
+              <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+                <div className="rounded-full border border-tt-gold/20 bg-tt-gold-soft/70 px-3 py-1.5 shadow-tt-sm">
+                  <Countdown
+                    startDate={activeTrip.start_date}
+                    endDate={activeTrip.end_date}
+                  />
+                </div>
+                <div className="rounded-full border border-tt-line bg-tt-surface/75 px-3 py-1.5 shadow-tt-sm">
+                  <TripTimeline trip={activeTrip} variant="inline" />
+                </div>
               </div>
             </div>
           </header>
@@ -2666,54 +2684,58 @@ export function PlannerClient({
           ) : null}
 
           <section
-            className="mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-royal/15 bg-gradient-to-br from-white/40 via-white/30 to-white/25 px-3 py-3 shadow-sm ring-1 ring-gold/20 backdrop-blur-md"
+            className="mt-4 flex flex-wrap items-center gap-2 rounded-tt-lg border border-tt-line bg-tt-surface/90 px-3 py-3 shadow-tt-sm backdrop-blur-md"
             aria-label="Trip actions"
           >
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="md"
               onClick={() => {
                 setWizardEditId(activeTripId);
                 setWizardFirstRun(false);
                 setWizardOpen(true);
               }}
-              className="rounded-lg bg-royalSoft px-4 py-2.5 font-sans text-sm font-semibold text-white shadow-sm transition hover:bg-royalSoft/90"
             >
               Edit trip
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="primary"
+              size="md"
               onClick={() => {
                 setSmartError(null);
                 setSmartOpen(true);
               }}
-              className="rounded-lg border-2 border-royalSoft/40 bg-royalSoft px-4 py-2.5 font-sans text-sm font-semibold text-white shadow-sm transition hover:bg-royalSoft/90"
             >
               Smart Plan ✨
-            </button>
+            </Button>
             <PdfExportButton
               tripId={activeTripId}
               disabled={!activeTripId}
               buttonId="planner-pdf-export-btn"
               onAchievementKeys={(keys) => enqueueAchievementKeys(keys)}
             />
-            <button
+            <Button
               type="button"
-              className="inline-flex cursor-pointer select-none rounded-lg border border-royalSoft/25 bg-white px-4 py-2.5 font-sans text-sm font-semibold text-ink shadow-sm transition hover:border-gold/35 hover:bg-cream"
+              variant="secondary"
+              size="md"
               onClick={openCompareDays}
             >
               Compare days
-            </button>
+            </Button>
             {activeTrip.previous_assignments_snapshot_at ? (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="md"
                 onClick={() => setSmartPlanUndoOpen(true)}
-                className="flex items-center gap-2 rounded-lg border border-gold/40 px-4 py-2.5 font-sans text-sm font-medium text-royal/80 shadow-sm transition hover:bg-cream active:bg-cream/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
                 aria-label="Undo last Smart Plan generation"
                 title={`Undo Smart Plan from ${formatUndoSnapshotHint(activeTrip.previous_assignments_snapshot_at)}`}
               >
                 <span aria-hidden>↶</span>
                 Undo Smart Plan
-              </button>
+              </Button>
             ) : null}
             <PlannerActionsMenu
               onCompareDays={openCompareDays}
@@ -2860,12 +2882,13 @@ export function PlannerClient({
               className={`mt-8 grid items-start gap-6 ${
                 compareMode
                   ? ""
-                  : "lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:gap-8 xl:gap-10"
+                : "lg:grid-cols-[minmax(18rem,20rem)_minmax(0,1fr)] lg:gap-5 xl:gap-6"
               }`}
             >
               {!compareMode ? (
-                <div className="hidden space-y-4 md:block lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:pr-1">
-                  {hasAnyAffiliatePartner() ? (
+                <div className="hidden space-y-3 md:block lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:pr-1">
+                  {SHOW_BOOKING_AFFILIATE_PANEL &&
+                  hasAnyAffiliatePartner() ? (
                     <BookTripAffiliatePanel
                       destinationLabel={activeRegionLabel}
                       tripId={activeTrip.id}
@@ -3114,24 +3137,30 @@ export function PlannerClient({
             theme park trip your family will actually follow.
           </p>
           <div className="mx-auto mt-8 flex w-full max-w-md flex-col gap-3 sm:flex-row sm:justify-center">
-            <button
+            <Button
               type="button"
+              variant="accent"
+              size="lg"
+              className="w-full min-w-0 flex-1 font-heading sm:max-w-xs"
               onClick={() => {
                 setWizardFirstRun(true);
                 setWizardOpen(true);
               }}
-              className="min-h-11 w-full min-w-0 flex-1 rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-5 py-2.5 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 sm:min-h-[44px] sm:max-w-xs"
             >
               Plan my trip in minutes
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="secondary"
+              size="lg"
+              className="w-full min-w-0 flex-1 sm:max-w-xs"
               disabled={blankTripBusy}
+              loading={blankTripBusy}
+              loadingLabel="Starting…"
               onClick={() => void startBlankTrip()}
-              className="min-h-11 w-full min-w-0 flex-1 rounded-lg border-2 border-royal/25 bg-white px-5 py-2.5 font-sans text-base font-semibold text-royal transition hover:border-royal/40 hover:bg-cream disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[44px] sm:max-w-xs"
             >
-              {blankTripBusy ? "Starting…" : "Start from scratch"}
-            </button>
+              Start from scratch
+            </Button>
           </div>
           <p className="mt-8 font-sans text-sm text-royal/65">
             Or browse plans from other families to get inspired.
@@ -3148,7 +3177,7 @@ export function PlannerClient({
       )}
 
       {wizardOpen && !wizardEditId ? (
-        <div className="fixed inset-0 z-[88] overflow-y-auto bg-royal/50 backdrop-blur-[2px]">
+        <div className="fixed inset-0 z-[88] overflow-y-auto bg-tt-royal/45 backdrop-blur-[1px]">
           <TripCreationWizard
             regions={regions}
             parks={parks}
@@ -3216,49 +3245,49 @@ export function PlannerClient({
       ) : null}
 
       {smartPlanUndoOpen && activeTrip?.previous_assignments_snapshot_at ? (
-        <div
-          className="fixed inset-0 z-[95] flex items-center justify-center bg-royal/40 p-4"
+        <ModalShell
+          zClassName="z-[95]"
+          overlayClassName="bg-tt-royal/50 backdrop-blur-[1px]"
+          maxWidthClass="max-w-md"
+          panelClassName="p-6"
           role="dialog"
-          aria-modal="true"
+          aria-modal={true}
           aria-labelledby="undo-smart-plan-title"
         >
-          <div className="w-full max-w-md rounded-2xl border border-gold/30 bg-cream p-6 shadow-xl">
             <h2
               id="undo-smart-plan-title"
-              className="font-display text-lg font-semibold text-royal"
+              className="font-heading text-lg font-semibold text-tt-royal"
             >
               Undo Smart Plan?
             </h2>
-            <p className="mt-3 font-sans text-sm text-royal/80">
-              This will restore your trip to the state it was in before the
-              last Smart Plan generation. Any Smart Plan suggestions will be
-              removed.
+            <p className="mt-3 font-sans text-sm text-tt-royal/80">
+              This will restore your trip to the state it was in before the last
+              Smart Plan generation. Any Smart Plan suggestions will be removed.
               This cannot be undone.
             </p>
-            <p className="mt-2 font-sans text-xs text-royal/60">
+            <p className="mt-2 font-sans text-xs text-tt-royal/60">
               Snapshot:{" "}
               {formatUndoSnapshotHint(
                 activeTrip.previous_assignments_snapshot_at,
               )}
             </p>
-            <div className="mt-6 flex flex-wrap justify-end gap-2">
-              <button
+            <div className="mt-6 flex flex-wrap justify-end gap-2 border-t border-tt-line-soft pt-4">
+              <Button
                 type="button"
-                className="rounded-lg border border-gold/40 px-4 py-2 font-sans text-sm font-medium text-royal/80 hover:bg-white"
+                variant="secondary"
                 onClick={() => setSmartPlanUndoOpen(false)}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="rounded-lg bg-royal px-4 py-2 font-sans text-sm font-medium text-cream hover:bg-royal/90"
+                variant="primary"
                 onClick={() => void confirmUndoSmartPlan()}
               >
                 Yes, undo it
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       ) : null}
 
       <SmartPlanModal
@@ -3378,62 +3407,64 @@ export function PlannerClient({
       />
 
       {undoDayTweakPrompt ? (
-        <div
-          className="fixed inset-0 z-[128] flex items-center justify-center bg-royal/75 p-4"
+        <ModalShell
+          zClassName="z-[128]"
+          overlayClassName="bg-tt-royal/60 backdrop-blur-[1px]"
+          maxWidthClass="max-w-md"
+          panelClassName="p-5"
           role="dialog"
-          aria-modal="true"
+          aria-modal={true}
           aria-labelledby="undo-day-tweak-title"
         >
-          <div className="w-full max-w-md rounded-2xl border border-gold/40 bg-cream p-5 shadow-xl">
             <h2
               id="undo-day-tweak-title"
-              className="font-serif text-lg font-semibold text-royal"
+              className="font-heading text-lg font-semibold text-tt-royal"
             >
               Undo AI change?
             </h2>
-            <p className="mt-3 font-sans text-sm leading-relaxed text-royal/85">
+            <p className="mt-3 font-sans text-sm leading-relaxed text-tt-royal/85">
               {undoDayTweakPrompt.message}
             </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
+            <div className="mt-4 flex flex-wrap gap-2 border-t border-tt-line-soft pt-4">
+              <Button
                 type="button"
-                className="min-h-11 flex-1 rounded-lg border border-royal/25 bg-white px-4 py-2 font-sans text-sm font-semibold text-royal"
+                variant="secondary"
+                className="min-h-11 flex-1"
                 disabled={undoDayTweakBusy}
                 onClick={() => setUndoDayTweakPrompt(null)}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="min-h-11 flex-1 rounded-lg bg-royal px-4 py-2 font-sans text-sm font-semibold text-cream disabled:opacity-60"
+                variant="primary"
+                className="min-h-11 flex-1"
                 disabled={undoDayTweakBusy}
+                loading={undoDayTweakBusy}
+                loadingLabel="Working…"
                 onClick={() => void confirmUndoDayTweak()}
               >
-                {undoDayTweakBusy ? "Working…" : "Undo"}
-              </button>
+                Undo
+              </Button>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       ) : null}
 
       {adminPanel && activeTrip ? (
-        <div
-          className="fixed inset-0 z-[103] flex items-center justify-center bg-royal/45 p-4"
+        <ModalShell
+          zClassName="z-[103]"
+          overlayClassName="bg-tt-royal/50 backdrop-blur-[1px]"
+          maxWidthClass="max-w-lg"
+          panelClassName="max-h-[min(90vh,800px)] overflow-y-auto p-5"
           role="dialog"
-          aria-modal="true"
+          aria-modal={true}
           aria-labelledby="planner-admin-panel-title"
+          onClick={(e) => e.target === e.currentTarget && setAdminPanel(null)}
         >
-          <button
-            type="button"
-            className="absolute inset-0 cursor-default border-0 bg-transparent"
-            aria-label="Close"
-            onClick={() => setAdminPanel(null)}
-          />
-          <div className="relative z-10 max-h-[min(90vh,800px)] w-full max-w-lg overflow-y-auto rounded-2xl border border-gold/30 bg-cream p-5 shadow-xl">
             <div className="mb-4 flex items-start justify-between gap-2">
               <h2
                 id="planner-admin-panel-title"
-                className="font-display text-lg font-semibold text-royal"
+                className="font-heading text-lg font-semibold text-tt-royal"
               >
                 {adminPanel === "share"
                   ? "Community sharing"
@@ -3441,14 +3472,15 @@ export function PlannerClient({
                     ? "Family members"
                     : "Day notes (all days)"}
               </h2>
-              <button
+              <Button
                 type="button"
-                className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-royal/15 bg-white text-lg text-royal transition hover:bg-cream"
+                variant="secondary"
+                className="min-h-11 min-w-11 shrink-0 p-0 text-lg"
                 aria-label="Close"
                 onClick={() => setAdminPanel(null)}
               >
                 ✕
-              </button>
+              </Button>
             </div>
             {adminPanel === "share" ? (
               <ShareTripPanel
@@ -3469,8 +3501,7 @@ export function PlannerClient({
             ) : (
               <DayNotesPanel trip={activeTrip} tripId={activeTrip.id} />
             )}
-          </div>
-        </div>
+        </ModalShell>
       ) : null}
 
       <BookingConflictModal
@@ -3522,17 +3553,13 @@ export function PlannerClient({
       />
 
       {surpriseUndo ? (
-        <div className="fixed bottom-24 left-1/2 z-[92] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-2xl border border-royal/15 bg-white px-4 py-3 shadow-xl safe-area-inset-bottom">
-          <span className="text-center font-sans text-sm text-royal">
+        <div className="fixed bottom-24 left-1/2 z-[92] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-3 rounded-tt-xl border border-tt-line bg-tt-surface-warm px-4 py-3 shadow-tt-md safe-area-inset-bottom">
+          <span className="text-center font-sans text-sm text-tt-royal">
             Undo surprise fill?
           </span>
-          <button
-            type="button"
-            onClick={undoSurpriseFill}
-            className="min-h-11 rounded-lg bg-royal px-5 font-sans text-sm font-semibold text-cream transition hover:bg-royal/90"
-          >
+          <Button type="button" variant="primary" onClick={undoSurpriseFill}>
             Undo
-          </button>
+          </Button>
         </div>
       ) : null}
 

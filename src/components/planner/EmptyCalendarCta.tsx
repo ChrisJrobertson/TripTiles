@@ -1,6 +1,7 @@
 "use client";
 
 import { TrippMascotImg } from "@/components/mascot/TrippMascotImg";
+import { Button } from "@/components/ui/Button";
 
 type Props = {
   onGenerateAi: () => void;
@@ -19,7 +20,7 @@ export function EmptyCalendarCta({
 }: Props) {
   return (
     <div
-      className="pointer-events-auto mx-auto max-w-md rounded-2xl border border-royal/15 bg-white/95 p-5 shadow-lg backdrop-blur-sm"
+      className="pointer-events-auto mx-auto max-w-md rounded-tt-xl border border-tt-line bg-tt-surface/95 p-5 shadow-tt-lg backdrop-blur-sm"
       role="region"
       aria-label="Get started with your calendar"
     >
@@ -30,36 +31,38 @@ export function EmptyCalendarCta({
           className="h-24 w-24 object-contain"
         />
       </div>
-      <p className="text-center font-serif text-lg font-semibold text-royal">
+      <p className="text-center font-heading text-lg font-semibold text-tt-royal">
         Your calendar is empty
       </p>
-      <p className="mt-2 text-center font-sans text-sm text-royal/70">
+      <p className="mt-2 text-center font-sans text-sm text-tt-ink-muted">
         Let Trip draft your calendar with Smart Plan, or add parks manually —
         your choice.
       </p>
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center">
-        <button
+        <Button
           type="button"
           onClick={onGenerateAi}
-          className="min-h-[44px] flex-1 rounded-lg bg-[color:var(--tt-ring)] px-4 py-3 font-serif text-sm font-semibold text-white shadow-sm transition hover:brightness-105 sm:min-w-[10rem]"
+          className="flex-1 sm:min-w-[10rem]"
         >
           Ask Trip to plan ✨
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={onAddManually}
-          className="min-h-[44px] flex-1 rounded-lg border border-royal/20 bg-cream px-4 py-3 font-sans text-sm font-semibold text-royal transition hover:bg-white sm:min-w-[10rem]"
+          variant="secondary"
+          className="flex-1 sm:min-w-[10rem]"
         >
           Add manually
-        </button>
+        </Button>
         {onSurpriseMe ? (
-          <button
+          <Button
             type="button"
             onClick={onSurpriseMe}
-            className="min-h-[44px] flex-1 rounded-lg border-2 border-gold/40 bg-white px-4 py-3 font-sans text-sm font-semibold text-royal transition hover:bg-cream sm:min-w-[10rem]"
+            variant="accent"
+            className="flex-1 sm:min-w-[10rem]"
           >
             🎲 Surprise me
-          </button>
+          </Button>
         ) : null}
       </div>
     </div>

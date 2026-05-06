@@ -1,6 +1,8 @@
 "use client";
 
 import { RegionalDiningSection } from "@/components/planner/RegionalDiningSection";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { Surface } from "@/components/ui/Surface";
 import { GROUP_META, GROUP_ORDER } from "@/lib/group-meta";
 import { isCruisePaletteTileName } from "@/lib/cruise-tiles";
 import { isNamedRestaurantPark } from "@/lib/named-restaurant-tiles";
@@ -77,26 +79,26 @@ export function Palette({
 
   if (!hasCatalog && !hasCustom) {
     return (
-      <aside className="rounded-2xl border border-royal/12 bg-white/45 p-4 text-royal shadow-sm backdrop-blur-md">
-        <h2 className="mb-2 font-serif text-base font-semibold text-royal">
-          Parks
-        </h2>
-        <p className="font-sans text-sm leading-relaxed text-royal/75">
+      <Surface as="aside" variant="warm" className="p-4 text-tt-ink">
+        <SectionHeader title="Parks" subtitle="Build your day by choosing a tile." />
+        <p className="mt-3 font-sans text-sm leading-relaxed text-tt-ink-muted">
           No park tiles are available for this destination in the catalog yet.
           Add your own with &quot;Add custom&quot; inside a category below, or
           try editing the trip region.
         </p>
-      </aside>
+      </Surface>
     );
   }
 
   return (
-    <aside className="rounded-2xl border border-royal/12 bg-white/45 p-4 text-royal shadow-sm backdrop-blur-md">
-      <h2 className="mb-3 font-serif text-base font-semibold text-royal">
-        Parks
-      </h2>
+    <Surface as="aside" variant="default" className="p-3 text-tt-ink backdrop-blur-md sm:p-4">
+      <SectionHeader
+        title="Parks & travel"
+        subtitle="Select a tile, then tap a day slot."
+        className="mb-3"
+      />
       <label className="mb-3 block">
-        <span className="mb-1 block font-sans text-xs font-semibold uppercase tracking-wide text-royal/60">
+        <span className="mb-1 block font-meta text-xs font-semibold uppercase tracking-wide text-tt-ink-soft">
           Search
         </span>
         <input
@@ -105,7 +107,7 @@ export function Palette({
           placeholder="Search parks…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="min-h-[44px] w-full rounded-lg border border-gold/30 bg-white px-3 py-2 font-sans text-sm text-royal placeholder:text-royal/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+          className="min-h-11 w-full rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 font-sans text-sm text-tt-ink placeholder:text-tt-ink-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-gold/50"
         />
       </label>
       <div className="flex flex-col gap-2">
@@ -137,15 +139,15 @@ export function Palette({
             <details
               key={groupKey}
               open={meta.openByDefault}
-              className="rounded-lg border border-royal/10 bg-white/60"
+              className="rounded-tt-md border border-tt-line-soft bg-tt-bg-soft/60"
             >
-              <summary className="cursor-pointer select-none px-3 py-2 font-sans text-sm font-semibold text-royal">
+              <summary className="cursor-pointer select-none px-3 py-2 font-sans text-sm font-semibold text-tt-royal marker:hidden [&::-webkit-details-marker]:hidden">
                 {meta.label}
               </summary>
               <div className="flex flex-col gap-2 px-3 pb-3 pt-1">
                 {groupKey === "dining" && genericDiningParks.length > 0 ? (
                   <div>
-                    <p className="mb-1.5 px-0.5 font-sans text-[0.65rem] font-semibold uppercase tracking-wide text-royal/55">
+                    <p className="mb-1.5 px-0.5 font-meta text-[0.65rem] font-semibold uppercase tracking-wide text-tt-ink-soft">
                       Dining
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -217,9 +219,9 @@ export function Palette({
                 {groupKey === "dining" && restaurantDiningParks.length > 0 ? (
                   <details
                     open
-                    className="rounded-lg border border-royal/8 bg-white/40"
+                    className="rounded-tt-md border border-tt-line-soft bg-tt-surface/70"
                   >
-                    <summary className="cursor-pointer select-none px-2 py-1.5 font-sans text-xs font-semibold text-royal">
+                    <summary className="cursor-pointer select-none px-2 py-1.5 font-sans text-xs font-semibold text-tt-royal marker:hidden [&::-webkit-details-marker]:hidden">
                       Restaurants
                     </summary>
                     <div className="flex flex-wrap gap-2 px-2 pb-2 pt-0.5">
@@ -298,7 +300,7 @@ export function Palette({
                       </button>
                       <button
                         type="button"
-                        className="shrink-0 rounded-lg border border-royal/25 bg-white px-1.5 font-sans text-xs font-bold text-royal hover:bg-cream"
+                        className="shrink-0 rounded-tt-sm border border-tt-line bg-tt-surface px-1.5 font-sans text-xs font-bold text-tt-royal hover:bg-tt-bg-soft"
                         aria-label="Tile menu"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -308,10 +310,10 @@ export function Palette({
                         ···
                       </button>
                       {menuOpen ? (
-                        <div className="absolute right-0 top-full z-20 mt-1 min-w-[7.5rem] rounded-lg border border-royal/20 bg-white py-1 shadow-lg">
+                        <div className="absolute right-0 top-full z-20 mt-1 min-w-[7.5rem] rounded-tt-md border border-tt-line bg-tt-surface py-1 shadow-tt-lg">
                           <button
                             type="button"
-                            className="block w-full px-3 py-1.5 text-left font-sans text-xs text-royal hover:bg-cream"
+                            className="block w-full px-3 py-1.5 text-left font-sans text-xs text-tt-royal hover:bg-tt-bg-soft"
                             onClick={(e) => {
                               e.stopPropagation();
                               setMenuTileId(null);
@@ -346,7 +348,7 @@ export function Palette({
                 <button
                   type="button"
                   onClick={() => onAddCustom(groupKey)}
-                  className="flex min-h-[2.5rem] min-w-[6.5rem] flex-col items-center justify-center gap-0.5 rounded-full border-2 border-dashed border-royal/40 bg-transparent px-2 py-2 font-sans text-[0.65rem] font-semibold text-royal transition hover:border-royal hover:bg-royal/5"
+                  className="flex min-h-[2.5rem] min-w-[6.5rem] flex-col items-center justify-center gap-0.5 rounded-full border-2 border-dashed border-tt-line bg-transparent px-2 py-2 font-sans text-[0.65rem] font-semibold text-tt-royal transition hover:border-tt-royal hover:bg-tt-royal-soft"
                 >
                   <span className="text-lg leading-none">+</span>
                   <span>Add custom</span>
@@ -358,11 +360,11 @@ export function Palette({
         })}
       </div>
       {!hasVisibleResults ? (
-        <p className="mt-3 rounded-lg border border-dashed border-royal/20 bg-white/70 px-3 py-2 font-sans text-xs text-royal/70">
+        <p className="mt-3 rounded-tt-md border border-dashed border-tt-line bg-tt-bg-soft px-3 py-2 font-sans text-xs text-tt-ink-soft">
           No parks match your search yet.
         </p>
       ) : null}
       <RegionalDiningSection regionId={regionId} />
-    </aside>
+    </Surface>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { TripCreationWizard } from "@/components/planner/TripCreationWizard";
+import { Button } from "@/components/ui/Button";
 import type { Park, Region } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
@@ -20,7 +21,7 @@ export function OnboardingWizard({ firstName, regions, parks }: Props) {
   }, [router]);
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-screen flex-col bg-tt-bg-soft/40">
       <TripCreationWizard
         regions={regions}
         parks={parks}
@@ -30,13 +31,15 @@ export function OnboardingWizard({ firstName, regions, parks }: Props) {
         onCancel={goPlanner}
       />
       <div className="mx-auto w-full max-w-lg px-4 pb-10 pt-2 text-center">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={goPlanner}
-          className="min-h-11 min-w-[44px] rounded-sm px-2 font-sans text-sm text-royal underline decoration-royal/40 underline-offset-2 transition hover:text-gold hover:decoration-gold/60"
+          className="font-normal underline decoration-tt-line underline-offset-2"
         >
           Skip, take me to the planner
-        </button>
+        </Button>
       </div>
     </div>
   );

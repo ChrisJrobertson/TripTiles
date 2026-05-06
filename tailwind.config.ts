@@ -1,31 +1,75 @@
 import type { Config } from "tailwindcss";
 
 /**
- * TripTiles brand theme - Color palette from logo and magical theme park aesthetic.
- * Utilities: bg-royal, text-gold, bg-cream, border-gold, etc.
+ * TripTiles brand theme - hybrid planner design tokens.
+ * Utilities: bg-royal, text-gold, bg-tt-surface, shadow-tt-md, rounded-tt-lg, etc.
  */
 const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Primary brand colors (from logo palette)
-        royal: "#2455ac",      // Deep blue (accents, borders)
-        /** Softer blue for large fills (nav CTAs, headers) — less harsh than royal. */
-        royalSoft: "#5c6b88",
-        /** Muted blue-gray for nav/body text — easier on the eye with cream + pastels. */
-        ink: "#3d4a5c",
-        gold: "#dd4e14",       // Vibrant orange from logo (was gold)
-        cream: "#fce7cc",      // Warm cream/peach from logo
+        tt: {
+          bg: "var(--tt-bg)",
+          "bg-soft": "var(--tt-bg-soft)",
+          surface: "var(--tt-surface)",
+          "surface-warm": "var(--tt-surface-warm)",
+          ink: "var(--tt-ink)",
+          "ink-muted": "var(--tt-ink-muted)",
+          "ink-soft": "var(--tt-ink-soft)",
+          line: "var(--tt-line)",
+          "line-soft": "var(--tt-line-soft)",
+          royal: "var(--tt-royal)",
+          "royal-deep": "var(--tt-royal-deep)",
+          "royal-soft": "var(--tt-royal-soft)",
+          gold: "var(--tt-gold)",
+          "gold-soft": "var(--tt-gold-soft)",
+          magic: "var(--tt-magic)",
+          success: "var(--tt-success)",
+          "success-soft": "var(--tt-success-soft)",
+          warning: "var(--tt-warning)",
+          "warning-soft": "var(--tt-warning-soft)",
+        },
+
+        // Primary brand colors. Kept as legacy class names while the app migrates.
+        royal: "var(--tt-royal)",
+        "royal-deep": "var(--tt-royal-deep)",
+        "royal-soft": "var(--tt-royal-soft)",
+        royalDeep: "var(--tt-royal-deep)",
+        royalSoft: "var(--tt-royal-soft)",
+        ink: "var(--tt-ink-muted)",
+        gold: "var(--tt-gold)",
+        "gold-soft": "var(--tt-gold-soft)",
+        goldSoft: "var(--tt-gold-soft)",
+        cream: "var(--tt-cream)",
 
         // Accent colors
-        magic: "#3fa2ec",       // Bright blue accent
-        lime: "#a2df56",        // Fresh lime green
+        magic: "var(--tt-magic)",
+        lime: "var(--tt-lime)",
+        success: "var(--tt-success)",
+        warning: "var(--tt-warning)",
         sky: "#c0d5e0",         // Soft blue-gray
 
         // Highlight colors (from WhatsApp palette)
         cyan: "#c3f5fd",        // Light cyan highlight
         pink: "#ffb8c2",        // Soft pink accent
         lavender: "#d5caf8",    // Gentle lavender
+      },
+      boxShadow: {
+        "tt-sm": "var(--tt-shadow-sm)",
+        "tt-md": "var(--tt-shadow-md)",
+        "tt-lg": "var(--tt-shadow-lg)",
+      },
+      borderRadius: {
+        "tt-sm": "var(--tt-radius-sm)",
+        "tt-md": "var(--tt-radius-md)",
+        "tt-lg": "var(--tt-radius-lg)",
+        "tt-xl": "var(--tt-radius-xl)",
+      },
+      fontFamily: {
+        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
+        heading: ["var(--font-fraunces)", "Georgia", "serif"],
+        meta: ["var(--font-jetbrains-mono)", "ui-monospace", "monospace"],
+        mono: ["var(--font-jetbrains-mono)", "ui-monospace", "monospace"],
       },
     },
   },

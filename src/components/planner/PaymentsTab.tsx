@@ -8,6 +8,10 @@ import {
 } from "@/actions/payments";
 import { CountdownChip } from "@/components/planning/CountdownChip";
 import { PdfExportButton } from "@/components/planner/PdfExportButton";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { currencyApproximationText, formatMoney } from "@/lib/format";
 import { formatOutstandingPaymentsTotal } from "@/lib/payment-totals";
 import { showToast } from "@/lib/toast";
@@ -263,17 +267,14 @@ export function PaymentsTab({
 
   return (
     <section
-      className={`space-y-6 font-sans text-royal ${embedded ? "" : "mx-auto max-w-3xl pb-24"}`}
+      className={`space-y-6 font-sans text-tt-ink ${embedded ? "" : "mx-auto max-w-3xl pb-24"}`}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="font-serif text-xl font-semibold text-royal">
-            Payments
-          </h2>
-          <p className="mt-1 text-sm text-royal/65">
-            Track deposits, balances, tickets, and flights in one place.
-          </p>
-        </div>
+        <SectionHeader
+          title="Payments"
+          subtitle="Track deposits, balances, tickets, and flights in one place."
+          icon="💷"
+        />
         <div className="flex flex-wrap items-center gap-2">
           <PdfExportButton
             tripId={trip.id}
@@ -281,110 +282,102 @@ export function PaymentsTab({
             defaultModeOnOpen="payments_schedule"
           />
           {!formActive ? (
-            <button
+            <Button
               type="button"
               onClick={startAdd}
-              className="min-h-[44px] rounded-lg bg-royal px-4 py-2.5 text-sm font-semibold text-cream shadow-sm transition hover:bg-royal/90"
             >
               Add payment
-            </button>
+            </Button>
           ) : null}
         </div>
       </div>
 
       {formActive ? (
-        <div className="rounded-2xl border border-royal/15 bg-white p-4 shadow-sm">
-          <p className="font-serif text-sm font-semibold text-royal">
+        <Card variant="default" className="p-4">
+          <p className="font-heading text-sm font-semibold text-tt-royal">
             {editingId ? "Edit payment" : "New payment"}
           </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium text-royal/80">Label</span>
+              <span className="font-medium text-tt-ink-muted">Label</span>
               <input
                 value={formLabel}
                 onChange={(e) => setFormLabel(e.target.value)}
                 maxLength={120}
-                className="min-h-[44px] rounded-lg border border-royal/20 bg-cream px-3 py-2 text-royal"
+                className="min-h-11 rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 text-tt-ink"
                 placeholder="e.g. Villa balance"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium text-royal/80">Amount</span>
+              <span className="font-medium text-tt-ink-muted">Amount</span>
               <input
                 inputMode="decimal"
                 value={formAmount}
                 onChange={(e) => setFormAmount(e.target.value)}
-                className="min-h-[44px] rounded-lg border border-royal/20 bg-cream px-3 py-2 text-royal"
+                className="min-h-11 rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 text-tt-ink"
                 placeholder="0.00"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium text-royal/80">Currency</span>
+              <span className="font-medium text-tt-ink-muted">Currency</span>
               <select
                 value={formCurrency}
                 onChange={(e) =>
                   setFormCurrency(e.target.value as PaymentCurrency)
                 }
-                className="min-h-[44px] rounded-lg border border-royal/20 bg-cream px-3 py-2 text-royal"
+                className="min-h-11 rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 text-tt-ink"
               >
                 <option value="GBP">£ GBP</option>
                 <option value="USD">$ USD</option>
               </select>
             </label>
             <label className="flex flex-col gap-1 text-sm">
-              <span className="font-medium text-royal/80">Booking date (optional)</span>
+              <span className="font-medium text-tt-ink-muted">Booking date (optional)</span>
               <input
                 type="date"
                 value={formBooking}
                 onChange={(e) => setFormBooking(e.target.value)}
-                className="min-h-[44px] rounded-lg border border-royal/20 bg-cream px-3 py-2 text-royal"
+                className="min-h-11 rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 text-tt-ink"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-              <span className="font-medium text-royal/80">Due date (optional)</span>
+              <span className="font-medium text-tt-ink-muted">Due date (optional)</span>
               <input
                 type="date"
                 value={formDue}
                 onChange={(e) => setFormDue(e.target.value)}
-                className="min-h-[44px] max-w-xs rounded-lg border border-royal/20 bg-cream px-3 py-2 text-royal"
+                className="min-h-11 max-w-xs rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 text-tt-ink"
               />
             </label>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
-            <button
+            <Button
               type="button"
               disabled={busy || !formLabel.trim()}
               onClick={() => void onSave()}
-              className="min-h-[44px] min-w-[7rem] rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-royal shadow-sm transition hover:bg-gold/90 disabled:opacity-50"
+              variant="accent"
             >
               Save
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               disabled={busy}
               onClick={cancelForm}
-              className="min-h-[44px] rounded-lg border border-royal/20 bg-white px-4 py-2 text-sm font-medium text-royal/80 transition hover:bg-cream disabled:opacity-50"
+              variant="secondary"
             >
               Cancel
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       ) : null}
 
       {sorted.length === 0 && !formActive ? (
-        <div className="rounded-2xl border border-dashed border-royal/20 bg-white/80 px-4 py-10 text-center text-sm text-royal/70">
-          <p>
-            Track cruise deposits, hotel balances, flights, tickets, and insurance
-            here.
-          </p>
-          <button
-            type="button"
-            onClick={startAdd}
-            className="mt-4 min-h-[44px] rounded-lg bg-royal px-4 py-2 font-semibold text-cream shadow-sm transition hover:bg-royal/90"
-          >
-            Add your first payment →
-          </button>
-        </div>
+        <EmptyState
+          icon="💷"
+          title="No payments yet"
+          description="Track cruise deposits, hotel balances, flights, tickets, and insurance here."
+          action={<Button onClick={startAdd}>Add your first payment →</Button>}
+        />
       ) : null}
 
       <ul className="space-y-3">
@@ -404,12 +397,12 @@ export function PaymentsTab({
           return (
             <li
               key={p.id}
-              className={`rounded-xl border border-royal/10 bg-white p-4 shadow-sm ${borderClass}`}
+              className={`rounded-tt-lg border border-tt-line bg-tt-surface p-4 shadow-tt-sm ${borderClass}`}
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium text-royal">{p.label}</p>
+                    <p className="font-medium text-tt-ink">{p.label}</p>
                     {p.due_date || p.paid_at ? (
                       <CountdownChip
                         targetDate={p.due_date ?? p.paid_at!}
@@ -419,20 +412,20 @@ export function PaymentsTab({
                     ) : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-lg font-semibold text-royal">
+                    <p className="text-lg font-semibold text-tt-royal">
                       {formatMoney(p.amount_pence, p.currency)}
                     </p>
                     {currencyApproximationText(p.amount_pence, p.currency, {
                       tripCurrency: trip.budget_currency,
                     }) ? (
-                      <p className="text-xs text-royal/50">
+                      <p className="text-xs text-tt-ink-soft">
                         {currencyApproximationText(p.amount_pence, p.currency, {
                           tripCurrency: trip.budget_currency,
                         })}
                       </p>
                     ) : null}
                   </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-royal/65">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-tt-ink-soft">
                     {p.booking_date ? (
                       <span>Booked {p.booking_date}</span>
                     ) : null}
@@ -541,7 +534,7 @@ export function PaymentsTab({
       </ul>
 
       {sorted.length > 0 ? (
-        <div className="rounded-xl border border-royal/15 bg-cream/80 px-4 py-3 text-sm font-medium text-royal">
+        <div className="rounded-tt-lg border border-tt-line bg-tt-surface-warm px-4 py-3 text-sm font-medium text-tt-royal shadow-tt-sm">
           Total outstanding: {totalsLine}
         </div>
       ) : null}

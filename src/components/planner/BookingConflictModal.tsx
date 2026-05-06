@@ -2,7 +2,9 @@
 
 import { formatDateISO, parseDate } from "@/lib/date-helpers";
 import type { BookingAnchor } from "@/lib/booking-anchor-risk";
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, type ReactNode } from "react";
+import { Button } from "@/components/ui/Button";
+import { ModalShell } from "@/components/ui/ModalShell";
 
 export type { BookingAnchor };
 
@@ -93,10 +95,9 @@ export function BookingConflictModal({
   dayDate,
 }: Props) {
   const titleId = useId();
-  const keepBtnRef = useRef<HTMLButtonElement>(null);
-
   useEffect(() => {
-    if (open) keepBtnRef.current?.focus();
+    if (open)
+      document.getElementById("booking-conflict-keep-primary")?.focus();
   }, [open]);
 
   useEffect(() => {
@@ -117,7 +118,7 @@ export function BookingConflictModal({
   if (action === "park-change" && newParkName && anchors.length === 1) {
     const a = anchors[0]!;
     body = (
-      <p className="font-sans text-sm leading-relaxed text-royal/90">
+      <p className="font-sans text-sm leading-relaxed text-tt-royal/90">
         You’ve booked {a.rideName} for {a.returnTimeHhmm} on {dLabel} at{" "}
         {a.parkName}. Changing this slot to {newParkName} can leave that
         booking hard to use — you’d still need to be at {a.parkName} in time
@@ -127,7 +128,7 @@ export function BookingConflictModal({
   } else if (action === "slot-clear" && anchors.length === 1) {
     const a = anchors[0]!;
     body = (
-      <p className="font-sans text-sm leading-relaxed text-royal/90">
+      <p className="font-sans text-sm leading-relaxed text-tt-royal/90">
         {a.rideName} is booked for {a.returnTimeHhmm} on {dLabel} at{" "}
         {a.parkName}. Clearing this slot can make that plan harder to follow on
         the day.
@@ -136,15 +137,15 @@ export function BookingConflictModal({
   } else if (action === "ride-remove" && anchors.length === 1) {
     const a = anchors[0]!;
     body = (
-      <p className="font-sans text-sm leading-relaxed text-royal/90">
+      <p className="font-sans text-sm leading-relaxed text-tt-royal/90">
         You’ve set a {a.returnTimeHhmm} return for {a.rideName} at {a.parkName}{" "}
-        on {dLabel}. Removing it from the list can still leave the booking
-        live in the app you used — this only changes TripTiles.
+        on {dLabel}. Removing it from the list can still leave the booking live
+        in the app you used — this only changes TripTiles.
       </p>
     );
   } else {
     body = (
-      <ul className="list-inside list-disc space-y-1.5 font-sans text-sm leading-relaxed text-royal/90">
+      <ul className="list-inside list-disc space-y-1.5 font-sans text-sm leading-relaxed text-tt-royal/90">
         {anchors.map((a) => (
           <li key={a.rideId}>
             <span className="font-medium">{a.rideName}</span> – return{" "}
@@ -156,31 +157,29 @@ export function BookingConflictModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[130] flex items-end justify-center bg-royal/50 p-0 sm:items-center sm:p-4"
+    <ModalShell
+      zClassName="z-[130]"
+      bottomSheetOnMobile
+      overlayClassName="bg-tt-royal/50 backdrop-blur-[1px]"
+      maxWidthClass="max-w-md"
       role="dialog"
-      aria-modal="true"
+      aria-modal={true}
       aria-labelledby={titleId}
+      onClick={(e) => e.target === e.currentTarget && onDismiss()}
     >
-      <button
-        type="button"
-        className="absolute inset-0 z-0 cursor-default"
-        aria-label="Close"
-        onClick={onDismiss}
-      />
-      <div className="relative z-10 w-full max-w-md rounded-t-2xl border border-royal/15 bg-cream p-4 shadow-2xl sm:rounded-2xl">
+      <div className="p-4 sm:p-5">
         <h2
           id={titleId}
-          className="font-['Fraunces',serif] text-lg font-semibold text-[#0B1E5C]"
+          className="font-heading text-lg font-semibold text-tt-royal"
         >
           {titleForAction(action)}
         </h2>
         <div className="mt-3" data-iso={iso}>
           {body}
         </div>
-        <div className="mt-4 flex gap-2 rounded-md bg-[#FEF3C7] px-3 py-2 text-sm text-[#B45309]">
+        <div className="mt-4 flex gap-2 rounded-tt-md border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-sm text-amber-950">
           <span className="shrink-0 pt-0.5">
-            <AmberTriangle className="text-[#B45309]" />
+            <AmberTriangle className="text-amber-800" />
           </span>
           <p>
             If any of these were paid bookings (Single Pass / Individual
@@ -189,30 +188,33 @@ export function BookingConflictModal({
           </p>
         </div>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-          <button
+          <Button
             type="button"
-            ref={keepBtnRef}
-            className="min-h-11 w-full rounded-lg bg-[#0B1E5C] px-4 font-sans text-sm font-semibold text-white sm:w-auto"
+            variant="primary"
+            id="booking-conflict-keep-primary"
+            className="w-full min-h-11 sm:w-auto"
             onClick={onKeepBooking}
           >
             Keep booking, undo change
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="min-h-11 w-full rounded-lg border border-[#0B1E5C]/20 bg-[#FAF8F3] px-4 font-sans text-sm font-semibold text-[#0B1E5C] sm:w-auto"
+            variant="secondary"
+            className="w-full min-h-11 sm:w-auto"
             onClick={onProceedKeepBooking}
           >
             Change and keep tracking
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="min-h-11 w-full font-sans text-sm font-medium text-red-700 hover:bg-red-50 sm:w-auto"
+            variant="ghost"
+            className="w-full min-h-11 text-red-700 hover:bg-red-50 sm:w-auto"
             onClick={onProceedClearBooking}
           >
             Change and clear booking
-          </button>
+          </Button>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

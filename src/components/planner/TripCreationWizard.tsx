@@ -3,8 +3,10 @@
 import { createTripAction, touchTripAction } from "@/actions/trips";
 import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
 import { TRIP_TILES_LOGO_AUTH_IMG_CLASS } from "@/components/brand/triptiles-logo-sizes";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 import { InlineLoadingOverlay } from "@/components/ui/InlineLoadingOverlay";
-import { LogoSpinner } from "@/components/ui/LogoSpinner";
+import { WizardProgress } from "@/components/ui/WizardProgress";
 import { TrippMascotImg } from "@/components/mascot/TrippMascotImg";
 import { TrippSpeechBubble } from "@/components/mascot/TrippSpeechBubble";
 import { eachDateKeyInRange } from "@/lib/date-helpers";
@@ -128,27 +130,12 @@ function inToCmRounded(inches: number): number {
 
 function HintDetails({ label, children }: { label: string; children: string }) {
   return (
-    <details className="mt-1 rounded-lg border border-royal/10 bg-cream px-3 py-2 font-sans text-xs text-royal/80">
-      <summary className="cursor-pointer font-semibold text-royal outline-none marker:text-gold">
+    <details className="mt-1 rounded-tt-md border border-tt-line bg-tt-bg-soft px-3 py-2 font-sans text-xs text-tt-ink-soft">
+      <summary className="cursor-pointer font-semibold text-tt-royal outline-none marker:text-tt-gold">
         {label}
       </summary>
-      <p className="mt-2 leading-relaxed">{children}</p>
+      <p className="mt-2 leading-relaxed text-tt-ink-muted">{children}</p>
     </details>
-  );
-}
-
-function ProgressDots({ current, total }: { current: number; total: number }) {
-  return (
-    <div className="flex flex-wrap justify-center gap-1.5" aria-hidden>
-      {Array.from({ length: total }, (_, i) => (
-        <span
-          key={i}
-          className={`h-2.5 w-2.5 rounded-full ${
-            i + 1 <= current ? "bg-gold" : "bg-royal/20"
-          }`}
-        />
-      ))}
-    </div>
   );
 }
 
@@ -423,7 +410,7 @@ export function TripCreationWizard({
   const shell =
     variant === "modal"
       ? "px-2 py-4 sm:px-4"
-      : "min-h-screen bg-transparent px-4 py-10";
+      : "min-h-screen bg-tt-bg-soft/50 px-4 py-10";
 
   const skipVisible = step >= 3 && step <= 7 && step !== 6;
   const step6Skippable = step === 6;
@@ -438,45 +425,44 @@ export function TripCreationWizard({
         className={
           variant === "modal"
             ? "mb-4 flex justify-end gap-4"
-            : "absolute right-4 top-4 flex gap-4"
+            : "absolute right-4 top-4 z-10 flex gap-4"
         }
       >
-        <button
-          type="button"
-          onClick={onCancel}
-          className="font-sans text-sm font-medium text-royal/70 underline-offset-2 hover:text-royal"
-        >
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
           Cancel
-        </button>
+        </Button>
       </div>
 
-      <div className="mx-auto max-w-lg rounded-2xl border border-royal/10 bg-white p-6 shadow-lg sm:p-8">
+      <Card
+        variant="warm"
+        className="mx-auto max-w-lg border-tt-line p-6 shadow-tt-md sm:p-8"
+      >
         {variant === "page" ? (
           <div className="mb-5 flex justify-center">
             <TripTilesLogoLink
               href="/planner"
               height={200}
               imgClassName={TRIP_TILES_LOGO_AUTH_IMG_CLASS}
-              className="inline-flex items-center rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              className="inline-flex items-center rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-tt-surface"
             />
           </div>
         ) : null}
 
         {step > 0 ? (
-          <div className="mb-4 space-y-2">
-            <p className="text-center font-sans text-xs font-semibold text-gold">
-              Step {step} of {PROGRESS_TOTAL}
-            </p>
-            <ProgressDots current={progressCurrent} total={PROGRESS_TOTAL} />
+          <div className="mb-5">
+            <WizardProgress current={progressCurrent} total={PROGRESS_TOTAL} />
           </div>
         ) : (
-          <p className="mb-3 text-center font-sans text-xs font-semibold uppercase tracking-wider text-gold">
+          <p className="mb-3 text-center font-meta text-xs font-semibold uppercase tracking-wider text-tt-gold">
             Welcome
           </p>
         )}
 
         {err ? (
-          <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-sans text-sm text-red-800">
+          <p
+            className="mt-3 rounded-tt-md border border-red-200 bg-red-50 px-3 py-2 font-sans text-sm text-red-800"
+            role="alert"
+          >
             {err}
           </p>
         ) : null}
@@ -493,10 +479,10 @@ export function TripCreationWizard({
                 Hi! I&apos;m Tripp. Let&apos;s build your perfect adventure. 🐾
               </TrippSpeechBubble>
             </div>
-            <h1 className="mt-8 font-serif text-2xl font-semibold text-royal md:text-3xl">
+            <h1 className="mt-8 font-heading text-2xl font-semibold text-tt-royal md:text-3xl">
               Welcome{firstName ? `, ${firstName}` : ""}!
             </h1>
-            <p className="mt-3 font-sans text-sm leading-relaxed text-royal/75">
+            <p className="mt-3 font-sans text-sm leading-relaxed text-tt-royal/75">
               Let&apos;s set up your first adventure — it only takes a minute.
             </p>
           </div>
@@ -504,7 +490,7 @@ export function TripCreationWizard({
 
         {step === 1 ? (
           <div className="mt-6">
-            <h1 className="font-serif text-xl font-semibold text-royal">
+            <h1 className="font-heading text-xl font-semibold text-tt-royal">
               Where are you going?
             </h1>
             <div className="mt-4 grid max-h-[min(360px,50vh)] grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3">
@@ -515,26 +501,26 @@ export function TripCreationWizard({
                   onClick={() => setRegionId(r.id)}
                   className={`min-h-[44px] rounded-xl border px-3 py-3 text-left font-sans text-sm transition ${
                     regionId === r.id
-                      ? "border-gold bg-gold/15"
-                      : "border-royal/15 bg-cream hover:border-gold/40"
+                      ? "border-tt-gold bg-tt-gold-soft"
+                      : "border-tt-royal/15 bg-cream hover:border-tt-gold/40"
                   }`}
                 >
                   <span className="text-lg" aria-hidden>
                     {r.flag_emoji ?? "🌍"}
                   </span>
-                  <p className="mt-1 font-semibold text-royal">
+                  <p className="mt-1 font-semibold text-tt-royal">
                     {r.short_name?.trim() || r.name}
                   </p>
                 </button>
               ))}
             </div>
             {regionId ? (
-              <div className="mt-5 rounded-xl border border-royal/15 bg-cream/80 p-4">
-                <p className="font-sans text-sm font-semibold text-royal">
+              <div className="mt-5 rounded-xl border border-tt-royal/15 bg-cream/80 p-4">
+                <p className="font-sans text-sm font-semibold text-tt-royal">
                   Does your trip include a cruise?
                 </p>
                 {regionId === "cruise" ? (
-                  <p className="mt-2 font-sans text-sm text-royal/75">
+                  <p className="mt-2 font-sans text-sm text-tt-royal/75">
                     You&apos;ve picked a cruise-focused region — ship and port
                     tiles stay available in your drawer.
                   </p>
@@ -545,8 +531,8 @@ export function TripCreationWizard({
                       onClick={() => setIncludesCruise(false)}
                       className={`min-h-[44px] flex-1 rounded-lg border px-3 py-2 font-sans text-sm font-semibold transition ${
                         !includesCruise
-                          ? "border-royal bg-royal text-cream"
-                          : "border-royal/25 bg-white text-royal"
+                          ? "border-tt-royal bg-tt-royal text-white"
+                          : "border-tt-royal/25 bg-white text-tt-royal"
                       }`}
                     >
                       No
@@ -556,8 +542,8 @@ export function TripCreationWizard({
                       onClick={() => setIncludesCruise(true)}
                       className={`min-h-[44px] flex-1 rounded-lg border px-3 py-2 font-sans text-sm font-semibold transition ${
                         includesCruise
-                          ? "border-royal bg-royal text-cream"
-                          : "border-royal/25 bg-white text-royal"
+                          ? "border-tt-royal bg-tt-royal text-white"
+                          : "border-tt-royal/25 bg-white text-tt-royal"
                       }`}
                     >
                       Yes
@@ -571,24 +557,24 @@ export function TripCreationWizard({
 
         {step === 2 ? (
           <div className="mt-6 space-y-4">
-            <h1 className="font-serif text-xl font-semibold text-royal">
+            <h1 className="font-heading text-xl font-semibold text-tt-royal">
               When are you going?
             </h1>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block font-sans text-sm text-royal">
+              <label className="block font-sans text-sm text-tt-royal">
                 Start date
                 <input
                   type="date"
-                  className="mt-1 min-h-[44px] w-full rounded-lg border-2 border-royal/20 px-3 py-2"
+                  className="mt-1 min-h-[44px] w-full rounded-lg border-2 border-tt-royal/20 px-3 py-2"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
                 />
               </label>
-              <label className="block font-sans text-sm text-royal">
+              <label className="block font-sans text-sm text-tt-royal">
                 End date
                 <input
                   type="date"
-                  className="mt-1 min-h-[44px] w-full rounded-lg border-2 border-royal/20 px-3 py-2"
+                  className="mt-1 min-h-[44px] w-full rounded-lg border-2 border-tt-royal/20 px-3 py-2"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
                 />
@@ -599,28 +585,28 @@ export function TripCreationWizard({
 
         {step === 3 ? (
           <div className="mt-6 space-y-4">
-            <h1 className="font-serif text-xl font-semibold text-royal">
+            <h1 className="font-heading text-xl font-semibold text-tt-royal">
               Who&apos;s going?
             </h1>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block font-sans text-sm text-royal">
+              <label className="block font-sans text-sm text-tt-royal">
                 Adults
                 <input
                   type="number"
                   min={1}
                   max={10}
-                  className="mt-1 min-h-[44px] w-full rounded-lg border-2 border-royal/20 px-3 py-2"
+                  className="mt-1 min-h-[44px] w-full rounded-lg border-2 border-tt-royal/20 px-3 py-2"
                   value={adults}
                   onChange={(e) => setAdults(Number(e.target.value))}
                 />
               </label>
-              <label className="block font-sans text-sm text-royal">
+              <label className="block font-sans text-sm text-tt-royal">
                 Children
                 <input
                   type="number"
                   min={0}
                   max={10}
-                  className="mt-1 min-h-[44px] w-full rounded-lg border-2 border-royal/20 px-3 py-2"
+                  className="mt-1 min-h-[44px] w-full rounded-lg border-2 border-tt-royal/20 px-3 py-2"
                   value={children}
                   onChange={(e) => setChildren(Number(e.target.value))}
                 />
@@ -628,10 +614,10 @@ export function TripCreationWizard({
             </div>
             {children > 0 ? (
               <>
-                <label className="block font-sans text-sm text-royal">
+                <label className="block font-sans text-sm text-tt-royal">
                   Children&apos;s ages (years, comma-separated)
                   <input
-                    className="mt-1 min-h-[44px] w-full rounded-lg border-2 border-royal/20 px-3 py-2"
+                    className="mt-1 min-h-[44px] w-full rounded-lg border-2 border-tt-royal/20 px-3 py-2"
                     value={childAgesText}
                     onChange={(e) => setChildAgesText(e.target.value)}
                     placeholder="e.g. 5, 8"
@@ -640,15 +626,15 @@ export function TripCreationWizard({
                 {childHeightsCm.slice(0, children).map((cm, idx) => (
                   <div
                     key={idx}
-                    className="rounded-xl border border-royal/10 bg-cream/50 p-3"
+                    className="rounded-xl border border-tt-royal/10 bg-cream/50 p-3"
                   >
-                    <p className="font-sans text-sm font-semibold text-royal">
+                    <p className="font-sans text-sm font-semibold text-tt-royal">
                       Child {idx + 1} height
                     </p>
-                    <label className="mt-2 flex min-h-[44px] items-center gap-2 font-sans text-xs text-royal/80">
+                    <label className="mt-2 flex min-h-[44px] items-center gap-2 font-sans text-xs text-tt-royal/80">
                       <input
                         type="checkbox"
-                        className="h-4 w-4 accent-royal"
+                        className="h-4 w-4 accent-tt-royal"
                         checked={heightUseInches[idx] ?? false}
                         onChange={(e) => {
                           setHeightUseInches((prev) => {
@@ -664,7 +650,7 @@ export function TripCreationWizard({
                       type="number"
                       min={heightUseInches[idx] ? 20 : 40}
                       max={heightUseInches[idx] ? 78 : 200}
-                      className="mt-2 min-h-[44px] w-full rounded-lg border-2 border-royal/20 px-3 py-2"
+                      className="mt-2 min-h-[44px] w-full rounded-lg border-2 border-tt-royal/20 px-3 py-2"
                       value={
                         heightUseInches[idx]
                           ? cmToInRounded(cm)
@@ -689,11 +675,11 @@ export function TripCreationWizard({
               </>
             ) : null}
             <div>
-              <label className="font-sans text-sm font-semibold text-royal">
+              <label className="font-sans text-sm font-semibold text-tt-royal">
                 Mobility considerations
               </label>
               <select
-                className="mt-2 min-h-[44px] w-full rounded-lg border-2 border-royal/20 bg-white px-3 py-2 font-sans text-sm"
+                className="mt-2 min-h-[44px] w-full rounded-lg border-2 border-tt-royal/20 bg-white px-3 py-2 font-sans text-sm"
                 value={mobility}
                 onChange={(e) =>
                   setMobility(e.target.value as PlanningMobility)
@@ -714,11 +700,11 @@ export function TripCreationWizard({
 
         {step === 4 ? (
           <div className="mt-6 space-y-5">
-            <h1 className="font-serif text-xl font-semibold text-royal">
+            <h1 className="font-heading text-xl font-semibold text-tt-royal">
               What kind of holiday is this?
             </h1>
             <section>
-              <h2 className="font-sans text-sm font-semibold text-royal">
+              <h2 className="font-sans text-sm font-semibold text-tt-royal">
                 Pace
               </h2>
               <div className="mt-2 grid gap-2 sm:grid-cols-3">
@@ -729,19 +715,19 @@ export function TripCreationWizard({
                     onClick={() => setPace(p.id)}
                     className={`min-h-[44px] rounded-xl border p-3 text-left text-sm transition ${
                       pace === p.id
-                        ? "border-gold bg-gold/15 ring-2 ring-gold/35"
-                        : "border-royal/15 bg-cream hover:border-royal/30"
+                        ? "border-tt-gold bg-tt-gold-soft ring-2 ring-tt-gold/35"
+                        : "border-tt-royal/15 bg-cream hover:border-tt-royal/30"
                     }`}
                   >
                     <span className="text-lg">{p.emoji}</span>
-                    <div className="mt-1 font-semibold text-royal">{p.title}</div>
-                    <div className="mt-1 text-xs text-royal/70">{p.body}</div>
+                    <div className="mt-1 font-semibold text-tt-royal">{p.title}</div>
+                    <div className="mt-1 text-xs text-tt-royal/70">{p.body}</div>
                   </button>
                 ))}
               </div>
             </section>
             <section>
-              <h2 className="font-sans text-sm font-semibold text-royal">
+              <h2 className="font-sans text-sm font-semibold text-tt-royal">
                 Trip type
               </h2>
               <HintDetails label="Why we ask (?)" >
@@ -755,8 +741,8 @@ export function TripCreationWizard({
                     onClick={() => setTripType(t.id)}
                     className={`min-h-[44px] rounded-xl border px-3 py-2 text-left font-sans text-sm ${
                       tripType === t.id
-                        ? "border-royal bg-royal text-cream"
-                        : "border-royal/20 bg-white text-royal"
+                        ? "border-tt-royal bg-tt-royal text-white"
+                        : "border-tt-royal/20 bg-white text-tt-royal"
                     }`}
                   >
                     {t.label.replace(/&apos;/g, "'")}
@@ -769,11 +755,11 @@ export function TripCreationWizard({
 
         {step === 5 ? (
           <div className="mt-6 max-h-[min(72vh,40rem)] space-y-5 overflow-y-auto pr-1">
-            <h1 className="font-serif text-xl font-semibold text-royal">
+            <h1 className="font-heading text-xl font-semibold text-tt-royal">
               What do you want from the trip?
             </h1>
             <section>
-              <h2 className="font-sans text-sm font-semibold text-royal">
+              <h2 className="font-sans text-sm font-semibold text-tt-royal">
                 Priorities
               </h2>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -793,8 +779,8 @@ export function TripCreationWizard({
                       }}
                       className={`min-h-[40px] rounded-full border px-3 py-2 font-sans text-xs ${
                         on
-                          ? "border-royal bg-royal text-cream"
-                          : "border-royal/25 bg-white"
+                          ? "border-tt-royal bg-tt-royal text-white"
+                          : "border-tt-royal/25 bg-white"
                       }`}
                     >
                       {p.emoji} {p.label}
@@ -804,14 +790,14 @@ export function TripCreationWizard({
               </div>
             </section>
             <section>
-              <h2 className="font-sans text-sm font-semibold text-royal">
+              <h2 className="font-sans text-sm font-semibold text-tt-royal">
                 Must-do experiences
               </h2>
               <div className="mt-2 flex flex-col gap-2">
                 {MUST_DO_EXPERIENCES.map((x) => {
                   const on = mustDoExperiences.has(x.id);
                   return (
-                    <div key={x.id} className="rounded-lg border border-royal/10 bg-cream/60 p-2">
+                    <div key={x.id} className="rounded-lg border border-tt-royal/10 bg-cream/60 p-2">
                       <button
                         type="button"
                         onClick={() => {
@@ -823,13 +809,13 @@ export function TripCreationWizard({
                           });
                         }}
                         className={`flex min-h-[44px] w-full items-center gap-2 rounded-md px-2 text-left font-sans text-sm ${
-                          on ? "font-semibold text-royal" : "text-royal/85"
+                          on ? "font-semibold text-tt-royal" : "text-tt-royal/85"
                         }`}
                       >
                         <span>{x.emoji}</span>
                         {x.label}
                       </button>
-                      <p className="px-2 pb-2 font-sans text-[11px] text-royal/65">
+                      <p className="px-2 pb-2 font-sans text-[11px] text-tt-royal/65">
                         {x.tip.replace(/&apos;/g, "'")}
                       </p>
                     </div>
@@ -838,7 +824,7 @@ export function TripCreationWizard({
               </div>
             </section>
             <section>
-              <h2 className="font-sans text-sm font-semibold text-royal">
+              <h2 className="font-sans text-sm font-semibold text-tt-royal">
                 Must-visit parks (optional)
               </h2>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -856,8 +842,8 @@ export function TripCreationWizard({
                     }}
                     className={`min-h-[40px] rounded-full border px-3 py-2 font-sans text-xs ${
                       mustDoParks.has(pk.id)
-                        ? "border-royal bg-royal text-cream"
-                        : "border-royal/25 bg-white"
+                        ? "border-tt-royal bg-tt-royal text-white"
+                        : "border-tt-royal/25 bg-white"
                     }`}
                   >
                     {pk.icon ? `${pk.icon} ` : ""}
@@ -871,24 +857,24 @@ export function TripCreationWizard({
 
         {step === 6 ? (
           <div className="mt-6 max-h-[min(72vh,42rem)] space-y-5 overflow-y-auto pr-1">
-            <h1 className="font-serif text-xl font-semibold text-royal">
+            <h1 className="font-heading text-xl font-semibold text-tt-royal">
               How are you handling the queues?
             </h1>
-            <p className="font-sans text-sm text-royal/75">
+            <p className="font-sans text-sm text-tt-royal/75">
               These help us suggest the best ride order. Don&apos;t worry if you
               don&apos;t know — pick Not sure and we&apos;ll explain on each day.
             </p>
             {!showQueueStep ? (
-              <div className="rounded-xl border border-royal/15 bg-cream p-4 font-sans text-sm text-royal/80">
+              <div className="rounded-xl border border-tt-royal/15 bg-cream p-4 font-sans text-sm text-tt-royal/80">
                 Skip-the-line details aren&apos;t required for this destination.
               </div>
             ) : null}
             {showDisneyBlock ? (
-              <section className="rounded-xl border border-royal/10 bg-cream/60 p-4">
-                <h2 className="font-serif text-lg font-semibold text-royal">
+              <section className="rounded-xl border border-tt-royal/10 bg-cream/60 p-4">
+                <h2 className="font-heading text-lg font-semibold text-tt-royal">
                   Disney — Lightning Lane
                 </h2>
-                <p className="mt-1 font-sans text-xs text-royal/70">
+                <p className="mt-1 font-sans text-xs text-tt-royal/70">
                   Lightning Lane Multi Pass
                 </p>
                 <div className="mt-2 flex flex-col gap-2">
@@ -908,8 +894,8 @@ export function TripCreationWizard({
                       }
                       className={`min-h-[44px] rounded-lg border px-3 py-2 text-left font-sans text-sm ${
                         disneyLL.multiPassStatus === id
-                          ? "border-gold bg-white"
-                          : "border-royal/15 bg-white"
+                          ? "border-tt-gold bg-white"
+                          : "border-tt-royal/15 bg-white"
                       }`}
                     >
                       {label}
@@ -924,7 +910,7 @@ export function TripCreationWizard({
                   What&apos;s Multi Pass?
                 </button>
                 {llMultiExplainOpen ? (
-                  <p className="mt-2 rounded-lg bg-cream px-3 py-2 font-sans text-xs leading-relaxed text-royal/85">
+                  <p className="mt-2 rounded-lg bg-cream px-3 py-2 font-sans text-xs leading-relaxed text-tt-royal/85">
                     Lightning Lane Multi Pass lets you skip the standby queue at one
                     ride per booking. You book up to three rides per day in advance
                     via the My Disney Experience app. Free with Multi Pass tickets,
@@ -932,7 +918,7 @@ export function TripCreationWizard({
                   </p>
                 ) : null}
 
-                <p className="mt-4 font-sans text-xs font-semibold text-royal/70">
+                <p className="mt-4 font-sans text-xs font-semibold text-tt-royal/70">
                   Single Pass — willing to pay for one or two headliners?
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -948,8 +934,8 @@ export function TripCreationWizard({
                       }
                       className={`min-h-[44px] flex-1 rounded-lg border px-2 py-2 font-sans text-xs ${
                         disneyLL.singlePassWillingToPay === id
-                          ? "border-royal bg-royal text-cream"
-                          : "border-royal/20 bg-white"
+                          ? "border-tt-royal bg-tt-royal text-white"
+                          : "border-tt-royal/20 bg-white"
                       }`}
                     >
                       {id === "not_sure" ? "Not sure" : id[0]!.toUpperCase() + id.slice(1)}
@@ -964,14 +950,14 @@ export function TripCreationWizard({
                   What&apos;s Single Pass?
                 </button>
                 {llSingleExplainOpen ? (
-                  <p className="mt-2 rounded-lg bg-cream px-3 py-2 font-sans text-xs leading-relaxed text-royal/85">
+                  <p className="mt-2 rounded-lg bg-cream px-3 py-2 font-sans text-xs leading-relaxed text-tt-royal/85">
                     Single Pass is a separate paid pass for the most popular rides
                     — for example Rise of the Resistance or Tron. Often roughly
                     £15–25 per person per ride.
                   </p>
                 ) : null}
 
-                <p className="mt-4 font-sans text-xs font-semibold text-royal/70">
+                <p className="mt-4 font-sans text-xs font-semibold text-tt-royal/70">
                   Memory Maker / PhotoPass?
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -984,8 +970,8 @@ export function TripCreationWizard({
                       }
                       className={`min-h-[44px] flex-1 rounded-lg border px-2 py-2 font-sans text-xs ${
                         disneyLL.memoryMaker === id
-                          ? "border-royal bg-royal text-cream"
-                          : "border-royal/20 bg-white"
+                          ? "border-tt-royal bg-tt-royal text-white"
+                          : "border-tt-royal/20 bg-white"
                       }`}
                     >
                       {id === "not_sure" ? "Not sure" : id[0]!.toUpperCase() + id.slice(1)}
@@ -999,8 +985,8 @@ export function TripCreationWizard({
             ) : null}
 
             {showUniversalBlock ? (
-              <section className="rounded-xl border border-royal/10 bg-cream/60 p-4">
-                <h2 className="font-serif text-lg font-semibold text-royal">
+              <section className="rounded-xl border border-tt-royal/10 bg-cream/60 p-4">
+                <h2 className="font-heading text-lg font-semibold text-tt-royal">
                   Universal — Express &amp; Single Rider
                 </h2>
                 <HintDetails label="About Express Pass (?)" >
@@ -1008,7 +994,7 @@ export function TripCreationWizard({
                   deluxe Universal hotels (for example Hard Rock, Royal Pacific,
                   Portofino). Often around £90–200 per day otherwise.
                 </HintDetails>
-                <p className="mt-3 font-sans text-xs font-semibold text-royal/70">
+                <p className="mt-3 font-sans text-xs font-semibold text-tt-royal/70">
                   Express Pass status
                 </p>
                 <div className="mt-2 flex flex-col gap-2">
@@ -1026,15 +1012,15 @@ export function TripCreationWizard({
                       onClick={() => setUnivEx((u) => ({ ...u, status: id }))}
                       className={`min-h-[44px] rounded-lg border px-3 py-2 text-left font-sans text-sm ${
                         univEx.status === id
-                          ? "border-gold bg-white"
-                          : "border-royal/15 bg-white"
+                          ? "border-tt-gold bg-white"
+                          : "border-tt-royal/15 bg-white"
                       }`}
                     >
                       {label}
                     </button>
                   ))}
                 </div>
-                <p className="mt-4 font-sans text-xs font-semibold text-royal/70">
+                <p className="mt-4 font-sans text-xs font-semibold text-tt-royal/70">
                   Single Rider lanes — happy to use them?
                 </p>
                 <div className="mt-2 flex flex-col gap-2">
@@ -1053,8 +1039,8 @@ export function TripCreationWizard({
                       }
                       className={`min-h-[44px] rounded-lg border px-3 py-2 text-left font-sans text-sm ${
                         univEx.singleRiderOk === id
-                          ? "border-gold bg-white"
-                          : "border-royal/15 bg-white"
+                          ? "border-tt-gold bg-white"
+                          : "border-tt-royal/15 bg-white"
                       }`}
                     >
                       {label}
@@ -1072,7 +1058,7 @@ export function TripCreationWizard({
 
         {step === 7 ? (
           <div className="mt-6 space-y-4">
-            <h1 className="font-serif text-xl font-semibold text-royal">
+            <h1 className="font-heading text-xl font-semibold text-tt-royal">
               Park days vs rest days?
             </h1>
             <HintDetails label="About park hopping (?)" >
@@ -1093,8 +1079,8 @@ export function TripCreationWizard({
                   onClick={() => setParkHopping(id)}
                   className={`min-h-[44px] rounded-xl border px-3 py-2 text-left font-sans text-sm ${
                     parkHopping === id
-                      ? "border-royal bg-royal text-cream"
-                      : "border-royal/20 bg-white text-royal"
+                      ? "border-tt-royal bg-tt-royal text-white"
+                      : "border-tt-royal/20 bg-white text-tt-royal"
                   }`}
                 >
                   {label.replace(/&apos;/g, "'")}
@@ -1102,7 +1088,7 @@ export function TripCreationWizard({
               ))}
             </div>
             <div>
-              <label className="font-sans text-sm font-semibold text-royal">
+              <label className="font-sans text-sm font-semibold text-tt-royal">
                 Roughly how many full park days? ({expectedFullParkDays} of max{" "}
                 {Math.max(1, tripDayCount)})
               </label>
@@ -1114,14 +1100,14 @@ export function TripCreationWizard({
                 onChange={(e) =>
                   setExpectedFullParkDays(Number(e.target.value))
                 }
-                className="mt-2 w-full accent-gold"
+                className="mt-2 w-full accent-tt-gold"
               />
             </div>
             <div>
-              <h2 className="font-sans text-sm font-semibold text-royal">
+              <h2 className="font-sans text-sm font-semibold text-tt-royal">
                 Colours
               </h2>
-              <p className="mt-1 font-sans text-xs text-royal/65">
+              <p className="mt-1 font-sans text-xs text-tt-royal/65">
                 Pick a planner theme — you can change this anytime from the trip
                 menu.
               </p>
@@ -1132,10 +1118,10 @@ export function TripCreationWizard({
 
         {step === 8 ? (
           <div className="mt-6 space-y-4">
-            <h1 className="font-serif text-xl font-semibold text-royal">
+            <h1 className="font-heading text-xl font-semibold text-tt-royal">
               Anything we should know?
             </h1>
-            <p className="font-sans text-sm text-royal/75">
+            <p className="font-sans text-sm text-tt-royal/75">
               How should we build your calendar to start?
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -1144,14 +1130,14 @@ export function TripCreationWizard({
                 onClick={() => setPlanPath("manual")}
                 className={`min-h-[120px] rounded-2xl border p-4 text-left transition ${
                   planPath === "manual"
-                    ? "border-royal ring-2 ring-royal/30"
-                    : "border-royal/20 bg-cream"
+                    ? "border-tt-royal ring-2 ring-tt-royal/30"
+                    : "border-tt-royal/20 bg-cream"
                 }`}
               >
-                <span className="font-serif font-semibold text-royal">
+                <span className="font-heading font-semibold text-tt-royal">
                   I&apos;ll plan it myself
                 </span>
-                <p className="mt-2 font-sans text-xs text-royal/75">
+                <p className="mt-2 font-sans text-xs text-tt-royal/75">
                   Blank calendar — your answers still save for AI features later.
                 </p>
               </button>
@@ -1160,22 +1146,22 @@ export function TripCreationWizard({
                 onClick={() => setPlanPath("ai")}
                 className={`min-h-[120px] rounded-2xl border border-l-4 border-l-gold p-4 text-left transition ${
                   planPath === "ai"
-                    ? "border-gold ring-2 ring-gold/35"
-                    : "border-royal/20 bg-cream"
+                    ? "border-tt-gold ring-2 ring-tt-gold/35"
+                    : "border-tt-royal/20 bg-cream"
                 }`}
               >
-                <span className="font-serif font-semibold text-royal">
+                <span className="font-heading font-semibold text-tt-royal">
                   Let Trip build my plan
                 </span>
-                <p className="mt-2 font-sans text-xs text-royal/75">
+                <p className="mt-2 font-sans text-xs text-tt-royal/75">
                   Smart Plan fills your trip after you finish.
                 </p>
               </button>
             </div>
-            <label className="block font-sans text-sm text-royal">
+            <label className="block font-sans text-sm text-tt-royal">
               Notes for Trip (optional)
               <textarea
-                className="mt-2 min-h-[120px] w-full rounded-lg border-2 border-royal/20 px-3 py-2 font-sans text-sm"
+                className="mt-2 min-h-[120px] w-full rounded-lg border-2 border-tt-royal/20 px-3 py-2 font-sans text-sm"
                 maxLength={2000}
                 value={additionalNotes}
                 onChange={(e) =>
@@ -1183,91 +1169,86 @@ export function TripCreationWizard({
                 }
                 placeholder='e.g. "We&apos;re staying at Reunion Resort", "My daughter loves Frozen", "Need a rest day mid-trip"'
               />
-              <span className="mt-1 block text-right text-xs text-royal/50">
+              <span className="mt-1 block text-right text-xs text-tt-royal/50">
                 {additionalNotes.length} / 2000
               </span>
             </label>
           </div>
         ) : null}
 
-        <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <div className="mt-8 flex flex-col gap-2 border-t border-tt-line-soft pt-6 sm:flex-row sm:flex-wrap">
           {step > minStep ? (
-            <button
-              type="button"
-              onClick={goBack}
-              className="min-h-[44px] rounded-lg border border-royal/30 bg-white px-4 py-2 font-sans text-sm text-royal"
-            >
+            <Button type="button" variant="secondary" size="md" onClick={goBack}>
               ← Back
-            </button>
+            </Button>
           ) : step === 1 ? (
-            <button
-              type="button"
-              onClick={onCancel}
-              className="min-h-[44px] rounded-lg border border-royal/30 bg-white px-4 py-2 font-sans text-sm text-royal"
-            >
+            <Button type="button" variant="secondary" size="md" onClick={onCancel}>
               Cancel
-            </button>
+            </Button>
           ) : null}
 
           <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:justify-end">
             {skipVisible ? (
-              <button
+              <Button
                 type="button"
+                variant="accent"
+                size="md"
+                className="border border-tt-gold/40 bg-tt-gold-soft text-tt-royal shadow-none hover:bg-tt-gold-soft/90"
                 onClick={() => {
                   if (step === 3) skipStep3();
                   else goNext();
                 }}
-                className="min-h-[44px] rounded-lg border border-gold/50 bg-cream px-4 py-2 font-sans text-sm font-medium text-royal"
               >
                 Skip — I&apos;ll add this later
-              </button>
+              </Button>
             ) : null}
             {step6Skippable && showQueueStep ? (
-              <button
+              <Button
                 type="button"
+                variant="accent"
+                size="md"
+                className="border border-tt-gold/40 bg-tt-gold-soft text-tt-royal shadow-none hover:bg-tt-gold-soft/90"
                 onClick={goNext}
-                className="min-h-[44px] rounded-lg border border-gold/50 bg-cream px-4 py-2 font-sans text-sm font-medium text-royal"
               >
                 Skip — I&apos;ll add this later
-              </button>
+              </Button>
             ) : null}
             {step < 8 ? (
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="md"
                 disabled={!canNext}
                 onClick={goNext}
-                className="min-h-[44px] flex-1 rounded-lg bg-royal px-4 py-2 font-sans text-sm font-semibold text-cream disabled:opacity-50 sm:max-w-[14rem]"
+                className="sm:max-w-[14rem] sm:flex-none"
               >
                 Next →
-              </button>
+              </Button>
             ) : (
-              <button
+              <Button
                 type="button"
+                variant="accent"
+                size="md"
                 disabled={busy || !canNext}
+                loading={busy}
+                loadingLabel="Creating your trip"
                 onClick={() => void submit()}
-                className="min-h-[44px] flex-1 rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 py-2 font-serif text-sm font-semibold text-royal disabled:opacity-60 sm:max-w-[14rem]"
+                className="sm:max-w-[14rem] sm:flex-none"
               >
-                {busy ? (
-                  <span className="inline-flex items-center justify-center gap-2">
-                    <LogoSpinner size="sm" decorative className="shrink-0" />
-                    <span>Creating your trip</span>
-                  </span>
-                ) : (
-                  "Finish ✨"
-                )}
-              </button>
+                Finish ✨
+              </Button>
             )}
           </div>
         </div>
 
         {!includeWelcome && step === 1 ? null : (
-          <p className="mt-8 text-center font-sans text-xs text-royal/45">
-            <Link href="/" className="underline">
+          <p className="mt-8 text-center font-sans text-xs text-tt-ink-soft">
+            <Link href="/" className="text-tt-royal underline underline-offset-2">
               Home
             </Link>
           </p>
         )}
-      </div>
+      </Card>
     </InlineLoadingOverlay>
   );
 }

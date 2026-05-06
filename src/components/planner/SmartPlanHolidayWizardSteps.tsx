@@ -293,10 +293,10 @@ function TileButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`min-h-[44px] rounded-xl border p-3 text-left text-sm transition ${
+      className={`min-h-11 rounded-tt-md border p-3 text-left font-sans text-sm transition ${
         selected
-          ? "border-royal bg-white ring-2 ring-royal/20"
-          : "border-royal/15 bg-white hover:border-royal/30"
+          ? "border-tt-royal bg-tt-surface shadow-tt-sm ring-2 ring-tt-royal/25"
+          : "border-tt-line bg-tt-surface hover:border-tt-royal-soft"
       } ${className}`}
     >
       {children}
@@ -359,10 +359,10 @@ export function SmartPlanHolidayWizardSteps({
 
   const header = (
     <div className="mb-3 flex items-baseline justify-between gap-2">
-      <p className="font-sans text-xs font-semibold uppercase tracking-wide text-royal/55">
+      <p className="font-meta text-xs font-semibold uppercase tracking-wide text-tt-ink-soft">
         Step {stepHuman} of {total}
       </p>
-      <p className="text-right font-sans text-xs text-royal/50">
+      <p className="text-right font-sans text-xs text-tt-ink-muted">
         Holiday planning brain — not ride-by-ride sequencing
       </p>
     </div>
@@ -374,10 +374,10 @@ export function SmartPlanHolidayWizardSteps({
 
       {stepId === "scope" ? (
         <section className="space-y-2">
-          <h3 className="font-sans text-sm font-semibold text-royal">
+          <h3 className="font-sans text-sm font-semibold text-tt-royal">
             What should Smart Plan do?
           </h3>
-          <p className="font-sans text-xs leading-relaxed text-royal/65">
+          <p className="font-sans text-xs leading-relaxed text-tt-royal/65">
             This sets how aggressive the next run is. You&apos;ll see a recap on
             the last step before anything changes.
           </p>
@@ -391,8 +391,8 @@ export function SmartPlanHolidayWizardSteps({
                   setWizard((w) => ({ ...w, scope: opt.id }))
                 }
               >
-                <div className="font-semibold text-royal">{opt.title}</div>
-                <div className="mt-1 text-xs text-royal/70">{opt.body}</div>
+                <div className="font-semibold text-tt-royal">{opt.title}</div>
+                <div className="mt-1 text-xs text-tt-royal/70">{opt.body}</div>
               </TileButton>
             ))}
           </div>
@@ -401,7 +401,7 @@ export function SmartPlanHolidayWizardSteps({
 
       {stepId === "holidayStyle" ? (
         <section className="space-y-2">
-          <h3 className="font-sans text-sm font-semibold text-royal">
+          <h3 className="font-sans text-sm font-semibold text-tt-royal">
             What kind of trip is this?
           </h3>
           <div className="grid max-h-[min(48vh,20rem)] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
@@ -414,8 +414,8 @@ export function SmartPlanHolidayWizardSteps({
                   setWizard((w) => ({ ...w, holidayStyle: opt.id }))
                 }
               >
-                <div className="font-semibold text-royal">{opt.title}</div>
-                <div className="mt-1 text-xs text-royal/70">{opt.body}</div>
+                <div className="font-semibold text-tt-royal">{opt.title}</div>
+                <div className="mt-1 text-xs text-tt-royal/70">{opt.body}</div>
               </TileButton>
             ))}
           </div>
@@ -425,7 +425,7 @@ export function SmartPlanHolidayWizardSteps({
       {stepId === "groupPace" ? (
         <section className="space-y-4">
           <div>
-            <h3 className="font-sans text-sm font-semibold text-royal">
+            <h3 className="font-sans text-sm font-semibold text-tt-royal">
               Who is travelling?
             </h3>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -439,8 +439,8 @@ export function SmartPlanHolidayWizardSteps({
                   }
                   className={`min-h-10 rounded-full border px-3 py-2 font-sans text-xs ${
                     wizard.wizardParty === opt.id
-                      ? "border-royal bg-royal text-cream"
-                      : "border-royal/25 bg-white"
+                      ? "border-tt-royal bg-tt-royal text-white"
+                      : "border-tt-line bg-tt-surface"
                   }`}
                 >
                   {opt.title}
@@ -449,7 +449,7 @@ export function SmartPlanHolidayWizardSteps({
             </div>
           </div>
           <div>
-            <h3 className="font-sans text-sm font-semibold text-royal">
+            <h3 className="font-sans text-sm font-semibold text-tt-royal">
               What pace suits you?
             </h3>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -460,8 +460,8 @@ export function SmartPlanHolidayWizardSteps({
                   disabled={isSubmitting}
                   onClick={() => setWizard((w) => ({ ...w, paceStyle: opt.id }))}
                 >
-                  <div className="font-semibold text-royal">{opt.title}</div>
-                  <div className="mt-1 text-xs text-royal/70">{opt.body}</div>
+                  <div className="font-semibold text-tt-royal">{opt.title}</div>
+                  <div className="mt-1 text-xs text-tt-royal/70">{opt.body}</div>
                 </TileButton>
               ))}
             </div>
@@ -472,7 +472,7 @@ export function SmartPlanHolidayWizardSteps({
       {stepId === "ridesAvoid" ? (
         <section className="space-y-4">
           <div>
-            <h3 className="font-sans text-sm font-semibold text-royal">
+            <h3 className="font-sans text-sm font-semibold text-tt-royal">
               What ride level suits your group?
             </h3>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -486,8 +486,8 @@ export function SmartPlanHolidayWizardSteps({
                   }
                   className={`min-h-10 rounded-full border px-3 py-2 font-sans text-xs ${
                     wizard.rideComfort === opt.id
-                      ? "border-royal bg-royal text-cream"
-                      : "border-royal/25 bg-white"
+                      ? "border-tt-royal bg-tt-royal text-white"
+                      : "border-tt-line bg-tt-surface"
                   }`}
                 >
                   {opt.title}
@@ -496,10 +496,10 @@ export function SmartPlanHolidayWizardSteps({
             </div>
           </div>
           <div>
-            <h3 className="font-sans text-sm font-semibold text-royal">
+            <h3 className="font-sans text-sm font-semibold text-tt-royal">
               Avoid (optional)
             </h3>
-            <p className="mt-1 font-sans text-xs text-royal/60">
+            <p className="mt-1 font-sans text-xs text-tt-royal/60">
               TripTiles will steer day structure around these where possible.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -512,7 +512,7 @@ export function SmartPlanHolidayWizardSteps({
                     disabled={isSubmitting}
                     onClick={() => setWizard((w) => toggleAvoidance(w, opt.id))}
                     className={`min-h-10 rounded-full border px-3 py-2 font-sans text-xs ${
-                      on ? "border-royal bg-royal text-cream" : "border-royal/25 bg-white"
+                      on ? "border-tt-royal bg-tt-royal text-white" : "border-tt-line bg-tt-surface"
                     }`}
                   >
                     {opt.label}
@@ -527,7 +527,7 @@ export function SmartPlanHolidayWizardSteps({
       {stepId === "mealsPaid" ? (
         <section className="space-y-4">
           <div>
-            <h3 className="font-sans text-sm font-semibold text-royal">
+            <h3 className="font-sans text-sm font-semibold text-tt-royal">
               How should TripTiles handle meals?
             </h3>
             <div className="mt-2 grid max-h-[min(40vh,16rem)] gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
@@ -540,21 +540,21 @@ export function SmartPlanHolidayWizardSteps({
                     setWizard((w) => ({ ...w, mealChoice: opt.id }))
                   }
                 >
-                  <div className="font-semibold text-royal">{opt.title}</div>
-                  <div className="mt-1 text-xs text-royal/70">{opt.body}</div>
+                  <div className="font-semibold text-tt-royal">{opt.title}</div>
+                  <div className="mt-1 text-xs text-tt-royal/70">{opt.body}</div>
                 </TileButton>
               ))}
             </div>
           </div>
           <div>
-            <h3 className="font-sans text-sm font-semibold text-royal">
+            <h3 className="font-sans text-sm font-semibold text-tt-royal">
               Should Smart Plan rely on paid queue access?
             </h3>
-            <p className="mt-1 font-sans text-xs leading-relaxed text-royal/60">
+            <p className="mt-1 font-sans text-xs leading-relaxed text-tt-royal/60">
               If you choose{" "}
-              <strong className="font-semibold text-royal/80">Not sure</strong>{" "}
+              <strong className="font-semibold text-tt-royal/80">Not sure</strong>{" "}
               or{" "}
-              <strong className="font-semibold text-royal/80">Decide later</strong>
+              <strong className="font-semibold text-tt-royal/80">Decide later</strong>
               , Smart Plan uses standby assumptions and only mentions paid access
               as optional advice.
             </p>
@@ -568,8 +568,8 @@ export function SmartPlanHolidayWizardSteps({
                     setWizard((w) => ({ ...w, paidAccessDefault: opt.id }))
                   }
                 >
-                  <div className="font-semibold text-royal">{opt.title}</div>
-                  <div className="mt-1 text-xs text-royal/70">{opt.body}</div>
+                  <div className="font-semibold text-tt-royal">{opt.title}</div>
+                  <div className="mt-1 text-xs text-tt-royal/70">{opt.body}</div>
                 </TileButton>
               ))}
             </div>
@@ -579,7 +579,7 @@ export function SmartPlanHolidayWizardSteps({
 
       {stepId === "rest" ? (
         <section className="space-y-2">
-          <h3 className="font-sans text-sm font-semibold text-royal">
+          <h3 className="font-sans text-sm font-semibold text-tt-royal">
             How should the holiday be balanced?
           </h3>
           <div className="grid gap-2 sm:grid-cols-2">
@@ -592,7 +592,7 @@ export function SmartPlanHolidayWizardSteps({
                   setWizard((w) => ({ ...w, restRhythm: opt.id }))
                 }
               >
-                <div className="font-semibold text-royal">{opt.title}</div>
+                <div className="font-semibold text-tt-royal">{opt.title}</div>
               </TileButton>
             ))}
           </div>
@@ -601,10 +601,10 @@ export function SmartPlanHolidayWizardSteps({
 
       {stepId === "parks" ? (
         <section className="space-y-2">
-          <h3 className="font-sans text-sm font-semibold text-royal">
+          <h3 className="font-sans text-sm font-semibold text-tt-royal">
             Must-do parks or focus areas?
           </h3>
-          <p className="font-sans text-xs text-royal/60">
+          <p className="font-sans text-xs text-tt-royal/60">
             Pick what matters — TripTiles maps this to parks in{" "}
             {trip.region_id ? "your region" : "your trip"} when it can.
           </p>
@@ -615,8 +615,8 @@ export function SmartPlanHolidayWizardSteps({
               onClick={() => setWizard((w) => ({ ...w, parkPriorities: [] }))}
               className={`min-h-10 rounded-full border px-3 py-2 font-sans text-xs ${
                 wizard.parkPriorities.length === 0
-                  ? "border-royal bg-royal text-cream"
-                  : "border-royal/25 bg-white"
+                  ? "border-tt-royal bg-tt-royal text-white"
+                  : "border-tt-line bg-tt-surface"
               }`}
             >
               No preference — surprise me
@@ -631,7 +631,7 @@ export function SmartPlanHolidayWizardSteps({
                     disabled={isSubmitting}
                     onClick={() => setWizard((w) => toggleParkToken(w, token))}
                     className={`min-h-10 rounded-full border px-3 py-2 font-sans text-xs ${
-                      on ? "border-royal bg-royal text-cream" : "border-royal/25 bg-white"
+                      on ? "border-tt-royal bg-tt-royal text-white" : "border-tt-line bg-tt-surface"
                     }`}
                   >
                     {PARK_TOKEN_LABEL[token]}
@@ -644,44 +644,44 @@ export function SmartPlanHolidayWizardSteps({
       ) : null}
 
       {stepId === "preview" ? (
-        <section className="space-y-3 rounded-xl border border-gold/35 bg-white/90 p-4">
-          <h3 className="font-serif text-base font-semibold text-royal">
+        <section className="space-y-3 rounded-tt-lg border border-tt-gold/35 bg-tt-surface p-4 shadow-tt-sm">
+          <h3 className="font-heading text-base font-semibold text-tt-royal">
             Preview before applying
           </h3>
-          <ul className="space-y-2 font-sans text-sm leading-relaxed text-royal/85">
+          <ul className="space-y-2 font-sans text-sm leading-relaxed text-tt-royal/85">
             <li>
-              <span className="font-semibold text-royal">Scope:</span>{" "}
+              <span className="font-semibold text-tt-royal">Scope:</span>{" "}
               {scopeLabel}
             </li>
             <li>
-              <span className="font-semibold text-royal">Calendar tiles:</span>{" "}
+              <span className="font-semibold text-tt-royal">Calendar tiles:</span>{" "}
               {tilesLine}
             </li>
             <li>
-              <span className="font-semibold text-royal">Trip shape:</span>{" "}
+              <span className="font-semibold text-tt-royal">Trip shape:</span>{" "}
               {preview.calendarDays} calendar day
               {preview.calendarDays === 1 ? "" : "s"},{" "}
               {preview.fullyEmptyDays} fully empty, {preview.daysWithFilledSlots}{" "}
               with something already placed.
             </li>
             <li>
-              <span className="font-semibold text-royal">Meals:</span>{" "}
+              <span className="font-semibold text-tt-royal">Meals:</span>{" "}
               {wizard.mealChoice.replace(/_/g, " ")}
             </li>
             <li>
-              <span className="font-semibold text-royal">Paid access:</span>{" "}
+              <span className="font-semibold text-tt-royal">Paid access:</span>{" "}
               {paidLine}
             </li>
             <li>
-              <span className="font-semibold text-royal">Pace:</span>{" "}
+              <span className="font-semibold text-tt-royal">Pace:</span>{" "}
               {wizard.paceStyle.replace(/_/g, " ")}
             </li>
             <li>
-              <span className="font-semibold text-royal">Rest rhythm:</span>{" "}
+              <span className="font-semibold text-tt-royal">Rest rhythm:</span>{" "}
               {wizard.restRhythm.replace(/_/g, " ")}
             </li>
             <li>
-              <span className="font-semibold text-royal">Park focus:</span>{" "}
+              <span className="font-semibold text-tt-royal">Park focus:</span>{" "}
               {wizard.parkPriorities.length === 0
                 ? "No preference"
                 : wizard.parkPriorities
@@ -695,11 +695,11 @@ export function SmartPlanHolidayWizardSteps({
             </li>
           </ul>
           <label className="block">
-            <span className="font-sans text-xs font-medium text-royal">
+            <span className="font-sans text-xs font-medium text-tt-royal">
               Anything else? (optional)
             </span>
             <textarea
-              className="mt-1 min-h-[72px] w-full resize-y rounded-lg border border-royal/25 px-3 py-2 font-sans text-sm text-royal placeholder:text-royal/35"
+              className="mt-1 min-h-[72px] w-full resize-y rounded-tt-md border border-tt-line px-3 py-2 font-sans text-sm text-tt-royal placeholder:text-tt-ink-soft"
               maxLength={2000}
               value={wizard.freeText}
               onChange={(e) =>

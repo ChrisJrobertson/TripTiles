@@ -20,6 +20,7 @@ import { sortPrioritiesForDay } from "@/lib/ride-plan-display";
 import type { Park, PlanningPace, Trip, TripPlanningPreferences } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
 import { LogoSpinner } from "@/components/ui/LogoSpinner";
+import { ModalShell } from "@/components/ui/ModalShell";
 import { SequenceTimeline } from "@/components/planner/SequenceTimeline";
 import {
   SmartPlanHolidayWizardSteps,
@@ -527,18 +528,18 @@ export function SmartPlanModal({
       : `TripTiles will use your answers to structure this trip in ${regionLabel}.`;
 
   const skipTheLineSection = (
-    <section className="rounded-lg border border-royal/15 bg-white/80 px-4 py-3">
-      <h3 className="font-sans text-sm font-semibold text-royal">
+    <section className="rounded-lg border border-tt-line-soft bg-tt-surface/80 px-4 py-3">
+      <h3 className="font-sans text-sm font-semibold text-tt-royal">
         Skip-the-line passes
       </h3>
-      <p className="mt-1 font-sans text-xs leading-relaxed text-royal/65">
+      <p className="mt-1 font-sans text-xs leading-relaxed text-tt-ink-muted">
         Turn off what you don&apos;t use so Smart Plan doesn&apos;t assume paid
         queue-skipping products.
       </p>
-      <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-lg border border-royal/10 bg-white/90 p-3">
+      <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-lg border border-tt-line-soft bg-tt-surface/90 p-3">
         <input
           type="checkbox"
-          className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+          className="mt-0.5 h-4 w-4 shrink-0 rounded border-tt-line accent-tt-royal"
           checked={trip.planning_preferences?.includeDisneySkipTips !== false}
           onChange={(e) =>
             void persistSkipLinePrefs(
@@ -548,17 +549,17 @@ export function SmartPlanModal({
           }
           disabled={isGenerating || skipPrefsSaving}
         />
-        <span className="min-w-0 font-sans text-xs leading-relaxed text-royal/85">
-          <span className="font-semibold text-royal">
+        <span className="min-w-0 font-sans text-xs leading-relaxed text-tt-royal/85">
+          <span className="font-semibold text-tt-royal">
             Disney Lightning Lane / Genie+ style tips
           </span>{" "}
           — rope-drop and general queue advice still applies when unchecked.
         </span>
       </label>
-      <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-lg border border-royal/10 bg-white/90 p-3">
+      <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-lg border border-tt-line-soft bg-tt-surface/90 p-3">
         <input
           type="checkbox"
-          className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+          className="mt-0.5 h-4 w-4 shrink-0 rounded border-tt-line accent-tt-royal"
           checked={
             trip.planning_preferences?.includeUniversalSkipTips !== false
           }
@@ -570,8 +571,8 @@ export function SmartPlanModal({
           }
           disabled={isGenerating || skipPrefsSaving}
         />
-        <span className="min-w-0 font-sans text-xs leading-relaxed text-royal/85">
-          <span className="font-semibold text-royal">
+        <span className="min-w-0 font-sans text-xs leading-relaxed text-tt-royal/85">
+          <span className="font-semibold text-tt-royal">
             Universal Express-style tips
           </span>{" "}
           — off if you don&apos;t hold Express on your tickets.
@@ -588,16 +589,15 @@ export function SmartPlanModal({
       : smartOnPreviewStep;
 
   return (
-    <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-royal/85 p-4"
-      role="dialog"
-      aria-modal="true"
+    <ModalShell
+      zClassName="z-[120]"
+      maxWidthClass="max-w-xl"
+      panelClassName="p-6 shadow-tt-lg sm:p-8"
       aria-labelledby="smart-plan-title"
     >
-      <div className="max-h-[min(92vh,48rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-gold/40 bg-cream p-6 shadow-xl sm:max-w-xl sm:p-8">
         <h2
           id="smart-plan-title"
-          className="font-serif text-xl font-semibold text-royal"
+          className="font-heading text-xl font-semibold text-tt-royal sm:text-2xl"
         >
         {isDayScope
           ? dayLabel
@@ -608,7 +608,7 @@ export function SmartPlanModal({
 
         {showTouringPlanToggle ? (
           <div
-            className="mt-4 flex min-w-0 flex-col gap-2 rounded-lg border border-royal/20 bg-white p-1 sm:flex-row"
+            className="mt-4 flex min-w-0 flex-col gap-2 rounded-lg border border-tt-line bg-tt-bg-soft p-1 sm:flex-row"
             role="tablist"
             aria-label="Day planner mode"
           >
@@ -619,8 +619,8 @@ export function SmartPlanModal({
               onClick={() => setDayPlannerSource("touring")}
               className={`min-h-11 flex-1 rounded-md px-3 py-2 text-center font-sans text-sm font-medium transition ${
                 dayPlannerSource === "touring"
-                  ? "bg-royal text-cream"
-                  : "text-royal/80 hover:bg-cream"
+                  ? "bg-tt-royal text-white"
+                  : "text-tt-ink-muted hover:bg-tt-bg-soft"
               }`}
             >
               Touring Plan
@@ -632,8 +632,8 @@ export function SmartPlanModal({
               onClick={() => setDayPlannerSource("ai")}
               className={`min-h-11 flex-1 rounded-md px-3 py-2 text-center font-sans text-sm font-medium transition ${
                 dayPlannerSource === "ai"
-                  ? "bg-royal text-cream"
-                  : "text-royal/80 hover:bg-cream"
+                  ? "bg-tt-royal text-white"
+                  : "text-tt-ink-muted hover:bg-tt-bg-soft"
               }`}
             >
               Smart Plan (AI)
@@ -652,17 +652,17 @@ export function SmartPlanModal({
         ) : null}
 
         {touringSubmitReady && !touringSequence ? (
-          <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
+          <p className="mt-2 font-sans text-sm leading-relaxed text-tt-ink-soft">
             Choose your pace and passes for today. Trip sequences your priority
             rides using typical waits — dining reservations and Lightning Lane
             windows will slot in automatically once they are linked.
           </p>
         ) : !touringSubmitReady ? (
           <>
-            <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
+            <p className="mt-2 font-sans text-sm leading-relaxed text-tt-ink-soft">
               {smartSummary}
             </p>
-            <p className="mt-1 font-sans text-xs leading-relaxed text-royal/60">
+            <p className="mt-1 font-sans text-xs leading-relaxed text-tt-ink-muted">
               Crowd-aware scheduling uses patterns we ship in-app — not live park
               data. Smart Plan shapes days and intents; AI Day Strategy still
               builds ride-level detail when you open a day.
@@ -672,19 +672,19 @@ export function SmartPlanModal({
 
         {touringSubmitReady ? (
           <div
-            className="mt-4 rounded-xl border border-royal/15 bg-white/90 px-3 py-2.5 font-sans text-xs leading-relaxed text-royal/85"
+            className="mt-4 rounded-xl border border-tt-line-soft bg-tt-surface/90 px-3 py-2.5 font-sans text-xs leading-relaxed text-tt-royal/85"
             role="note"
           >
-            <strong className="font-semibold text-royal">Touring Plan:</strong>{" "}
+            <strong className="font-semibold text-tt-royal">Touring Plan:</strong>{" "}
             This is a draft sequence from historic averages — always check
             posted waits and showtimes in-park.
           </div>
         ) : (
           <div
-            className="mt-4 rounded-xl border border-amber-200/90 bg-amber-50/95 px-3 py-2.5 font-sans text-xs leading-relaxed text-royal/90"
+            className="mt-4 rounded-xl border border-amber-200/90 bg-amber-50/95 px-3 py-2.5 font-sans text-xs leading-relaxed text-tt-royal/90"
             role="note"
           >
-            <strong className="font-semibold text-royal">
+            <strong className="font-semibold text-tt-royal">
               Smart Plan disclaimer:
             </strong>{" "}
             Smart Plan is a draft. It can make mistakes — always verify park
@@ -693,20 +693,20 @@ export function SmartPlanModal({
           </div>
         )}
         {!touringSubmitReady && mode === "custom" ? (
-          <p className="mt-2 font-sans text-[0.7rem] leading-snug text-royal/55">
-            <strong className="text-royal/70">Tip:</strong> leave &quot;Overwrite
+          <p className="mt-2 font-sans text-[0.7rem] leading-snug text-tt-ink-soft">
+            <strong className="text-tt-ink-muted">Tip:</strong> leave &quot;Overwrite
             existing tiles&quot; off to keep what you&apos;ve placed; use{" "}
             <strong>↶ Undo Smart Plan</strong> after a run if you want to revert.
           </p>
         ) : !touringSubmitReady && smartUsingWizard && smartOnPreviewStep ? (
-          <p className="mt-2 font-sans text-[0.7rem] leading-snug text-royal/55">
-            <strong className="text-royal/70">Ready:</strong> applying saves your{" "}
-            <strong className="text-royal/80">trip planning profile</strong> and runs
+          <p className="mt-2 font-sans text-[0.7rem] leading-snug text-tt-ink-soft">
+            <strong className="text-tt-ink-muted">Ready:</strong> applying saves your{" "}
+            <strong className="text-tt-ink-muted">trip planning profile</strong> and runs
             Smart Plan with the scope you chose.
           </p>
         ) : !touringSubmitReady && smartUsingWizard ? (
-          <p className="mt-2 font-sans text-[0.7rem] leading-snug text-royal/55">
-            Use <strong className="text-royal/80">Next</strong> — you&apos;ll confirm
+          <p className="mt-2 font-sans text-[0.7rem] leading-snug text-tt-ink-soft">
+            Use <strong className="text-tt-ink-muted">Next</strong> — you&apos;ll confirm
             everything on the preview step before TripTiles changes the calendar.
           </p>
         ) : null}
@@ -718,9 +718,9 @@ export function SmartPlanModal({
           {!touringSubmitReady && mode === "custom" ? (
             <div className="space-y-3">{skipTheLineSection}</div>
           ) : touringSubmitReady ? (
-            <div className="space-y-4 rounded-lg border border-royal/15 bg-white/85 px-4 py-4">
+            <div className="space-y-4 rounded-lg border border-tt-line-soft bg-tt-surface/85 px-4 py-4">
               <section>
-                <h3 className="font-sans text-sm font-semibold text-royal">
+                <h3 className="font-sans text-sm font-semibold text-tt-royal">
                   Pace today
                 </h3>
                 <div className="mt-2 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-3">
@@ -738,8 +738,8 @@ export function SmartPlanModal({
                       disabled={sequencerBusy || isGenerating}
                       className={`min-h-11 rounded-xl border px-3 py-2 text-left font-sans text-sm font-medium transition ${
                         touringPace === opt.id
-                          ? "border-royal bg-white ring-2 ring-royal/20"
-                          : "border-royal/15 bg-white hover:border-royal/30"
+                          ? "border-tt-royal bg-tt-surface ring-2 ring-tt-royal/20"
+                          : "border-tt-line bg-tt-surface hover:border-tt-royal-soft"
                       }`}
                     >
                       {opt.label}
@@ -748,72 +748,72 @@ export function SmartPlanModal({
                 </div>
               </section>
               <section>
-                <h3 className="font-sans text-sm font-semibold text-royal">
+                <h3 className="font-sans text-sm font-semibold text-tt-royal">
                   Passes today
                 </h3>
-                <p className="mt-1 font-sans text-xs leading-relaxed text-royal/65">
+                <p className="mt-1 font-sans text-xs leading-relaxed text-tt-ink-muted">
                   These change the wait times the plan assumes. Lightning Lane
                   turns your must-dos into ~10&nbsp;min waits; Universal Express
                   turns Express-eligible rides into ~15&nbsp;min waits.
                 </p>
-                <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-md border border-royal/10 bg-cream/50 px-2 py-2">
+                <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-md border border-tt-line-soft bg-cream/50 px-2 py-2">
                   <input
                     type="checkbox"
-                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-tt-line accent-tt-royal"
                     checked={entMultiLl}
                     onChange={(e) => setEntMultiLl(e.target.checked)}
                     disabled={sequencerBusy || isGenerating}
                   />
-                  <span className="font-sans text-xs text-royal/85">
+                  <span className="font-sans text-xs text-tt-royal/85">
                     We have Lightning Lane Multi Pass today
                   </span>
                 </label>
-                <label className="mt-1 flex cursor-pointer items-start gap-2 rounded-md border border-royal/10 bg-cream/50 px-2 py-2">
+                <label className="mt-1 flex cursor-pointer items-start gap-2 rounded-md border border-tt-line-soft bg-cream/50 px-2 py-2">
                   <input
                     type="checkbox"
-                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-tt-line accent-tt-royal"
                     checked={entSingleLl}
                     onChange={(e) => setEntSingleLl(e.target.checked)}
                     disabled={sequencerBusy || isGenerating}
                   />
-                  <span className="font-sans text-xs text-royal/85">
+                  <span className="font-sans text-xs text-tt-royal/85">
                     We have Lightning Lane Single Pass today
                   </span>
                 </label>
-                <label className="mt-1 flex cursor-pointer items-start gap-2 rounded-md border border-royal/10 bg-cream/50 px-2 py-2">
+                <label className="mt-1 flex cursor-pointer items-start gap-2 rounded-md border border-tt-line-soft bg-cream/50 px-2 py-2">
                   <input
                     type="checkbox"
-                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-tt-line accent-tt-royal"
                     checked={entUx}
                     onChange={(e) => setEntUx(e.target.checked)}
                     disabled={sequencerBusy || isGenerating}
                   />
-                  <span className="font-sans text-xs text-royal/85">
+                  <span className="font-sans text-xs text-tt-royal/85">
                     We have Universal Express today
                   </span>
                 </label>
-                <label className="mt-1 flex cursor-pointer items-start gap-2 rounded-md border border-royal/10 bg-cream/50 px-2 py-2">
+                <label className="mt-1 flex cursor-pointer items-start gap-2 rounded-md border border-tt-line-soft bg-cream/50 px-2 py-2">
                   <input
                     type="checkbox"
-                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-tt-line accent-tt-royal"
                     checked={entEarly}
                     onChange={(e) => setEntEarly(e.target.checked)}
                     disabled={sequencerBusy || isGenerating}
                   />
-                  <span className="font-sans text-xs text-royal/85">
+                  <span className="font-sans text-xs text-tt-royal/85">
                     We have Early Entry today
                   </span>
                 </label>
               </section>
-              <section className="font-sans text-xs leading-relaxed text-royal/80">
+              <section className="font-sans text-xs leading-relaxed text-tt-ink-muted">
                 <p>
-                  <span className="font-semibold text-royal">Respecting:</span>{" "}
+                  <span className="font-semibold text-tt-royal">Respecting:</span>{" "}
                   {/* TODO(V1.1): Replace with live anchors when the anchor store exists. */}
                   No dining reservations or Lightning Lane windows are linked
                   for this day yet.
                 </p>
                 <p className="mt-2">
-                  <span className="font-semibold text-royal">
+                  <span className="font-semibold text-tt-royal">
                     Routing around your top {prioritiesOnDayParks.length} rides:
                   </span>{" "}
                   {prioritiesOnDayParks.length === 0
@@ -829,7 +829,7 @@ export function SmartPlanModal({
           {!touringSubmitReady ? (
             <>
               <div
-                className="flex rounded-lg border border-royal/20 bg-white p-1"
+                className="flex rounded-lg border border-tt-line bg-tt-bg-soft p-1"
                 role="radiogroup"
                 aria-label="Plan mode"
               >
@@ -843,11 +843,11 @@ export function SmartPlanModal({
                   }}
                   className={`flex-1 rounded-md px-3 py-2 text-center font-sans text-sm font-medium transition ${
                     mode === "smart"
-                      ? "bg-royal text-cream"
-                      : "text-royal/80 hover:bg-cream"
+                      ? "bg-tt-royal text-white"
+                      : "text-tt-ink-muted hover:bg-tt-bg-soft"
                   }`}
                 >
-                  Smart Plan
+                  Smart suggestions
                 </button>
                 <button
                   type="button"
@@ -856,17 +856,17 @@ export function SmartPlanModal({
                   onClick={() => setMode("custom")}
                   className={`flex-1 rounded-md px-3 py-2 text-center font-sans text-sm font-medium transition ${
                     mode === "custom"
-                      ? "bg-royal text-cream"
-                      : "text-royal/80 hover:bg-cream"
+                      ? "bg-tt-royal text-white"
+                      : "text-tt-ink-muted hover:bg-tt-bg-soft"
                   }`}
                 >
-                  Custom prompt
+                  Tell TripTiles
                 </button>
               </div>
 
               {mode === "smart" ? (
                 <>
-                  <div className="rounded-lg border border-gold/40 bg-white/80 px-4 py-3 font-sans text-sm leading-relaxed text-royal">
+                  <div className="rounded-lg border border-gold/40 bg-tt-surface/80 px-4 py-3 font-sans text-sm leading-relaxed text-tt-royal">
                     {smartSummary}
                   </div>
                   <div className="max-h-[min(58vh,28rem)] min-h-[12rem] overflow-y-auto pr-1">
@@ -891,7 +891,7 @@ export function SmartPlanModal({
                 </>
               ) : (
             <label className="block">
-              <span className="font-sans text-sm font-medium text-royal">
+              <span className="font-sans text-sm font-medium text-tt-royal">
                 Your trip style &amp; priorities
               </span>
               <textarea
@@ -902,12 +902,12 @@ export function SmartPlanModal({
                 rows={6}
                 maxLength={MAX_CHARS}
                 placeholder={`We're a family of 4 with two kids aged 8 and 10. The kids love roller coasters and Star Wars. My wife hates queueing. We want one rest day in the middle. Budget is moderate.`}
-                className="mt-2 w-full resize-y rounded-lg border border-royal/25 px-3 py-3 font-sans text-sm text-royal placeholder:text-royal/35"
+                className="mt-2 w-full resize-y rounded-lg border border-tt-line px-3 py-3 font-sans text-sm text-tt-royal placeholder:text-tt-ink-soft"
                 disabled={isGenerating}
               />
               <span
                 className={`mt-1 block text-right font-sans text-xs ${
-                  customOver ? "text-red-600" : "text-royal/50"
+                  customOver ? "text-red-600" : "text-tt-royal/50"
                 }`}
               >
                 {customText.length} / {MAX_CHARS}
@@ -916,44 +916,44 @@ export function SmartPlanModal({
           )}
 
           {showFreeTierNote ? (
-            <p className="font-sans text-xs text-royal/65">
+            <p className="font-sans text-xs text-tt-ink-muted">
               Free plan:{" "}
-              <strong className="font-semibold text-royal">
+              <strong className="font-semibold text-tt-royal">
                 {Math.min(generationsUsedThisTrip, freeTierCap)} of{" "}
                 {freeTierCap}
               </strong>{" "}
               generations used for this trip
             </p>
           ) : (
-            <p className="font-sans text-xs text-royal/60">
+            <p className="font-sans text-xs text-tt-ink-muted">
               Paid plans include higher Smart Plan limits and full-day AI tools.
             </p>
           )}
 
           {mode === "custom" ? (
           <div className="rounded-xl border-2 border-gold/30 bg-gradient-to-b from-white to-cream/90 p-4 shadow-sm">
-            <p className="font-serif text-sm font-semibold tracking-tight text-royal">
+            <p className="font-heading text-sm font-semibold tracking-tight text-tt-royal">
               Your existing calendar
             </p>
-            <p className="mt-1.5 font-sans text-xs leading-relaxed text-royal/70">
-              <strong className="font-semibold text-royal/85">Default:</strong>{" "}
+            <p className="mt-1.5 font-sans text-xs leading-relaxed text-tt-ink-muted">
+              <strong className="font-semibold text-tt-royal/85">Default:</strong>{" "}
               we only fill <strong>empty</strong> AM, PM, lunch, and dinner
               slots. Tiles you&apos;ve already set are left as-is — nothing is
               overwritten unless you choose otherwise below.
             </p>
-            <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-lg border border-royal/15 bg-white/95 p-3 transition hover:border-gold/40">
+            <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-lg border border-tt-line-soft bg-tt-surface/95 p-3 transition hover:border-gold/40">
               <input
                 type="checkbox"
-                className="mt-0.5 h-4 w-4 shrink-0 rounded border-royal/35 accent-royal"
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-tt-line accent-tt-royal"
                 checked={replaceExistingTiles}
                 onChange={(e) => setReplaceExistingTiles(e.target.checked)}
                 disabled={isGenerating}
               />
               <span className="min-w-0">
-                <span className="block font-sans text-sm font-semibold text-royal">
+                <span className="block font-sans text-sm font-semibold text-tt-royal">
                   Overwrite my existing tiles where Smart Plan suggests something
                 </span>
-                <span className="mt-1 block text-xs leading-relaxed text-royal/65">
+                <span className="mt-1 block text-xs leading-relaxed text-tt-ink-muted">
                   Enable this for a full redo: any slot Smart Plan suggests can
                   replace what you had. Leave unchecked to protect your manual
                   plan.
@@ -961,7 +961,7 @@ export function SmartPlanModal({
               </span>
             </label>
             {replaceExistingTiles ? (
-              <p className="mt-2 rounded-md border border-gold/40 bg-cream/85 px-3 py-2 font-sans text-xs leading-relaxed text-royal">
+              <p className="mt-2 rounded-md border border-gold/40 bg-cream/85 px-3 py-2 font-sans text-xs leading-relaxed text-tt-royal">
                 <span aria-hidden="true">✓</span>{" "}
                 <strong className="font-semibold">Fresh plan:</strong>{" "}
                 Smart Plan will design a new itinerary based on your priorities,
@@ -972,7 +972,7 @@ export function SmartPlanModal({
           </div>
           ) : null}
 
-          <p className="font-sans text-[0.7rem] leading-snug text-royal/55">
+          <p className="font-sans text-[0.7rem] leading-snug text-tt-ink-soft">
             Crowd predictions are based on historical patterns and general
             industry knowledge, not real-time data. Actual crowds vary with
             weather, school holidays, and events. Always confirm official park
@@ -1000,8 +1000,8 @@ export function SmartPlanModal({
           ) : null}
 
           {sequencerBusy ? (
-            <div className="rounded-lg border border-royal/20 bg-white/85 px-3 py-2">
-              <span className="inline-flex items-center gap-2 font-sans text-sm text-royal/85">
+            <div className="rounded-lg border border-tt-line bg-tt-surface/85 px-3 py-2">
+              <span className="inline-flex items-center gap-2 font-sans text-sm text-tt-royal/85">
                 <LogoSpinner size="sm" className="shrink-0" decorative />
                 {SEQUENCER_STATUS_LINES[sequencerStatusIdx]}
               </span>
@@ -1009,8 +1009,8 @@ export function SmartPlanModal({
           ) : null}
 
           {isGenerating ? (
-            <div className="rounded-lg border border-royal/20 bg-white/85 px-3 py-2">
-              <span className="inline-flex items-center gap-2 font-sans text-sm text-royal/85">
+            <div className="rounded-lg border border-tt-line bg-tt-surface/85 px-3 py-2">
+              <span className="inline-flex items-center gap-2 font-sans text-sm text-tt-royal/85">
                 <LogoSpinner size="sm" className="shrink-0" decorative />
                 Smart Plan is thinking — this usually takes 5-10 seconds.
               </span>
@@ -1020,7 +1020,7 @@ export function SmartPlanModal({
             <button
               type="button"
               onClick={onRetryPartial}
-              className="rounded-md border border-royal/30 bg-white px-2.5 py-1.5 font-sans text-xs font-semibold text-royal hover:bg-cream"
+              className="rounded-md border border-tt-line bg-tt-surface px-2.5 py-1.5 font-sans text-xs font-semibold text-tt-royal hover:bg-tt-bg-soft"
             >
               Stopped early — retry?
             </button>
@@ -1031,7 +1031,7 @@ export function SmartPlanModal({
               type="button"
               onClick={isGenerating ? onCancelGeneration : onClose}
               disabled={sequencerBusy || profileSaving}
-              className="min-h-[44px] rounded-lg border border-royal/30 bg-white px-4 py-2.5 font-sans text-sm font-medium text-royal disabled:opacity-60"
+              className="min-h-[44px] rounded-lg border border-tt-line bg-tt-surface px-4 py-2.5 font-sans text-sm font-medium text-tt-royal disabled:opacity-60"
             >
               {isGenerating ? "Stop generating" : "Cancel"}
             </button>
@@ -1040,7 +1040,7 @@ export function SmartPlanModal({
                 type="button"
                 onClick={() => setHolidayStep((s) => Math.max(0, s - 1))}
                 disabled={isGenerating || sequencerBusy || profileSaving}
-                className="min-h-[44px] rounded-lg border border-royal/30 bg-white px-4 py-2.5 font-sans text-sm font-medium text-royal disabled:opacity-60"
+                className="min-h-[44px] rounded-lg border border-tt-line bg-tt-surface px-4 py-2.5 font-sans text-sm font-medium text-tt-royal disabled:opacity-60"
               >
                 Back
               </button>
@@ -1050,7 +1050,7 @@ export function SmartPlanModal({
                 type="button"
                 onClick={handleWizardNext}
                 disabled={isGenerating || sequencerBusy || profileSaving}
-                className="min-h-[44px] min-w-[10rem] flex-1 rounded-lg px-4 py-3 font-serif text-sm font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-60 sm:min-w-[12rem] bg-[color:var(--tt-ring)]"
+                className="min-h-[44px] min-w-[10rem] flex-1 rounded-lg px-4 py-3 font-heading text-sm font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-60 sm:min-w-[12rem] bg-[color:var(--tt-ring)]"
               >
                 Next
               </button>
@@ -1061,7 +1061,7 @@ export function SmartPlanModal({
               disabled={
                 isGenerating || sequencerBusy || profileSaving || !canSubmit
               }
-              className={`min-h-[44px] min-w-[12rem] flex-1 rounded-lg px-4 py-3 font-serif text-sm font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-60 ${
+              className={`min-h-[44px] min-w-[12rem] flex-1 rounded-lg px-4 py-3 font-heading text-sm font-semibold text-white shadow-sm transition hover:brightness-105 disabled:opacity-60 ${
                 (replaceExistingTiles &&
                   mode === "custom" &&
                   !touringSubmitReady) ||
@@ -1111,23 +1111,22 @@ export function SmartPlanModal({
             ) : null}
           </div>
           {!isDayScope ? (
-            <p className="mt-3 text-left font-sans text-sm leading-relaxed text-gray-400">
+            <p className="mt-3 text-left font-sans text-sm leading-relaxed text-tt-ink-muted">
               Just want to tweak one day?{" "}
               <button
                 type="button"
                 onClick={onClose}
-                className="font-semibold text-gold underline decoration-gold/40 underline-offset-2"
+                className="font-semibold text-tt-gold underline decoration-tt-gold/40 underline-offset-2"
               >
                 Close and open day view
               </button>
             </p>
           ) : null}
-          <p className="mt-4 text-left font-sans text-sm leading-relaxed text-gray-400">
+          <p className="mt-4 text-left font-sans text-sm leading-relaxed text-tt-ink-muted">
             Prefer to plan manually? Close this and drag parks onto your
             calendar instead — Smart Plan is always optional.
           </p>
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

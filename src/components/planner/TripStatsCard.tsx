@@ -5,6 +5,11 @@ import {
   computeTripStats,
   type TripStatsSummary,
 } from "@/lib/compute-trip-stats";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { MetricPill } from "@/components/ui/MetricPill";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { copyTextToClipboard } from "@/lib/clipboard-access";
 import { currencyApproximationText, formatMoney } from "@/lib/format";
 import type { Park, Trip } from "@/lib/types";
@@ -100,74 +105,81 @@ export function TripStatsCard({
   }
 
   return (
-    <section className="mb-5 rounded-2xl border border-royal/15 bg-white/50 p-4 shadow-md shadow-royal/[0.04] backdrop-blur-md">
+    <Card
+      as="section"
+      className="mb-4 p-3 backdrop-blur-md sm:p-4"
+      variant="elevated"
+    >
       <button
         type="button"
-        className="flex w-full min-h-[44px] items-center justify-between gap-2 text-left"
+        className="flex w-full min-h-11 items-center justify-between gap-2 text-left"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
-        <h3 className="flex items-center gap-2 font-serif text-xl font-semibold text-royal sm:text-2xl">
-          <span className="text-2xl leading-none sm:text-3xl" aria-hidden>
-            📊
-          </span>
-          Your trip at a glance
-        </h3>
-        <span className="text-royal/50">{open ? "▾" : "▸"}</span>
+        <SectionHeader
+          title="Your trip at a glance"
+          icon="📊"
+          subtitle={`${destinationLabel} overview`}
+          className="flex-1"
+        />
+        <span className="text-tt-royal/50">{open ? "▾" : "▸"}</span>
       </button>
       {open ? (
         <>
-          <p className="mt-2 font-sans text-sm leading-relaxed text-royal/80">
-            <span className="whitespace-nowrap">🗓️ {stats.totalDays} days</span>
-            {" · "}
-            <span className="whitespace-nowrap">🎢 {stats.parkDays} park days</span>
-            {" · "}
-            <span className="whitespace-nowrap">😴 {stats.restDays} rest days</span>
-            {" · "}
-            <span className="whitespace-nowrap">
-              🍽️ {stats.mealSlotsFilled} meals planned
-            </span>
-          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricPill label="Trip length" value={`${stats.totalDays} days`} icon="🗓️" />
+            <MetricPill label="Park days" value={stats.parkDays} icon="🎢" variant="magic" />
+            <MetricPill label="Rest days" value={stats.restDays} icon="😴" variant="warm" />
+            <MetricPill
+              label="Meals"
+              value={`${stats.mealSlotsFilled} planned`}
+              icon="🍽️"
+              variant="warning"
+            />
+          </div>
           {stats.mostVisitedName ? (
-            <p className="mt-2 font-sans text-sm text-royal">
-              🏰 Most visited:{" "}
-              <span className="font-semibold">
+            <p className="mt-3 font-sans text-sm text-tt-ink-muted">
+              🏰 Most visited{" "}
+              <span className="font-semibold text-tt-royal">
                 {stats.mostVisitedName} ({stats.mostVisitedDayCount}{" "}
                 {stats.mostVisitedDayCount === 1 ? "day" : "days"})
               </span>
             </p>
           ) : null}
-          <p className="mt-1 font-sans text-sm text-royal">
-            👟 Est. walking: ~{stats.estimatedMiles} miles (
-            {Math.round(stats.estimatedMiles * 1.60934)} km)
-          </p>
-          <p className="mt-1 font-sans text-sm text-royal">
-            📋 Plan completeness: {stats.completenessPct}%
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <Badge variant="info">
+              👟 ~{stats.estimatedMiles} miles /{" "}
+              {Math.round(stats.estimatedMiles * 1.60934)} km
+            </Badge>
+            <Badge variant={stats.completenessPct >= 80 ? "success" : "default"}>
+              📋 {stats.completenessPct}% complete
+            </Badge>
+          </div>
           {stats.namedRestaurantCount > 0 ? (
-            <p className="mt-1 font-sans text-xs text-royal/65">
+            <p className="mt-2 font-sans text-xs text-tt-ink-soft">
               {stats.namedRestaurantCount} named restaurant
               {stats.namedRestaurantCount === 1 ? "" : "s"} on the plan
             </p>
           ) : null}
-          <button
+          <Button
             type="button"
-            className="mt-4 min-h-[44px] w-full rounded-lg border border-royal/25 bg-white px-4 font-sans text-sm font-semibold text-royal transition hover:bg-cream"
+            variant="secondary"
+            className="mt-4 w-full"
             onClick={() => void copyShare()}
           >
             Share my stats
-          </button>
+          </Button>
 
           {upcomingPayments.length > 0 ? (
-            <div className="mt-5 rounded-xl border border-royal/12 bg-white p-3 sm:p-4">
+            <div className="mt-5 rounded-tt-lg border border-tt-line bg-tt-surface-warm p-3 sm:p-4">
               <div className="flex items-center justify-between gap-2">
-                <h4 className="font-serif text-base font-semibold text-royal">
+                <h4 className="font-heading text-base font-semibold text-tt-royal">
                   💷 Coming up
                 </h4>
                 <button
                   type="button"
                   onClick={onViewAllPayments}
-                  className="font-sans text-xs font-semibold text-royal/75 underline-offset-2 hover:text-royal hover:underline"
+                  className="font-sans text-xs font-semibold text-tt-royal/75 underline-offset-2 hover:text-tt-royal hover:underline"
                 >
                   View all payments
                 </button>
@@ -179,23 +191,23 @@ export function TripStatsCard({
                   return (
                     <li
                       key={payment.id}
-                      className="rounded-lg border border-royal/10 bg-cream/45 px-3 py-2"
+                      className="rounded-tt-md border border-tt-line-soft bg-tt-surface px-3 py-2"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="min-w-0 flex-1 truncate font-sans text-sm font-medium text-royal">
+                        <p className="min-w-0 flex-1 truncate font-sans text-sm font-medium text-tt-ink">
                           {payment.label}
                         </p>
-                        <p className="font-sans text-sm font-semibold text-royal">
+                        <p className="font-sans text-sm font-semibold text-tt-royal">
                           {formatMoney(payment.amount_pence, payment.currency)}
                         </p>
                       </div>
                       <div className="mt-1 flex flex-wrap items-center justify-between gap-2 font-sans text-xs">
-                        <p className="text-royal/65">Due {payment.due_date}</p>
+                        <p className="text-tt-ink-soft">Due {payment.due_date}</p>
                         <p
                           className={
                             countdown.isOverdue
                               ? "font-semibold text-red-700"
-                              : "text-royal/70"
+                              : "text-tt-ink-muted"
                           }
                         >
                           {countdown.text}
@@ -206,7 +218,7 @@ export function TripStatsCard({
                         payment.currency,
                         { tripCurrency: trip.budget_currency },
                       ) ? (
-                        <p className="mt-1 font-sans text-[11px] text-royal/55">
+                        <p className="mt-1 font-sans text-[11px] text-tt-ink-soft">
                           {currencyApproximationText(
                             payment.amount_pence,
                             payment.currency,
@@ -222,6 +234,6 @@ export function TripStatsCard({
           ) : null}
         </>
       ) : null}
-    </section>
+    </Card>
   );
 }

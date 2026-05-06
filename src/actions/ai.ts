@@ -1097,7 +1097,11 @@ export async function tweakDay(input: {
     return { status: "error", error: "AI is not configured.", code: "ai_failure" };
   }
   if (input.mode === "freetext" && !input.freetext?.trim()) {
-    return { status: "error", error: "Tell the AI what to change.", code: "invalid_day" };
+    return {
+      status: "error",
+      error: "Add a custom instruction describing what to change.",
+      code: "invalid_day",
+    };
   }
   if (input.freetext && input.freetext.length > 500) {
     return { status: "error", error: "Keep requests to 500 characters.", code: "invalid_day" };

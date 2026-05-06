@@ -4,6 +4,8 @@ import { KeyDatesPanel } from "@/components/planning/KeyDatesPanel";
 import { PaymentsTab } from "@/components/planner/PaymentsTab";
 import { TripBudgetView } from "@/components/planner/TripBudgetView";
 import { TripChecklistView } from "@/components/planner/TripChecklistView";
+import { Card } from "@/components/ui/Card";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import type { Trip } from "@/lib/types";
 import type { TripPayment } from "@/types/payments";
 import { useMemo, useState } from "react";
@@ -71,44 +73,40 @@ export function PlanningSections({
   };
 
   return (
-    <section className="mt-8 w-full max-w-4xl space-y-4">
+    <section className="mt-6 w-full max-w-5xl space-y-4">
       {(["todo", "payments", "budget"] as const).map((key) => {
         const meta = SECTION_META[key];
         const isOpen = openBySection[key];
         const panelId = `planning-section-panel-${key}`;
         return (
-          <div
+          <Card
             key={key}
             id={`planning-section-${key}`}
-            className="overflow-hidden rounded-2xl border border-royal/12 bg-white/50 shadow-sm backdrop-blur-md"
+            className="overflow-hidden backdrop-blur-md"
+            variant="elevated"
           >
             <button
               type="button"
               aria-expanded={isOpen}
               aria-controls={panelId}
               onClick={() => toggleSection(key)}
-              className="flex min-h-[44px] w-full items-center justify-between gap-3 bg-cream/40 px-4 py-3 text-left transition hover:bg-cream/70"
+              className="flex min-h-11 w-full items-center justify-between gap-3 bg-tt-surface-warm px-4 py-3 text-left transition hover:bg-tt-bg-soft"
             >
-              <div className="min-w-0">
-                <p className="font-serif text-lg font-semibold text-royal">
-                  <span aria-hidden className="mr-2">
-                    {meta.icon}
-                  </span>
-                  {meta.title}
-                </p>
-                <p className="mt-0.5 font-sans text-xs text-royal/65">
-                  {meta.description}
-                </p>
-              </div>
+              <SectionHeader
+                title={meta.title}
+                subtitle={meta.description}
+                icon={meta.icon}
+                className="min-w-0 flex-1"
+              />
               <span
                 aria-hidden
-                className="shrink-0 text-lg font-semibold text-royal/70"
+                className="shrink-0 text-lg font-semibold text-tt-royal/70"
               >
                 {isOpen ? "−" : "+"}
               </span>
             </button>
             {isOpen ? (
-              <div id={panelId} className="border-t border-royal/10 p-4 sm:p-5">
+              <div id={panelId} className="border-t border-tt-line p-4 sm:p-5">
                 {key === "todo" ? <TripChecklistView trip={trip} embedded /> : null}
                 {key === "payments" ? (
                   <div className="space-y-8">
@@ -130,7 +128,7 @@ export function PlanningSections({
                 ) : null}
               </div>
             ) : null}
-          </div>
+          </Card>
         );
       })}
     </section>

@@ -5,6 +5,8 @@ import {
   formatProductTierName,
   type ProductTier,
 } from "@/lib/product-tier-labels";
+import { Button } from "@/components/ui/Button";
+import { ModalShell } from "@/components/ui/ModalShell";
 
 type Variant = "trips" | "ai" | "custom";
 
@@ -16,6 +18,9 @@ type Props = {
   /** Paid plan to promote in the CTA. */
   upgradeTargetTier?: Exclude<ProductTier, "free">;
 };
+
+const ACCENT_LINK =
+  "inline-flex flex-1 items-center justify-center gap-2 rounded-tt-md border-0 bg-tt-gold px-4 py-2 font-sans text-sm font-semibold text-white shadow-tt-sm transition hover:bg-tt-gold/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tt-gold sm:flex-none min-h-11";
 
 function headingFor(
   v: Variant,
@@ -59,39 +64,39 @@ export function TierLimitModal({
   const ctaLabel = `Upgrade to ${formatProductTierName(upgradeTargetTier)}`;
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(11,30,92,0.85)] p-4"
+    <ModalShell
+      zClassName="z-[70]"
+      overlayClassName="bg-tt-royal/70 backdrop-blur-[1px]"
+      maxWidthClass="max-w-md"
       role="dialog"
-      aria-modal="true"
+      aria-modal={true}
       aria-labelledby="tier-limit-title"
     >
-      <div className="w-full max-w-md rounded-2xl border border-gold/40 bg-cream p-6 shadow-2xl sm:p-8">
+      <div className="p-6 sm:p-8">
         <h2
           id="tier-limit-title"
-          className="font-serif text-xl font-semibold text-royal"
+          className="font-heading text-xl font-semibold text-tt-royal"
         >
           {headingFor(variant, upgradeTargetTier)}
         </h2>
-        <p className="mt-3 font-sans text-sm text-royal/80">{reason}</p>
-        <p className="mt-2 font-sans text-sm text-royal/70">
+        <p className="mt-3 font-sans text-sm text-tt-royal/80">{reason}</p>
+        <p className="mt-2 font-sans text-sm text-tt-royal/70">
           {subFor(variant, upgradeTargetTier)}
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
-          <Link
-            href="/pricing"
-            className="inline-flex flex-1 items-center justify-center rounded-lg bg-gold px-4 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition hover:bg-gold/90 sm:flex-none"
-          >
+          <Link href="/pricing" className={ACCENT_LINK}>
             {ctaLabel}
           </Link>
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            className="flex-1 sm:flex-none"
             onClick={onClose}
-            className="inline-flex flex-1 items-center justify-center rounded-lg border border-royal/25 bg-white px-4 py-2.5 font-sans text-sm font-medium text-royal sm:flex-none"
           >
             Maybe later
-          </button>
+          </Button>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

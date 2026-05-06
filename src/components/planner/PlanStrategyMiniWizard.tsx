@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import {
   saveDayPlanningIntentAction,
   updateTripPlanningPreferencesAction,
@@ -382,16 +383,16 @@ export function PlanStrategyMiniWizard({
         aria-modal="true"
         className={
           embedded
-            ? "max-h-[min(70vh,28rem)] w-full max-w-lg overflow-y-auto rounded-xl border border-gold/30 bg-cream p-5 shadow-lg sm:rounded-2xl sm:p-6"
-            : "relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-gold/30 bg-cream p-6 shadow-2xl sm:rounded-2xl"
+            ? "max-h-[min(70vh,28rem)] w-full max-w-lg overflow-y-auto rounded-tt-xl border border-tt-line bg-tt-surface-warm p-5 shadow-tt-md sm:p-6"
+            : "relative z-10 max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-tt-xl border border-tt-line bg-tt-surface-warm p-6 shadow-tt-lg sm:rounded-tt-xl"
         }
       >
-        <h2 className="font-serif text-lg font-semibold text-royal">
+        <h2 className="font-heading text-lg font-semibold text-tt-royal">
           {embedded
             ? "Build day strategy"
             : "Tell TripTiles how this day should run"}
         </h2>
-        <p className="mt-2 font-sans text-sm text-royal/75">
+        <p className="mt-2 font-sans text-sm text-tt-ink-muted">
           {embedded
             ? "Save once — we&apos;ll generate your ride strategy in this window."
             : "Save once — we&apos;ll continue with your AI Day Strategy."}
@@ -399,54 +400,57 @@ export function PlanStrategyMiniWizard({
 
         {saveTimedOut ? (
           <div className="mt-6 space-y-4">
-            <p className="font-sans text-sm leading-relaxed text-royal/85">
+            <p className="font-sans text-sm leading-relaxed text-tt-royal/85">
               Taking longer than expected — your details are saved. You can
               close this and tap{" "}
               <span className="font-semibold">{helpCtaLabel}</span> again on
               that day.
             </p>
-            <button
+            <Button
               type="button"
-              className="min-h-[44px] w-full rounded-lg bg-royal px-4 py-2 font-sans text-sm font-semibold text-cream"
+              variant="primary"
+              className="w-full"
               onClick={onClose}
             >
               Close
-            </button>
+            </Button>
           </div>
         ) : saveError ? (
           <div className="mt-6 space-y-4">
-            <p className="font-sans text-sm leading-relaxed text-royal/85">
+            <p className="font-sans text-sm leading-relaxed text-tt-royal/85">
               We saved your details, but couldn&apos;t finish the strategy.{" "}
-              <span className="font-medium text-royal">{saveError}</span> Try
+              <span className="font-medium text-tt-royal">{saveError}</span> Try
               again, or close and run{" "}
               <span className="font-semibold">{helpCtaLabel}</span> from the day
               view.
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
               {onRetryStrategyGenerate ? (
-                <button
+                <Button
                   type="button"
+                  variant="primary"
                   disabled={busy}
-                  className="min-h-[44px] flex-1 rounded-lg bg-royal px-4 py-2 font-sans text-sm font-semibold text-cream disabled:opacity-50"
+                  className="flex-1"
                   onClick={() => void retryStrategyOnly()}
                 >
                   {busy ? "Working…" : "Try again"}
-                </button>
+                </Button>
               ) : null}
-              <button
+              <Button
                 type="button"
-                className="min-h-[44px] flex-1 rounded-lg border border-royal/25 bg-white px-4 py-2 font-sans text-sm text-royal"
+                variant="secondary"
+                className="flex-1"
                 onClick={onClose}
               >
                 Close
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
           <>
             <div className="mt-4 space-y-4">
               <section className="rounded-xl border border-royal/10 bg-white/90 p-4">
-                <h3 className="font-serif text-base font-semibold text-royal">
+                <h3 className="font-heading text-base font-semibold text-tt-royal">
                   1. What should this day be built around?
                 </h3>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -463,8 +467,8 @@ export function PlanStrategyMiniWizard({
                       onClick={() => setParkAction(value as DayPlanningParkAction)}
                       className={`min-h-[44px] rounded-lg border px-3 py-2 text-left font-sans text-sm ${
                         parkAction === value
-                          ? "border-gold bg-cream text-royal"
-                          : "border-royal/20 bg-white text-royal/85"
+                          ? "border-gold bg-cream text-tt-royal"
+                          : "border-royal/20 bg-white text-tt-royal/85"
                       }`}
                     >
                       {label}
@@ -473,7 +477,7 @@ export function PlanStrategyMiniWizard({
                 </div>
                 {PARK_ACTIONS_WITH_PARK_SELECTION.has(parkAction) ? (
                   <div className="mt-3">
-                    <p className="font-sans text-xs text-royal/70">
+                    <p className="font-sans text-xs text-tt-royal/70">
                       Select park{parkAction === "add_park" ? "s" : ""}.
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
@@ -495,8 +499,8 @@ export function PlanStrategyMiniWizard({
                             }}
                             className={`min-h-[40px] rounded-full border px-3 py-2 font-sans text-xs ${
                               selected
-                                ? "border-gold bg-cream text-royal"
-                                : "border-royal/20 bg-white text-royal/85"
+                                ? "border-gold bg-cream text-tt-royal"
+                                : "border-royal/20 bg-white text-tt-royal/85"
                             }`}
                           >
                             {park.name}
@@ -509,7 +513,7 @@ export function PlanStrategyMiniWizard({
               </section>
 
               <section className="rounded-xl border border-royal/10 bg-white/90 p-4">
-                <h3 className="font-serif text-base font-semibold text-royal">
+                <h3 className="font-heading text-base font-semibold text-tt-royal">
                   2. What kind of day do you want?
                 </h3>
                 <select
@@ -525,7 +529,7 @@ export function PlanStrategyMiniWizard({
                   <option value="suggest">Let TripTiles suggest</option>
                 </select>
 
-                <h3 className="mt-4 font-serif text-base font-semibold text-royal">
+                <h3 className="mt-4 font-heading text-base font-semibold text-tt-royal">
                   3. What ride level should TripTiles plan for?
                 </h3>
                 <select
@@ -549,7 +553,7 @@ export function PlanStrategyMiniWizard({
               </section>
 
               <section className="rounded-xl border border-royal/10 bg-white/90 p-4">
-                <h3 className="font-serif text-base font-semibold text-royal">
+                <h3 className="font-heading text-base font-semibold text-tt-royal">
                   4. Anything to avoid?
                 </h3>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -576,8 +580,8 @@ export function PlanStrategyMiniWizard({
                         }
                         className={`min-h-[40px] rounded-full border px-3 py-2 font-sans text-xs ${
                           selected
-                            ? "border-gold bg-cream text-royal"
-                            : "border-royal/20 bg-white text-royal/85"
+                            ? "border-gold bg-cream text-tt-royal"
+                            : "border-royal/20 bg-white text-tt-royal/85"
                         }`}
                       >
                         {label}
@@ -588,7 +592,7 @@ export function PlanStrategyMiniWizard({
               </section>
 
               <section className="rounded-xl border border-royal/10 bg-white/90 p-4">
-                <h3 className="font-serif text-base font-semibold text-royal">
+                <h3 className="font-heading text-base font-semibold text-tt-royal">
                   5. How should meals work today?
                 </h3>
                 <select
@@ -609,7 +613,7 @@ export function PlanStrategyMiniWizard({
                   <option value="suggest">Let TripTiles suggest</option>
                 </select>
 
-                <h3 className="mt-4 font-serif text-base font-semibold text-royal">
+                <h3 className="mt-4 font-heading text-base font-semibold text-tt-royal">
                   6. What pace do you want?
                 </h3>
                 <select
@@ -625,10 +629,10 @@ export function PlanStrategyMiniWizard({
               </section>
 
               <section className="rounded-xl border border-royal/10 bg-white/90 p-4">
-                <h3 className="font-serif text-base font-semibold text-royal">
+                <h3 className="font-heading text-base font-semibold text-tt-royal">
                   7. How should the day start and finish?
                 </h3>
-                <label className="mt-2 block font-sans text-sm font-semibold text-royal">
+                <label className="mt-2 block font-sans text-sm font-semibold text-tt-royal">
                   Start
                 </label>
                 <select
@@ -643,7 +647,7 @@ export function PlanStrategyMiniWizard({
                   <option value="slow_start">Slow start</option>
                   <option value="afternoon">Afternoon start</option>
                 </select>
-                <label className="mt-3 block font-sans text-sm font-semibold text-royal">
+                <label className="mt-3 block font-sans text-sm font-semibold text-tt-royal">
                   Finish
                 </label>
                 <select
@@ -660,7 +664,7 @@ export function PlanStrategyMiniWizard({
                   <option value="close">Stay until close</option>
                 </select>
 
-                <h3 className="mt-4 font-serif text-base font-semibold text-royal">
+                <h3 className="mt-4 font-heading text-base font-semibold text-tt-royal">
                   8. Are you using paid queue access?
                 </h3>
                 <select
@@ -678,29 +682,29 @@ export function PlanStrategyMiniWizard({
               </section>
 
               <section className="rounded-xl border border-royal/10 bg-white/90 p-4">
-                <h3 className="font-serif text-base font-semibold text-royal">
+                <h3 className="font-heading text-base font-semibold text-tt-royal">
                   9. Anything TripTiles must include or avoid?
                 </h3>
-                <label className="mt-2 block font-sans text-sm font-semibold text-royal">
+                <label className="mt-2 block font-sans text-sm font-semibold text-tt-royal">
                   Must include today
                 </label>
                 <textarea
                   rows={3}
                   value={mustInclude}
                   onChange={(e) => setMustInclude(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-royal/20 bg-white px-3 py-2 font-sans text-sm text-royal"
+                  className="mt-1 w-full rounded-lg border border-royal/20 bg-white px-3 py-2 font-sans text-sm text-tt-royal"
                 />
-                <label className="mt-3 block font-sans text-sm font-semibold text-royal">
+                <label className="mt-3 block font-sans text-sm font-semibold text-tt-royal">
                   Must avoid today
                 </label>
                 <textarea
                   rows={3}
                   value={mustAvoid}
                   onChange={(e) => setMustAvoid(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-royal/20 bg-white px-3 py-2 font-sans text-sm text-royal"
+                  className="mt-1 w-full rounded-lg border border-royal/20 bg-white px-3 py-2 font-sans text-sm text-tt-royal"
                 />
 
-                <h3 className="mt-4 font-serif text-base font-semibold text-royal">
+                <h3 className="mt-4 font-heading text-base font-semibold text-tt-royal">
                   10. How much can TripTiles change?
                 </h3>
                 <select
@@ -721,11 +725,11 @@ export function PlanStrategyMiniWizard({
               </section>
 
               <section className="rounded-xl border border-gold/30 bg-cream/70 p-4">
-                <h3 className="font-serif text-base font-semibold text-royal">
+                <h3 className="font-heading text-base font-semibold text-tt-royal">
                   Additional planning details
                 </h3>
                 <div className="mt-3 space-y-4">
-                <label className="font-sans text-sm font-semibold text-royal">
+                <label className="font-sans text-sm font-semibold text-tt-royal">
                   Mobility
                 </label>
                 <select
@@ -745,7 +749,7 @@ export function PlanStrategyMiniWizard({
 
               {tripChildren > 0
                 ? heights.slice(0, tripChildren).map((h, i) => (
-                    <label key={i} className="block font-sans text-sm text-royal">
+                    <label key={i} className="block font-sans text-sm text-tt-royal">
                       Child {i + 1} height (cm)
                       <input
                         type="number"
@@ -769,10 +773,10 @@ export function PlanStrategyMiniWizard({
 
               {showDisney ? (
                 <div className="rounded-xl border border-royal/10 bg-white/80 p-3">
-                  <p className="font-sans text-sm font-semibold text-royal">
+                  <p className="font-sans text-sm font-semibold text-tt-royal">
                     Disney — queues
                   </p>
-                  <p className="mt-2 font-sans text-xs text-royal/70">
+                  <p className="mt-2 font-sans text-xs text-tt-royal/70">
                     Multi Pass
                   </p>
                   <select
@@ -791,7 +795,7 @@ export function PlanStrategyMiniWizard({
                     <option value="none">No</option>
                     <option value="not_sure">Not sure</option>
                   </select>
-                  <p className="mt-2 font-sans text-xs text-royal/70">
+                  <p className="mt-2 font-sans text-xs text-tt-royal/70">
                     Single Pass willingness
                   </p>
                   <select
@@ -809,7 +813,7 @@ export function PlanStrategyMiniWizard({
                     <option value="no">No</option>
                     <option value="not_sure">Not sure</option>
                   </select>
-                  <p className="mt-2 font-sans text-xs text-royal/70">
+                  <p className="mt-2 font-sans text-xs text-tt-royal/70">
                     Memory Maker
                   </p>
                   <select
@@ -832,10 +836,10 @@ export function PlanStrategyMiniWizard({
 
               {showUniversal ? (
                 <div className="rounded-xl border border-royal/10 bg-white/80 p-3">
-                  <p className="font-sans text-sm font-semibold text-royal">
+                  <p className="font-sans text-sm font-semibold text-tt-royal">
                     Universal — Express &amp; Single Rider
                   </p>
-                  <p className="mt-2 font-sans text-xs text-royal/70">Express</p>
+                  <p className="mt-2 font-sans text-xs text-tt-royal/70">Express</p>
                   <select
                     className="mt-1 min-h-[44px] w-full rounded-lg border border-royal/20 px-2"
                     value={univEx.status}
@@ -853,7 +857,7 @@ export function PlanStrategyMiniWizard({
                     <option value="no">No</option>
                     <option value="not_sure">Not sure</option>
                   </select>
-                  <p className="mt-2 font-sans text-xs text-royal/70">
+                  <p className="mt-2 font-sans text-xs text-tt-royal/70">
                     Single rider OK?
                   </p>
                   <select
@@ -882,22 +886,26 @@ export function PlanStrategyMiniWizard({
               </p>
             ) : null}
 
-            <div className="mt-6 flex gap-2">
-              <button
+            <div className="mt-6 flex gap-2 border-t border-tt-line-soft pt-6">
+              <Button
                 type="button"
-                className="min-h-[44px] flex-1 rounded-lg border border-royal/25 bg-white px-4 py-2 font-sans text-sm text-royal"
+                variant="secondary"
+                className="min-h-11 flex-1"
                 onClick={onClose}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="primary"
+                className="min-h-11 flex-1"
                 disabled={busy}
-                className="min-h-[44px] flex-1 rounded-lg bg-royal px-4 py-2 font-sans text-sm font-semibold text-cream disabled:opacity-50"
+                loading={busy}
+                loadingLabel="Saving…"
                 onClick={() => void save()}
               >
-                {busy ? "Saving…" : "Save & continue"}
-              </button>
+                Save & continue
+              </Button>
             </div>
           </>
         )}
@@ -909,7 +917,7 @@ export function PlanStrategyMiniWizard({
   }
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-royal/50 sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-[120] flex items-end justify-center bg-tt-royal/50 backdrop-blur-[1px] sm:items-center sm:p-4">
       <button
         type="button"
         className="absolute inset-0 cursor-default border-0 bg-transparent"

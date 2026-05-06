@@ -4,6 +4,7 @@ import {
   awardFirstPdfExportAction,
   getPdfExportContextAction,
 } from "@/actions/pdf";
+import { Button } from "@/components/ui/Button";
 import { LogoSpinner } from "@/components/ui/LogoSpinner";
 import { TripPDF } from "@/components/pdf/TripPDF";
 import { tierLoadFailureUserMessage } from "@/lib/supabase/tier-load-error";
@@ -104,25 +105,21 @@ export function PdfExportButton({
 
   return (
     <div className="inline-flex flex-col items-start">
-      <button
+      <Button
         id={buttonId}
         type="button"
+        variant="secondary"
+        size="md"
         onClick={() => {
           setExportMode(defaultModeOnOpen);
           setModalOpen(true);
         }}
         disabled={disabled || pdfBusy}
-        className="rounded-lg bg-royalSoft px-4 py-2.5 font-serif text-sm font-bold text-white shadow-sm transition hover:bg-royalSoft/90 disabled:opacity-50"
+        loading={pdfBusy}
+        loadingLabel={buttonLabel}
       >
-        {pdfBusy ? (
-          <span className="inline-flex items-center justify-center gap-2">
-            <LogoSpinner size="sm" className="shrink-0" decorative />
-            {buttonLabel}
-          </span>
-        ) : (
-          buttonLabel
-        )}
-      </button>
+        {buttonLabel}
+      </Button>
       {error ? (
         <p className="mt-2 max-w-xs font-sans text-sm text-red-600">{error}</p>
       ) : null}

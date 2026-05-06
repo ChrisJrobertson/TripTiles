@@ -36,7 +36,7 @@ function MenuBlock({
   return (
     <>
       {adminSection ? (
-        <div className="border-b border-royal/10 pb-1">{adminSection(close)}</div>
+        <div className="border-b border-tt-line pb-1">{adminSection(close)}</div>
       ) : null}
       {onCompareDays ? (
         <button
@@ -46,7 +46,7 @@ function MenuBlock({
             onCompareDays();
             close();
           }}
-          className="block w-full px-4 py-2.5 text-left font-sans text-sm text-royal transition hover:bg-cream"
+          className="block w-full px-4 py-2.5 text-left font-sans text-sm text-tt-royal transition hover:bg-tt-bg-soft"
         >
           Compare days
         </button>
@@ -58,7 +58,7 @@ function MenuBlock({
           onResetCruise();
           close();
         }}
-        className="block w-full px-4 py-2.5 text-left font-sans text-sm text-royal transition hover:bg-cream"
+        className="block w-full px-4 py-2.5 text-left font-sans text-sm text-tt-royal transition hover:bg-tt-bg-soft"
       >
         Reset cruise
       </button>
@@ -69,7 +69,7 @@ function MenuBlock({
           onClearAll();
           close();
         }}
-        className="block w-full px-4 py-2.5 text-left font-sans text-sm text-royal transition hover:bg-cream"
+        className="block w-full px-4 py-2.5 text-left font-sans text-sm text-tt-royal transition hover:bg-tt-bg-soft"
       >
         Clear all tiles
       </button>
@@ -80,7 +80,7 @@ function MenuBlock({
           onPrint();
           close();
         }}
-        className="block w-full px-4 py-2.5 text-left font-sans text-sm text-royal print:hidden transition hover:bg-cream"
+        className="block w-full px-4 py-2.5 text-left font-sans text-sm text-tt-royal print:hidden transition hover:bg-tt-bg-soft"
       >
         Print calendar
       </button>
@@ -92,19 +92,19 @@ function MenuBlock({
             onExportPdf();
             close();
           }}
-          className="block w-full px-4 py-2.5 text-left font-sans text-sm text-royal transition hover:bg-cream"
+          className="block w-full px-4 py-2.5 text-left font-sans text-sm text-tt-royal transition hover:bg-tt-bg-soft"
         >
           Export to PDF
         </button>
       ) : null}
       {cruiseSection ? (
-        <div className="border-t border-royal/10">{cruiseSection}</div>
+        <div className="border-t border-tt-line">{cruiseSection}</div>
       ) : null}
       {colourSection ? (
-        <div className="border-t border-royal/10">{colourSection}</div>
+        <div className="border-t border-tt-line">{colourSection}</div>
       ) : null}
       {remindersSection ? (
-        <div className="border-t border-royal/10">{remindersSection}</div>
+        <div className="border-t border-tt-line">{remindersSection}</div>
       ) : null}
     </>
   );
@@ -148,12 +148,12 @@ export function PlannerActionsMenu({
   return (
     <>
       <details ref={detailsRef} className="group relative hidden md:block">
-        <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-lg border border-royal/20 bg-white px-3 py-2 font-sans text-sm font-medium text-royal/85 shadow-sm transition hover:border-royal/35 hover:bg-cream [&::-webkit-details-marker]:hidden">
+        <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 font-sans text-sm font-medium text-tt-royal shadow-tt-sm transition hover:bg-tt-bg-soft [&::-webkit-details-marker]:hidden">
           More
-          <span className="text-royal/40 transition group-open:rotate-180">▾</span>
+          <span className="text-tt-royal/40 transition group-open:rotate-180">▾</span>
         </summary>
         <div
-          className="absolute left-0 top-full z-30 mt-1 min-w-[12rem] max-h-[min(70vh,32rem)] overflow-y-auto rounded-xl border border-royal/10 bg-white py-1 shadow-lg"
+          className="absolute left-0 top-full z-30 mt-1 min-w-[12rem] max-h-[min(70vh,32rem)] overflow-y-auto rounded-tt-lg border border-tt-line bg-tt-surface py-1 shadow-tt-lg"
           role="menu"
         >
           <MenuBlock {...menuProps} close={closeMenu} />
@@ -162,7 +162,7 @@ export function PlannerActionsMenu({
 
       <button
         type="button"
-        className="md:hidden rounded-lg border border-royal/20 bg-white px-3 py-2 font-sans text-sm font-medium text-royal/85 shadow-sm transition hover:border-royal/35 hover:bg-cream"
+        className="md:hidden rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 font-sans text-sm font-medium text-tt-royal shadow-tt-sm transition hover:bg-tt-bg-soft"
         onClick={() => setSheetOpen(true)}
       >
         More ▾
@@ -175,7 +175,7 @@ export function PlannerActionsMenu({
         <button
           type="button"
           aria-label="Close menu"
-          className={`absolute inset-0 bg-royal/50 transition-opacity duration-200 ${
+          className={`absolute inset-0 bg-tt-royal/50 transition-opacity duration-200 ${
             sheetOpen ? "opacity-100" : "opacity-0"
           }`}
           onClick={closeSheet}
@@ -184,14 +184,14 @@ export function PlannerActionsMenu({
           role="dialog"
           aria-modal="true"
           aria-label="More trip actions"
-          className={`absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-2xl border border-gold/20 bg-cream px-2 py-3 shadow-2xl transition-transform duration-200 ease-out safe-area-inset-bottom ${
+          className={`absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-tt-xl border border-tt-line bg-tt-bg px-2 py-3 shadow-tt-lg transition-transform duration-200 ease-out safe-area-inset-bottom ${
             sheetOpen ? "translate-y-0" : "translate-y-full"
           }`}
         >
           <div className="mb-2 flex justify-center">
-            <div className="h-1 w-10 rounded-full bg-royal/20" aria-hidden />
+            <div className="h-1 w-10 rounded-full bg-tt-line" aria-hidden />
           </div>
-          <p className="mb-2 px-2 font-serif text-lg font-semibold text-royal">
+          <p className="mb-2 px-2 font-heading text-lg font-semibold text-tt-royal">
             More
           </p>
           <div className="max-h-[70vh] overflow-y-auto pb-4">

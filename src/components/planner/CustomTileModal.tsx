@@ -5,6 +5,8 @@ import {
   updateCustomTileAction,
   type CreateCustomTileInput,
 } from "@/actions/custom-tiles";
+import { Button } from "@/components/ui/Button";
+import { ModalShell } from "@/components/ui/ModalShell";
 import { GROUP_META } from "@/lib/group-meta";
 import type { CustomTile } from "@/lib/types";
 import Link from "next/link";
@@ -59,6 +61,9 @@ const SWATCHES: { bg: string; label: string }[] = [
   { bg: "#FF69B4", label: "Blush" },
   { bg: "#556B2F", label: "Sage" },
 ];
+
+const ACCENT_LINK =
+  "mt-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-tt-md bg-tt-gold px-4 py-2 font-sans text-sm font-semibold text-white shadow-tt-sm transition hover:bg-tt-gold/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tt-gold";
 
 function luminance(hex: string): number {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
@@ -227,20 +232,22 @@ export function CustomTileModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-royal/40 p-4 backdrop-blur-sm"
+    <ModalShell
+      zClassName="z-[100]"
+      overlayClassName="bg-tt-royal/50 backdrop-blur-[1px]"
+      maxWidthClass="max-w-lg"
+      panelClassName="max-h-[min(90vh,40rem)] overflow-y-auto p-6"
       role="dialog"
-      aria-modal="true"
+      aria-modal={true}
       aria-labelledby="custom-tile-title"
     >
-      <div className="max-h-[min(90vh,40rem)] w-full max-w-lg overflow-y-auto rounded-2xl border border-royal/15 bg-cream p-6 shadow-xl">
         <h2
           id="custom-tile-title"
-          className="font-serif text-xl font-semibold text-royal"
+          className="font-heading text-xl font-semibold text-tt-royal"
         >
           {title}
         </h2>
-        <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
+        <p className="mt-2 font-sans text-sm leading-relaxed text-tt-royal/75">
           Add a place, activity, or attraction to your trip that isn&apos;t in our
           built-in list.
         </p>
@@ -381,10 +388,7 @@ export function CustomTileModal({
           {tierError ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 font-sans text-sm text-amber-950">
               <p>{tierError}</p>
-              <Link
-                href="/pricing"
-                className="mt-2 inline-block rounded-lg bg-royal px-4 py-2 text-sm font-semibold text-cream"
-              >
+              <Link href="/pricing" className={ACCENT_LINK}>
                 Upgrade to Pro
               </Link>
             </div>
@@ -402,28 +406,21 @@ export function CustomTileModal({
             </p>
           ) : null}
 
-          <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-royal/25 bg-white px-4 py-2.5 font-sans text-sm font-medium text-royal"
-            >
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-tt-line-soft pt-4">
+            <Button type="button" variant="secondary" onClick={onClose}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
+              variant="accent"
               disabled={submitting || (!editingTile && remainingCreates <= 0)}
-              className="rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-5 py-2.5 font-serif text-sm font-semibold text-royal shadow disabled:opacity-50"
+              loading={submitting}
+              loadingLabel="Saving…"
             >
-              {submitting
-                ? "Saving…"
-                : editingTile
-                  ? "Save changes"
-                  : "Add tile"}
-            </button>
+              {editingTile ? "Save changes" : "Add tile"}
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </ModalShell>
   );
 }

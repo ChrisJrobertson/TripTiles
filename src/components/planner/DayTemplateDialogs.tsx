@@ -2,6 +2,8 @@
 
 import { updateRidePriorityMeta } from "@/actions/ride-priorities";
 import { BookingConflictModal } from "@/components/planner/BookingConflictModal";
+import { Button } from "@/components/ui/Button";
+import { ModalShell } from "@/components/ui/ModalShell";
 import {
   anchorsOnTargetDay,
   type BookingAnchor,
@@ -112,54 +114,53 @@ export function SaveTemplateDialog({
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[120] flex items-end justify-center bg-royal/50 p-0 sm:items-center sm:p-4"
+    <ModalShell
+      zClassName="z-[120]"
+      bottomSheetOnMobile
+      overlayClassName="bg-tt-royal/50 backdrop-blur-[1px]"
+      maxWidthClass="max-w-md"
+      panelClassName="p-5 sm:p-6"
       role="dialog"
-      aria-modal="true"
+      aria-modal={true}
       aria-labelledby="save-tpl-title"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <button
-        type="button"
-        className="absolute inset-0 z-0 cursor-default"
-        aria-label="Close"
-        onClick={onClose}
-      />
-      <div className="relative z-10 w-full max-w-md rounded-t-2xl border border-royal/15 bg-cream p-4 shadow-2xl sm:rounded-2xl">
         <h2
           id="save-tpl-title"
-          className="font-serif text-lg font-semibold text-royal"
+          className="font-heading text-lg font-semibold text-tt-royal"
         >
           Save as template
         </h2>
-        <label className="mt-3 block font-sans text-xs font-medium text-royal/70">
+        <label className="mt-3 block font-sans text-xs font-medium text-tt-royal/70">
           Template name
           <input
-            className="mt-1 min-h-11 w-full rounded-lg border border-royal/20 bg-white px-3 font-sans text-sm text-royal"
+            className="mt-1 min-h-11 w-full rounded-tt-md border border-tt-line bg-white px-3 font-sans text-sm text-tt-royal"
             placeholder="e.g. Typical MK Day"
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={120}
           />
         </label>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
+        <div className="mt-4 flex flex-wrap gap-2 border-t border-tt-line-soft pt-4">
+          <Button
             type="button"
-            className="min-h-11 flex-1 rounded-lg bg-royal px-4 font-sans text-sm font-semibold text-cream disabled:opacity-50"
+            variant="primary"
+            className="min-h-11 flex-1"
             disabled={busy || !name.trim()}
             onClick={() => void save()}
           >
             Save
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="min-h-11 flex-1 rounded-lg border border-royal/20 bg-white px-4 font-sans text-sm font-medium text-royal"
+            variant="secondary"
+            className="min-h-11 flex-1"
             onClick={onClose}
           >
             Cancel
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -281,42 +282,40 @@ export function ApplyTemplateDialog({
 
   return (
     <>
-    <div
-      className="fixed inset-0 z-[120] flex items-end justify-center bg-royal/50 p-0 sm:items-center sm:p-4"
+    <ModalShell
+      zClassName="z-[120]"
+      bottomSheetOnMobile
+      overlayClassName="bg-tt-royal/50 backdrop-blur-[1px]"
+      maxWidthClass="max-w-md"
+      panelClassName="flex max-h-[min(85vh,36rem)] flex-col overflow-hidden p-0"
       role="dialog"
-      aria-modal="true"
+      aria-modal={true}
       aria-labelledby="apply-tpl-title"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <button
-        type="button"
-        className="absolute inset-0 z-0 cursor-default"
-        aria-label="Close"
-        onClick={onClose}
-      />
-      <div className="relative z-10 flex max-h-[min(85vh,36rem)] w-full max-w-md flex-col rounded-t-2xl border border-royal/15 bg-cream shadow-2xl sm:rounded-2xl">
-        <div className="shrink-0 border-b border-royal/10 p-4">
+        <div className="shrink-0 border-b border-tt-line-soft p-4">
           <h2
             id="apply-tpl-title"
-            className="font-serif text-lg font-semibold text-royal"
+            className="font-heading text-lg font-semibold text-tt-royal"
           >
             Apply template
           </h2>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
-          <ul className="divide-y divide-royal/10">
+          <ul className="divide-y divide-tt-line-soft">
             {templates.map((t) => (
               <li key={t.id}>
                 <button
                   type="button"
                   className={`flex w-full min-h-11 flex-col items-start gap-0.5 py-2 text-left font-sans text-sm ${
-                    selectedId === t.id ? "text-royal" : "text-royal/80"
+                    selectedId === t.id ? "text-tt-royal" : "text-tt-royal/80"
                   }`}
                   onClick={() => setSelectedId(t.id)}
                 >
                   <span className="font-semibold">{t.name}</span>
-                  <span className="text-xs text-royal/55">
+                  <span className="text-xs text-tt-royal/55">
                     {t.is_seed ? (
-                      <span className="mr-2 rounded bg-gold/25 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase">
+                      <span className="mr-2 rounded bg-tt-gold/20 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase">
                         Seed
                       </span>
                     ) : null}
@@ -327,12 +326,14 @@ export function ApplyTemplateDialog({
             ))}
           </ul>
         </div>
-        <div className="shrink-0 space-y-3 border-t border-royal/10 p-4">
-          <div className="flex rounded-lg border border-royal/15 p-0.5 font-sans text-xs font-semibold">
+        <div className="shrink-0 space-y-3 border-t border-tt-line-soft p-4">
+          <div className="flex rounded-tt-md border border-tt-line-soft bg-tt-surface p-0.5 font-sans text-xs font-semibold">
             <button
               type="button"
-              className={`min-h-11 flex-1 rounded-md ${
-                merge === "append" ? "bg-royal text-cream" : "text-royal"
+              className={`min-h-11 flex-1 rounded-tt-md ${
+                merge === "append"
+                  ? "bg-tt-royal text-white shadow-tt-sm"
+                  : "text-tt-royal"
               }`}
               onClick={() => setMerge("append")}
             >
@@ -340,8 +341,10 @@ export function ApplyTemplateDialog({
             </button>
             <button
               type="button"
-              className={`min-h-11 flex-1 rounded-md ${
-                merge === "replace" ? "bg-royal text-cream" : "text-royal"
+              className={`min-h-11 flex-1 rounded-tt-md ${
+                merge === "replace"
+                  ? "bg-tt-royal text-white shadow-tt-sm"
+                  : "text-tt-royal"
               }`}
               onClick={() => setMerge("replace")}
             >
@@ -349,25 +352,26 @@ export function ApplyTemplateDialog({
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
               type="button"
-              className="min-h-11 flex-1 rounded-lg bg-royal px-4 font-sans text-sm font-semibold text-cream disabled:opacity-50"
+              variant="primary"
+              className="min-h-11 flex-1"
               disabled={busy || !selectedId}
               onClick={() => apply()}
             >
               Apply
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="min-h-11 flex-1 rounded-lg border border-royal/20 bg-white px-4 font-sans text-sm font-medium text-royal"
+              variant="secondary"
+              className="min-h-11 flex-1"
               onClick={onClose}
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
-    </div>
+    </ModalShell>
     <BookingConflictModal
       open={replaceTemplateAnchors != null}
       dayDate={dayDate}

@@ -366,22 +366,22 @@ export function Calendar({
   );
 
   return (
-    <div className="w-full min-w-0 overflow-x-auto">
+    <div className="w-full min-w-0 overflow-x-auto rounded-tt-xl border border-tt-line bg-tt-surface/80 p-1.5 shadow-tt-md backdrop-blur-md">
       {skeletonActive ? (
         <div
           aria-hidden
-          className="mb-2 space-y-1 rounded-md border border-royal/10 bg-white/50 p-2 backdrop-blur-sm"
+          className="mb-2 space-y-1 rounded-tt-md border border-tt-line bg-tt-surface p-2"
         >
           <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
             {Array.from({ length: 7 }).map((_, i) => (
-              <div key={`sh-head-${i}`} className="h-6 rounded bg-royal/10 animate-pulse" />
+              <div key={`sh-head-${i}`} className="h-6 rounded bg-tt-royal-soft animate-pulse" />
             ))}
           </div>
           <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
             {Array.from({ length: 14 }).map((_, i) => (
               <div
                 key={`sh-day-${i}`}
-                className="min-h-[5.75rem] rounded border border-royal/10 bg-cream/50 animate-pulse"
+                className="min-h-[5.5rem] rounded border border-tt-line bg-tt-bg-soft animate-pulse"
               />
             ))}
           </div>
@@ -395,7 +395,7 @@ export function Calendar({
           {DAYS_OF_WEEK.map((d) => (
             <div
               key={d}
-              className="bg-royalSoft py-2 text-center font-sans text-[0.65rem] font-semibold text-white sm:text-xs"
+            className="rounded-tt-sm bg-tt-royal-soft py-1.5 text-center font-meta text-[0.62rem] font-semibold uppercase tracking-wide text-tt-royal sm:text-xs"
             >
               {d}
             </div>
@@ -417,7 +417,7 @@ export function Calendar({
                 return (
                   <div
                     key={key}
-                    className="min-h-[8rem] rounded-md bg-transparent sm:min-h-[9rem] md:min-h-[5.5rem]"
+                    className="min-h-[7rem] rounded-tt-md bg-transparent sm:min-h-[8rem] md:min-h-[5rem]"
                   />
                 );
               }
@@ -468,9 +468,9 @@ export function Calendar({
                 <div
                   key={key}
                   id={`planner-day-${key}`}
-                  className={`relative flex min-h-[8rem] flex-col rounded-md border border-royal/15 bg-white/50 backdrop-blur-md sm:min-h-[9rem] md:min-h-[5.75rem]${
+                  className={`relative flex min-h-[7rem] flex-col rounded-tt-md border border-tt-line bg-tt-surface/95 shadow-tt-sm transition hover:border-tt-royal/30 sm:min-h-[8rem] md:min-h-[5.25rem]${
                     highlightDateKey === key
-                      ? " ring-2 ring-royal ring-offset-2 ring-offset-white/50"
+                      ? " ring-2 ring-tt-royal ring-offset-2 ring-offset-tt-surface"
                       : ""
                   }${
                     useDayDetailShell && onOpenDayDetail && !readOnly
@@ -502,7 +502,7 @@ export function Calendar({
                       aria-hidden
                     />
                   ) : null}
-                  <div className="relative z-[1] flex items-center justify-between gap-0.5 border-b border-royal/10 bg-white/60 px-1 py-0.5 backdrop-blur-sm md:py-1">
+                  <div className="relative z-[1] flex items-center justify-between gap-0.5 border-b border-tt-line-soft bg-tt-bg-soft/65 px-1 py-0.5 md:py-1">
                     {!readOnly && (onRideDayPrioritiesUpdated || onOpenDayDetail) ? (
                       <button
                         type="button"
@@ -512,7 +512,7 @@ export function Calendar({
                             ? "Open day planner (rides, must-dos, and notes for this day)"
                             : undefined
                         }
-                        className="min-h-11 min-w-0 flex flex-1 flex-wrap items-center justify-center gap-1 text-center transition hover:bg-cream/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+                        className="min-h-10 min-w-0 flex flex-1 flex-wrap items-center justify-center gap-1 text-center transition hover:bg-tt-surface/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-gold/50"
                         aria-expanded={
                           useDayDetailShell ? false : expandedDay === key
                         }
@@ -543,7 +543,7 @@ export function Calendar({
                             }}
                             aria-hidden
                           />
-                          <span className="whitespace-nowrap font-sans text-[10px] leading-none text-royal/75">
+                          <span className="whitespace-nowrap font-sans text-[10px] leading-none text-tt-ink-muted">
                             {dc.conditions.weatherEmoji}
                             {dc.tempLabel}
                           </span>
@@ -553,29 +553,29 @@ export function Calendar({
                           <CrowdLevelIndicator level={crowdLevel} size="sm" />
                         </span>
                       ) : null}
-                      <span className="font-serif text-lg font-bold leading-none text-royal sm:text-xl">
+                      <span className="font-heading text-base font-bold leading-none text-tt-royal sm:text-lg">
                         {dayNum}
                       </span>
-                      <span className="font-sans text-[0.6rem] font-medium uppercase text-royal/60 sm:text-[0.65rem]">
+                      <span className="font-meta text-[0.58rem] font-medium uppercase text-tt-ink-soft sm:text-[0.62rem]">
                         {mon}
                       </span>
                       {!useDayDetailShell ? (
                         <span
-                          className="font-sans text-[0.55rem] text-royal/45"
+                          className="font-sans text-[0.55rem] text-tt-ink-soft"
                           aria-hidden
                         >
                           {expandedDay === key ? "▲" : "▼"}
                         </span>
                       ) : (
                         <span
-                          className="inline-flex items-center gap-0.5 font-sans text-[0.55rem] text-royal/50"
+                          className="inline-flex items-center gap-0.5 font-sans text-[0.55rem] text-tt-ink-soft"
                         >
                           <span className="hidden sm:inline">Open</span>
                           <span aria-hidden>→</span>
                         </span>
                       )}
                       {rideCount > 0 ? (
-                        <span className="font-sans text-[0.55rem] font-medium text-royal/55">
+                        <span className="font-sans text-[0.55rem] font-medium text-tt-ink-soft">
                           🎢 {rideCount}
                         </span>
                       ) : null}
@@ -594,7 +594,7 @@ export function Calendar({
                               }}
                               aria-hidden
                             />
-                            <span className="whitespace-nowrap font-sans text-[10px] leading-none text-royal/75">
+                            <span className="whitespace-nowrap font-sans text-[10px] leading-none text-tt-ink-muted">
                               {dc.conditions.weatherEmoji}
                               {dc.tempLabel}
                             </span>
@@ -604,14 +604,14 @@ export function Calendar({
                             <CrowdLevelIndicator level={crowdLevel} size="sm" />
                           </span>
                         ) : null}
-                        <span className="font-serif text-lg font-bold leading-none text-royal sm:text-xl">
+                        <span className="font-heading text-base font-bold leading-none text-tt-royal sm:text-lg">
                           {dayNum}
                         </span>
-                        <span className="font-sans text-[0.6rem] font-medium uppercase text-royal/60 sm:text-[0.65rem]">
+                        <span className="font-meta text-[0.58rem] font-medium uppercase text-tt-ink-soft sm:text-[0.62rem]">
                           {mon}
                         </span>
                         {rideCount > 0 ? (
-                          <span className="font-sans text-[0.55rem] font-medium text-royal/55">
+                          <span className="font-sans text-[0.55rem] font-medium text-tt-ink-soft">
                             🎢 {rideCount}
                           </span>
                         ) : null}
@@ -627,10 +627,10 @@ export function Calendar({
                             ? "Day tips and notes — tap to read"
                             : "Day tips and timeline — tap to open"
                         }
-                        className={`flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-md border text-lg leading-none text-royal transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 focus-visible:ring-offset-2 focus-visible:ring-offset-white md:min-h-9 md:min-w-9 ${
+                        className={`flex min-h-10 min-w-10 shrink-0 cursor-pointer items-center justify-center rounded-tt-sm border text-base leading-none text-tt-royal transition focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-gold/60 focus-visible:ring-offset-2 focus-visible:ring-offset-tt-surface md:min-h-8 md:min-w-8 ${
                           hasInsight
-                            ? "border-gold/40 bg-gold/15 hover:bg-gold/30"
-                            : "border-gold/25 bg-gold/10 text-royal/75 hover:bg-gold/20"
+                            ? "border-tt-gold/35 bg-tt-gold-soft hover:bg-tt-gold-soft/80"
+                            : "border-tt-line bg-tt-bg-soft text-tt-ink-soft hover:bg-tt-royal-soft"
                         }`}
                         aria-label={`Show day note for ${headingDate}`}
                         aria-expanded={notePopoverOpenThisDay}
@@ -658,7 +658,7 @@ export function Calendar({
                       />
                     )}
                   </div>
-                  <div className="planner-slot-grid flex-1 p-0.5">
+                  <div className="planner-slot-grid flex-1 p-1">
                     <PlannerAmPmCalendarCells
                       dateKey={key}
                       assignment={ass}
@@ -702,7 +702,7 @@ export function Calendar({
                         <div
                           key={slot}
                           className={`group planner-slot relative flex min-h-0 flex-1 flex-col overflow-hidden rounded ${area} ${
-                            park ? "" : "border border-royal/10"
+                            park ? "" : "border border-tt-line-soft"
                           } ${
                             park
                               ? "transition hover:brightness-[1.06]"
@@ -838,10 +838,10 @@ export function Calendar({
                     })}
                   </div>
                   {!readOnly && onSaveDayNote && useDayDetailShell && onOpenDayDetail ? (
-                    <div className="border-t border-royal/10 px-1 py-1" data-day-interactive>
+                    <div className="border-t border-tt-line-soft px-1 py-1" data-day-interactive>
                       <button
                         type="button"
-                        className="min-h-11 w-full rounded px-1 py-1 text-left font-sans text-xs italic text-royal/55 transition hover:bg-cream/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
+                        className="min-h-10 w-full rounded px-1 py-1 text-left font-sans text-xs italic text-tt-ink-soft transition hover:bg-tt-bg-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-gold/50"
                         onClick={() => onOpenDayDetail(key, { focusNotes: true })}
                       >
                         {dayUserNote(trip, key) ? (
@@ -853,18 +853,18 @@ export function Calendar({
                             </span>
                           </>
                         ) : (
-                          <span className="not-italic text-royal/45">
+                          <span className="not-italic text-tt-ink-soft">
                             Add note…
                           </span>
                         )}
                       </button>
                     </div>
                   ) : !readOnly && onSaveDayNote ? (
-                    <div className="border-t border-royal/10 px-1 py-1" data-day-interactive>
+                    <div className="border-t border-tt-line-soft px-1 py-1" data-day-interactive>
                       {editingNoteKey === key ? (
                         <div className="space-y-0.5">
                           <textarea
-                            className="min-h-[2.75rem] max-h-40 w-full resize-y rounded border border-royal/20 bg-cream/40 px-2 py-1.5 font-sans text-xs text-royal placeholder:text-royal/40 focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/40"
+                            className="min-h-[2.75rem] max-h-40 w-full resize-y rounded border border-tt-line bg-tt-bg-soft px-2 py-1.5 font-sans text-xs text-tt-ink placeholder:text-tt-ink-soft focus:border-tt-gold focus:outline-none focus:ring-1 focus:ring-tt-gold/40"
                             rows={3}
                             maxLength={500}
                             value={noteDraft}
@@ -886,7 +886,7 @@ export function Calendar({
                             autoFocus
                           />
                           {noteDraft.length > 400 ? (
-                            <p className="text-right font-sans text-[10px] text-royal/55">
+                            <p className="text-right font-sans text-[10px] text-tt-ink-soft">
                               {noteDraft.length}/500
                             </p>
                           ) : null}
@@ -894,7 +894,7 @@ export function Calendar({
                       ) : (
                         <button
                           type="button"
-                          className="min-h-11 w-full rounded px-1 py-1 text-left font-sans text-xs italic text-royal/55 transition hover:bg-cream/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 md:min-h-0 md:py-0.5"
+                          className="min-h-10 w-full rounded px-1 py-1 text-left font-sans text-xs italic text-tt-ink-soft transition hover:bg-tt-bg-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-gold/50 md:min-h-0 md:py-0.5"
                           onClick={() => {
                             setEditingNoteKey(key);
                             setNoteDraft(dayUserNote(trip, key));
@@ -911,7 +911,7 @@ export function Calendar({
                               </span>
                             </>
                           ) : (
-                            <span className="not-italic text-royal/45">
+                            <span className="not-italic text-tt-ink-soft">
                               Add note…
                             </span>
                           )}
@@ -919,7 +919,7 @@ export function Calendar({
                       )}
                     </div>
                   ) : dayUserNote(trip, key) ? (
-                    <p className="border-t border-royal/10 px-1 py-0.5 font-sans text-[10px] italic leading-snug text-royal/55">
+                    <p className="border-t border-tt-line-soft px-1 py-0.5 font-sans text-[10px] italic leading-snug text-tt-ink-soft">
                       <span aria-hidden>📝 </span>
                       {dayUserNote(trip, key)}
                     </p>

@@ -1,5 +1,11 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { ModalShell } from "@/components/ui/ModalShell";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { WizardProgress } from "@/components/ui/WizardProgress";
+import { wizardFieldInput } from "@/components/ui/wizard-shared-classes";
 import { daysBetween, formatDateISO, parseDate } from "@/lib/date-helpers";
 import { legacyDestinationFromRegionId } from "@/lib/legacy-destination";
 import type { Region, Trip, WizardData } from "@/lib/types";
@@ -158,192 +164,199 @@ export function Wizard({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-[rgba(11,30,92,0.85)] p-4 sm:p-6"
-      role="dialog"
-      aria-modal="true"
+    <ModalShell
+      zClassName="z-[60]"
+      maxWidthClass="max-w-2xl"
+      className="overflow-y-auto p-4 sm:p-6"
+      panelClassName="my-auto max-h-[min(92vh,42rem)] overflow-y-auto p-0 shadow-tt-lg"
+      aria-modal={true}
     >
-      <div className="my-auto w-full max-w-2xl rounded-2xl border border-gold/40 bg-cream p-5 shadow-2xl sm:p-8 min-[0px]:min-h-[min(100%,36rem)] sm:min-h-0">
-        <p className="font-sans text-sm font-medium text-royal/80">
-          Step {step} of 4
-        </p>
-        <h2 className="mt-2 font-serif text-xl font-semibold text-royal">
-          {isFirstRun ? "Plan your trip" : "Edit trip"}
-        </h2>
-
-        {error ? (
-          <p
-            className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-sans text-sm text-red-800"
-            role="alert"
-          >
-            {error}
-          </p>
-        ) : null}
-
-        {step === 1 ? (
-          <div className="mt-6 space-y-4">
-            <label className="block">
-              <span className="font-sans text-sm font-medium text-royal">
-                Family / group name
-              </span>
-              <input
-                type="text"
-                value={familyName}
-                onChange={(e) => setFamilyName(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-royal/25 px-3 py-3 text-base text-royal"
-              />
-            </label>
-            <label className="block">
-              <span className="font-sans text-sm font-medium text-royal">
-                Adventure title
-              </span>
-              <input
-                type="text"
-                value={adventureName}
-                onChange={(e) => setAdventureName(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-royal/25 px-3 py-3 text-base text-royal"
-              />
-            </label>
-          </div>
-        ) : null}
-
-        {step === 2 ? (
-          <div className="mt-6 space-y-4">
-            <label className="block">
-              <span className="font-sans text-sm font-medium text-royal">
-                Start date
-              </span>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-royal/25 px-3 py-3 text-base text-royal"
-              />
-            </label>
-            <label className="block">
-              <span className="font-sans text-sm font-medium text-royal">
-                End date
-              </span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-royal/25 px-3 py-3 text-base text-royal"
-              />
-            </label>
-          </div>
-        ) : null}
-
-        {step === 3 ? (
-          <div className="mt-6 max-h-[min(70vh,32rem)] overflow-y-auto pr-1">
-            <RegionPicker
-              regions={regions}
-              selectedRegionId={regionId}
-              onChange={setRegionId}
+      <Card variant="warm" className="border-0 shadow-none sm:rounded-tt-xl">
+        <div className="p-5 sm:p-8 min-[0px]:min-h-[min(100%,36rem)] sm:min-h-0">
+          <WizardProgress current={step} total={4} />
+          <div className="mt-4">
+            <SectionHeader
+              compact
+              title={isFirstRun ? "Plan your trip" : "Edit trip"}
+              subtitle="Names, dates, and destination — four quick steps."
             />
           </div>
-        ) : null}
 
-        {step === 4 ? (
-          <div className="mt-6 space-y-4">
-            <label className="flex items-center gap-2 font-sans text-sm text-royal">
-              <input
-                type="checkbox"
-                checked={hasCruise}
-                onChange={(e) => setHasCruise(e.target.checked)}
+          {error ? (
+            <p
+              className="mt-4 rounded-tt-md border border-red-200 bg-red-50 px-3 py-2 font-sans text-sm text-red-800"
+              role="alert"
+            >
+              {error}
+            </p>
+          ) : null}
+
+          {step === 1 ? (
+            <div className="mt-6 space-y-4">
+              <label className="block">
+                <span className="font-sans text-sm font-medium text-tt-royal">
+                  Family / group name
+                </span>
+                <input
+                  type="text"
+                  value={familyName}
+                  onChange={(e) => setFamilyName(e.target.value)}
+                  className={wizardFieldInput + " text-base"}
+                />
+              </label>
+              <label className="block">
+                <span className="font-sans text-sm font-medium text-tt-royal">
+                  Adventure title
+                </span>
+                <input
+                  type="text"
+                  value={adventureName}
+                  onChange={(e) => setAdventureName(e.target.value)}
+                  className={wizardFieldInput + " text-base"}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {step === 2 ? (
+            <div className="mt-6 space-y-4">
+              <label className="block">
+                <span className="font-sans text-sm font-medium text-tt-royal">
+                  Start date
+                </span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className={wizardFieldInput + " text-base"}
+                />
+              </label>
+              <label className="block">
+                <span className="font-sans text-sm font-medium text-tt-royal">
+                  End date
+                </span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className={wizardFieldInput + " text-base"}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {step === 3 ? (
+            <div className="mt-6 max-h-[min(70vh,32rem)] overflow-y-auto pr-1">
+              <RegionPicker
+                regions={regions}
+                selectedRegionId={regionId}
+                onChange={setRegionId}
               />
-              Include a cruise segment
-            </label>
-            {hasCruise ? (
-              <>
-                <label className="block">
-                  <span className="font-sans text-sm font-medium text-royal">
-                    Embark
-                  </span>
-                  <input
-                    type="date"
-                    value={cruiseEmbark}
-                    onChange={(e) => setCruiseEmbark(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-royal/25 px-3 py-2 text-base"
-                  />
-                </label>
-                <label className="block">
-                  <span className="font-sans text-sm font-medium text-royal">
-                    Disembark
-                  </span>
-                  <input
-                    type="date"
-                    value={cruiseDisembark}
-                    onChange={(e) => setCruiseDisembark(e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-royal/25 px-3 py-2 text-base"
-                  />
-                </label>
-              </>
-            ) : null}
-          </div>
-        ) : null}
+            </div>
+          ) : null}
 
-        <div className="mt-8 flex flex-wrap gap-2">
-          {step > 1 ? (
-            <button
-              type="button"
-              onClick={() => {
-                setError(null);
-                setStep((s) => s - 1);
-              }}
-              className="rounded-lg border border-royal/30 bg-white px-4 py-2 font-sans text-sm text-royal"
-            >
-              Back
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-royal/30 bg-white px-4 py-2 font-sans text-sm text-royal"
-            >
-              Cancel
-            </button>
-          )}
-          {step < 4 ? (
-            <button
-              type="button"
-              onClick={() => {
-                if (step === 1 && !validateStep1()) return;
-                if (step === 2 && !validateStep2()) return;
-                if (step === 3 && !validateStep3()) return;
-                setStep((s) => s + 1);
-              }}
-              className="rounded-lg bg-royal px-4 py-2 font-sans text-sm font-semibold text-cream"
-            >
-              Next
-            </button>
-          ) : (
-            <>
-              {step === 4 && hasCruise ? (
-                <button
-                  type="button"
-                  onClick={() => void finish(true)}
-                  disabled={submitting}
-                  className="rounded-lg border border-royal/30 bg-white px-4 py-2 font-sans text-sm text-royal"
-                >
-                  Skip cruise details
-                </button>
+          {step === 4 ? (
+            <div className="mt-6 space-y-4">
+              <label className="flex items-center gap-2 font-sans text-sm text-tt-ink">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-tt-line accent-tt-royal"
+                  checked={hasCruise}
+                  onChange={(e) => setHasCruise(e.target.checked)}
+                />
+                Include a cruise segment
+              </label>
+              {hasCruise ? (
+                <>
+                  <label className="block">
+                    <span className="font-sans text-sm font-medium text-tt-royal">
+                      Embark
+                    </span>
+                    <input
+                      type="date"
+                      value={cruiseEmbark}
+                      onChange={(e) => setCruiseEmbark(e.target.value)}
+                      className={wizardFieldInput + " text-base"}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="font-sans text-sm font-medium text-tt-royal">
+                      Disembark
+                    </span>
+                    <input
+                      type="date"
+                      value={cruiseDisembark}
+                      onChange={(e) => setCruiseDisembark(e.target.value)}
+                      className={wizardFieldInput + " text-base"}
+                    />
+                  </label>
+                </>
               ) : null}
-              <button
+            </div>
+          ) : null}
+
+          <div className="mt-8 flex flex-wrap gap-2 border-t border-tt-line-soft pt-6">
+            {step > 1 ? (
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={() => {
-                  if (step === 4 && !validateStep4()) return;
-                  void finish(false);
+                  setError(null);
+                  setStep((s) => s - 1);
                 }}
-                disabled={submitting}
-                className="rounded-lg bg-gold px-4 py-2 font-sans text-sm font-semibold text-royal disabled:opacity-60"
               >
-                {submitting ? "Saving…" : "All Done"}
-              </button>
-            </>
-          )}
+                Back
+              </Button>
+            ) : (
+              <Button type="button" variant="secondary" onClick={onClose}>
+                Cancel
+              </Button>
+            )}
+            {step < 4 ? (
+              <Button
+                type="button"
+                variant="primary"
+                className="sm:ml-auto"
+                onClick={() => {
+                  if (step === 1 && !validateStep1()) return;
+                  if (step === 2 && !validateStep2()) return;
+                  if (step === 3 && !validateStep3()) return;
+                  setStep((s) => s + 1);
+                }}
+              >
+                Next
+              </Button>
+            ) : (
+              <>
+                {step === 4 && hasCruise ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => void finish(true)}
+                    disabled={submitting}
+                  >
+                    Skip cruise details
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="accent"
+                  onClick={() => {
+                    if (step === 4 && !validateStep4()) return;
+                    void finish(false);
+                  }}
+                  disabled={submitting}
+                  loading={submitting}
+                  loadingLabel="Saving…"
+                  className="sm:ml-auto"
+                >
+                  All Done
+                </Button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
-    </div>
+      </Card>
+    </ModalShell>
   );
 }

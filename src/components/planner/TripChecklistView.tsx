@@ -8,6 +8,11 @@ import {
   seedTripChecklistIfEmptyAction,
   updateTripChecklistItemCheckedAction,
 } from "@/actions/checklist";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { MetricPill } from "@/components/ui/MetricPill";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import type { ChecklistCategory, Trip, TripChecklistItem } from "@/lib/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -131,20 +136,23 @@ export function TripChecklistView({ trip, embedded = false }: Props) {
   return (
     <section className={`space-y-6 ${embedded ? "" : "mx-auto max-w-3xl pb-24"}`}>
       {!embedded ? (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <h2 className="font-serif text-2xl font-semibold text-royal">
-            Trip checklist
-          </h2>
-        </div>
+        <SectionHeader
+          title="Trip checklist"
+          subtitle="Prep, packing, and day-of essentials."
+          icon="✓"
+        />
       ) : null}
 
-      <div className="rounded-2xl border border-royal/10 bg-white p-4 shadow-sm sm:p-6">
-        <p className="font-sans text-sm text-royal/80">
-          {checkedCount}/{items.length} items done · {pct}%
-        </p>
-        <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-royal/10">
+      <div className="rounded-tt-lg border border-tt-line bg-tt-surface p-4 shadow-tt-sm sm:p-5">
+        <MetricPill
+          label="Checklist progress"
+          value={`${checkedCount}/${items.length} done · ${pct}%`}
+          icon="🎒"
+          variant="warm"
+        />
+        <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-tt-royal-soft">
           <div
-            className="h-full rounded-full bg-gold transition-all"
+            className="h-full rounded-full bg-tt-gold transition-all"
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -160,22 +168,22 @@ export function TripChecklistView({ trip, embedded = false }: Props) {
           ))}
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-royal/20 bg-cream/60 p-8 text-center">
-          <p className="font-sans text-sm text-royal/80">
-            No todos yet. Add your first one to keep track of what&apos;s left before you travel.
-          </p>
-          <p className="mt-2 font-sans text-xs text-royal/65">
-            Start with the suggested list, then customise items for your family.
-          </p>
-          <button
-            type="button"
-            disabled={seeding}
-            onClick={() => void seedSuggested()}
-            className="mt-4 min-h-11 rounded-lg bg-royal px-5 py-2.5 font-sans text-sm font-semibold text-cream disabled:opacity-50"
-          >
-            {seeding ? "Working…" : "Generate suggested list"}
-          </button>
-        </div>
+        <EmptyState
+          icon="🎒"
+          title="No todos yet"
+          description="Add your first one to keep track of what's left before you travel, or start with suggested family-holiday items."
+          action={
+            <Button
+              type="button"
+              disabled={seeding}
+              loading={seeding}
+              loadingLabel="Working…"
+              onClick={() => void seedSuggested()}
+            >
+              Generate suggested list
+            </Button>
+          }
+        />
       ) : (
         <div className="space-y-8">
           {ORDER.map((cat) => {
@@ -183,8 +191,8 @@ export function TripChecklistView({ trip, embedded = false }: Props) {
             if (list.length === 0) return null;
             return (
               <div key={cat}>
-                <div className="sticky top-0 z-10 -mx-1 border-b border-gold/30 bg-cream/95 px-1 py-2 backdrop-blur">
-                  <h3 className="font-sans text-sm font-bold uppercase tracking-wide text-royal">
+                <div className="sticky top-0 z-10 -mx-1 border-b border-tt-line bg-tt-bg/95 px-1 py-2 backdrop-blur">
+                  <h3 className="font-meta text-sm font-bold uppercase tracking-wide text-tt-royal">
                     {LABELS[cat]}
                   </h3>
                 </div>
@@ -192,35 +200,35 @@ export function TripChecklistView({ trip, embedded = false }: Props) {
                   {list.map((it) => (
                     <li
                       key={it.id}
-                      className="flex items-start gap-3 rounded-xl border border-royal/10 bg-white p-3"
+                      className="flex items-start gap-3 rounded-tt-lg border border-tt-line bg-tt-surface p-3 shadow-tt-sm"
                     >
                       <button
                         type="button"
                         aria-checked={it.is_checked}
                         role="checkbox"
                         onClick={() => void toggle(it)}
-                        className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-royal/15 text-lg"
+                        className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-tt-md border border-tt-line text-lg"
                       >
                         {it.is_checked ? "☑️" : "☐"}
                       </button>
                       <div className="min-w-0 flex-1">
                         <p
-                          className={`font-sans text-sm text-royal ${
+                          className={`font-sans text-sm text-tt-ink ${
                             it.is_checked ? "opacity-55 line-through" : ""
                           }`}
                         >
                           {it.label}
                           {it.is_custom ? (
-                            <span className="ml-2 rounded bg-gold/25 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-royal">
+                            <Badge variant="warning" className="ml-2 normal-case">
                               Custom
-                            </span>
+                            </Badge>
                           ) : null}
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => void del(it)}
-                        className="min-h-11 min-w-11 shrink-0 rounded-lg border border-royal/15 font-sans text-xs text-royal/70"
+                        className="min-h-11 min-w-11 shrink-0 rounded-tt-md border border-tt-line font-sans text-xs text-tt-ink-soft hover:bg-tt-bg-soft"
                         aria-label="Delete item"
                       >
                         ×
@@ -235,15 +243,15 @@ export function TripChecklistView({ trip, embedded = false }: Props) {
       )}
 
       {items.length > 0 ? (
-        <div className="space-y-4 rounded-2xl border border-royal/10 bg-white p-4">
-          <p className="font-sans text-sm font-semibold text-royal">
+        <div className="space-y-4 rounded-tt-lg border border-tt-line bg-tt-surface p-4 shadow-tt-sm">
+          <p className="font-sans text-sm font-semibold text-tt-royal">
             Add custom item
           </p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <select
               value={customCat}
               onChange={(e) => setCustomCat(e.target.value as ChecklistCategory)}
-              className="min-h-11 rounded-lg border border-royal/20 px-2 font-sans text-sm"
+              className="min-h-11 rounded-tt-md border border-tt-line bg-tt-surface px-2 font-sans text-sm text-tt-ink"
             >
               {ORDER.map((c) => (
                 <option key={c} value={c}>
@@ -255,23 +263,23 @@ export function TripChecklistView({ trip, embedded = false }: Props) {
               value={customLabel}
               onChange={(e) => setCustomLabel(e.target.value)}
               placeholder="e.g. Gran’s birthday card"
-              className="min-h-11 flex-1 rounded-lg border border-royal/20 px-3 font-sans text-sm"
+              className="min-h-11 flex-1 rounded-tt-md border border-tt-line bg-tt-surface px-3 font-sans text-sm text-tt-ink"
             />
-            <button
+            <Button
               type="button"
               onClick={() => void addCustom()}
-              className="min-h-11 rounded-lg bg-royal px-4 font-sans text-sm font-semibold text-cream"
             >
               Add
-            </button>
+            </Button>
           </div>
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            className="w-full"
             onClick={() => void resetTemplate()}
-            className="min-h-11 w-full rounded-lg border border-royal/20 py-2 font-sans text-sm text-royal hover:bg-cream"
           >
             ↻ Reset suggested items
-          </button>
+          </Button>
         </div>
       ) : null}
     </section>

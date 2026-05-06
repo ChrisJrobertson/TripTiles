@@ -14,6 +14,8 @@ import {
 import type { Tier } from "@/lib/tier";
 import type { Park, Trip } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
+import { ModalShell } from "@/components/ui/ModalShell";
+import { Button } from "@/components/ui/Button";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const WEEK: { dow: number; label: string }[] = [
@@ -173,31 +175,31 @@ export function DuplicateDayModal({
 
   return (
     <>
-    <div
-      className="fixed inset-0 z-[120] flex items-end justify-center bg-royal/50 p-0 sm:items-center sm:p-4"
+    <ModalShell
+      zClassName="z-[120]"
+      bottomSheetOnMobile
+      overlayClassName="bg-tt-royal/50 backdrop-blur-[1px]"
+      maxWidthClass="max-w-lg"
+      panelClassName="flex max-h-[min(90vh,40rem)] flex-col overflow-hidden p-0"
       role="dialog"
-      aria-modal="true"
+      aria-modal={true}
       aria-labelledby="dup-day-title"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <button
-        type="button"
-        className="absolute inset-0 z-0 cursor-default"
-        aria-label="Close"
-        onClick={onClose}
-      />
-      <div className="relative z-10 flex max-h-[min(90vh,40rem)] w-full max-w-lg flex-col rounded-t-2xl border border-royal/15 bg-cream shadow-2xl sm:rounded-2xl">
-        <div className="shrink-0 border-b border-royal/10 p-4">
+        <div className="shrink-0 border-b border-tt-line-soft p-4">
           <h2
             id="dup-day-title"
-            className="font-serif text-lg font-semibold text-royal"
+            className="font-heading text-lg font-semibold text-tt-royal"
           >
             Duplicate day
           </h2>
-          <div className="mt-3 flex gap-1 rounded-lg border border-royal/15 p-0.5 font-sans text-xs font-semibold">
+          <div className="mt-3 flex gap-1 rounded-tt-md border border-tt-line-soft bg-tt-surface p-0.5 font-sans text-xs font-semibold">
             <button
               type="button"
-              className={`min-h-11 flex-1 rounded-md ${
-                tab === "specific" ? "bg-royal text-cream" : "text-royal"
+              className={`min-h-11 flex-1 rounded-tt-md ${
+                tab === "specific"
+                  ? "bg-tt-royal text-white shadow-tt-sm"
+                  : "text-tt-royal"
               }`}
               onClick={() => setTab("specific")}
             >
@@ -205,8 +207,10 @@ export function DuplicateDayModal({
             </button>
             <button
               type="button"
-              className={`relative min-h-11 flex-1 rounded-md ${
-                tab === "recurring" ? "bg-royal text-cream" : "text-royal"
+              className={`relative min-h-11 flex-1 rounded-tt-md ${
+                tab === "recurring"
+                  ? "bg-tt-royal text-white shadow-tt-sm"
+                  : "text-tt-royal"
               }`}
               onClick={() => {
                 if (productTier === "free") {
@@ -231,17 +235,17 @@ export function DuplicateDayModal({
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
           {tab === "specific" ? (
             <>
-              <p className="font-sans text-xs text-royal/70">
+              <p className="font-sans text-xs text-tt-royal/70">
                 Choose dates inside your trip (excluding this day).
               </p>
-              <p className="mt-2 font-sans text-sm font-semibold text-royal">
+              <p className="mt-2 font-sans text-sm font-semibold text-tt-royal">
                 Copy to {picked.size} day{picked.size === 1 ? "" : "s"}
               </p>
-              <div className="mt-2 flex max-h-52 flex-col gap-1 overflow-y-auto rounded-lg border border-royal/10 bg-white/80 p-2">
+              <div className="mt-2 flex max-h-52 flex-col gap-1 overflow-y-auto rounded-tt-md border border-tt-line-soft bg-white/80 p-2">
                 {selectableDates.map((k) => (
                   <label
                     key={k}
-                    className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 font-sans text-sm text-royal hover:bg-cream"
+                    className="flex min-h-11 cursor-pointer items-center gap-2 rounded px-2 font-sans text-sm text-tt-royal hover:bg-tt-royal-soft"
                   >
                     <input
                       type="checkbox"
@@ -256,7 +260,7 @@ export function DuplicateDayModal({
             </>
           ) : (
             <>
-              <p className="font-sans text-xs text-royal/70">
+              <p className="font-sans text-xs text-tt-royal/70">
                 Pick weekdays — we only include dates inside your trip range.
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
@@ -264,10 +268,10 @@ export function DuplicateDayModal({
                   <button
                     key={dow}
                     type="button"
-                    className={`min-h-11 min-w-[2.75rem] rounded-lg border px-2 font-sans text-xs font-semibold ${
+                    className={`min-h-11 min-w-[2.75rem] rounded-tt-md border px-2 font-sans text-xs font-semibold ${
                       weekdays.has(dow)
-                        ? "border-royal bg-royal text-cream"
-                        : "border-royal/20 bg-white text-royal"
+                        ? "border-tt-royal bg-tt-royal text-white"
+                        : "border-tt-line bg-white text-tt-royal"
                     }`}
                     onClick={() => toggleWeekday(dow)}
                   >
@@ -275,10 +279,10 @@ export function DuplicateDayModal({
                   </button>
                 ))}
               </div>
-              <p className="mt-3 font-sans text-xs font-semibold text-royal">
+              <p className="mt-3 font-sans text-xs font-semibold text-tt-royal">
                 Preview ({recurringPreview.length})
               </p>
-              <ul className="mt-1 max-h-36 overflow-y-auto font-mono text-xs text-royal/80">
+              <ul className="mt-1 max-h-36 overflow-y-auto font-mono text-xs text-tt-royal/80">
                 {recurringPreview.map((k) => (
                   <li key={k}>{k}</li>
                 ))}
@@ -286,11 +290,13 @@ export function DuplicateDayModal({
             </>
           )}
 
-          <div className="mt-4 flex rounded-lg border border-royal/15 p-0.5 font-sans text-xs font-semibold">
+          <div className="mt-4 flex rounded-tt-md border border-tt-line-soft bg-tt-surface p-0.5 font-sans text-xs font-semibold">
             <button
               type="button"
-              className={`min-h-11 flex-1 rounded-md ${
-                merge === "append" ? "bg-royal text-cream" : "text-royal"
+              className={`min-h-11 flex-1 rounded-tt-md ${
+                merge === "append"
+                  ? "bg-tt-royal text-white shadow-tt-sm"
+                  : "text-tt-royal"
               }`}
               onClick={() => setMerge("append")}
             >
@@ -298,8 +304,10 @@ export function DuplicateDayModal({
             </button>
             <button
               type="button"
-              className={`min-h-11 flex-1 rounded-md ${
-                merge === "replace" ? "bg-royal text-cream" : "text-royal"
+              className={`min-h-11 flex-1 rounded-tt-md ${
+                merge === "replace"
+                  ? "bg-tt-royal text-white shadow-tt-sm"
+                  : "text-tt-royal"
               }`}
               onClick={() => setMerge("replace")}
             >
@@ -308,25 +316,26 @@ export function DuplicateDayModal({
           </div>
         </div>
 
-        <div className="shrink-0 flex flex-wrap gap-2 border-t border-royal/10 p-4">
-          <button
+        <div className="shrink-0 flex flex-wrap gap-2 border-t border-tt-line-soft p-4">
+          <Button
             type="button"
-            className="min-h-11 flex-1 rounded-lg bg-royal px-4 font-sans text-sm font-semibold text-cream disabled:opacity-50"
+            variant="primary"
+            className="min-h-11 flex-1"
             disabled={busy || targets.length === 0}
             onClick={() => void submit()}
           >
             Duplicate →
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="min-h-11 flex-1 rounded-lg border border-royal/20 bg-white px-4 font-sans text-sm font-medium text-royal"
+            variant="secondary"
+            className="min-h-11 flex-1"
             onClick={onClose}
           >
             Cancel
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+    </ModalShell>
     <BookingConflictModal
       open={replaceDayAnchors != null}
       dayDate={replaceDayAnchors?.targets[0] ?? sourceDate}

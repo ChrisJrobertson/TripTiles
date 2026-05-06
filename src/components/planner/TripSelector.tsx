@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import type { Trip } from "@/lib/types";
 
 type Props = {
@@ -25,21 +26,23 @@ export function TripSelector({
 
   return (
     <div
-      className={`flex flex-col gap-3 rounded-xl border border-royal/12 bg-white/90 px-4 py-3 shadow-md shadow-royal/[0.06] ring-1 ring-gold/15 backdrop-blur-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5 sm:py-4 ${className}`}
+      className={`flex flex-col gap-3 rounded-tt-lg border border-tt-line bg-tt-surface/95 px-4 py-3 shadow-tt-sm backdrop-blur-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between ${className}`}
     >
-      <label className="flex flex-wrap items-center gap-3 font-sans text-base text-royal">
+      <label className="flex flex-wrap items-center gap-3 font-sans text-sm text-tt-ink">
         <span
-          className="select-none text-3xl leading-none sm:text-4xl"
+          className="select-none text-2xl leading-none sm:text-3xl"
           aria-hidden
         >
           🎢
         </span>
         <span className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
-          <span className="font-semibold">Current trip:</span>
+          <span className="font-meta text-xs font-semibold uppercase tracking-wide text-tt-ink-soft">
+            Current trip
+          </span>
           <select
             value={activeTripId}
             onChange={(e) => onSwitch(e.target.value)}
-            className="min-h-12 min-w-[min(100%,14rem)] flex-1 rounded-lg border border-royal/25 bg-white px-3 py-2.5 text-base text-royal sm:min-w-[16rem]"
+            className="min-h-11 min-w-[min(100%,14rem)] flex-1 rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 text-sm font-semibold text-tt-royal shadow-tt-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-royal/40 sm:min-w-[16rem]"
           >
             {trips.map((t) => (
               <option key={t.id} value={t.id}>
@@ -50,28 +53,31 @@ export function TripSelector({
         </span>
       </label>
       <div className="flex flex-wrap gap-2">
-        <button
+        <Button
           type="button"
           onClick={onNew}
-          className="rounded-lg border border-royal/30 bg-white px-3 py-2 font-sans text-sm font-medium text-royal hover:border-gold"
+          variant="secondary"
+          size="sm"
         >
           + New
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={onRename}
-          className="rounded-lg border border-royal/30 bg-white px-3 py-2 font-sans text-sm font-medium text-royal hover:border-gold"
+          variant="ghost"
+          size="sm"
         >
           Rename
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
           onClick={onDelete}
           disabled={onlyOne}
-          className="rounded-lg border border-red-200 bg-white px-3 py-2 font-sans text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+          variant="danger"
+          size="sm"
         >
           Delete
-        </button>
+        </Button>
       </div>
     </div>
   );

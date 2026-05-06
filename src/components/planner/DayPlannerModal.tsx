@@ -13,7 +13,10 @@ import {
   incrementProfileAiDayPlanModeASuccessCountAction,
   setProfileAiDayPreviewDefaultAction,
 } from "@/actions/profile-preferences";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { LogoSpinner } from "@/components/ui/LogoSpinner";
+import { ModalShell } from "@/components/ui/ModalShell";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { formatUndoSnapshotHint, parseDate } from "@/lib/date-helpers";
 import {
@@ -464,58 +467,59 @@ export function DayPlannerModal({
 
 
   return (
-    <div className="fixed inset-0 z-[130] flex items-center justify-center bg-royal/75 p-4">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="day-planner-title"
-        className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-gold/40 bg-cream p-5 shadow-xl sm:p-6"
-      >
+    <ModalShell
+      zClassName="z-[130]"
+      maxWidthClass="max-w-2xl"
+      panelClassName="max-h-[92vh] overflow-y-auto p-5 shadow-tt-lg sm:p-6"
+      aria-labelledby="day-planner-title"
+    >
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2
               id="day-planner-title"
-              className="font-serif text-xl font-semibold text-royal"
+              className="font-heading text-xl font-semibold text-tt-royal"
             >
               ✨ Plan this day
             </h2>
-            <p className="mt-1 font-sans text-sm text-royal/70">
+            <p className="mt-1 font-sans text-sm text-tt-ink-muted">
               {subtitleLine}. Existing tiles on other days stay as they are.
             </p>
           </div>
-          <button
+          <Button
             type="button"
-            className="min-h-11 min-w-11 rounded-lg border border-royal/15 bg-white text-royal"
+            variant="secondary"
+            size="sm"
+            className="min-h-11 min-w-11 shrink-0 px-0"
             onClick={onClose}
             aria-label="Close"
           >
             ×
-          </button>
+          </Button>
         </div>
 
         {!miniWizardOpen ? (
-          <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl bg-white/70 p-1">
+          <div className="mt-5 grid grid-cols-2 gap-2 rounded-tt-md border border-tt-line bg-tt-bg-soft p-1">
             <button
               type="button"
-              className={`min-h-11 rounded-lg px-3 font-sans text-sm font-semibold ${
-                tab === "adjust" ? "bg-royal text-cream" : "text-royal"
+              className={`min-h-11 rounded-tt-sm px-3 font-sans text-sm font-semibold transition ${
+                tab === "adjust" ? "bg-tt-royal text-white shadow-tt-sm" : "text-tt-ink-muted"
               }`}
               onClick={() => setTab("adjust")}
             >
-              Quick plan
+              Optimise day structure
             </button>
             <button
               type="button"
-              className={`min-h-11 rounded-lg px-3 font-sans text-sm font-semibold ${
-                tab === "strategy" ? "bg-royal text-cream" : "text-royal"
+              className={`min-h-11 rounded-tt-sm px-3 font-sans text-sm font-semibold transition ${
+                tab === "strategy" ? "bg-tt-royal text-white shadow-tt-sm" : "text-tt-ink-muted"
               }`}
               onClick={() => setTab("strategy")}
             >
               Build day strategy
               {productTier === "free" ? (
-                <span className="ml-1 rounded bg-royal/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-royal">
+                <Badge variant="magic" className="ml-1 align-middle text-[10px] font-bold uppercase">
                   Pro
-                </span>
+                </Badge>
               ) : null}
             </button>
           </div>
@@ -569,7 +573,7 @@ export function DayPlannerModal({
                     }`}
                     onClick={() => setTweakMode("smart_suggest")}
                   >
-                    Suggest a day
+                    Smart suggestions
                   </button>
                   <button
                     type="button"
@@ -580,7 +584,7 @@ export function DayPlannerModal({
                     }`}
                     onClick={() => setTweakMode("freetext")}
                   >
-                    Custom instructions
+                    Tell TripTiles
                   </button>
                 </div>
                 <label className="mt-3 flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-royal/12 bg-white/80 px-3 py-2 font-sans text-sm font-medium text-royal">
@@ -597,18 +601,18 @@ export function DayPlannerModal({
                 <div className="mt-5 rounded-xl border border-royal/10 bg-white/90 p-4">
                   {tweakMode === "smart_suggest" ? (
                     <>
-                      <h3 className="font-serif text-lg font-semibold text-royal">
-                        Suggest a day
+                      <h3 className="font-heading text-lg font-semibold text-tt-royal">
+                        Smart suggestions
                       </h3>
-                      <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
+                      <p className="mt-2 font-sans text-sm leading-relaxed text-tt-ink-muted">
                         The AI proposes refreshed AM / PM / meal slots for{" "}
                         {dayTitle} using your trip context.
                       </p>
                     </>
                   ) : (
                     <label className="block">
-                      <span className="font-serif text-lg font-semibold text-royal">
-                        Custom instructions
+                      <span className="font-heading text-lg font-semibold text-tt-royal">
+                        Tell TripTiles
                       </span>
                       <textarea
                         value={text}
@@ -754,7 +758,7 @@ export function DayPlannerModal({
                     Upgrade to <span className="font-semibold">Pro</span> or{" "}
                     <span className="font-semibold">Family</span> to generate a
                     strategy here. You can still use{" "}
-                    <span className="font-semibold">Quick plan</span>{" "}
+                    <span className="font-semibold">Optimise day structure</span>{" "}
                     on any plan.
                   </p>
                   <button
@@ -828,7 +832,6 @@ export function DayPlannerModal({
             </p>
           )
         ) : null}
-      </div>
-    </div>
+    </ModalShell>
   );
 }

@@ -6,6 +6,8 @@ import {
   revokeInviteAction,
   type CollaboratorRole,
 } from "@/actions/collaborators";
+import { Button } from "@/components/ui/Button";
+import { ModalShell } from "@/components/ui/ModalShell";
 import { getTierConfig } from "@/lib/tiers";
 import type { UserTier } from "@/lib/types";
 import Link from "next/link";
@@ -128,57 +130,65 @@ export function FamilyInvitePanel({ tripId, userTier }: Props) {
       {msg ? <p className="mt-2 text-xs text-red-600">{msg}</p> : null}
 
       {modalOpen ? (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-royal/40 p-4 backdrop-blur-sm"
+        <ModalShell
+          zClassName="z-[125]"
+          overlayClassName="bg-tt-royal/50 backdrop-blur-[1px]"
+          maxWidthClass="max-w-md"
+          panelClassName="p-6"
           role="dialog"
-          aria-modal="true"
+          aria-modal={true}
+          aria-labelledby="family-invite-title"
+          onClick={(e) => e.target === e.currentTarget && setModalOpen(false)}
         >
-          <div className="w-full max-w-md rounded-2xl border border-royal/15 bg-cream p-6 shadow-xl">
-            <h2 className="font-serif text-lg font-semibold text-royal">
+            <h2
+              id="family-invite-title"
+              className="font-heading text-lg font-semibold text-tt-royal"
+            >
               Invite by email
             </h2>
-            <label className="mt-4 block text-xs font-medium text-royal/70">
+            <label className="mt-4 block text-xs font-medium text-tt-royal/70">
               Email
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-royal/20 bg-white px-3 py-2 font-sans text-sm text-royal"
+                className="mt-1 w-full rounded-tt-md border border-tt-line bg-white px-3 py-2 font-sans text-sm text-tt-royal"
                 placeholder="name@example.com"
               />
             </label>
-            <label className="mt-3 block text-xs font-medium text-royal/70">
+            <label className="mt-3 block text-xs font-medium text-tt-royal/70">
               Role
               <select
                 value={role}
                 onChange={(e) =>
                   setRole(e.target.value as CollaboratorRole)
                 }
-                className="mt-1 w-full rounded-lg border border-royal/20 bg-white px-3 py-2 font-sans text-sm text-royal"
+                className="mt-1 w-full rounded-tt-md border border-tt-line bg-white px-3 py-2 font-sans text-sm text-tt-royal"
               >
                 <option value="editor">Editor</option>
                 <option value="viewer">Viewer</option>
               </select>
             </label>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
+            <div className="mt-6 flex justify-end gap-3 border-t border-tt-line-soft pt-4">
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => setModalOpen(false)}
-                className="text-sm font-medium text-royal/75 hover:text-royal"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="accent"
                 disabled={busy || !email.trim()}
+                loading={busy}
+                loadingLabel="Sending…"
                 onClick={() => void onInvite()}
-                className="rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-royal disabled:opacity-50"
               >
-                {busy ? "Sending…" : "Send invite"}
-              </button>
+                Send invite
+              </Button>
             </div>
-          </div>
-        </div>
+        </ModalShell>
       ) : null}
     </div>
   );

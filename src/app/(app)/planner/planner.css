@@ -4,7 +4,7 @@
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 3fr 2fr;
   gap: 2px;
-  min-height: 7.5rem;
+  min-height: 6.6rem;
   width: 100%;
 }
 
@@ -41,8 +41,8 @@
   flex-direction: column;
   justify-content: space-between;
   overflow: hidden;
-  border-radius: 4px;
-  padding: 4px;
+  border-radius: var(--tt-radius-sm);
+  padding: 3px;
   font-size: 0.65rem;
   line-height: 1.2;
 }
@@ -87,7 +87,7 @@
 
 @media (min-width: 768px) {
   .planner-slot-grid {
-    min-height: 4.25rem;
+    min-height: 3.85rem;
   }
 
   .planner-slot {

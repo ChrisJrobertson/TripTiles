@@ -15,6 +15,7 @@ import {
 import { DuplicateDayModal } from "@/components/planner/DuplicateDayModal";
 import { UnsavedChangesModal } from "@/components/app/UnsavedChangesModal";
 import { TierLimitModal } from "@/components/paywall/TierLimitModal";
+import { Button } from "@/components/ui/Button";
 import { updateTripPlanningPreferencesAction } from "@/actions/trips";
 import {
   eachDateKeyInRange,
@@ -603,15 +604,15 @@ export function TripDayPageView({
     <>
       <div
         ref={rootRef}
-        className="hidden min-h-0 w-full min-w-0 flex-col rounded-xl border border-royal/15 bg-cream shadow-sm md:flex"
+        className="hidden min-h-0 w-full min-w-0 flex-col rounded-tt-xl border border-tt-line bg-tt-surface-warm shadow-tt-md md:flex"
         aria-labelledby={titleId}
       >
-        <header className="flex shrink-0 flex-col gap-2 border-b border-royal/10 bg-cream px-3 py-3">
+        <header className="flex shrink-0 flex-col gap-2 border-b border-tt-line bg-tt-bg-soft px-3 py-3">
           <div className="flex items-start justify-between gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <button
                 type="button"
-                className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-royal/15 bg-white text-lg text-royal shadow-sm transition hover:bg-cream"
+                className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-tt-md border border-tt-line bg-tt-surface text-lg text-tt-royal shadow-tt-sm transition hover:bg-tt-bg-soft"
                 aria-label="Back to calendar"
                 onClick={closeToCalendar}
               >
@@ -620,11 +621,11 @@ export function TripDayPageView({
               <div className="min-w-0">
                 <h1
                   id={titleId}
-                  className="font-serif text-lg font-semibold leading-tight text-royal"
+                  className="font-heading text-lg font-semibold leading-tight text-tt-royal"
                 >
                   {formatHeaderShort(dayDate)}
                 </h1>
-                <p className="mt-0.5 font-sans text-xs text-royal/70">
+                <p className="mt-0.5 font-sans text-xs text-tt-ink-muted">
                   {parkLabels}
                 </p>
               </div>
@@ -633,7 +634,7 @@ export function TripDayPageView({
               {prev ? (
                 <button
                   type="button"
-                  className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-royal/15 bg-white text-sm text-royal"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-tt-md border border-tt-line bg-tt-surface text-sm text-tt-royal"
                   aria-label="Previous day"
                   onClick={() => navigateTo(prev)}
                 >
@@ -643,7 +644,7 @@ export function TripDayPageView({
               {next ? (
                 <button
                   type="button"
-                  className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-royal/15 bg-white text-sm text-royal"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-tt-md border border-tt-line bg-tt-surface text-sm text-tt-royal"
                   aria-label="Next day"
                   onClick={() => navigateTo(next)}
                 >
@@ -652,7 +653,7 @@ export function TripDayPageView({
               ) : null}
               <button
                 type="button"
-                className="min-h-11 shrink-0 rounded-lg border border-royal/15 bg-white px-2 font-sans text-[11px] font-semibold text-royal"
+                className="min-h-11 shrink-0 rounded-tt-md border border-tt-line bg-tt-surface px-2 font-sans text-[11px] font-semibold text-tt-royal"
                 onClick={() => queueAction(() => setDupOpen(true))}
               >
                 Duplicate
@@ -660,7 +661,7 @@ export function TripDayPageView({
               <div className="relative shrink-0" ref={moreWrapRef}>
                 <button
                   type="button"
-                  className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-royal/15 bg-white text-lg leading-none text-royal"
+                  className="flex min-h-11 min-w-11 items-center justify-center rounded-tt-md border border-tt-line bg-tt-surface text-lg leading-none text-tt-royal"
                   aria-haspopup="menu"
                   aria-expanded={moreOpen}
                   aria-label="More day actions"
@@ -730,7 +731,7 @@ export function TripDayPageView({
               </div>
               <button
                 type="button"
-                className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg border border-royal/15 bg-white text-sm text-royal"
+                className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-tt-md border border-tt-line bg-tt-surface text-sm text-tt-royal"
                 aria-label="Back to calendar"
                 onClick={closeToCalendar}
               >
@@ -738,25 +739,26 @@ export function TripDayPageView({
               </button>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 font-sans text-xs text-royal/80">
-            <button
+          <div className="flex flex-wrap items-center gap-2 font-sans text-xs text-tt-ink-muted">
+            <Button
               type="button"
-              className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-royal px-3 py-2 font-sans text-xs font-semibold text-cream shadow-sm transition hover:bg-royal/90"
+              size="sm"
               onClick={() => queueAction(() => onOpenDayPlanner())}
             >
               <span aria-hidden>✨</span>
               Plan this day
-            </button>
+            </Button>
             {daySnapshotCount > 0 && latestDaySnapshot ? (
-              <button
+              <Button
                 type="button"
-                className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-gold/40 bg-white px-3 py-2 font-sans text-xs font-semibold text-royal shadow-sm transition hover:bg-cream"
+                variant="secondary"
+                size="sm"
                 title={`Restores the day to before the last AI tweak — ${daySnapshotCount} changes ago`}
                 onClick={() => queueAction(() => onUndoDayTweak(dayDate))}
               >
                 <span aria-hidden>↩</span>
                 Undo last AI change
-              </button>
+              </Button>
             ) : null}
             {dc ? (
               <span className="inline-flex items-center gap-1">
