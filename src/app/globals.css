@@ -3,8 +3,9 @@
 
 :root {
   /* TripTiles hybrid design system tokens */
-  --tt-bg: #f6efe1;
-  --tt-bg-soft: #fbf3e3;
+  /* Warm planner shell — aligns with redesign mock cream */
+  --tt-bg: #faf5e9;
+  --tt-bg-soft: #fcf6ee;
   --tt-surface: #ffffff;
   --tt-surface-warm: #fcf6ea;
   --tt-ink: #15203a;

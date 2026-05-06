@@ -29,7 +29,6 @@ import {
 } from "@/actions/trips";
 import { AppNavHeader } from "@/components/app/AppNavHeader";
 import { Button } from "@/components/ui/Button";
-import { InlineLoadingOverlay } from "@/components/ui/InlineLoadingOverlay";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { AchievementToast } from "@/components/gamification/AchievementToast";
 import { deleteCustomTileAction } from "@/actions/custom-tiles";
@@ -694,7 +693,6 @@ export function PlannerClient({
   const tileScrubToastShown = useRef(false);
   const smartPlanOpenedFromQueryRef = useRef(false);
   const autoGenerateConsumedRef = useRef(false);
-  const [fullPageAiBusy, setFullPageAiBusy] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const [adminPanel, setAdminPanel] = useState<
     null | "share" | "family" | "notes"
@@ -1835,7 +1833,6 @@ export function PlannerClient({
     if (autoGenerateConsumedRef.current) return;
     autoGenerateConsumedRef.current = true;
     void (async () => {
-      setFullPageAiBusy(true);
       try {
         const tripBefore =
           trips.find((x) => x.id === activeTripId) ??
@@ -1925,8 +1922,6 @@ export function PlannerClient({
             : "Smart Plan couldn't generate your plan — you can try again from the planner, or build it yourself.",
         );
         startTransition(() => router.replace(overviewHref));
-      } finally {
-        setFullPageAiBusy(false);
       }
     })();
   }, [
@@ -2636,12 +2631,8 @@ export function PlannerClient({
   const heroTripStatus = activeTrip ? tripPlannerStatusMeta(activeTrip) : null;
 
   return (
-    <InlineLoadingOverlay
-      isLoading={fullPageAiBusy}
-      label="Smart Plan is building your itinerary"
-    >
     <div
-      className="min-h-screen bg-transparent pb-28 pt-2 text-tt-ink lg:pb-16"
+      className="min-h-screen bg-tt-bg pb-28 pt-2 text-tt-ink lg:pb-16"
       style={shellThemeStyle}
     >
       <AppNavHeader
@@ -3266,44 +3257,6 @@ export function PlannerClient({
                         </div>
                       </div>
                     ) : null}
-                    {!dayDetailOpen && activeTrip ? (
-                      <>
-                        <PlannerDayTimelineStub
-                          trip={activeTrip}
-                          dateKey={plannerTimelineDateKey}
-                          parks={calendarParks}
-                          plannerRegionId={resolvePaletteRegionId(activeTrip)}
-                          temperatureUnit={temperatureUnit}
-                          weatherChip={plannerTimelineWeatherCrowd.weather}
-                          crowdLevel={plannerTimelineWeatherCrowd.crowd}
-                          undoAiAvailable={plannerDayUndoAvailable}
-                          onClearSelection={() =>
-                            setPlannerTimelineDateKey(null)
-                          }
-                          onPrevDay={() => shiftPlannerTimelineDay(-1)}
-                          onNextDay={() => shiftPlannerTimelineDay(1)}
-                          onPlanThisDay={() => setSmartOpen(true)}
-                          onUndoAi={() => {
-                            if (plannerTimelineDateKey) {
-                              handleUndoDayTweak(plannerTimelineDateKey);
-                            }
-                          }}
-                          onShareDay={
-                            tripRouteBase ? handleShareTimelineDay : undefined
-                          }
-                          onEditDay={() => {
-                            if (plannerTimelineDateKey) {
-                              openDayPlanner(plannerTimelineDateKey);
-                            }
-                          }}
-                        />
-                        <PlannerPlanningDeck
-                          trip={activeTrip}
-                          payments={paymentsByTripId[activeTrip.id] ?? []}
-                          onPaymentsChange={handlePaymentsChange}
-                        />
-                      </>
-                    ) : null}
                     <div className="relative min-w-0">
                       {dayDetailOpen &&
                       tripRouteBase &&
@@ -3454,6 +3407,48 @@ export function PlannerClient({
                               dayNotes={mobilePlannerNoteMaps.ai}
                               userDayNotes={mobilePlannerNoteMaps.user}
                             />
+                          ) : null}
+                          {activeTrip ? (
+                            <div className="mt-6 space-y-4 md:mt-8 md:space-y-5">
+                              <PlannerDayTimelineStub
+                                trip={activeTrip}
+                                dateKey={plannerTimelineDateKey}
+                                parks={calendarParks}
+                                plannerRegionId={resolvePaletteRegionId(
+                                  activeTrip,
+                                )}
+                                temperatureUnit={temperatureUnit}
+                                weatherChip={plannerTimelineWeatherCrowd.weather}
+                                crowdLevel={plannerTimelineWeatherCrowd.crowd}
+                                undoAiAvailable={plannerDayUndoAvailable}
+                                onClearSelection={() =>
+                                  setPlannerTimelineDateKey(null)
+                                }
+                                onPrevDay={() => shiftPlannerTimelineDay(-1)}
+                                onNextDay={() => shiftPlannerTimelineDay(1)}
+                                onPlanThisDay={() => setSmartOpen(true)}
+                                onUndoAi={() => {
+                                  if (plannerTimelineDateKey) {
+                                    handleUndoDayTweak(plannerTimelineDateKey);
+                                  }
+                                }}
+                                onShareDay={
+                                  tripRouteBase
+                                    ? handleShareTimelineDay
+                                    : undefined
+                                }
+                                onEditDay={() => {
+                                  if (plannerTimelineDateKey) {
+                                    openDayPlanner(plannerTimelineDateKey);
+                                  }
+                                }}
+                              />
+                              <PlannerPlanningDeck
+                                trip={activeTrip}
+                                payments={paymentsByTripId[activeTrip.id] ?? []}
+                                onPaymentsChange={handlePaymentsChange}
+                              />
+                            </div>
                           ) : null}
                         </>
                       )}
@@ -3948,6 +3943,5 @@ export function PlannerClient({
       </div>
 
     </div>
-    </InlineLoadingOverlay>
   );
 }

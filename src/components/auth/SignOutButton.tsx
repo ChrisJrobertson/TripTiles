@@ -1,6 +1,5 @@
 "use client";
 
-import { LogoSpinner } from "@/components/ui/LogoSpinner";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -28,14 +27,7 @@ export function SignOutButton() {
       disabled={loading}
       className="bg-transparent p-0 font-sans text-sm font-medium text-ink/90 underline-offset-4 transition hover:text-royalSoft hover:underline disabled:opacity-60"
     >
-      {loading ? (
-        <span className="inline-flex items-center gap-2">
-          <LogoSpinner size="sm" className="shrink-0" decorative />
-          Signing out
-        </span>
-      ) : (
-        "Sign out"
-      )}
+      {loading ? "Signing out…" : "Sign out"}
     </button>
   );
 }
