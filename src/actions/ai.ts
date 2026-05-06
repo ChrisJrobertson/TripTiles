@@ -4,7 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getCustomTilesForRegion } from "@/lib/db/custom-tiles";
 import { getParksForRegion } from "@/lib/db/parks";
 import { getRegionById } from "@/lib/db/regions";
-import { getTripById, mapTripRow } from "@/lib/db/trips";
+import { mapTripRow } from "@/lib/db/trips";
 import {
   applyArrivalDayNoThemeParks,
   enforceAiPlanGuardrails,
@@ -1752,8 +1752,8 @@ export async function runGenerateAIPlan(
     };
   }
 
-  const trip = await getTripById(input.tripId);
-  if (!trip || trip.owner_id !== user.id) {
+  const trip = await fetchOwnedTripForAi(input.tripId, user.id);
+  if (!trip) {
     logAiGen({
       step: "action_exit_result",
       tripId: input.tripId,
@@ -2878,8 +2878,8 @@ export async function generateMustDosForPark(input: {
     };
   }
 
-  const trip = await getTripById(input.tripId);
-  if (!trip || trip.owner_id !== user.id) {
+  const trip = await fetchOwnedTripForAi(input.tripId, user.id);
+  if (!trip) {
     return { ok: false, error: "Trip not found.", code: "TRIP_NOT_FOUND" };
   }
 
@@ -3400,8 +3400,8 @@ export async function generateDayTimeline(
     };
   }
 
-  const trip = await getTripById(tripId);
-  if (!trip || trip.owner_id !== user.id) {
+  const trip = await fetchOwnedTripForAi(tripId, user.id);
+  if (!trip) {
     return { ok: false, error: "Trip not found.", code: "invalid_day" };
   }
 
