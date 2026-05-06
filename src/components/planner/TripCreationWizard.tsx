@@ -7,8 +7,6 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { InlineLoadingOverlay } from "@/components/ui/InlineLoadingOverlay";
 import { WizardProgress } from "@/components/ui/WizardProgress";
-import { TrippMascotImg } from "@/components/mascot/TrippMascotImg";
-import { TrippSpeechBubble } from "@/components/mascot/TrippSpeechBubble";
 import { eachDateKeyInRange } from "@/lib/date-helpers";
 import { parkMatchesPlannerRegion } from "@/lib/park-matches-planner-region";
 import {
@@ -302,7 +300,7 @@ export function TripCreationWizard({
     goNext();
   };
 
-  const buildPlanningPreferences = (): TripPlanningPreferences | null => {
+  const buildPlanningPreferences = useCallback((): TripPlanningPreferences => {
     const childAges = parseChildAges(childAgesText, children);
     const childHeights =
       children > 0
@@ -335,7 +333,25 @@ export function TripCreationWizard({
     };
 
     return base;
-  };
+  }, [
+    childAgesText,
+    children,
+    childHeightsCm,
+    pace,
+    mustDoParks,
+    priorities,
+    additionalNotes,
+    adults,
+    mobility,
+    tripType,
+    mustDoExperiences,
+    disneyLL,
+    univEx,
+    parkHopping,
+    expectedFullParkDays,
+    showDisneyBlock,
+    showUniversalBlock,
+  ]);
 
   const submit = useCallback(async () => {
     if (!regionId || !startDate || !endDate || !planPath) return;
@@ -399,6 +415,7 @@ export function TripCreationWizard({
     router,
     onTripCreated,
     onTripTierLimit,
+    buildPlanningPreferences,
   ]);
 
   const featured = useMemo(
@@ -469,15 +486,11 @@ export function TripCreationWizard({
 
         {step === 0 ? (
           <div className="mt-6 text-center">
-            <div className="flex flex-col items-center">
-              <TrippMascotImg
-                width={80}
-                height={80}
-                className="h-20 w-20 object-contain"
-              />
-              <TrippSpeechBubble maxWidthClass="max-w-sm">
-                Hi! I&apos;m Tripp. Let&apos;s build your perfect adventure. 🐾
-              </TrippSpeechBubble>
+            <div
+              className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-2xl border border-tt-gold/35 bg-gradient-to-b from-tt-gold-soft/50 to-white text-5xl shadow-tt-sm"
+              aria-hidden
+            >
+              🗺️
             </div>
             <h1 className="mt-8 font-heading text-2xl font-semibold text-tt-royal md:text-3xl">
               Welcome{firstName ? `, ${firstName}` : ""}!

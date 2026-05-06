@@ -14,6 +14,8 @@ type KeyDateRow = {
   notes?: string;
 };
 
+export type PlannerKeyDateRow = KeyDateRow;
+
 /** Region slugs that imply a US visit (ESTA / travel authorisation). */
 const US_ESTA_REGION_IDS = new Set([
   "orlando",
@@ -141,20 +143,70 @@ function buildRows(trip: Trip): KeyDateRow[] {
   return rows.filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.dateKey));
 }
 
+export function buildPlannerKeyDateRowsSorted(trip: Trip): KeyDateRow[] {
+  const list = buildRows(trip);
+  return [...list].sort((a, b) => {
+    if (a.dateKey < b.dateKey) return -1;
+    if (a.dateKey > b.dateKey) return 1;
+    return a.id.localeCompare(b.id);
+  });
+}
+
 type Props = {
   trip: Trip;
   className?: string;
+  /** Render only the milestone list (no Card or SectionHeader). */
+  listOnly?: boolean;
 };
 
-export function KeyDatesPanel({ trip, className = "" }: Props) {
+export function KeyDatesPanel({
+  trip,
+  className = "",
+  listOnly = false,
+}: Props) {
   const rows = useMemo(() => {
-    const list = buildRows(trip);
-    return [...list].sort((a, b) => {
-      if (a.dateKey < b.dateKey) return -1;
-      if (a.dateKey > b.dateKey) return 1;
-      return a.id.localeCompare(b.id);
-    });
+    return buildPlannerKeyDateRowsSorted(trip);
   }, [trip]);
+
+  if (listOnly) {
+    return (
+      <ul className={`space-y-3 ${className}`.trim()}>
+        {rows.map((row) => (
+          <li
+            key={`${row.id}-${row.dateKey}`}
+            className="rounded-tt-lg border border-tt-line bg-tt-surface px-3 py-3 shadow-tt-sm sm:px-4"
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-start gap-2">
+                  <span className="text-lg leading-none" aria-hidden>
+                    {row.icon}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-sans text-sm font-semibold text-tt-ink">
+                      {row.label}
+                    </p>
+                    {row.notes ? (
+                      <p className="mt-1 font-sans text-xs italic leading-snug text-tt-ink-soft">
+                        {row.notes}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                <CountdownChip
+                  targetDate={row.dateKey}
+                  label={`${row.label}: ${row.dateKey}`}
+                  treatPastAsMilestone
+                />
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    );
+  }
 
   return (
     <Card

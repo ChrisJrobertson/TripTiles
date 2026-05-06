@@ -22,6 +22,12 @@ function isProtectedPath(pathname: string): boolean {
 }
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (pathname === "/_archive" || pathname.startsWith("/_archive/")) {
+    return new NextResponse(null, { status: 404 });
+  }
+
   const url = getSupabaseUrl();
   const anonKey = getSupabaseAnonKey();
 
@@ -63,6 +69,8 @@ export async function middleware(request: NextRequest) {
  */
 export const config = {
   matcher: [
+    "/_archive",
+    "/_archive/:path*",
     "/",
     "/login",
     "/login/:path*",

@@ -1,5 +1,5 @@
 /**
- * Full wordmark (`/images/triptiles-logo.png`) — not the Tripp mascot.
+ * Full wordmark (`/images/triptiles-logo.png`).
  * App nav: compact, readable, doesn't dominate the header (~32-40px).
  */
 export const TRIP_TILES_LOGO_NAV_IMG_CLASS =

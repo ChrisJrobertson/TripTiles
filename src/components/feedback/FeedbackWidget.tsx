@@ -48,18 +48,10 @@ export function FeedbackWidget() {
           setStatus("idle");
           setError(null);
         }}
-        className="fixed bottom-5 right-5 z-50 hidden h-14 w-14 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-transparent bg-cream shadow-lg shadow-royal/20 ring-offset-2 ring-offset-cream transition hover:scale-110 hover:ring-2 hover:ring-gold md:flex"
-        aria-label="Chat with Tripp"
+        className="fixed bottom-5 right-5 z-50 hidden h-14 w-14 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-royal/20 bg-cream text-2xl shadow-lg shadow-royal/20 ring-offset-2 ring-offset-cream transition hover:scale-110 hover:ring-2 hover:ring-gold md:flex"
+        aria-label="Send feedback"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element -- fixed-size mascot crop */}
-        <img
-          src="/images/tripp-mascot.png"
-          alt=""
-          width={56}
-          height={56}
-          className="h-full w-full object-cover"
-          aria-hidden
-        />
+        <span aria-hidden>💬</span>
       </button>
 
       {open ? (
@@ -72,20 +64,17 @@ export function FeedbackWidget() {
           <div className="w-full max-w-md rounded-2xl border border-royal/15 bg-cream p-6 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 flex-1 items-center gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/images/tripp-mascot.png"
-                  alt=""
-                  width={32}
-                  height={32}
-                  className="h-8 w-8 shrink-0 rounded-full object-cover"
+                <span
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-royal text-xl text-cream"
                   aria-hidden
-                />
+                >
+                  💬
+                </span>
                 <h2
                   id="fb-title"
                   className="font-serif text-xl font-semibold text-royal"
                 >
-                  Ask Tripp
+                  Feedback
                 </h2>
               </div>
               <button

@@ -1,6 +1,5 @@
 "use client";
 
-import { TrippMascotImg } from "@/components/mascot/TrippMascotImg";
 import { Button } from "@/components/ui/Button";
 
 type Props = {
@@ -24,12 +23,10 @@ export function EmptyCalendarCta({
       role="region"
       aria-label="Get started with your calendar"
     >
-      <div className="mb-4 flex justify-center">
-        <TrippMascotImg
-          width={96}
-          height={96}
-          className="h-24 w-24 object-contain"
-        />
+      <div className="mb-4 flex justify-center" aria-hidden>
+        <div className="flex h-24 w-24 items-center justify-center rounded-2xl border border-tt-gold/30 bg-tt-gold-soft/35 text-4xl shadow-tt-sm">
+          ✨
+        </div>
       </div>
       <p className="text-center font-heading text-lg font-semibold text-tt-royal">
         Your calendar is empty

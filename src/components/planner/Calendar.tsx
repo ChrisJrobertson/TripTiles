@@ -75,6 +75,9 @@ type Props = {
   dayConflictDots?: Record<string, "amber" | "grey">;
   /** Brief outline highlight for “Go to today”. */
   highlightDateKey?: string | null;
+  /** Timeline selection (persisted planner panel). */
+  timelineSelectedDateKey?: string | null;
+  onTimelineDaySelect?: (dateKey: string) => void;
   onRideDayPrioritiesUpdated?: (
     dayDate: string,
     items: TripRidePriority[],
@@ -196,6 +199,8 @@ export function Calendar({
   rideCountsByDay,
   dayConflictDots = {},
   highlightDateKey = null,
+  timelineSelectedDateKey = null,
+  onTimelineDaySelect,
   onRideDayPrioritiesUpdated,
   onOpenDayDetail,
 }: Props) {
@@ -469,7 +474,7 @@ export function Calendar({
                   key={key}
                   id={`planner-day-${key}`}
                   className={`relative flex min-h-[7rem] flex-col rounded-tt-md border border-tt-line bg-tt-surface/95 shadow-tt-sm transition hover:border-tt-royal/30 sm:min-h-[8rem] md:min-h-[5.25rem]${
-                    highlightDateKey === key
+                    highlightDateKey === key || timelineSelectedDateKey === key
                       ? " ring-2 ring-tt-royal ring-offset-2 ring-offset-tt-surface"
                       : ""
                   }${
@@ -486,6 +491,9 @@ export function Calendar({
                             )
                           )
                             return;
+                          if (inTripRange(day, trip) && onTimelineDaySelect) {
+                            onTimelineDaySelect(key);
+                          }
                           onOpenDayDetail(key);
                         }
                       : undefined
@@ -523,6 +531,9 @@ export function Calendar({
                         }
                         onClick={() => {
                           if (useDayDetailShell && onOpenDayDetail) {
+                            if (inTripRange(day, trip) && onTimelineDaySelect) {
+                              onTimelineDaySelect(key);
+                            }
                             onOpenDayDetail(key);
                             return;
                           }
@@ -742,6 +753,12 @@ export function Calendar({
                             if (park) {
                               if (useDayDetailShell && onOpenDayDetail) {
                                 e.stopPropagation();
+                                if (
+                                  inTripRange(day, trip) &&
+                                  onTimelineDaySelect
+                                ) {
+                                  onTimelineDaySelect(key);
+                                }
                                 onOpenDayDetail(key);
                               }
                               return;
@@ -763,6 +780,12 @@ export function Calendar({
                               ) {
                                 e.preventDefault();
                                 e.stopPropagation();
+                                if (
+                                  inTripRange(day, trip) &&
+                                  onTimelineDaySelect
+                                ) {
+                                  onTimelineDaySelect(key);
+                                }
                                 onOpenDayDetail(key);
                               }
                               return;

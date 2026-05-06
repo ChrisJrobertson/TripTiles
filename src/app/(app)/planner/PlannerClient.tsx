@@ -78,8 +78,6 @@ import {
 import { BookTripAffiliatePanel } from "@/components/planner/BookTripAffiliatePanel";
 import { hasAnyAffiliatePartner } from "@/lib/affiliates";
 import { PdfExportButton } from "@/components/planner/PdfExportButton";
-import { TrippMascotImg } from "@/components/mascot/TrippMascotImg";
-import { TrippSpeechBubble } from "@/components/mascot/TrippSpeechBubble";
 import { EmptyCalendarCta } from "@/components/planner/EmptyCalendarCta";
 import { TripCreationWizard } from "@/components/planner/TripCreationWizard";
 import { TripThemePicker } from "@/components/planner/TripThemePicker";
@@ -115,7 +113,17 @@ import {
   buildTripStatsShareText,
   computeTripStats,
 } from "@/lib/compute-trip-stats";
-import { daysUntilTripStart } from "@/lib/trip-start-label";
+import { buildPlannerKeyDateRowsSorted } from "@/components/planning/KeyDatesPanel";
+import {
+  heuristicCrowdToneFromNoteText,
+  type CrowdLevel,
+} from "@/lib/planner-crowd-level-meta";
+import { crowdLevelFromHeuristicTone } from "@/components/planner/CrowdLevelIndicator";
+import { PlannerDayTimelineStub } from "@/components/planner/PlannerDayTimelineStub";
+import { PlannerPlanningDeck } from "@/components/planner/PlannerPlanningDeck";
+import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { dayConditionRow } from "@/lib/planner-day-conditions";
+import { daysUntilTripStart, tripStartValueLabel } from "@/lib/trip-start-label";
 import {
   computePlannerDayConflicts,
   conflictDotForDay,
@@ -163,6 +171,24 @@ import {
 import "./planner.css";
 
 const SHOW_BOOKING_AFFILIATE_PANEL = false;
+
+const APP_PLANNER_VERSION = "2.4";
+
+function formatSavedBrief(at: Date | null): string {
+  if (!at) return "";
+  const sec = Math.max(0, Math.round((Date.now() - at.getTime()) / 1000));
+  if (sec < 10) return "just now";
+  if (sec < 120) return `${sec}s ago`;
+  const m = Math.floor(sec / 60);
+  if (m < 120) return `${m} min ago`;
+  return at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function dayCrowdNoteForDate(trip: Trip, dateKey: string): string | null {
+  const raw = plannerAiDayCrowdNotes(trip)[dateKey]?.trim();
+  if (!raw) return null;
+  return sanitizeDayNote(raw);
+}
 
 function formatTripHeroDateRange(startIso: string, endIso: string): string {
   const a = parseDate(startIso);
@@ -677,6 +703,10 @@ export function PlannerClient({
   const [goToTodayRingDateKey, setGoToTodayRingDateKey] = useState<
     string | null
   >(null);
+  /** Selected day for inline planner timeline (/planner, not routed day panel). */
+  const [plannerTimelineDateKey, setPlannerTimelineDateKey] = useState<
+    string | null
+  >(null);
   const [isTodayVisibleInViewport, setIsTodayVisibleInViewport] = useState(true);
   const smartLandingScrollDoneRef = useRef<string | null>(null);
   /** Loaded eagerly for all trips; Day Detail is the future boundary for lazy per-day fetch. */
@@ -706,6 +736,19 @@ export function PlannerClient({
   } | null>(null);
   const [undoDayTweakBusy, setUndoDayTweakBusy] = useState(false);
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
+
+  useEffect(() => {
+    if (!activeTrip?.id) {
+      setPlannerTimelineDateKey(null);
+      return;
+    }
+    const todayKey = formatDateKey(new Date());
+    const picked =
+      todayKey >= activeTrip.start_date && todayKey <= activeTrip.end_date
+        ? formatDateISO(parseDate(todayKey))
+        : formatDateISO(parseDate(activeTrip.start_date));
+    setPlannerTimelineDateKey(picked);
+  }, [activeTrip?.id, activeTrip?.start_date, activeTrip?.end_date]);
 
   const cataloguedParkIdSet = useMemo(
     () => new Set(cataloguedParkIdsProp ?? []),
@@ -2261,6 +2304,8 @@ export function PlannerClient({
 
   const openDayDetail = useCallback(
     (dateKey: string, options?: { focusNotes?: boolean }) => {
+      const daySeg = formatDateISO(parseDate(dateKey));
+      setPlannerTimelineDateKey(daySeg);
       if (!tripRouteBase || !activeTripId) return;
       const el = mainScrollRef.current;
       if (el) {
@@ -2269,7 +2314,6 @@ export function PlannerClient({
           String(el.scrollTop),
         );
       }
-      const daySeg = formatDateISO(parseDate(dateKey));
       startTransition(() => {
         router.push(
           `${tripRouteBase}/day/${daySeg}${options?.focusNotes ? "#day-notes" : ""}`,
@@ -2482,6 +2526,102 @@ export function PlannerClient({
     return {};
   };
 
+  const crowdSeasonPill = useMemo(() => {
+    if (!activeTrip) return null;
+    const sd = parseDate(activeTrip.start_date);
+    const mon = (MONTHS_SHORT[sd.getMonth()] ?? "").toUpperCase();
+    const dc = dayConditionRow(
+      resolvePaletteRegionId(activeTrip),
+      sd,
+      temperatureUnit,
+    );
+    if (!dc) return mon ? `${mon} · PLAN` : null;
+    const tag =
+      dc.crowd === "busy" ? "PEAK" : dc.crowd === "moderate" ? "BUSY" : "QUIETER";
+    return `${mon} · ${tag}`;
+  }, [activeTrip, temperatureUnit]);
+
+  const nextPlannerMilestoneLabel = useMemo(() => {
+    if (!activeTrip) return null;
+    const rows = buildPlannerKeyDateRowsSorted(activeTrip);
+    const today = formatDateKey(new Date());
+    const upcoming = rows.find((r) => r.dateKey >= today);
+    return upcoming?.label ?? null;
+  }, [activeTrip]);
+
+  const heroMetadataLine = useMemo(() => {
+    if (!activeTrip) return null;
+    const startDiff = daysUntilTripStart(activeTrip.start_date);
+    const departs = tripStartValueLabel(startDiff);
+    const range = formatTripHeroDateRange(activeTrip.start_date, activeTrip.end_date);
+    const dest = activeRegionLabel;
+    const party = plannerPartyLabel(activeTrip);
+    const next = nextPlannerMilestoneLabel
+      ? `Next: ${nextPlannerMilestoneLabel}`
+      : "Next: —";
+    return `Departs ${departs} · ${next} · ${range} · ${dest} · ${party}`;
+  }, [activeTrip, activeRegionLabel, nextPlannerMilestoneLabel]);
+
+  const plannerTimelineWeatherCrowd = useMemo(() => {
+    if (!activeTrip || !plannerTimelineDateKey) {
+      return { weather: null as string | null, crowd: null as CrowdLevel | null };
+    }
+    const day = parseDate(plannerTimelineDateKey);
+    const dc = dayConditionRow(
+      resolvePaletteRegionId(activeTrip),
+      day,
+      temperatureUnit,
+    );
+    const weather = dc
+      ? `${dc.conditions.weatherEmoji} ${dc.tempLabel}`
+      : null;
+    const note = dayCrowdNoteForDate(activeTrip, plannerTimelineDateKey);
+    const noteTone = heuristicCrowdToneFromNoteText(note);
+    const crowd =
+      note != null && note.trim() !== "" && noteTone != null
+        ? crowdLevelFromHeuristicTone(noteTone)
+        : (dc?.crowd ?? null);
+    return { weather, crowd };
+  }, [activeTrip, plannerTimelineDateKey, temperatureUnit]);
+
+  const smartPlanDayKey =
+    dayDetailOpen && dayCanonicalForDetail
+      ? dayCanonicalForDetail
+      : plannerTab === "planner" && plannerTimelineDateKey
+        ? plannerTimelineDateKey
+        : null;
+
+  const plannerDayUndoAvailable = useMemo(() => {
+    if (!activeTripId || !plannerTimelineDateKey) return false;
+    const trip = trips.find((t) => t.id === activeTripId);
+    if (!trip?.day_snapshots?.length) return false;
+    return trip.day_snapshots.some((s) => s.date === plannerTimelineDateKey);
+  }, [activeTripId, plannerTimelineDateKey, trips]);
+
+  const shiftPlannerTimelineDay = useCallback(
+    (delta: number) => {
+      if (!activeTrip || !plannerTimelineDateKey) return;
+      const keys = eachDateKeyInRange(
+        activeTrip.start_date,
+        activeTrip.end_date,
+      );
+      const idx = keys.indexOf(plannerTimelineDateKey);
+      if (idx < 0) return;
+      const next = keys[idx + delta];
+      if (!next) return;
+      setPlannerTimelineDateKey(next);
+    },
+    [activeTrip, plannerTimelineDateKey],
+  );
+
+  const handleShareTimelineDay = useCallback(() => {
+    if (!activeTrip || !plannerTimelineDateKey || !tripRouteBase) return;
+    const base = siteUrl.replace(/\/$/, "");
+    const url = `${base}${tripRouteBase}/day/${plannerTimelineDateKey}`;
+    void copyTextToClipboard(url);
+    showToast("Day link copied");
+  }, [activeTrip, plannerTimelineDateKey, tripRouteBase, siteUrl]);
+
   const savingVisible = isSaving || isPending;
   const showPlannerShell = plannerTab === "planner";
 
@@ -2524,6 +2664,7 @@ export function PlannerClient({
       </div>
 
       {activeTrip ? (
+        <>
         <main
           ref={mainScrollRef}
           className="mx-auto w-full max-w-screen-2xl px-3 py-3 sm:px-5 sm:py-5 lg:px-6"
@@ -2540,6 +2681,26 @@ export function PlannerClient({
             <div className="relative flex flex-col gap-4">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
                 <div className="min-w-0 flex-1 space-y-3">
+                  <p className="font-meta text-[10px] font-semibold uppercase tracking-[0.14em] text-tt-gold/95">
+                    Current trip
+                    {lastSavedAt ? (
+                      <>
+                        {" "}
+                        <span className="font-normal tracking-normal text-tt-line/55">
+                          ·
+                        </span>{" "}
+                        Auto-saved {formatSavedBrief(lastSavedAt)}
+                      </>
+                    ) : (
+                      <>
+                        {" "}
+                        <span className="font-normal tracking-normal text-tt-line/55">
+                          ·
+                        </span>{" "}
+                        Auto-save while you edit
+                      </>
+                    )}
+                  </p>
                   <div className="flex flex-wrap items-start gap-2">
                     <span
                       className="mt-2 inline-flex shrink-0 items-center gap-2"
@@ -2630,15 +2791,7 @@ export function PlannerClient({
                     </h1>
                   </div>
                   <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-tt-ink-muted">
-                    <span>{formatTripHeroDateRange(activeTrip.start_date, activeTrip.end_date)}</span>
-                    <span className="text-tt-line/80" aria-hidden>
-                      ·
-                    </span>
-                    <span>{plannerPartyLabel(activeTrip)}</span>
-                    <span className="text-tt-line/80" aria-hidden>
-                      ·
-                    </span>
-                    <span>{activeRegionLabel}</span>
+                    {heroMetadataLine}
                   </p>
                   <PlannerHeroStats trip={activeTrip} parks={calendarParks} />
                 </div>
@@ -3028,6 +3181,7 @@ export function PlannerClient({
           (activeTrip.preferences.ai_crowd_summary as string).trim() ? (
             <CrowdStrategyBanner
               text={(activeTrip.preferences.ai_crowd_summary as string).trim()}
+              seasonPill={crowdSeasonPill ?? undefined}
             />
           ) : null}
 
@@ -3112,6 +3266,44 @@ export function PlannerClient({
                           />
                         </div>
                       </div>
+                    ) : null}
+                    {!dayDetailOpen && activeTrip ? (
+                      <>
+                        <PlannerDayTimelineStub
+                          trip={activeTrip}
+                          dateKey={plannerTimelineDateKey}
+                          parks={calendarParks}
+                          plannerRegionId={resolvePaletteRegionId(activeTrip)}
+                          temperatureUnit={temperatureUnit}
+                          weatherChip={plannerTimelineWeatherCrowd.weather}
+                          crowdLevel={plannerTimelineWeatherCrowd.crowd}
+                          undoAiAvailable={plannerDayUndoAvailable}
+                          onClearSelection={() =>
+                            setPlannerTimelineDateKey(null)
+                          }
+                          onPrevDay={() => shiftPlannerTimelineDay(-1)}
+                          onNextDay={() => shiftPlannerTimelineDay(1)}
+                          onPlanThisDay={() => setSmartOpen(true)}
+                          onUndoAi={() => {
+                            if (plannerTimelineDateKey) {
+                              handleUndoDayTweak(plannerTimelineDateKey);
+                            }
+                          }}
+                          onShareDay={
+                            tripRouteBase ? handleShareTimelineDay : undefined
+                          }
+                          onEditDay={() => {
+                            if (plannerTimelineDateKey) {
+                              openDayPlanner(plannerTimelineDateKey);
+                            }
+                          }}
+                        />
+                        <PlannerPlanningDeck
+                          trip={activeTrip}
+                          payments={paymentsByTripId[activeTrip.id] ?? []}
+                          onPaymentsChange={handlePaymentsChange}
+                        />
+                      </>
                     ) : null}
                     <div className="relative min-w-0">
                       {dayDetailOpen &&
@@ -3246,6 +3438,8 @@ export function PlannerClient({
                               rideCountsByDay={rideCountsByDayForActiveTrip}
                               dayConflictDots={calendarConflictDotsForCalendar}
                               highlightDateKey={goToTodayRingDateKey}
+                              timelineSelectedDateKey={plannerTimelineDateKey}
+                              onTimelineDaySelect={setPlannerTimelineDateKey}
                               onRideDayPrioritiesUpdated={
                                 handleRideDayPrioritiesUpdated
                               }
@@ -3271,17 +3465,42 @@ export function PlannerClient({
             </div>
           )}
         </main>
+        {showPlannerShell && !compareMode ? (
+          <footer className="mx-auto mt-10 w-full max-w-screen-2xl border-t border-tt-line-soft px-3 py-6 text-center font-meta text-[11px] leading-relaxed text-tt-ink-muted sm:px-5 lg:px-6">
+            <p className="text-balance">
+              <span className="text-tt-ink-soft">Plan together, stress less.</span>
+              {" "}
+              <span className="text-tt-line/45" aria-hidden>
+                ·
+              </span>
+              {" "}
+              Planner v{APP_PLANNER_VERSION}
+              {lastSavedAt ? (
+                <>
+                  {" "}
+                  <span className="text-tt-line/45" aria-hidden>
+                    ·
+                  </span>
+                  {" "}
+                  Saved {formatSavedBrief(lastSavedAt)}
+                </>
+              ) : null}
+            </p>
+          </footer>
+        ) : null}
+        </>
       ) : (
         <main className="mx-auto w-full max-w-2xl px-4 py-12 text-center sm:px-6 sm:py-16">
           <div className="mx-auto flex max-w-md flex-col items-center">
-            <TrippMascotImg
-              width={80}
-              height={80}
-              className="h-20 w-20 object-contain"
-            />
-            <TrippSpeechBubble maxWidthClass="max-w-md">
-              Ready when you are — no pressure, just possibilities. 🗺️
-            </TrippSpeechBubble>
+            <div
+              className="mb-4 flex h-24 w-24 items-center justify-center rounded-2xl border border-tt-gold/35 bg-gradient-to-b from-tt-gold-soft/45 to-white text-5xl shadow-tt-sm"
+              aria-hidden
+            >
+              🗺️
+            </div>
+            <p className="max-w-md font-sans text-sm leading-relaxed text-royal/80">
+              Ready when you are — no pressure, just possibilities.
+            </p>
           </div>
           <h2 className="mt-8 font-serif text-2xl font-semibold tracking-tight text-royal sm:text-3xl">
             Your planner is ready
@@ -3459,11 +3678,10 @@ export function PlannerClient({
         showFreeTierNote={isFreeTierForTripLimit(productTier)}
         isGenerating={isAiGenerating}
         submitError={smartError}
-        scope={dayDetailOpen && dayCanonicalForDetail ? "day" : "trip"}
-        dayDateKey={dayDetailOpen ? dayCanonicalForDetail : null}
+        scope={smartPlanDayKey ? "day" : "trip"}
+        dayDateKey={smartPlanDayKey}
         dayHasAiTimeline={Boolean(
-          dayDetailOpen &&
-            dayCanonicalForDetail &&
+          smartPlanDayKey &&
             activeTrip &&
             (() => {
               const m = activeTrip.preferences?.ai_day_timeline;
@@ -3471,13 +3689,13 @@ export function PlannerClient({
                 return false;
               }
               return Boolean(
-                (m as Record<string, unknown>)[dayCanonicalForDetail!],
+                (m as Record<string, unknown>)[smartPlanDayKey],
               );
             })(),
         )}
         ridePrioritiesForDay={
-          dayDetailOpen && dayCanonicalForDetail
-            ? (ridePrioritiesByDayForActiveTrip[dayCanonicalForDetail] ?? [])
+          smartPlanDayKey
+            ? (ridePrioritiesByDayForActiveTrip[smartPlanDayKey] ?? [])
             : []
         }
         canRetryPartial={smartCanRetryPartial}

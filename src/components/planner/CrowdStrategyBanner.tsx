@@ -9,9 +9,11 @@ const PREVIEW_LEN = 80;
 
 type Props = {
   text: string;
+  /** Left pill e.g. "JUL · PEAK" derived from trip month + crowd tiers. */
+  seasonPill?: string | null;
 };
 
-export function CrowdStrategyBanner({ text }: Props) {
+export function CrowdStrategyBanner({ text, seasonPill }: Props) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const cleaned = sanitizeDayNote(text.trim());
@@ -30,6 +32,11 @@ export function CrowdStrategyBanner({ text }: Props) {
         >
           📈 Crowd strategy
         </span>
+        {seasonPill ? (
+          <span className="shrink-0 rounded-full bg-gold-soft/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-royal-deep">
+            {seasonPill}
+          </span>
+        ) : null}
         {isLong ? (
           <>
             <span className="min-w-0 flex-1 text-royal/85">

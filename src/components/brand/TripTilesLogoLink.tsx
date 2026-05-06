@@ -17,7 +17,6 @@ type Props = {
 
 /**
  * Full TripTiles wordmark for headers and footers (`/images/triptiles-logo.png`).
- * The Tripp mascot (`/images/tripp-mascot.png`) is for Tripp, chat, and spinners only.
  */
 export function TripTilesLogoLink({
   href,

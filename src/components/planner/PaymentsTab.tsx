@@ -24,6 +24,8 @@ type Props = {
   payments: TripPayment[];
   onPaymentsChange: (tripId: string, next: TripPayment[]) => void;
   embedded?: boolean;
+  /** When false, hides the payments title row (use an outer SectionHeader). */
+  showTitleRow?: boolean;
 };
 
 function sortPayments(items: TripPayment[]): TripPayment[] {
@@ -82,6 +84,7 @@ export function PaymentsTab({
   payments,
   onPaymentsChange,
   embedded = false,
+  showTitleRow = true,
 }: Props) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -269,6 +272,7 @@ export function PaymentsTab({
     <section
       className={`space-y-6 font-sans text-tt-ink ${embedded ? "" : "mx-auto max-w-3xl pb-24"}`}
     >
+      {showTitleRow ? (
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SectionHeader
           title="Payments"
@@ -291,6 +295,20 @@ export function PaymentsTab({
           ) : null}
         </div>
       </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <PdfExportButton
+            tripId={trip.id}
+            buttonLabel="PDF"
+            defaultModeOnOpen="payments_schedule"
+          />
+          {!formActive ? (
+            <Button type="button" onClick={startAdd}>
+              Add payment
+            </Button>
+          ) : null}
+        </div>
+      )}
 
       {formActive ? (
         <Card variant="default" className="p-4">

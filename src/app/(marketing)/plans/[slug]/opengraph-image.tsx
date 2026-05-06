@@ -1,11 +1,10 @@
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { getPublicAdventureTitleFromRow } from "@/lib/public-trip-display";
-import { getTrippMascotDataUrl } from "@/lib/og/tripp-mascot-data-url";
 import { ImageResponse } from "next/og";
 
 export const runtime = "nodejs";
 
-/** Royal blue OG canvas with transparent Tripp mascot. */
+/** OG canvas — brand palette only (no mascot assets). */
 export const alt = "TripTiles plan";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -16,7 +15,6 @@ export default async function Image({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const tripp = getTrippMascotDataUrl();
   const trimmed = slug.trim();
   if (!trimmed) {
     return new ImageResponse(
@@ -33,8 +31,9 @@ export default async function Image({
           color: "#fce7cc",
         }}
       >
-        <img src={tripp} width={160} height={160} alt="" style={{ objectFit: "contain" }} />
-        <div style={{ fontSize: 48, fontWeight: 600 }}>TripTiles</div>
+        <div style={{ fontSize: 72, fontWeight: 700, fontFamily: "Georgia, serif" }}>
+          TripTiles
+        </div>
       </div>,
       size,
     );
@@ -133,13 +132,7 @@ export default async function Image({
           >
             TripTiles
           </span>
-          <img
-            src={tripp}
-            width={120}
-            height={120}
-            alt=""
-            style={{ objectFit: "contain" }}
-          />
+          <span style={{ fontSize: 48 }}>✦</span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <span style={{ fontSize: 56 }}>🎢</span>
