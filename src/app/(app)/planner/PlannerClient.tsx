@@ -1652,8 +1652,34 @@ export function PlannerClient({
             preferences: { ...prevPrefs, ai_day_timeline: dayMap },
             assignments: dayRes.assignments,
           });
+
+          let dayPlanToast =
+            "✨ Day plan ready! Slot times updated to match the plan.";
+          try {
+            const stratRes = await generateDayStrategy({
+              tripId: activeTripId,
+              date: payload.dateKey,
+            });
+            if (stratRes.status === "success") {
+              applyStrategyPatchForDate(payload.dateKey, stratRes.strategy);
+              dayPlanToast =
+                "✨ Day plan ready! Slot times and ride-by-ride strategy updated.";
+              trackEvent("day_strategy_chain_success", {
+                dateKey: payload.dateKey,
+              });
+            } else if (
+              stratRes.status === "missing_data" ||
+              stratRes.status === "no_park_assigned"
+            ) {
+              dayPlanToast +=
+                " Use Plan this day to finish the short questionnaire, then Build day strategy.";
+            }
+          } catch {
+            /* timeline already saved */
+          }
+
           spinnerClearReason = "done";
-          showToast("✨ Day plan ready! Slot times updated to match the plan.");
+          showToast(dayPlanToast);
           trackEvent("day_timeline_success", { dateKey: payload.dateKey });
           setSmartOpen(false);
           startTransition(() => router.refresh());
@@ -1812,6 +1838,7 @@ export function PlannerClient({
     [
       activeTripId,
       applyLocalPatch,
+      applyStrategyPatchForDate,
       enqueueAchievementKeys,
       router,
       trips,

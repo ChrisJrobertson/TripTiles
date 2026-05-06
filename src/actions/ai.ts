@@ -4539,8 +4539,8 @@ export async function generateDayStrategy(input: {
   const ent = await currentUserCanGenerateDayStrategy(input.tripId);
   if (ent === "tier_blocked") return { status: "tier_blocked" };
 
-  const trip = await getTripById(input.tripId);
-  if (!trip || trip.owner_id !== user.id) {
+  const trip = await fetchOwnedTripForAi(input.tripId, user.id);
+  if (!trip) {
     return { status: "error", error: "Trip not found." };
   }
 
