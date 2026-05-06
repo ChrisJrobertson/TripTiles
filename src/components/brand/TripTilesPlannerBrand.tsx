@@ -1,7 +1,11 @@
 import Link from "next/link";
 
+/** Rainbow ring + white centre + navy serif “T”, matching TripTiles nav reference art. */
+const LOGO_TILE_CONIC =
+  "conic-gradient(from 140deg at 50% 50%, #43c067 0deg, #2f93de 70deg, #7c61ff 155deg, #e255a8 235deg, #ff9540 300deg, #f2d049 338deg, #43c067 360deg)";
+
 /**
- * Planner / app shell lockup — wordmark stack with a compact “T” tile (matches redesign nav).
+ * Planner / app shell lockup — white squircle tile, gradient border ring, serif wordmark (reference asset 2).
  */
 export function TripTilesPlannerBrand({
   href,
@@ -16,16 +20,21 @@ export function TripTilesPlannerBrand({
       className={`group inline-flex shrink-0 items-center gap-3 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-gold/45 focus-visible:ring-offset-2 focus-visible:ring-offset-white ${className}`.trim()}
     >
       <span
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/35 bg-gradient-to-br from-[#7c69f8] via-[#5b4cdb] to-[#3d2ea8] font-heading text-sm font-bold text-white shadow-sm sm:h-10 sm:w-10"
+        className="shrink-0 rounded-2xl p-[2.5px] shadow-[0_1px_3px_rgba(21,32,58,0.12)] sm:rounded-[14px] sm:p-[3px]"
+        style={{ background: LOGO_TILE_CONIC }}
         aria-hidden
       >
-        T
+        <span className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-white sm:h-10 sm:w-10 sm:rounded-[13px]">
+          <span className="font-heading text-[1.125rem] font-bold leading-none text-tt-royal-deep sm:text-[1.3125rem]">
+            T
+          </span>
+        </span>
       </span>
       <span className="min-w-0 leading-tight">
-        <span className="block font-heading text-base font-semibold tracking-tight text-tt-royal transition group-hover:text-tt-royal-deep sm:text-lg">
+        <span className="block font-heading text-base font-semibold tracking-tight text-tt-royal-deep transition group-hover:text-tt-royal sm:text-lg">
           TripTiles
         </span>
-        <span className="block font-meta text-[9px] font-semibold uppercase tracking-[0.22em] text-tt-ink-soft sm:text-[10px] sm:tracking-[0.26em]">
+        <span className="block font-sans text-[9px] font-semibold uppercase tracking-[0.32em] text-tt-ink-soft sm:text-[10px] sm:tracking-[0.34em]">
           Adventure planning
         </span>
       </span>
