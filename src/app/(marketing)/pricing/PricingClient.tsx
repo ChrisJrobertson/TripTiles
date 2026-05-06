@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
+import { ModalShell } from "@/components/ui/ModalShell";
 import { showToast } from "@/lib/toast";
 import type { ProductTier } from "@/lib/product-tier-labels";
 import { formatProductTierName } from "@/lib/product-tier-labels";
@@ -198,48 +200,42 @@ export function PricingClient({
   return (
     <div className="w-full">
       {successOpen ? (
-        <div
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-royal/50 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="max-w-md rounded-2xl border border-royal/15 bg-cream p-8 text-center shadow-xl">
-            <p className="font-serif text-2xl font-semibold text-royal">
-              Welcome aboard
+        <ModalShell maxWidthClass="max-w-md" panelClassName="p-8 text-center">
+          <p className="font-heading text-2xl font-semibold text-tt-royal">
+            Welcome aboard
+          </p>
+          <p className="mt-3 font-sans text-sm text-tt-royal/80">
+            We&apos;re confirming your subscription with Smart Plan access…
+          </p>
+          {fallbackBanner ? (
+            <p className="mt-4 font-sans text-xs text-tt-royal/70">
+              This is taking longer than usual. Refresh the page in a moment, use
+              the same email as TripTiles, or{" "}
+              <Link href="/feedback" className="font-semibold text-tt-gold underline">
+                contact us
+              </Link>
+              .
             </p>
-            <p className="mt-3 font-sans text-sm text-royal/80">
-              We&apos;re confirming your subscription with Smart Plan access…
-            </p>
-            {fallbackBanner ? (
-              <p className="mt-4 font-sans text-xs text-royal/70">
-                This is taking longer than usual. Refresh the page in a moment, use
-                the same email as TripTiles, or{" "}
-                <Link href="/feedback" className="text-gold underline">
-                  contact us
-                </Link>
-                .
-              </p>
-            ) : null}
-            <button
-              type="button"
-              className="mt-6 min-h-[44px] rounded-lg border border-royal/20 px-4 py-2 font-sans text-sm text-royal/80"
-              onClick={() => setSuccessOpen(false)}
-            >
-              Close
-            </button>
-          </div>
-        </div>
+          ) : null}
+          <Button
+            variant="secondary"
+            className="mt-6"
+            onClick={() => setSuccessOpen(false)}
+          >
+            Close
+          </Button>
+        </ModalShell>
       ) : null}
 
       <div className="mb-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:flex-wrap">
-        <span className="font-sans text-sm font-medium text-royal/70">Billing</span>
-        <div className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-royal/15 bg-white p-1">
+        <span className="font-sans text-sm font-medium text-tt-royal/70">Billing</span>
+        <div className="inline-flex flex-wrap items-center justify-center gap-2 rounded-full border border-tt-line/15 bg-tt-surface p-1 shadow-tt-sm">
           <button
             type="button"
             className={`min-h-[44px] rounded-full px-4 py-2 font-sans text-sm font-semibold ${
               billing === "monthly"
-                ? "bg-royal text-cream"
-                : "text-royal/70 hover:bg-cream"
+                ? "bg-tt-royal text-white"
+                : "text-tt-royal/70 hover:bg-tt-surface-warm"
             }`}
             onClick={() => setBilling("monthly")}
           >
@@ -249,8 +245,8 @@ export function PricingClient({
             type="button"
             className={`min-h-[44px] rounded-full px-4 py-2 font-sans text-sm font-semibold ${
               billing === "yearly"
-                ? "bg-royal text-cream"
-                : "text-royal/70 hover:bg-cream"
+                ? "bg-tt-royal text-white"
+                : "text-tt-royal/70 hover:bg-tt-surface-warm"
             }`}
             onClick={() => setBilling("yearly")}
           >
@@ -258,20 +254,20 @@ export function PricingClient({
           </button>
         </div>
         {billing === "yearly" ? (
-          <span className="rounded-full bg-gold/25 px-3 py-1 font-sans text-xs font-semibold text-royal">
+          <span className="rounded-full bg-tt-gold/25 px-3 py-1 font-sans text-xs font-semibold text-tt-royal">
             Save £{TIERS.family.annualSavingsVsMonthlyGbp.toFixed(2)}/year
           </span>
         ) : null}
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
-        <article className="flex flex-col rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
-          <h2 className="font-serif text-xl font-semibold text-royal">Free</h2>
-          <p className="mt-4 font-serif text-3xl font-semibold text-royal">
-            £0 <span className="text-lg font-medium text-royal/70">forever</span>
+        <article className="flex flex-col rounded-tt-lg border border-tt-line/10 bg-tt-surface p-6 shadow-tt-sm">
+          <h2 className="font-heading text-xl font-semibold text-tt-royal">Free</h2>
+          <p className="mt-4 font-heading text-3xl font-semibold text-tt-royal">
+            £0 <span className="text-lg font-medium text-tt-royal/70">forever</span>
           </p>
-          <p className="mt-1 font-sans text-xs text-royal/60">Cancel anytime — no card required</p>
-          <ul className="mt-4 flex-1 list-inside list-disc space-y-1.5 font-sans text-sm text-royal/80">
+          <p className="mt-1 font-sans text-xs text-tt-royal/60">Cancel anytime — no card required</p>
+          <ul className="mt-4 flex-1 list-inside list-disc space-y-1.5 font-sans text-sm text-tt-royal/80">
             <li>1 active trip</li>
             <li>5 AI Smart Plan runs per account</li>
             <li>5 custom tiles total</li>
@@ -279,13 +275,13 @@ export function PricingClient({
           </ul>
           <div className="mt-6 flex flex-1 flex-col justify-end">
             {current === "free" && me ? (
-              <span className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-royal/15 bg-cream px-4 py-2 text-center font-sans text-sm font-semibold text-royal/60">
+              <span className="inline-flex min-h-[44px] items-center justify-center rounded-tt-md border border-tt-line/15 bg-tt-surface-warm px-4 py-2 text-center font-sans text-sm font-semibold text-tt-royal/60">
                 Your current plan
               </span>
             ) : (
               <Link
                 href="/signup"
-                className="inline-flex min-h-[44px] items-center justify-center rounded-lg border border-royal/20 bg-white px-4 py-2 text-center font-sans text-sm font-semibold text-royal hover:bg-cream"
+                className="inline-flex min-h-[44px] items-center justify-center rounded-tt-md border border-tt-line/20 bg-tt-surface px-4 py-2 text-center font-sans text-sm font-semibold text-tt-royal hover:bg-tt-surface-warm"
               >
                 Get started free
               </Link>
@@ -293,22 +289,22 @@ export function PricingClient({
           </div>
         </article>
 
-        <article className="flex flex-col rounded-2xl border border-gold/50 bg-white p-6 shadow-md ring-2 ring-gold/20">
-          <p className="font-sans text-[11px] font-bold uppercase tracking-wide text-royal">
-            <span className="rounded-full bg-royal px-2 py-0.5 text-cream">
+        <article className="flex flex-col rounded-tt-lg border border-tt-gold/50 bg-tt-surface p-6 shadow-tt-md ring-2 ring-tt-gold/20">
+          <p className="font-sans text-[11px] font-bold uppercase tracking-wide text-tt-royal">
+            <span className="rounded-full bg-tt-royal px-2 py-0.5 text-white">
               Most popular
             </span>
           </p>
-          <h2 className="mt-2 font-serif text-xl font-semibold text-royal">Pro</h2>
-          <p className="mt-4 font-serif text-3xl font-semibold text-royal">
+          <h2 className="mt-2 font-heading text-xl font-semibold text-tt-royal">Pro</h2>
+          <p className="mt-4 font-heading text-3xl font-semibold text-tt-royal">
             {proPrice.main}
           </p>
-          <p className="mt-1 font-sans text-xs text-royal/65">{proPrice.sub}</p>
+          <p className="mt-1 font-sans text-xs text-tt-royal/65">{proPrice.sub}</p>
           {proPrice.save ? (
-            <p className="mt-1 font-sans text-xs font-semibold text-gold">{proPrice.save}</p>
+            <p className="mt-1 font-sans text-xs font-semibold text-tt-gold">{proPrice.save}</p>
           ) : null}
-          <p className="mt-2 font-sans text-xs text-royal/55">Cancel anytime</p>
-          <ul className="mt-3 flex-1 list-inside list-disc space-y-1.5 font-sans text-sm text-royal/80">
+          <p className="mt-2 font-sans text-xs text-tt-royal/55">Cancel anytime</p>
+          <ul className="mt-3 flex-1 list-inside list-disc space-y-1.5 font-sans text-sm text-tt-royal/80">
             <li>Unlimited trips</li>
             <li>Unlimited AI Smart Plan</li>
             <li>Unlimited custom tiles</li>
@@ -318,7 +314,7 @@ export function PricingClient({
             type="button"
             disabled={Boolean(busy) || current === "pro"}
             onClick={() => void startCheckout("pro")}
-            className="mt-6 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-royal px-4 py-2.5 font-sans text-sm font-semibold text-cream shadow-sm transition hover:bg-royal/90 disabled:opacity-50"
+            className="mt-6 inline-flex min-h-[44px] w-full items-center justify-center rounded-tt-md bg-tt-royal px-4 py-2.5 font-sans text-sm font-semibold text-white shadow-tt-sm transition hover:bg-tt-royal/90 disabled:opacity-50"
           >
             {current === "pro"
               ? "Your current plan"
@@ -328,24 +324,24 @@ export function PricingClient({
           </button>
         </article>
 
-        <article className="flex flex-col rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
-          <p className="font-sans text-[11px] font-bold uppercase tracking-wide text-gold">
-            <span className="rounded-full bg-gold/25 px-2 py-0.5 text-royal">
+        <article className="flex flex-col rounded-tt-lg border border-tt-line/10 bg-tt-surface p-6 shadow-tt-sm">
+          <p className="font-sans text-[11px] font-bold uppercase tracking-wide text-tt-gold">
+            <span className="rounded-full bg-tt-gold/25 px-2 py-0.5 text-tt-royal">
               Best for families
             </span>
           </p>
-          <h2 className="mt-2 font-serif text-xl font-semibold text-royal">
+          <h2 className="mt-2 font-heading text-xl font-semibold text-tt-royal">
             Family
           </h2>
-          <p className="mt-4 font-serif text-3xl font-semibold text-royal">
+          <p className="mt-4 font-heading text-3xl font-semibold text-tt-royal">
             {familyPrice.main}
           </p>
-          <p className="mt-1 font-sans text-xs text-royal/65">{familyPrice.sub}</p>
+          <p className="mt-1 font-sans text-xs text-tt-royal/65">{familyPrice.sub}</p>
           {familyPrice.save ? (
-            <p className="mt-1 font-sans text-xs font-semibold text-gold">{familyPrice.save}</p>
+            <p className="mt-1 font-sans text-xs font-semibold text-tt-gold">{familyPrice.save}</p>
           ) : null}
-          <p className="mt-2 font-sans text-xs text-royal/55">Cancel anytime</p>
-          <ul className="mt-3 flex-1 list-inside list-disc space-y-1.5 font-sans text-sm text-royal/80">
+          <p className="mt-2 font-sans text-xs text-tt-royal/55">Cancel anytime</p>
+          <ul className="mt-3 flex-1 list-inside list-disc space-y-1.5 font-sans text-sm text-tt-royal/80">
             <li>Everything in Pro</li>
             <li>Shared planning for up to 4 family members</li>
           </ul>
@@ -353,7 +349,7 @@ export function PricingClient({
             type="button"
             disabled={Boolean(busy) || current === "family"}
             onClick={() => void startCheckout("family")}
-            className="mt-6 inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-gold px-4 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition hover:bg-gold/90 disabled:opacity-50"
+            className="mt-6 inline-flex min-h-[44px] w-full items-center justify-center rounded-tt-md bg-tt-gold px-4 py-2.5 font-sans text-sm font-semibold text-white shadow-tt-sm transition hover:bg-tt-gold/90 disabled:opacity-50"
           >
             {current === "family"
               ? "Your current plan"
@@ -364,48 +360,48 @@ export function PricingClient({
         </article>
       </div>
 
-      <p className="mt-8 rounded-2xl border border-gold/35 bg-gold/10 px-4 py-3 text-center font-sans text-sm font-semibold text-royal">
-        Use code <code className="rounded bg-white/70 px-1">LAUNCH20</code> at
+      <p className="mt-8 rounded-tt-lg border border-tt-gold/35 bg-tt-gold/10 px-4 py-3 text-center font-sans text-sm font-semibold text-tt-royal">
+        Use code <code className="rounded-tt-md bg-tt-surface/90 px-1">LAUNCH20</code> at
         checkout for 20% off your first month — first 100 customers.
       </p>
 
-      <div className="mt-12 overflow-x-auto rounded-xl border border-royal/10 bg-white/90">
-        <table className="w-full min-w-[520px] border-collapse font-sans text-sm text-royal">
+      <div className="mt-12 overflow-x-auto rounded-tt-md border border-tt-line/10 bg-tt-surface/95 shadow-tt-sm">
+        <table className="w-full min-w-[520px] border-collapse font-sans text-sm text-tt-royal">
           <caption className="sr-only">Plan comparison</caption>
           <thead>
-            <tr className="border-b border-royal/10 bg-cream/80 text-left">
+            <tr className="border-b border-tt-line/10 bg-tt-surface-warm/80 text-left">
               <th className="px-4 py-3 font-semibold">Feature</th>
               <th className="px-4 py-3 font-semibold">Free</th>
               <th className="px-4 py-3 font-semibold">Pro</th>
               <th className="px-4 py-3 font-semibold">Family</th>
             </tr>
           </thead>
-          <tbody className="text-royal/85">
-            <tr className="border-b border-royal/10">
+          <tbody className="text-tt-royal/85">
+            <tr className="border-b border-tt-line/10">
               <td className="px-4 py-2">Active trips</td>
               <td className="px-4 py-2">1</td>
               <td className="px-4 py-2">Unlimited</td>
               <td className="px-4 py-2">Unlimited</td>
             </tr>
-            <tr className="border-b border-royal/10">
+            <tr className="border-b border-tt-line/10">
               <td className="px-4 py-2">Smart Plan (AI)</td>
               <td className="px-4 py-2">5 total on Free</td>
               <td className="px-4 py-2">Unlimited</td>
               <td className="px-4 py-2">Unlimited</td>
             </tr>
-            <tr className="border-b border-royal/10">
+            <tr className="border-b border-tt-line/10">
               <td className="px-4 py-2">Custom tiles</td>
               <td className="px-4 py-2">5 total</td>
               <td className="px-4 py-2">Unlimited</td>
               <td className="px-4 py-2">Unlimited</td>
             </tr>
-            <tr className="border-b border-royal/10">
+            <tr className="border-b border-tt-line/10">
               <td className="px-4 py-2">AI Day Planner</td>
               <td className="px-4 py-2">—</td>
               <td className="px-4 py-2">Included</td>
               <td className="px-4 py-2">Included</td>
             </tr>
-            <tr className="border-b border-royal/10">
+            <tr className="border-b border-tt-line/10">
               <td className="px-4 py-2">PDF export</td>
               <td className="px-4 py-2">Watermarked</td>
               <td className="px-4 py-2">Clean</td>
@@ -427,7 +423,7 @@ export function PricingClient({
             type="button"
             disabled={busy === "portal"}
             onClick={() => void openPortal()}
-            className="min-h-[44px] rounded-lg border border-royal/20 px-4 py-2 font-sans text-sm font-semibold text-royal hover:bg-cream disabled:opacity-50"
+            className="min-h-[44px] rounded-tt-md border border-tt-line/20 px-4 py-2 font-sans text-sm font-semibold text-tt-royal hover:bg-tt-surface-warm disabled:opacity-50"
           >
             {busy === "portal" ? "Opening…" : "Manage subscription"}
           </button>

@@ -6,6 +6,9 @@ import {
   exportUserDataAction,
   updateDisplayNameAction,
 } from "@/actions/account";
+import { Card } from "@/components/ui/Card";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { Button } from "@/components/ui/Button";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useCallback, useState, useTransition } from "react";
@@ -127,13 +130,13 @@ export function SettingsAccountPanel({
 
   return (
     <div className="space-y-8">
-      <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
-        <h2 className="font-serif text-xl font-semibold text-royal">Profile</h2>
+      <Card className="p-6">
+        <SectionHeader compact title="Profile" />
         <div className="mt-4 space-y-4 font-sans text-sm">
-          <label className="block text-royal">
+          <label className="block text-tt-royal">
             Display name
             <input
-              className="mt-1 w-full rounded-lg border-2 border-royal/20 px-3 py-2"
+              className="mt-1 w-full rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 shadow-tt-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tt-royal"
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
@@ -141,58 +144,57 @@ export function SettingsAccountPanel({
               }}
             />
           </label>
-          <p className="text-royal/70">
-            <span className="font-medium text-royal">Email</span>{" "}
+          <p className="text-tt-royal/70">
+            <span className="font-medium text-tt-royal">Email</span>{" "}
             <span className="select-all">{email}</span> (read-only)
           </p>
           {created ? (
-            <p className="text-royal/70">
-              <span className="font-medium text-royal">Member since</span>{" "}
+            <p className="text-tt-royal/70">
+              <span className="font-medium text-tt-royal">Member since</span>{" "}
               {created}
             </p>
           ) : null}
-          <p className="flex flex-wrap items-center gap-2 text-royal/70">
+          <p className="flex flex-wrap items-center gap-2 text-tt-royal/70">
             <span className="text-2xl" aria-hidden>
               {tierBadge}
             </span>
-            <span className="font-medium text-royal">Plan:</span> {tierLabel}
+            <span className="font-medium text-tt-royal">Plan:</span> {tierLabel}
           </p>
           {dirty ? (
-            <button
+            <Button
               type="button"
               disabled={pending}
+              variant="accent"
               onClick={() => void saveName()}
-              className="rounded-lg bg-gold px-4 py-2 font-semibold text-royal disabled:opacity-50"
             >
               Save changes
-            </button>
+            </Button>
           ) : null}
-          {msg ? <p className="text-sm text-royal/80">{msg}</p> : null}
+          {msg ? <p className="text-sm text-tt-royal/80">{msg}</p> : null}
         </div>
-      </section>
+      </Card>
 
-      <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
-        <h2 className="font-serif text-xl font-semibold text-royal">Your data</h2>
-        <p className="mt-2 font-sans text-sm text-royal/75">
+      <Card className="p-6">
+        <SectionHeader compact title="Your data" />
+        <p className="mt-2 font-sans text-sm text-tt-royal/75">
           Download a portable JSON copy of your trips and account metadata (GDPR
           data portability).
         </p>
-        <button
+        <Button
           type="button"
           disabled={exporting}
+          variant="secondary"
+          className="mt-4"
           onClick={() => void downloadExport()}
-          className="mt-4 rounded-lg border-2 border-royal/25 bg-white px-4 py-2 font-sans text-sm font-semibold text-royal hover:bg-cream disabled:opacity-50"
         >
           {exporting ? "Preparing…" : "Download all your data (JSON)"}
-        </button>
-      </section>
+        </Button>
+      </Card>
 
       {hasPasswordAuth ? (
-        <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
-          <h2 className="font-serif text-xl font-semibold text-royal">
-            Security
-          </h2>
-          <p className="mt-2 font-sans text-sm text-royal/70">
+        <Card className="p-6">
+          <SectionHeader compact title="Security" />
+          <p className="mt-2 font-sans text-sm text-tt-royal/70">
             Change the password you use with email sign-in.
           </p>
           <div className="mt-4 space-y-3">
@@ -200,7 +202,7 @@ export function SettingsAccountPanel({
               type="password"
               autoComplete="current-password"
               placeholder="Current password"
-              className="w-full rounded-lg border-2 border-royal/20 px-3 py-2 font-sans text-sm"
+              className="w-full rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 font-sans text-sm shadow-tt-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tt-royal"
               value={curPw}
               onChange={(e) => setCurPw(e.target.value)}
             />
@@ -208,7 +210,7 @@ export function SettingsAccountPanel({
               type="password"
               autoComplete="new-password"
               placeholder="New password (8+ characters)"
-              className="w-full rounded-lg border-2 border-royal/20 px-3 py-2 font-sans text-sm"
+              className="w-full rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 font-sans text-sm shadow-tt-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tt-royal"
               value={newPw}
               onChange={(e) => setNewPw(e.target.value)}
             />
@@ -216,36 +218,34 @@ export function SettingsAccountPanel({
               type="password"
               autoComplete="new-password"
               placeholder="Confirm new password"
-              className="w-full rounded-lg border-2 border-royal/20 px-3 py-2 font-sans text-sm"
+              className="w-full rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 font-sans text-sm shadow-tt-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tt-royal"
               value={confPw}
               onChange={(e) => setConfPw(e.target.value)}
             />
-            <button
+            <Button
               type="button"
               disabled={pending}
+              variant="primary"
               onClick={() => void changePw()}
-              className="rounded-lg bg-royal px-4 py-2 font-sans text-sm font-semibold text-cream disabled:opacity-50"
             >
               Update password
-            </button>
+            </Button>
             {pwMsg ? (
-              <p className="font-sans text-sm text-royal/80">{pwMsg}</p>
+              <p className="font-sans text-sm text-tt-royal/80">{pwMsg}</p>
             ) : null}
           </div>
           <button
             type="button"
             onClick={() => void signOutEverywhere()}
-            className="mt-6 font-sans text-sm font-semibold text-royal underline"
+            className="mt-6 font-sans text-sm font-semibold text-tt-royal underline underline-offset-4 decoration-tt-gold/40 hover:text-tt-royal/85"
           >
             Sign out everywhere
           </button>
-        </section>
+        </Card>
       ) : oauthProviderLabel ? (
-        <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
-          <h2 className="font-serif text-xl font-semibold text-royal">
-            Security
-          </h2>
-          <p className="mt-2 font-sans text-sm text-royal/70">
+        <Card className="p-6">
+          <SectionHeader compact title="Security" />
+          <p className="mt-2 font-sans text-sm text-tt-royal/70">
             {oauthProviderLabel === "Apple" ? (
               <>
                 Your account uses Sign in with Apple. Password management is
@@ -262,32 +262,30 @@ export function SettingsAccountPanel({
           <button
             type="button"
             onClick={() => void signOutEverywhere()}
-            className="mt-4 font-sans text-sm font-semibold text-royal underline"
+            className="mt-4 font-sans text-sm font-semibold text-tt-royal underline underline-offset-4 decoration-tt-gold/40 hover:text-tt-royal/85"
           >
             Sign out everywhere
           </button>
-        </section>
+        </Card>
       ) : (
-        <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
-          <h2 className="font-serif text-xl font-semibold text-royal">
-            Security
-          </h2>
-          <p className="mt-2 font-sans text-sm text-royal/70">
+        <Card className="p-6">
+          <SectionHeader compact title="Security" />
+          <p className="mt-2 font-sans text-sm text-tt-royal/70">
             You signed in with an email code. To set a permanent password, use
             the password reset flow.
           </p>
           <button
             type="button"
             onClick={() => void signOutEverywhere()}
-            className="mt-4 font-sans text-sm font-semibold text-royal underline"
+            className="mt-4 font-sans text-sm font-semibold text-tt-royal underline underline-offset-4 decoration-tt-gold/40 hover:text-tt-royal/85"
           >
             Sign out everywhere
           </button>
-        </section>
+        </Card>
       )}
 
-      <section className="rounded-2xl border-2 border-red-200 bg-red-50/40 p-6">
-        <h2 className="font-serif text-xl font-semibold text-red-900">
+      <Card className="border-2 border-red-200 bg-red-50/40 p-6 shadow-tt-sm">
+        <h2 className="font-heading text-lg font-semibold text-red-900 sm:text-xl">
           Danger zone
         </h2>
         <p className="mt-2 font-sans text-sm leading-relaxed text-red-900/90">
@@ -316,7 +314,7 @@ export function SettingsAccountPanel({
               Are you absolutely sure? Type your email to confirm.
             </p>
             <input
-              className="w-full rounded-lg border border-red-300 bg-white px-3 py-2 font-sans text-sm"
+              className="w-full rounded-tt-md border border-red-300 bg-tt-surface px-3 py-2 font-sans text-sm shadow-tt-sm"
               placeholder={email}
               value={delEmail}
               onChange={(e) => setDelEmail(e.target.value)}
@@ -335,13 +333,13 @@ export function SettingsAccountPanel({
             <button
               type="button"
               onClick={() => setDelOpen(false)}
-              className="ml-3 font-sans text-sm text-royal underline"
+              className="ml-3 font-sans text-sm text-tt-royal underline underline-offset-2"
             >
               Cancel
             </button>
           </div>
         )}
-      </section>
+      </Card>
     </div>
   );
 }

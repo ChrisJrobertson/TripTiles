@@ -13,10 +13,10 @@ export function EmailPreferencesSettings({ initialOptOut }: Props) {
 
   return (
     <div id="email-preferences" className="mt-6 scroll-mt-24">
-      <label className="flex min-h-[44px] cursor-pointer items-start gap-3 rounded-lg border border-royal/12 bg-cream/50 px-3 py-3">
+      <label className="flex min-h-[44px] cursor-pointer items-start gap-3 rounded-tt-md border border-tt-line-soft bg-tt-surface-warm px-3 py-3 shadow-tt-sm">
         <input
           type="checkbox"
-          className="mt-1 h-5 w-5 shrink-0 rounded border-royal/35 accent-royal"
+          className="mt-1 h-5 w-5 shrink-0 rounded border-tt-line accent-tt-royal"
           checked={optOut}
           disabled={pending}
           onChange={(e) => {
@@ -29,10 +29,10 @@ export function EmailPreferencesSettings({ initialOptOut }: Props) {
           }}
         />
         <span>
-          <span className="font-sans text-sm font-semibold text-royal">
+          <span className="font-sans text-sm font-semibold text-tt-royal">
             Opt out of marketing-style emails
           </span>
-          <span className="mt-1 block font-sans text-xs leading-relaxed text-royal/65">
+          <span className="mt-1 block font-sans text-xs leading-relaxed text-tt-royal/65">
             When ticked, we won&apos;t send trip milestone reminder emails or
             similar promotional messages. Transactional mail (password resets,
             receipts) may still be sent.

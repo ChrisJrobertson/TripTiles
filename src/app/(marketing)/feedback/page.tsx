@@ -1,3 +1,5 @@
+import { marketingLinkAccentLg, marketingLinkUnderline } from "@/components/marketing/marketing-classes";
+import { Card } from "@/components/ui/Card";
 import { getPublicSiteUrl } from "@/lib/site";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -26,41 +28,40 @@ export default function FeedbackPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col px-6 py-14">
-        <h1 className="font-serif text-3xl font-semibold text-royal md:text-4xl">
-          Feedback
-        </h1>
-        <p className="mt-4 font-sans text-base leading-relaxed text-royal/75">
-          Tell us what broke, what confused you, or what would make TripTiles
-          magical for your next trip. We read everything.
-        </p>
+      <h1 className="font-heading text-3xl font-semibold text-tt-royal md:text-4xl">
+        Feedback
+      </h1>
+      <p className="mt-4 font-sans text-base leading-relaxed text-tt-royal/75">
+        Tell us what broke, what confused you, or what would make TripTiles
+        magical for your next trip. We read everything.
+      </p>
 
-        {!configured ? (
-          <p
-            className="mt-6 rounded-xl border border-royal/15 bg-white px-4 py-3 font-sans text-sm text-royal/80"
-            role="status"
-          >
-            <strong className="font-semibold text-royal">Host:</strong> set{" "}
-            <code className="rounded bg-cream px-1 text-xs">
+      {!configured ? (
+        <Card variant="subtle" className="mt-6 p-4" role="status">
+          <p className="font-sans text-sm text-tt-royal/80">
+            <strong className="font-semibold text-tt-royal">Host:</strong> set{" "}
+            <code className="rounded-tt-md bg-tt-surface-warm px-1 font-meta text-xs">
               NEXT_PUBLIC_FEEDBACK_EMAIL
             </code>{" "}
-            in <code className="rounded bg-cream px-1 text-xs">.env.local</code>{" "}
+            in{" "}
+            <code className="rounded-tt-md bg-tt-surface-warm px-1 font-meta text-xs">
+              .env.local
+            </code>{" "}
             to your real inbox. Until then, the button uses a placeholder address
             — replace it before sharing widely.
           </p>
-        ) : null}
+        </Card>
+      ) : null}
 
-        <a
-          href={mailto}
-          className="mt-8 inline-flex min-h-12 items-center justify-center rounded-lg bg-royal px-8 py-3 font-serif text-base font-semibold text-cream shadow-md transition hover:bg-royal/90"
-        >
-          Email us
-        </a>
+      <a href={mailto} className={`mt-8 ${marketingLinkAccentLg}`}>
+        Email us
+      </a>
 
-        <p className="mt-6 font-sans text-sm text-royal/55">
-          <Link href="/" className="text-royal underline underline-offset-2">
-            ← Home
-          </Link>
-        </p>
+      <p className="mt-6 font-sans text-sm text-tt-royal/55">
+        <Link href="/" className={marketingLinkUnderline}>
+          ← Home
+        </Link>
+      </p>
     </main>
   );
 }

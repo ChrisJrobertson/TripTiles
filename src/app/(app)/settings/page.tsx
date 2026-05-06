@@ -1,6 +1,8 @@
 import { AppNavHeader } from "@/components/app/AppNavHeader";
 import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
 import { SettingsAccountPanel } from "@/components/settings/SettingsAccountPanel";
+import { Card } from "@/components/ui/Card";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { getUserTier } from "@/lib/tier";
 import { getTierConfig, renewalPriceLabelGbp } from "@/lib/tiers";
 import { getUserTripCount } from "@/lib/db/trips";
@@ -47,16 +49,18 @@ export default async function SettingsPage() {
   if (!getSupabaseUrl() || !getSupabaseAnonKey()) {
     return (
       <main className="min-h-screen bg-transparent px-6 py-12">
-        <div className="mx-auto max-w-lg rounded-2xl border border-royal/10 bg-white p-8">
-          <h1 className="font-serif text-xl font-semibold text-royal">
+        <Card className="mx-auto max-w-lg p-8">
+          <h1 className="font-heading text-xl font-semibold text-tt-royal">
             Configuration needed
           </h1>
-          <p className="mt-3 font-sans text-sm text-royal/70">
+          <p className="mt-3 font-sans text-sm text-tt-royal/70">
             Add Supabase environment variables to{" "}
-            <code className="rounded bg-cream px-1">.env.local</code>, then
-            restart the dev server.
+            <code className="rounded-tt-md bg-tt-surface-warm px-1 font-meta text-xs">
+              .env.local
+            </code>
+            , then restart the dev server.
           </p>
-        </div>
+        </Card>
       </main>
     );
   }
@@ -123,33 +127,29 @@ export default async function SettingsPage() {
       />
       <main className="mx-auto max-w-2xl space-y-8 px-4 py-8 sm:px-6">
         {productTier !== "free" ? (
-          <p className="font-sans text-sm text-royal/80">
+          <p className="font-sans text-sm text-tt-royal/80">
             <Link
               href="/settings/templates"
-              className="font-semibold text-royal underline underline-offset-2"
+              className="font-semibold text-tt-royal underline underline-offset-2"
             >
               Day templates
             </Link>{" "}
             — save and reuse planner days.
           </p>
         ) : null}
-        <h1 className="font-serif text-3xl font-semibold text-royal">
+        <h1 className="font-heading text-3xl font-semibold text-tt-royal">
           Settings
         </h1>
 
-        <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
-          <h2 className="font-serif text-xl font-semibold text-royal">
-            Planner display
-          </h2>
+        <Card className="p-6">
+          <SectionHeader compact title="Planner display" />
           <TemperatureUnitSettings initial={initialTemperatureUnit} />
-        </section>
+        </Card>
 
-        <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
-          <h2 className="font-serif text-xl font-semibold text-royal">
-            Email preferences
-          </h2>
+        <Card className="p-6">
+          <SectionHeader compact title="Email preferences" />
           <EmailPreferencesSettings initialOptOut={emailMarketingOptOut} />
-        </section>
+        </Card>
 
         <SettingsAccountPanel
           email={user.email ?? ""}
@@ -161,8 +161,8 @@ export default async function SettingsPage() {
           oauthProviderLabel={oauthProviderLabel}
         />
 
-        <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
-          <h2 className="font-serif text-xl font-semibold text-royal">Billing</h2>
+        <Card className="p-6">
+          <SectionHeader compact title="Billing" />
           {(() => {
             const stripeRows = purchases.filter((p) => p.provider === "stripe");
             const latestStripe = stripeRows[0] ?? null;
@@ -174,7 +174,7 @@ export default async function SettingsPage() {
               !Number.isNaN(expDate.getTime()) &&
               expDate.getTime() > Date.now();
             return showCancelBanner ? (
-              <div className="mt-4 rounded-lg border border-amber-300/80 bg-amber-50 px-4 py-3 font-sans text-sm text-royal">
+              <div className="mt-4 rounded-tt-md border border-amber-300/80 bg-amber-50 px-4 py-3 font-sans text-sm text-tt-royal">
                 Your {planCfg.name} access ends on{" "}
                 {expDate.toLocaleDateString("en-GB", {
                   day: "numeric",
@@ -182,7 +182,7 @@ export default async function SettingsPage() {
                   year: "numeric",
                 })}
                 . You can resubscribe anytime from{" "}
-                <Link href="/pricing" className="font-semibold underline">
+                <Link href="/pricing" className="font-semibold text-tt-royal underline">
                   Pricing
                 </Link>
                 .
@@ -198,9 +198,9 @@ export default async function SettingsPage() {
               (st === "past_due" || st === "unpaid")
             ) {
               return (
-                <div className="mt-4 rounded-lg border border-amber-400/90 bg-amber-50 px-4 py-3 font-sans text-sm text-royal">
+                <div className="mt-4 rounded-tt-md border border-amber-400/90 bg-amber-50 px-4 py-3 font-sans text-sm text-tt-royal">
                   <p className="font-semibold">Payment failed — retrying</p>
-                  <p className="mt-1 text-royal/80">
+                  <p className="mt-1 text-tt-royal/80">
                     Stripe is attempting to collect payment. Update your card in
                     the billing portal if you need to.
                   </p>
@@ -215,7 +215,7 @@ export default async function SettingsPage() {
               {planCfg.badge_emoji}
             </span>
             <div>
-              <p className="font-sans text-sm font-semibold text-royal">
+              <p className="font-sans text-sm font-semibold text-tt-royal">
                 {productTier === "free"
                   ? "Current plan: Free"
                   : (() => {
@@ -246,7 +246,7 @@ export default async function SettingsPage() {
                   const endDate = endIso ? new Date(endIso) : null;
                   if (endDate && !Number.isNaN(endDate.getTime())) {
                     return (
-                      <p className="mt-1 font-sans text-sm text-royal/70">
+                      <p className="mt-1 font-sans text-sm text-tt-royal/70">
                         Subscription ended on{" "}
                         {endDate.toLocaleDateString("en-GB", {
                           day: "numeric",
@@ -254,7 +254,7 @@ export default async function SettingsPage() {
                           year: "numeric",
                         })}{" "}
                         — see{" "}
-                        <Link href="/pricing" className="font-semibold underline">
+                        <Link href="/pricing" className="font-semibold text-tt-royal underline">
                           pricing
                         </Link>{" "}
                         to resubscribe.
@@ -262,9 +262,9 @@ export default async function SettingsPage() {
                     );
                   }
                   return (
-                    <p className="mt-1 font-sans text-sm text-royal/70">
+                    <p className="mt-1 font-sans text-sm text-tt-royal/70">
                       Not subscribed — see{" "}
-                      <Link href="/pricing" className="font-semibold underline">
+                      <Link href="/pricing" className="font-semibold text-tt-royal underline">
                         pricing
                       </Link>
                       .
@@ -272,7 +272,7 @@ export default async function SettingsPage() {
                   );
                 })()
               ) : (
-                <p className="mt-1 font-sans text-sm text-royal/70">
+                <p className="mt-1 font-sans text-sm text-tt-royal/70">
                   {(() => {
                     const stripeRows = purchases.filter(
                       (p) => p.provider === "stripe",
@@ -311,7 +311,7 @@ export default async function SettingsPage() {
               )}
             </div>
           </div>
-          <p className="mt-4 font-sans text-xs text-royal/55">
+          <p className="mt-4 font-sans text-xs text-tt-royal/55">
             Change card, cancel, switch between monthly and annual billing, or
             move between Pro and Family in the Stripe Customer Portal.
           </p>
@@ -337,24 +337,22 @@ export default async function SettingsPage() {
           {productTier === "free" ? (
             <Link
               href="/pricing"
-              className="mt-6 inline-flex items-center justify-center rounded-lg bg-gold px-5 py-2.5 font-sans text-sm font-semibold text-royal shadow-sm transition hover:bg-gold/90"
+              className="mt-6 inline-flex items-center justify-center rounded-tt-md bg-tt-gold px-5 py-2.5 font-sans text-sm font-semibold text-white shadow-tt-sm transition hover:bg-tt-gold/90"
             >
               See pricing
             </Link>
           ) : null}
-        </section>
+        </Card>
 
-        <section className="rounded-2xl border border-royal/10 bg-white p-6 shadow-sm">
-          <h3 className="font-serif text-lg font-semibold text-royal">
-            Billing history
-          </h3>
+        <Card className="p-6">
+          <SectionHeader compact title="Billing history" />
           {purchases.length === 0 ? (
-            <p className="mt-3 font-sans text-sm text-royal/65">
+            <p className="mt-3 font-sans text-sm text-tt-royal/65">
               No subscription payments recorded yet. Successful renewals appear
               here after Stripe confirms them.
             </p>
           ) : (
-            <ul className="mt-4 divide-y divide-royal/10">
+            <ul className="mt-4 divide-y divide-tt-line-soft">
               {purchases.map((p) => {
                 const receiptUrl =
                   typeof p.metadata?.receipt_url === "string"
@@ -372,10 +370,10 @@ export default async function SettingsPage() {
                     className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div>
-                      <p className="font-sans text-sm font-medium capitalize text-royal">
+                      <p className="font-sans text-sm font-medium capitalize text-tt-royal">
                         {p.product}
                       </p>
-                      <p className="font-sans text-xs text-royal/60">
+                      <p className="font-sans text-xs text-tt-royal/60">
                         {when} · £{amount}{" "}
                         {p.currency && p.currency !== "GBP"
                           ? `(${p.currency})`
@@ -387,7 +385,7 @@ export default async function SettingsPage() {
                         href={receiptUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="font-sans text-sm font-semibold text-royal underline underline-offset-2"
+                        className="font-sans text-sm font-semibold text-tt-royal underline underline-offset-2"
                       >
                         View receipt
                       </a>
@@ -397,7 +395,7 @@ export default async function SettingsPage() {
               })}
             </ul>
           )}
-        </section>
+        </Card>
       </main>
     </div>
   );

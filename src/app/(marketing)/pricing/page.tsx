@@ -2,6 +2,8 @@ import {
   PricingClient,
   type CheckoutPriceIds,
 } from "@/app/(marketing)/pricing/PricingClient";
+import { marketingEyebrow } from "@/components/marketing/marketing-classes";
+import { Card } from "@/components/ui/Card";
 import { getUserTier } from "@/lib/tier";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type { Metadata } from "next";
@@ -51,7 +53,7 @@ const FAQ = [
     a: (
       <>
         See our{" "}
-        <Link href="/terms" className="text-royal underline underline-offset-2">
+        <Link href="/terms" className="text-tt-royal underline underline-offset-2">
           terms of service
         </Link>{" "}
         for the full policy — in summary, new subscribers have a 14-day cooling-off period under UK Consumer Contracts Regulations before they start using the service.
@@ -75,7 +77,7 @@ const FAQ = [
     a: (
       <>
         We take privacy seriously. Read our{" "}
-        <Link href="/privacy" className="text-royal underline underline-offset-2">
+        <Link href="/privacy" className="text-tt-royal underline underline-offset-2">
           privacy policy
         </Link>{" "}
         for details.
@@ -118,59 +120,59 @@ export default async function PricingPage() {
 
   return (
     <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-12 sm:px-6 sm:py-14">
-      <p className="text-center font-sans text-xs font-semibold uppercase tracking-widest text-gold">
+      <p className={`text-center ${marketingEyebrow}`}>
         Planning your holiday since April 2026
       </p>
-      <h1 className="mt-3 text-center font-serif text-4xl font-semibold tracking-tight text-royal md:text-5xl">
+      <h1 className="mt-3 text-center font-heading text-4xl font-semibold tracking-tight text-tt-royal md:text-5xl">
         Pick your perfect plan
       </h1>
-      <p className="mx-auto mt-4 max-w-2xl text-center font-sans text-lg leading-relaxed text-royal/80">
+      <p className="mx-auto mt-4 max-w-2xl text-center font-sans text-lg leading-relaxed text-tt-royal/80">
         Cancel anytime. Works on every device.
       </p>
 
       <div className="mt-12">
         <Suspense
           fallback={
-            <div className="h-40 animate-pulse rounded-2xl bg-royal/5" aria-hidden />
+            <div className="h-40 animate-pulse rounded-tt-lg bg-tt-royal-soft/80" aria-hidden />
           }
         >
           <PricingClient initialMe={initialMe} checkoutPriceIds={checkoutPriceIds} />
         </Suspense>
       </div>
 
-      <section className="mt-16 rounded-2xl border border-royal/10 bg-white/90 px-4 py-10 sm:px-8">
-        <h2 className="text-center font-serif text-2xl font-semibold text-royal">
+      <Card variant="warm" className="mt-16 px-4 py-10 sm:px-8">
+        <h2 className="text-center font-heading text-2xl font-semibold text-tt-royal">
           Questions
         </h2>
         <div className="mx-auto mt-8 max-w-2xl space-y-3">
           {FAQ.map((item) => (
             <details
               key={item.q}
-              className="group rounded-xl border border-royal/10 bg-cream/60 px-4 py-3"
+              className="group rounded-tt-md border border-tt-line-soft bg-tt-surface/95 px-4 py-3 shadow-tt-sm"
             >
-              <summary className="cursor-pointer font-sans text-sm font-semibold text-royal marker:text-gold">
+              <summary className="cursor-pointer font-sans text-sm font-semibold text-tt-royal marker:text-tt-gold">
                 {item.q}
               </summary>
-              <p className="mt-2 font-sans text-sm leading-relaxed text-royal/75">
+              <p className="mt-2 font-sans text-sm leading-relaxed text-tt-royal/75">
                 {item.a}
               </p>
             </details>
           ))}
         </div>
-      </section>
+      </Card>
 
-      <p className="mt-12 text-center font-sans text-sm text-royal/70">
+      <p className="mt-12 text-center font-sans text-sm text-tt-royal/70">
         Questions? Email{" "}
         <a
           href="mailto:hello@triptiles.app"
-          className="font-semibold text-royal underline underline-offset-2"
+          className="font-semibold text-tt-royal underline underline-offset-2"
         >
           hello@triptiles.app
         </a>
       </p>
 
-      <p className="mt-8 text-center font-sans text-sm text-royal/55">
-        <Link href="/" className="text-royal underline underline-offset-2">
+      <p className="mt-8 text-center font-sans text-sm text-tt-royal/55">
+        <Link href="/" className="text-tt-royal underline underline-offset-2">
           ← Home
         </Link>
       </p>

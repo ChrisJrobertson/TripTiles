@@ -64,7 +64,7 @@ function variantClasses(v: CountdownChipVariant): string {
       return "border border-amber-200 bg-amber-50 font-medium text-amber-950";
     case "normal":
     default:
-      return "border border-royal/10 bg-cream font-medium text-royal/75";
+      return "border border-tt-line bg-tt-surface-warm font-medium text-tt-royal/75";
   }
 }
 
@@ -138,7 +138,7 @@ export function CountdownChip({
 
   return (
     <span
-      className={`inline-flex max-w-full items-center rounded-full px-2.5 py-1 text-xs whitespace-normal ${mutedPast ? "border border-royal/10 bg-cream font-medium text-royal/50" : variantClasses(displayVariant)}`}
+      className={`inline-flex max-w-full items-center rounded-full px-2.5 py-1 text-xs whitespace-normal ${mutedPast ? "border border-tt-line bg-tt-surface-warm font-medium text-tt-royal/50" : variantClasses(displayVariant)}`}
       title={label}
     >
       {text}

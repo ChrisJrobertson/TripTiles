@@ -1,3 +1,5 @@
+import { Card } from "@/components/ui/Card";
+
 const HIGHLIGHTS = [
   {
     icon: "✨" as const,
@@ -29,11 +31,11 @@ type Variant = "full" | "compact";
 export function PlannerValueHighlights({ variant = "full" }: { variant?: Variant }) {
   if (variant === "compact") {
     return (
-      <div className="rounded-2xl border border-royal/10 bg-white/80 p-5 shadow-sm backdrop-blur-sm md:p-6">
-        <p className="font-sans text-xs font-semibold uppercase tracking-widest text-gold">
+      <Card variant="elevated" className="p-5 backdrop-blur-sm md:p-6">
+        <p className="font-meta text-xs font-semibold uppercase tracking-widest text-tt-gold">
           What you get in the app
         </p>
-        <p className="mt-2 font-sans text-sm leading-relaxed text-royal/80">
+        <p className="mt-2 font-sans text-sm leading-relaxed text-tt-royal/80">
           These plans are a live preview. Clone one into your account to use
           the same calendar, nudges, and clash checks on your own trip.
         </p>
@@ -41,40 +43,39 @@ export function PlannerValueHighlights({ variant = "full" }: { variant?: Variant
           {HIGHLIGHTS.map((h) => (
             <li
               key={h.title}
-              className="flex gap-3 font-sans text-sm leading-relaxed text-royal/85"
+              className="flex gap-3 font-sans text-sm leading-relaxed text-tt-royal/85"
             >
               <span className="shrink-0 text-base" aria-hidden>
                 {h.icon}
               </span>
               <span>
-                <span className="font-semibold text-royal">{h.title}.</span>{" "}
+                <span className="font-semibold text-tt-royal">{h.title}.</span>{" "}
                 {h.body}
               </span>
             </li>
           ))}
         </ul>
-      </div>
+      </Card>
     );
   }
 
   return (
     <ul className="mt-10 grid gap-5 sm:grid-cols-2">
       {HIGHLIGHTS.map((h) => (
-        <li
-          key={h.title}
-          className="flex gap-4 rounded-2xl border border-royal/10 bg-white/90 p-5 shadow-sm"
-        >
-          <span className="text-2xl leading-none" aria-hidden>
-            {h.icon}
-          </span>
-          <div>
-            <h3 className="font-serif text-base font-semibold text-royal">
-              {h.title}
-            </h3>
-            <p className="mt-2 font-sans text-sm leading-relaxed text-royal/80">
-              {h.body}
-            </p>
-          </div>
+        <li key={h.title}>
+          <Card className="flex gap-4 p-5">
+            <span className="text-2xl leading-none" aria-hidden>
+              {h.icon}
+            </span>
+            <div>
+              <h3 className="font-heading text-base font-semibold text-tt-royal">
+                {h.title}
+              </h3>
+              <p className="mt-2 font-sans text-sm leading-relaxed text-tt-royal/80">
+                {h.body}
+              </p>
+            </div>
+          </Card>
         </li>
       ))}
     </ul>
