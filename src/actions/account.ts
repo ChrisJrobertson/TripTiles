@@ -19,7 +19,7 @@ export async function updateDisplayNameAction(input: {
     .eq("id", user.id);
 
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return { ok: true };
 }
 
@@ -140,6 +140,6 @@ export async function changePasswordAction(input: {
   });
   if (upErr) return { ok: false, error: upErr.message };
 
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return { ok: true };
 }

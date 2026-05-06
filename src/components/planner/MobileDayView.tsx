@@ -1410,7 +1410,7 @@ export function MobileDayView({
             ) : null}
             {onMenuSettings ? (
               <Link
-                href="/settings"
+                href="/settings/profile"
                 className="min-h-[48px] rounded-lg px-4 py-3 font-sans text-sm font-medium text-royal active:bg-white"
                 onClick={() => setMenuOpen(false)}
               >

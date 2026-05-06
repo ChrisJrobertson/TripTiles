@@ -1,5 +1,6 @@
 import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
 import { TRIP_TILES_LOGO_COMPACT_IMG_CLASS } from "@/components/brand/triptiles-logo-sizes";
+import { APP_PLANNER_VERSION } from "@/lib/planner-version";
 import Link from "next/link";
 
 const DEST_LINKS: { label: string; href: string }[] = [
@@ -97,8 +98,16 @@ export function MarketingFooter() {
           </ul>
         </div>
       </div>
-      <div className="mx-auto mt-10 max-w-5xl border-t border-tt-line-soft pt-8 text-center">
-        <p className="font-sans text-xs text-tt-royal/55">
+      <div className="mx-auto mt-10 max-w-5xl border-t border-tt-line-soft pt-8">
+        <div className="flex flex-col items-center justify-between gap-3 font-sans text-xs text-tt-royal/55 sm:flex-row sm:items-center">
+          <p className="text-center sm:text-left">
+            Plan smarter days — clashes caught early, timelines you can trust.
+          </p>
+          <p className="font-meta tracking-wide">
+            Planner v{APP_PLANNER_VERSION}
+          </p>
+        </div>
+        <p className="mt-4 text-center font-sans text-xs text-tt-royal/55">
           © {new Date().getFullYear()} TripTiles. Made in the UK.
         </p>
         <p className="mx-auto mt-3 max-w-2xl font-sans text-[11px] leading-relaxed text-tt-royal/45">

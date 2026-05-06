@@ -149,12 +149,12 @@ function AppNavHeaderFallback({
                     </Link>
                   </li>
                   <li>
-                    <Link href="/achievements" className={mobileNavLinkClass(false)}>
+                    <Link href="/passport" className={mobileNavLinkClass(false)}>
                       Passport
                     </Link>
                   </li>
                   <li>
-                    <Link href="/settings" className={mobileNavLinkClass(false)}>
+                    <Link href="/settings/profile" className={mobileNavLinkClass(false)}>
                       Settings
                     </Link>
                   </li>
@@ -193,13 +193,13 @@ function AppNavHeaderFallback({
                 Organise
               </Link>
               <Link
-                href="/achievements"
+                href="/passport"
                 className="rounded-full px-3 py-1 font-sans text-sm font-medium text-ink/75 transition hover:bg-royalSoft/10 hover:text-ink"
               >
                 Passport
               </Link>
               <Link
-                href="/settings"
+                href="/settings/profile"
                 className="rounded-full px-3 py-1 font-sans text-sm font-medium text-ink/75 transition hover:bg-royalSoft/10 hover:text-ink"
               >
                 Settings
@@ -292,10 +292,14 @@ function AppNavHeaderInner({
 
   const plannerHomeActive = onPlanner && tab === "planner";
   const planningActive = onPlanner && tab === "planning";
-  const passportActive =
-    pathname === "/achievements" || pathname?.startsWith("/achievements/");
+  const passportAreaActive =
+    pathname === "/passport" ||
+    pathname?.startsWith("/passport/") ||
+    pathname === "/achievements" ||
+    pathname?.startsWith("/achievements/");
   const settingsActive =
-    pathname === "/settings" || pathname?.startsWith("/settings/");
+    pathname === "/settings" ||
+    pathname?.startsWith("/settings/");
 
   const linkOrCurrent = (
     key: string,
@@ -364,16 +368,16 @@ function AppNavHeaderInner({
                   </li>
                   <li>
                     <Link
-                      href="/achievements"
-                      className={mobileNavLinkClass(passportActive)}
-                      aria-current={passportActive ? "page" : undefined}
+                      href="/passport"
+                      className={mobileNavLinkClass(passportAreaActive)}
+                      aria-current={passportAreaActive ? "page" : undefined}
                     >
                       Passport
                     </Link>
                   </li>
                   <li>
                     <Link
-                      href="/settings"
+                      href="/settings/profile"
                       className={mobileNavLinkClass(settingsActive)}
                       aria-current={settingsActive ? "page" : undefined}
                     >
@@ -409,7 +413,7 @@ function AppNavHeaderInner({
                 "Organise",
                 planningActive,
               )}
-              {passportActive ? (
+              {passportAreaActive ? (
                 <span
                   key="passport"
                   className="rounded-full bg-royalSoft/20 px-3 py-1 font-sans text-sm font-medium text-ink"
@@ -420,7 +424,7 @@ function AppNavHeaderInner({
               ) : (
                 <Link
                   key="passport"
-                  href="/achievements"
+                  href="/passport"
                   className="rounded-full px-3 py-1 font-sans text-sm font-medium text-ink/75 transition hover:bg-royalSoft/10 hover:text-ink"
                 >
                   Passport
@@ -437,7 +441,7 @@ function AppNavHeaderInner({
               ) : (
                 <Link
                   key="settings"
-                  href="/settings"
+                  href="/settings/profile"
                   className="rounded-full px-3 py-1 font-sans text-sm font-medium text-ink/75 transition hover:bg-royalSoft/10 hover:text-ink"
                 >
                   Settings

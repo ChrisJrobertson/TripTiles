@@ -56,3 +56,17 @@ export async function getParksForRegion(regionId: string): Promise<Park[]> {
   if (error) throw error;
   return (data ?? []).map((r) => mapPark(r as Record<string, unknown>));
 }
+
+export async function getParksByIds(ids: string[]): Promise<Park[]> {
+  const uniq = [...new Set(ids.map((id) => id.trim()))].filter(Boolean);
+  if (uniq.length === 0) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("parks")
+    .select("*")
+    .in("id", uniq)
+    .order("sort_order", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []).map((r) => mapPark(r as Record<string, unknown>));
+}

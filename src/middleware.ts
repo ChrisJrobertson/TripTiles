@@ -10,6 +10,7 @@ const PROTECTED_PREFIXES = [
   "/admin",
   "/agency",
   "/achievements",
+  "/passport",
   "/settings",
 ] as const;
 
@@ -91,6 +92,8 @@ export const config = {
     "/cookies",
     "/achievements",
     "/achievements/:path*",
+    "/passport",
+    "/passport/:path*",
     "/settings",
     "/settings/:path*",
     "/pricing",

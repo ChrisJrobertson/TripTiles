@@ -6,6 +6,7 @@ import {
   marketingLinkSecondaryMd,
   marketingLinkUnderline,
 } from "@/components/marketing/marketing-classes";
+import { MarketingTrustStrip } from "@/components/marketing/MarketingTrustStrip";
 import { PlannerValueHighlights } from "@/components/marketing/PlannerValueHighlights";
 import { TwoPathPlanningSection } from "@/components/marketing/TwoPathPlanningSection";
 import { getPublicAdventureTitle } from "@/lib/public-trip-display";
@@ -136,7 +137,9 @@ export default async function MarketingHomePage() {
           <div>
             <p className={marketingEyebrow}>Theme park trips, visually planned</p>
             <h1 className="mt-4 font-heading text-4xl font-semibold leading-tight tracking-tight text-tt-royal md:text-5xl md:leading-tight">
-              A theme park calendar that flags problems before you land
+              A theme park calendar that{" "}
+              <em className="not-italic text-tt-gold">flags problems</em> before
+              you land
             </h1>
             <p className="mt-6 max-w-xl font-sans text-lg leading-relaxed text-tt-royal/80">
               Smart Plan drafts from your must-dos and dining anchors, a
@@ -150,8 +153,8 @@ export default async function MarketingHomePage() {
               <Link href="/signup?next=/planner" className={marketingLinkAccentLg}>
                 Start planning free
               </Link>
-              <Link href="/plans" className={marketingLinkSecondaryLg}>
-                Community plans
+              <Link href="/pricing" className={marketingLinkSecondaryLg}>
+                See pricing
               </Link>
             </div>
             <p className="mt-6 font-sans text-xs text-tt-royal/55">
@@ -159,7 +162,10 @@ export default async function MarketingHomePage() {
               public itinerary into your own planner
             </p>
           </div>
-          <Card variant="elevated" className="overflow-hidden p-0 shadow-tt-lg">
+          <Card
+            variant="elevated"
+            className="-rotate-1 overflow-hidden p-0 shadow-tt-lg md:rotate-[-0.5deg]"
+          >
             <Image
               src="/marketing/hero-planner.png"
               alt="TripTiles planner: Your trip at a glance stats, park tiles in the left rail, and a multi-week day grid with parks, dining, and daily notes"
@@ -181,6 +187,8 @@ export default async function MarketingHomePage() {
           </Card>
         </div>
       </section>
+
+      <MarketingTrustStrip />
 
       <section className="border-t border-tt-line-soft bg-tt-surface/90 px-6 py-16 backdrop-blur-sm">
         <div className="mx-auto max-w-5xl">
@@ -316,41 +324,16 @@ export default async function MarketingHomePage() {
           <h2 className="mt-2 text-center font-heading text-2xl font-semibold text-tt-royal md:text-3xl">
             What early planners say
           </h2>
-          <ul className="mt-10 grid gap-6 md:grid-cols-3">
-            {[
-              {
-                quote:
-                  "Saved me 10 hours of research for our Disney World trip.",
-                who: "Sarah",
-                where: "Manchester",
-              },
-              {
-                quote: "The PDF export alone is worth the Pro upgrade.",
-                who: "James",
-                where: "London",
-              },
-              {
-                quote: "Finally a planner that understands Paris Disneyland.",
-                who: "Céline",
-                where: "Nice",
-              },
-            ].map((t) => (
-              <li
-                key={t.who}
-                className="rounded-tt-lg border border-tt-line/10 bg-tt-surface p-6 shadow-tt-sm"
-              >
-                <p className="text-tt-gold" aria-hidden>
-                  ★★★★★
-                </p>
-                <p className="mt-3 font-sans text-sm leading-relaxed text-tt-royal/85">
-                  &ldquo;{t.quote}&rdquo;
-                </p>
-                <p className="mt-4 font-sans text-xs font-semibold text-tt-royal/60">
-                  — {t.who}, {t.where}
-                </p>
-              </li>
-            ))}
-          </ul>
+          <figure className="mx-auto mt-10 max-w-xl rounded-tt-lg border border-tt-line/10 bg-tt-surface p-8 text-center shadow-tt-sm md:p-10">
+            <blockquote className="font-sans text-lg leading-relaxed text-tt-royal/90 md:text-xl">
+              &ldquo;Saved me 10 hours of research for our Disney World trip.
+              The timeline made it obvious where we&apos;d overstuffed a
+              day.&rdquo;
+            </blockquote>
+            <figcaption className="mt-6 font-meta text-[11px] font-semibold uppercase tracking-widest text-tt-gold">
+              Planner in beta · UK
+            </figcaption>
+          </figure>
         </div>
       </section>
 
@@ -419,18 +402,21 @@ export default async function MarketingHomePage() {
           <h2 className="text-center font-heading text-2xl font-semibold text-tt-royal md:text-3xl">
             FAQ
           </h2>
-          <dl className="mt-10 space-y-6">
-            {FAQ.map((item) => (
-              <div key={item.q}>
-                <dt className="font-heading text-base font-semibold text-tt-royal">
+          <div className="mt-10 space-y-3">
+            {FAQ.slice(0, 5).map((item) => (
+              <details
+                key={item.q}
+                className="group rounded-tt-md border border-tt-line-soft bg-tt-surface/95 px-4 py-3 shadow-tt-sm"
+              >
+                <summary className="cursor-pointer font-heading text-base font-semibold text-tt-royal marker:text-tt-gold">
                   {item.q}
-                </dt>
-                <dd className="mt-2 font-sans text-sm leading-relaxed text-tt-royal/75">
+                </summary>
+                <p className="mt-2 font-sans text-sm leading-relaxed text-tt-royal/75">
                   {item.a}
-                </dd>
-              </div>
+                </p>
+              </details>
             ))}
-          </dl>
+          </div>
         </div>
       </section>
 
@@ -458,8 +444,7 @@ export default async function MarketingHomePage() {
                         {getPublicAdventureTitle(trip)}
                       </p>
                       <p className="mt-2 font-sans text-xs text-tt-royal/55">
-                        {trip.clone_count ?? 0} clones · {trip.view_count ?? 0}{" "}
-                        views
+                        Public itinerary
                       </p>
                     </Link>
                   </li>
@@ -475,14 +460,35 @@ export default async function MarketingHomePage() {
         </section>
       ) : null}
 
-      <section className="border-t border-tt-line-soft bg-tt-royal px-6 py-16 text-center">
-        <h2 className="font-heading text-2xl font-semibold text-white md:text-3xl">
-          Ready when you are
-        </h2>
-        <div className="mt-8 flex justify-center">
-          <Link href="/signup?next=/planner" className={marketingLinkAccentLg}>
-            Start planning free
-          </Link>
+      <section className="relative overflow-hidden border-t border-tt-line-soft bg-tt-royal px-6 py-16 text-center">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.12]"
+          style={{
+            backgroundImage: `radial-gradient(circle at 20% 30%, rgba(255,210,140,0.9) 0, transparent 45%),
+              radial-gradient(circle at 80% 20%, rgba(180,215,255,0.85) 0, transparent 42%),
+              radial-gradient(circle at 55% 90%, rgba(255,235,190,0.75) 0, transparent 50%)`,
+          }}
+          aria-hidden
+        />
+        <div className="relative mx-auto max-w-xl">
+          <h2 className="font-heading text-2xl font-semibold text-white md:text-3xl">
+            Ready when you are
+          </h2>
+          <p className="mt-4 font-sans text-sm leading-relaxed text-white/80">
+            Start free on one trip, or compare Pro and Family when you want
+            unlimited plans and sharing.
+          </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-4">
+            <Link href="/signup?next=/planner" className={marketingLinkAccentLg}>
+              Start planning free
+            </Link>
+            <Link
+              href="/pricing"
+              className="inline-flex min-h-12 items-center justify-center rounded-tt-md border border-white/45 bg-white/10 px-8 py-3 font-sans text-sm font-semibold text-white shadow-sm backdrop-blur-sm transition hover:bg-white/18 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/80"
+            >
+              See pricing
+            </Link>
+          </div>
         </div>
       </section>
     </main>

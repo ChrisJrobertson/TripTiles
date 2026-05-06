@@ -16,6 +16,7 @@ export default function robots(): MetadataRoute.Robots {
           "/planner",
           "/settings",
           "/achievements",
+          "/passport",
           "/invite/",
           "/reset-password",
           "/auth/",

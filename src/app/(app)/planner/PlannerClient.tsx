@@ -134,6 +134,7 @@ import {
   type ThemeKey,
 } from "@/lib/themes";
 import type { Tier } from "@/lib/tier";
+import { APP_PLANNER_VERSION } from "@/lib/planner-version";
 import {
   notifyStaleServerActionIfNeeded,
   showToast,
@@ -171,8 +172,6 @@ import {
 import "./planner.css";
 
 const SHOW_BOOKING_AFFILIATE_PANEL = false;
-
-const APP_PLANNER_VERSION = "2.4";
 
 function formatSavedBrief(at: Date | null): string {
   if (!at) return "";

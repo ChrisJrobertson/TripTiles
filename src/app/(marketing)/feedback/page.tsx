@@ -1,27 +1,13 @@
-import { marketingLinkAccentLg, marketingLinkUnderline } from "@/components/marketing/marketing-classes";
+import { FeedbackEmailActions } from "@/components/marketing/FeedbackEmailActions";
 import { Card } from "@/components/ui/Card";
-import { getPublicSiteUrl } from "@/lib/site";
 import type { Metadata } from "next";
-import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Feedback · TripTiles",
   description: "Send feedback about TripTiles — we read every message.",
 };
 
-function feedbackMailto(): string {
-  const email =
-    process.env.NEXT_PUBLIC_FEEDBACK_EMAIL?.trim() || "feedback@example.com";
-  const origin = getPublicSiteUrl() || "TripTiles";
-  const subject = encodeURIComponent("TripTiles feedback");
-  const body = encodeURIComponent(
-    `\n\n---\nContext: signed-in user\nApp: ${origin}\n`,
-  );
-  return `mailto:${email}?subject=${subject}&body=${body}`;
-}
-
 export default function FeedbackPage() {
-  const mailto = feedbackMailto();
   const configured = Boolean(
     process.env.NEXT_PUBLIC_FEEDBACK_EMAIL?.trim(),
   );
@@ -53,15 +39,7 @@ export default function FeedbackPage() {
         </Card>
       ) : null}
 
-      <a href={mailto} className={`mt-8 ${marketingLinkAccentLg}`}>
-        Email us
-      </a>
-
-      <p className="mt-6 font-sans text-sm text-tt-royal/55">
-        <Link href="/" className={marketingLinkUnderline}>
-          ← Home
-        </Link>
-      </p>
+      <FeedbackEmailActions />
     </main>
   );
 }

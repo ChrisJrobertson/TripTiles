@@ -25,7 +25,7 @@ export async function updateProfileTemperatureUnitAction(
     .update({ temperature_unit: unit })
     .eq("id", user.id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   revalidatePath("/planner");
   return { ok: true };
 }
@@ -41,7 +41,7 @@ export async function updateProfileEmailMarketingOptOutAction(
     .update({ email_marketing_opt_out: optOut })
     .eq("id", user.id);
   if (error) return { ok: false, error: error.message };
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   revalidatePath("/planner");
   return { ok: true };
 }
@@ -85,7 +85,7 @@ export async function setProfileAiDayPreviewDefaultAction(
     .eq("id", user.id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/planner");
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return { ok: true };
 }
 

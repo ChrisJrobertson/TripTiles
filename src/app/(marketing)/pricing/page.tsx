@@ -2,6 +2,7 @@ import {
   PricingClient,
   type CheckoutPriceIds,
 } from "@/app/(marketing)/pricing/PricingClient";
+import { MarketingTrustStrip } from "@/components/marketing/MarketingTrustStrip";
 import { marketingEyebrow } from "@/components/marketing/marketing-classes";
 import { Card } from "@/components/ui/Card";
 import { getUserTier } from "@/lib/tier";
@@ -129,6 +130,10 @@ export default async function PricingPage() {
       <p className="mx-auto mt-4 max-w-2xl text-center font-sans text-lg leading-relaxed text-tt-royal/80">
         Cancel anytime. Works on every device.
       </p>
+
+      <div className="mt-10">
+        <MarketingTrustStrip />
+      </div>
 
       <div className="mt-12">
         <Suspense
