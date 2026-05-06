@@ -100,21 +100,34 @@ html {
   background-image: none;
 }
 
-/* Site background image - magical TripTiles theme */
-body::before {
+/**
+ * Magical full-page background — only on marketing shell (see `.tt-marketing-bg`).
+ * App routes use solid `--tt-bg` on `body` so /planner and other tools stay calm.
+ */
+.tt-marketing-bg {
+  position: relative;
+  isolation: isolate;
+}
+
+.tt-marketing-bg::before {
   content: "";
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: -1;
+  z-index: 0;
   background-image: url("/images/triptiles-bg.png");
   background-size: cover;
   background-position: center center;
   background-repeat: no-repeat;
   opacity: 0.52;
   pointer-events: none;
+}
+
+.tt-marketing-bg > * {
+  position: relative;
+  z-index: 1;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -129,7 +142,7 @@ body::before {
     background-attachment: scroll;
   }
 
-  body::before {
+  .tt-marketing-bg::before {
     opacity: 0.15;
     filter: saturate(0.6);
   }
@@ -137,7 +150,7 @@ body::before {
 
 body {
   min-height: 100dvh;
-  background: transparent;
+  background: var(--tt-bg);
   color: var(--foreground);
   font-family: var(--font-inter), Arial, Helvetica, sans-serif;
 }

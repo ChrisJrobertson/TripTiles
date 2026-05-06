@@ -56,7 +56,6 @@ import { DayStrategyUpgradeModal } from "@/components/planner/DayStrategyUpgrade
 import { MobileTripCalendarStripNav } from "@/components/planner/MobileTripCalendarStripNav";
 import { MobileDayView } from "@/components/planner/MobileDayView";
 import { PlanningSections } from "@/components/planner/PlanningSections";
-import { Countdown } from "@/components/planner/Countdown";
 import { CustomTileModal } from "@/components/planner/CustomTileModal";
 import { TripDayPageView } from "@/components/planner/TripDayPageView";
 import { DayPlannerModal } from "@/components/planner/DayPlannerModal";
@@ -65,7 +64,7 @@ import { AdventureTitleColorControl } from "@/components/planner/AdventureTitleC
 import { EditableTitle } from "@/components/planner/EditableTitle";
 import { MobilePlannerDock } from "@/components/planner/MobilePlannerDock";
 import { Palette } from "@/components/planner/Palette";
-import { PlannerMoreMenu } from "@/components/planner/PlannerMoreMenu";
+import { PlannerHeroStats } from "@/components/planner/PlannerHeroStats";
 import { PlannerActionsMenu } from "@/components/planner/PlannerActionsMenu";
 import { PlannerTopNotices } from "@/components/planner/PlannerTopNotices";
 import { SavingIndicator } from "@/components/planner/SavingIndicator";
@@ -76,12 +75,9 @@ import {
   SmartPlanModal,
   type SmartPlanGeneratePayload,
 } from "@/components/planner/SmartPlanModal";
-import { TripSelector } from "@/components/planner/TripSelector";
 import { BookTripAffiliatePanel } from "@/components/planner/BookTripAffiliatePanel";
 import { hasAnyAffiliatePartner } from "@/lib/affiliates";
 import { PdfExportButton } from "@/components/planner/PdfExportButton";
-import { TripTimeline } from "@/components/planner/TripTimeline";
-import { TripStatsCard } from "@/components/planner/TripStatsCard";
 import { TrippMascotImg } from "@/components/mascot/TrippMascotImg";
 import { TrippSpeechBubble } from "@/components/mascot/TrippSpeechBubble";
 import { EmptyCalendarCta } from "@/components/planner/EmptyCalendarCta";
@@ -112,8 +108,14 @@ import {
   eachDateKeyInRange,
   formatDateISO,
   formatDateKey,
+  MONTHS_SHORT,
   parseDate,
 } from "@/lib/date-helpers";
+import {
+  buildTripStatsShareText,
+  computeTripStats,
+} from "@/lib/compute-trip-stats";
+import { daysUntilTripStart } from "@/lib/trip-start-label";
 import {
   computePlannerDayConflicts,
   conflictDotForDay,
@@ -161,6 +163,51 @@ import {
 import "./planner.css";
 
 const SHOW_BOOKING_AFFILIATE_PANEL = false;
+
+function formatTripHeroDateRange(startIso: string, endIso: string): string {
+  const a = parseDate(startIso);
+  const b = parseDate(endIso);
+  const sameMonth =
+    a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
+  if (sameMonth) {
+    return `${a.getDate()}–${b.getDate()} ${MONTHS_SHORT[b.getMonth()]} ${b.getFullYear()}`;
+  }
+  const sameYear = a.getFullYear() === b.getFullYear();
+  const left = `${a.getDate()} ${MONTHS_SHORT[a.getMonth()]}`;
+  const right = `${b.getDate()} ${MONTHS_SHORT[b.getMonth()]} ${b.getFullYear()}`;
+  return sameYear ? `${left} – ${right}` : `${left} ${a.getFullYear()} – ${right}`;
+}
+
+function plannerPartyLabel(trip: Trip): string {
+  const bits: string[] = [];
+  if (trip.adults > 0) {
+    bits.push(`${trip.adults} adult${trip.adults === 1 ? "" : "s"}`);
+  }
+  if (trip.children > 0) {
+    bits.push(`${trip.children} child${trip.children === 1 ? "" : "ren"}`);
+  }
+  return bits.length ? bits.join(", ") : "Party size not set";
+}
+
+function tripPlannerStatusMeta(trip: Trip): {
+  label: string;
+  dotClass: string;
+} {
+  const end = parseDate(trip.end_date);
+  const today = new Date();
+  const startOfToday = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+  if (startOfToday.getTime() > end.getTime()) {
+    return { label: "Past trip", dotClass: "bg-tt-ink/40" };
+  }
+  if (daysUntilTripStart(trip.start_date) > 0) {
+    return { label: "Upcoming", dotClass: "bg-sky-500" };
+  }
+  return { label: "In progress", dotClass: "bg-emerald-600" };
+}
 
 type Props = {
   initialTrips: Trip[];
@@ -2447,6 +2494,8 @@ export function PlannerClient({
     }
   }, [plannerTab, router, tripRouteBase]);
 
+  const heroTripStatus = activeTrip ? tripPlannerStatusMeta(activeTrip) : null;
+
   return (
     <InlineLoadingOverlay
       isLoading={fullPageAiBusy}
@@ -2488,185 +2537,168 @@ export function PlannerClient({
                   "radial-gradient(circle at 12% 18%, rgba(255,255,255,.95) 0 1px, transparent 1.5px), radial-gradient(circle at 88% 20%, rgba(217,73,26,.22) 0 1px, transparent 1.6px), radial-gradient(circle at 70% 78%, rgba(47,147,222,.2) 0 1.5px, transparent 2px)",
               }}
             />
-            <div className="relative flex flex-col gap-2">
-              <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
-                <h1 className="min-w-0 flex-1 text-balance font-heading text-3xl font-semibold tracking-tight text-tt-royal sm:text-4xl">
-                  <EditableTitle
-                    key={`${activeTrip.id}-fam`}
-                    value={activeTrip.family_name}
-                    onSave={(v) => {
-                      const trimmed = v.trim();
-                      applyLocalPatch(activeTrip.id, { family_name: trimmed });
-                      void withSaving(async () => {
-                        setSaveError(null);
-                        const res = await updateTripMetadataAction({
-                          tripId: activeTrip.id,
-                          familyName: trimmed,
-                        });
-                        if (!res.ok) setSaveError(res.error);
-                      });
-                    }}
-                    className="inline-block min-w-[4ch] text-tt-royal"
-                  />
-                  <span className="text-tt-royal/35"> — </span>
-                  <span className="inline-flex max-w-full flex-wrap items-baseline gap-1.5 sm:gap-2">
-                    <EditableTitle
-                      key={`${activeTrip.id}-adv`}
-                      value={activeTrip.adventure_name}
-                      onSave={(v) => {
-                        const trimmed = v.trim();
-                        applyLocalPatch(activeTrip.id, {
-                          adventure_name: trimmed,
-                        });
-                        void withSaving(async () => {
-                          setSaveError(null);
-                          const res = await updateTripMetadataAction({
-                            tripId: activeTrip.id,
-                            adventureName: trimmed,
-                          });
-                          if (!res.ok) setSaveError(res.error);
-                        });
-                      }}
-                      className="inline-block min-w-[6ch]"
-                      style={{
-                        color: resolvedAdventureTitleColor(
-                          activeTrip.preferences,
-                        ),
-                      }}
-                    />
-                    <AdventureTitleColorControl
-                      preferences={activeTrip.preferences}
-                      onColorChange={(next) => {
-                        const prev =
-                          activeTrip.preferences &&
-                          typeof activeTrip.preferences === "object" &&
-                          !Array.isArray(activeTrip.preferences)
-                            ? ({
-                                ...activeTrip.preferences,
-                              } as Record<string, unknown>)
-                            : ({} as Record<string, unknown>);
-                        applyLocalPatch(activeTrip.id, {
-                          preferences: {
-                            ...prev,
-                            [ADVENTURE_TITLE_COLOR_KEY]: next,
-                          },
-                        });
-                        void withSaving(async () => {
-                          setSaveError(null);
-                          const res = await updateTripPreferencesPatchAction({
-                            tripId: activeTrip.id,
-                            patch: {
-                              [ADVENTURE_TITLE_COLOR_KEY]: next,
-                            },
-                          });
-                          if (!res.ok) setSaveError(res.error);
-                        });
-                      }}
-                    />
-                  </span>
-                </h1>
-                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-                  {showGoToTodayPill ? (
-                    <Button
-                      type="button"
-                      variant="accent"
-                      size="sm"
-                      className="rounded-full"
-                      onClick={() => {
-                        const todayKey = formatDateKey(new Date());
-                        const el = document.getElementById(
-                          `planner-day-${todayKey}`,
-                        );
-                        el?.scrollIntoView({
-                          behavior: "smooth",
-                          block: "center",
-                        });
-                        setGoToTodayRingDateKey(todayKey);
-                        window.setTimeout(() => setGoToTodayRingDateKey(null), 1000);
-                      }}
+            <div className="relative flex flex-col gap-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
+                <div className="min-w-0 flex-1 space-y-3">
+                  <div className="flex flex-wrap items-start gap-2">
+                    <span
+                      className="mt-2 inline-flex shrink-0 items-center gap-2"
+                      title={heroTripStatus?.label}
                     >
-                      Go to today →
-                    </Button>
-                  ) : null}
-                  <PlannerMoreMenu
-                    onOpenPanel={(panel) => {
-                      setAdminPanel(panel);
-                    }}
-                  />
-                  <SavingIndicator
-                    isSaving={savingVisible}
-                    lastSavedAt={lastSavedAt}
-                  />
+                      <span
+                        className={`inline-block h-2.5 w-2.5 rounded-full ${heroTripStatus?.dotClass ?? "bg-tt-ink/30"}`}
+                        aria-hidden
+                      />
+                      <span className="sr-only">
+                        Trip status: {heroTripStatus?.label ?? "Unknown"}
+                      </span>
+                    </span>
+                    <h1 className="min-w-0 flex-1 text-balance font-heading text-3xl font-semibold tracking-tight text-tt-royal sm:text-4xl">
+                      <EditableTitle
+                        key={`${activeTrip.id}-fam`}
+                        value={activeTrip.family_name}
+                        onSave={(v) => {
+                          const trimmed = v.trim();
+                          applyLocalPatch(activeTrip.id, { family_name: trimmed });
+                          void withSaving(async () => {
+                            setSaveError(null);
+                            const res = await updateTripMetadataAction({
+                              tripId: activeTrip.id,
+                              familyName: trimmed,
+                            });
+                            if (!res.ok) setSaveError(res.error);
+                          });
+                        }}
+                        className="inline-block min-w-[4ch] text-tt-royal"
+                      />
+                      <span className="text-tt-royal/35"> — </span>
+                      <span className="inline-flex max-w-full flex-wrap items-baseline gap-1.5 sm:gap-2">
+                        <EditableTitle
+                          key={`${activeTrip.id}-adv`}
+                          value={activeTrip.adventure_name}
+                          onSave={(v) => {
+                            const trimmed = v.trim();
+                            applyLocalPatch(activeTrip.id, {
+                              adventure_name: trimmed,
+                            });
+                            void withSaving(async () => {
+                              setSaveError(null);
+                              const res = await updateTripMetadataAction({
+                                tripId: activeTrip.id,
+                                adventureName: trimmed,
+                              });
+                              if (!res.ok) setSaveError(res.error);
+                            });
+                          }}
+                          className="inline-block min-w-[6ch]"
+                          style={{
+                            color: resolvedAdventureTitleColor(
+                              activeTrip.preferences,
+                            ),
+                          }}
+                        />
+                        <AdventureTitleColorControl
+                          preferences={activeTrip.preferences}
+                          onColorChange={(next) => {
+                            const prev =
+                              activeTrip.preferences &&
+                              typeof activeTrip.preferences === "object" &&
+                              !Array.isArray(activeTrip.preferences)
+                                ? ({
+                                    ...activeTrip.preferences,
+                                  } as Record<string, unknown>)
+                                : ({} as Record<string, unknown>);
+                            applyLocalPatch(activeTrip.id, {
+                              preferences: {
+                                ...prev,
+                                [ADVENTURE_TITLE_COLOR_KEY]: next,
+                              },
+                            });
+                            void withSaving(async () => {
+                              setSaveError(null);
+                              const res = await updateTripPreferencesPatchAction({
+                                tripId: activeTrip.id,
+                                patch: {
+                                  [ADVENTURE_TITLE_COLOR_KEY]: next,
+                                },
+                              });
+                              if (!res.ok) setSaveError(res.error);
+                            });
+                          }}
+                        />
+                      </span>
+                    </h1>
+                  </div>
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-tt-ink-muted">
+                    <span>{formatTripHeroDateRange(activeTrip.start_date, activeTrip.end_date)}</span>
+                    <span className="text-tt-line/80" aria-hidden>
+                      ·
+                    </span>
+                    <span>{plannerPartyLabel(activeTrip)}</span>
+                    <span className="text-tt-line/80" aria-hidden>
+                      ·
+                    </span>
+                    <span>{activeRegionLabel}</span>
+                  </p>
+                  <PlannerHeroStats trip={activeTrip} parks={calendarParks} />
                 </div>
-              </div>
-              <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-                <div className="rounded-full border border-tt-gold/20 bg-tt-gold-soft/70 px-3 py-1.5 shadow-tt-sm">
-                  <Countdown
-                    startDate={activeTrip.start_date}
-                    endDate={activeTrip.end_date}
-                  />
-                </div>
-                <div className="rounded-full border border-tt-line bg-tt-surface/75 px-3 py-1.5 shadow-tt-sm">
-                  <TripTimeline trip={activeTrip} variant="inline" />
+
+                <div className="flex w-full shrink-0 flex-col gap-2 sm:max-w-xs lg:w-64">
+                  <label className="block font-meta text-[11px] font-semibold uppercase tracking-wide text-tt-ink-soft">
+                    Switch trip
+                    <select
+                      value={activeTripId}
+                      onChange={(e) => {
+                        const id = e.target.value;
+                        setActiveTripId(id);
+                        void touchTripAction(id);
+                        const tabQ =
+                          plannerTab !== "planner" ? `?tab=${plannerTab}` : "";
+                        if (tripRouteBase) {
+                          router.push(`/trip/${id}${tabQ}`);
+                        }
+                      }}
+                      className="mt-1.5 min-h-11 w-full rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 text-sm font-semibold text-tt-royal shadow-tt-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-royal/40"
+                    >
+                      {trips.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.family_name} — {t.adventure_name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                    {showGoToTodayPill ? (
+                      <Button
+                        type="button"
+                        variant="accent"
+                        size="sm"
+                        className="rounded-full"
+                        onClick={() => {
+                          const todayKey = formatDateKey(new Date());
+                          const el = document.getElementById(
+                            `planner-day-${todayKey}`,
+                          );
+                          el?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center",
+                          });
+                          setGoToTodayRingDateKey(todayKey);
+                          window.setTimeout(() => setGoToTodayRingDateKey(null), 1000);
+                        }}
+                      >
+                        Go to today →
+                      </Button>
+                    ) : null}
+                    <SavingIndicator
+                      isSaving={savingVisible}
+                      lastSavedAt={lastSavedAt}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
           </header>
-
-          <div className="mt-5">
-            <TripSelector
-              className="w-full"
-              trips={trips}
-              activeTripId={activeTripId}
-              onSwitch={(id) => {
-                setActiveTripId(id);
-                void touchTripAction(id);
-                const tabQ =
-                  plannerTab !== "planner" ? `?tab=${plannerTab}` : "";
-                if (tripRouteBase) {
-                  router.push(`/trip/${id}${tabQ}`);
-                }
-              }}
-              onNew={() => {
-                if (shouldBlockNewTripWizard(trips.length, maxActiveTripCap)) {
-                  setTierLimitVariant("trips");
-                  setTierLimitReason(
-                    maxActiveTripCap === 1
-                      ? "Free includes one active trip. Upgrade to Pro or Family on Pricing for more."
-                      : `Your plan allows ${maxActiveTripCap} active trips. Archive one or upgrade on Pricing.`,
-                  );
-                  setTierLimitOpen(true);
-                  return;
-                }
-                setWizardEditId(null);
-                setWizardFirstRun(false);
-                setWizardOpen(true);
-              }}
-              onRename={() => {
-                setWizardEditId(activeTripId);
-                setWizardFirstRun(false);
-                setWizardOpen(true);
-              }}
-              onDelete={() => {
-                if (trips.length <= 1) return;
-                if (
-                  !confirm("Are you sure? This can't be undone.")
-                )
-                  return;
-                clearAssignTimer();
-                const idToDelete = activeTripId;
-                void withSaving(async () => {
-                  const res = await deleteTripAction(idToDelete);
-                  if (!res.ok) {
-                    setSaveError(res.error);
-                    showToast("Couldn't delete trip — please try again");
-                    return;
-                  }
-                  startTransition(() => router.refresh());
-                });
-              }}
-            />
-          </div>
 
           {saveError ? (
             <div
@@ -2689,18 +2721,6 @@ export function PlannerClient({
           >
             <Button
               type="button"
-              variant="secondary"
-              size="md"
-              onClick={() => {
-                setWizardEditId(activeTripId);
-                setWizardFirstRun(false);
-                setWizardOpen(true);
-              }}
-            >
-              Edit trip
-            </Button>
-            <Button
-              type="button"
               variant="primary"
               size="md"
               onClick={() => {
@@ -2714,6 +2734,8 @@ export function PlannerClient({
               tripId={activeTripId}
               disabled={!activeTripId}
               buttonId="planner-pdf-export-btn"
+              buttonVariant="accent"
+              buttonLabel="Export PDF"
               onAchievementKeys={(keys) => enqueueAchievementKeys(keys)}
             />
             <Button
@@ -2724,21 +2746,170 @@ export function PlannerClient({
             >
               Compare days
             </Button>
-            {activeTrip.previous_assignments_snapshot_at ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="md"
-                onClick={() => setSmartPlanUndoOpen(true)}
-                aria-label="Undo last Smart Plan generation"
-                title={`Undo Smart Plan from ${formatUndoSnapshotHint(activeTrip.previous_assignments_snapshot_at)}`}
-              >
-                <span aria-hidden>↶</span>
-                Undo Smart Plan
-              </Button>
-            ) : null}
             <PlannerActionsMenu
-              onCompareDays={openCompareDays}
+              adminSection={(close) => (
+                <>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="block w-full px-4 py-2.5 text-left font-sans text-sm text-tt-royal transition hover:bg-tt-bg-soft"
+                    onClick={() => {
+                      setAdminPanel("share");
+                      close();
+                    }}
+                  >
+                    Share trip
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="block w-full px-4 py-2.5 text-left font-sans text-sm text-tt-royal transition hover:bg-tt-bg-soft"
+                    onClick={() => {
+                      setAdminPanel("family");
+                      close();
+                    }}
+                  >
+                    Family members
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="block w-full px-4 py-2.5 text-left font-sans text-sm text-tt-royal transition hover:bg-tt-bg-soft"
+                    onClick={() => {
+                      setAdminPanel("notes");
+                      close();
+                    }}
+                  >
+                    Day notes (all days)
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="block w-full px-4 py-2.5 text-left font-sans text-sm text-tt-royal transition hover:bg-tt-bg-soft"
+                    onClick={() => {
+                      setWizardEditId(activeTripId);
+                      setWizardFirstRun(false);
+                      setWizardOpen(true);
+                      close();
+                    }}
+                  >
+                    Edit trip
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="block w-full px-4 py-2.5 text-left font-sans text-sm text-tt-royal transition hover:bg-tt-bg-soft"
+                    onClick={() => {
+                      if (shouldBlockNewTripWizard(trips.length, maxActiveTripCap)) {
+                        setTierLimitVariant("trips");
+                        setTierLimitReason(
+                          maxActiveTripCap === 1
+                            ? "Free includes one active trip. Upgrade to Pro or Family on Pricing for more."
+                            : `Your plan allows ${maxActiveTripCap} active trips. Archive one or upgrade on Pricing.`,
+                        );
+                        setTierLimitOpen(true);
+                        close();
+                        return;
+                      }
+                      setWizardEditId(null);
+                      setWizardFirstRun(false);
+                      setWizardOpen(true);
+                      close();
+                    }}
+                  >
+                    + New trip
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="block w-full px-4 py-2.5 text-left font-sans text-sm text-tt-royal transition hover:bg-tt-bg-soft"
+                    onClick={() => {
+                      setWizardEditId(activeTripId);
+                      setWizardFirstRun(false);
+                      setWizardOpen(true);
+                      close();
+                    }}
+                  >
+                    Rename in wizard
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={trips.length <= 1}
+                    className="block w-full px-4 py-2.5 text-left font-sans text-sm text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-45"
+                    onClick={() => {
+                      if (trips.length <= 1) return;
+                      if (!confirm("Are you sure? This can't be undone.")) return;
+                      clearAssignTimer();
+                      const idToDelete = activeTripId;
+                      close();
+                      void withSaving(async () => {
+                        const res = await deleteTripAction(idToDelete);
+                        if (!res.ok) {
+                          setSaveError(res.error);
+                          showToast("Couldn't delete trip — please try again");
+                          return;
+                        }
+                        startTransition(() => router.refresh());
+                      });
+                    }}
+                  >
+                    Delete trip
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="block w-full px-4 py-2.5 text-left font-sans text-sm text-tt-royal transition hover:bg-tt-bg-soft"
+                    onClick={() => {
+                      void (async () => {
+                        const parkById = new Map(
+                          calendarParks.map((p) => [p.id, p]),
+                        );
+                        const stats = computeTripStats(activeTrip, parkById);
+                        const text = buildTripStatsShareText(
+                          stats,
+                          activeRegionLabel,
+                        );
+                        try {
+                          await copyTextToClipboard(text);
+                          showToast("Stats copied — share it with your group!");
+                        } catch {
+                          showToast("Couldn't copy — try again.");
+                        }
+                        close();
+                      })();
+                    }}
+                  >
+                    Copy stats summary
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="block w-full px-4 py-2.5 text-left font-sans text-sm text-tt-royal transition hover:bg-tt-bg-soft"
+                    onClick={() => {
+                      startTransition(() => {
+                        router.push(`${tripRouteBase ?? "/planner"}?tab=payments`);
+                      });
+                      close();
+                    }}
+                  >
+                    View payments
+                  </button>
+                  {activeTrip.previous_assignments_snapshot_at ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="block w-full px-4 py-2.5 text-left font-sans text-sm text-tt-royal transition hover:bg-tt-bg-soft"
+                      onClick={() => {
+                        setSmartPlanUndoOpen(true);
+                        close();
+                      }}
+                    >
+                      Undo Smart Plan
+                    </button>
+                  ) : null}
+                </>
+              )}
               onResetCruise={() => {
                 if (!activeTripId) return;
                 applyLocalPatch(activeTripId, {
@@ -2780,9 +2951,6 @@ export function PlannerClient({
                 });
               }}
               onPrint={() => window.print()}
-              onExportPdf={() =>
-                document.getElementById("planner-pdf-export-btn")?.click()
-              }
               cruiseSection={
                 activeTrip ? (
                   <div className="px-3 py-2">
@@ -2927,20 +3095,6 @@ export function PlannerClient({
                   />
                 ) : (
                   <>
-                    {!dayDetailOpen ? (
-                      <TripStatsCard
-                        trip={activeTrip}
-                        parks={calendarParks}
-                        payments={paymentsByTripId[activeTrip.id] ?? []}
-                        destinationLabel={activeRegionLabel}
-                        onToast={showToast}
-                        onViewAllPayments={() => {
-                          startTransition(() => {
-                            router.push(`${tripRouteBase ?? "/planner"}?tab=payments`);
-                          });
-                        }}
-                      />
-                    ) : null}
                     {!hasAnyAssignment && !dayDetailOpen ? (
                       <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-3 sm:p-4">
                         <div className="pointer-events-auto w-full max-w-md">

@@ -20,6 +20,8 @@ interface Props {
   buttonId?: string;
   onAchievementKeys?: (keys: string[]) => void;
   buttonLabel?: string;
+  /** Default secondary; use accent when Export should read as the gold CTA next to primary Smart Plan. */
+  buttonVariant?: "secondary" | "accent";
   defaultModeOnOpen?: PdfExportMode;
 }
 
@@ -29,6 +31,7 @@ export function PdfExportButton({
   buttonId,
   onAchievementKeys,
   buttonLabel = "📄 Export to PDF",
+  buttonVariant = "secondary",
   defaultModeOnOpen = "with_notes",
 }: Props) {
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -108,7 +111,7 @@ export function PdfExportButton({
       <Button
         id={buttonId}
         type="button"
-        variant="secondary"
+        variant={buttonVariant}
         size="md"
         onClick={() => {
           setExportMode(defaultModeOnOpen);
