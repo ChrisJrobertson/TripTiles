@@ -1,3 +1,4 @@
+import { AppRoutePulseFallback } from "@/components/app/AppRoutePulseFallback";
 import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
 import { getActiveTripForUser } from "@/lib/db/trips";
 import { loadPlannerClientServerData } from "@/lib/planner-server-data";
@@ -5,6 +6,7 @@ import { getPublicSiteUrl } from "@/lib/site";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +17,7 @@ function firstParam(
   return v;
 }
 
-export default async function PlannerPage({
+export default function PlannerPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -37,6 +39,18 @@ export default async function PlannerPage({
     );
   }
 
+  return (
+    <Suspense fallback={<AppRoutePulseFallback />}>
+      <PlannerRedirectContent searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function PlannerRedirectContent({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/planner");
 

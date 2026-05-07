@@ -1,16 +1,18 @@
 import { PlannerClient } from "@/app/(app)/planner/PlannerClient";
 import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
+import { PlannerTripPageSkeleton } from "@/components/planner/PlannerTripPageSkeleton";
 import { getPublicSiteUrl } from "@/lib/site";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { loadPlannerClientServerData } from "@/lib/planner-server-data";
 import { isDateKeyInTripRange } from "@/lib/trip-date-range";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
+import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-export default async function TripPlannerPage({
+export default function TripPlannerPage({
   params,
   searchParams,
 }: {
@@ -34,6 +36,20 @@ export default async function TripPlannerPage({
     );
   }
 
+  return (
+    <Suspense fallback={<PlannerTripPageSkeleton />}>
+      <TripPlannerPageContent params={params} searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function TripPlannerPageContent({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ tripId: string; rest?: string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/planner");
 
