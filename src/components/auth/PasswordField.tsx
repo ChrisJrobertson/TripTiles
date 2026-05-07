@@ -1,9 +1,7 @@
 "use client";
 
+import { AUTH_INPUT_CLASS, AUTH_LABEL_CLASS } from "@/components/auth/auth-field-classes";
 import { useCallback, useId, useState } from "react";
-
-const inputClass =
-  "min-h-12 w-full rounded-lg border-2 border-royal/25 bg-white px-4 pr-12 text-base text-royal outline-none transition focus:border-gold focus:ring-2 focus:ring-gold/40";
 
 type Props = {
   id?: string;
@@ -51,10 +49,7 @@ export function PasswordField({
 
   return (
     <div>
-      <label
-        htmlFor={id}
-        className="mb-2 block font-serif text-sm font-medium text-royal"
-      >
+      <label htmlFor={id} className={AUTH_LABEL_CLASS}>
         {label}
       </label>
       <div className="relative">
@@ -68,14 +63,14 @@ export function PasswordField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKey}
-          className={inputClass}
+          className={`${AUTH_INPUT_CLASS} pr-12`}
           aria-describedby={showDesc ? descId : undefined}
         />
         <button
           type="button"
           tabIndex={-1}
           onClick={() => setVisible((v) => !v)}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 font-sans text-xs font-medium text-royal/60 hover:bg-royal/5 hover:text-royal"
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2 py-1 font-sans text-xs font-medium text-tt-ink-soft hover:bg-tt-royal-soft hover:text-tt-royal"
           aria-label={visible ? "Hide password" : "Show password"}
         >
           {visible ? "Hide" : "Show"}
@@ -84,7 +79,7 @@ export function PasswordField({
       {showDesc ? (
         <div id={descId} className="mt-1.5 space-y-1">
           {helperText ? (
-            <p className="font-sans text-xs text-royal/55">{helperText}</p>
+            <p className="font-sans text-xs text-tt-ink-muted">{helperText}</p>
           ) : null}
           {showCapsHint && capsOn ? (
             <p

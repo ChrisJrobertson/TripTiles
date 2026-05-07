@@ -1,6 +1,7 @@
 import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
 import { TRIP_TILES_LOGO_AUTH_IMG_CLASS } from "@/components/brand/triptiles-logo-sizes";
 import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
+import { Card } from "@/components/ui/Card";
 import { createClient } from "@/lib/supabase/server";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -13,6 +14,9 @@ export const metadata: Metadata = {
   description: "Choose a new password for your TripTiles account.",
 };
 
+const logoFocus =
+  "inline-flex items-center rounded-sm focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tt-royal";
+
 export default async function ResetPasswordPage() {
   const supabase = await createClient();
   const {
@@ -21,41 +25,49 @@ export default async function ResetPasswordPage() {
 
   return (
     <main className="min-h-screen bg-transparent px-4 py-12">
-      <div className="mx-auto w-full max-w-md rounded-2xl border border-royal/10 bg-white/80 p-8 shadow-lg shadow-royal/5 backdrop-blur-sm md:p-10">
+      <Card
+        variant="elevated"
+        className="mx-auto w-full max-w-md border border-tt-line/15 bg-tt-surface/92 p-8 shadow-tt-md backdrop-blur-sm md:p-10"
+      >
         <div className="flex justify-center">
           <TripTilesLogoLink
             href="/"
             height={200}
             imgClassName={TRIP_TILES_LOGO_AUTH_IMG_CLASS}
-            className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-sm"
+            className={logoFocus}
           />
         </div>
 
         {!user ? (
-          <div className="mt-8 space-y-4 font-sans text-sm text-royal/80">
-            <p>
-              This session is invalid or has expired. Request a new reset code
-              from the forgot password page.
-            </p>
-            <p>
-              <Link
-                href="/forgot-password"
-                className="font-semibold text-gold underline"
-              >
-                Forgot password
-              </Link>
-            </p>
-          </div>
+          <>
+            <div className="mt-8 space-y-4 font-sans text-sm text-tt-ink-muted">
+              <p>
+                This session is invalid or has expired. Request a new reset code
+                from the forgot password page.
+              </p>
+              <p>
+                <Link
+                  href="/forgot-password"
+                  className="font-semibold text-tt-gold underline underline-offset-2"
+                >
+                  Forgot password
+                </Link>
+              </p>
+            </div>
+          </>
         ) : (
           <ResetPasswordForm />
         )}
 
-        <p className="mt-8 text-center font-sans text-sm text-royal/50">
-          <Link href="/login" className="text-royal underline underline-offset-2">
+        <p className="mt-8 text-center font-sans text-sm text-tt-ink-soft">
+          <Link
+            href="/login"
+            className="text-tt-royal underline underline-offset-2"
+          >
             Back to sign in
           </Link>
         </p>
-      </div>
+      </Card>
     </main>
   );
 }

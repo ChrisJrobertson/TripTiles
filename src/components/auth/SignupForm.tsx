@@ -1,15 +1,14 @@
 "use client";
 
 import { signUpWithPasswordAction } from "@/actions/auth";
+import { AUTH_INPUT_CLASS, AUTH_LABEL_CLASS } from "@/components/auth/auth-field-classes";
 import { useGlobalLoading } from "@/components/app/GlobalLoadingContext";
-import { safeNextPath } from "@/lib/auth/safe-next-path";
 import { PasswordField } from "@/components/auth/PasswordField";
+import { Button } from "@/components/ui/Button";
+import { safeNextPath } from "@/lib/auth/safe-next-path";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-
-const inputClass =
-  "min-h-12 w-full rounded-lg border-2 border-royal/25 bg-white px-4 text-base text-royal outline-none transition focus:border-gold focus:ring-2 focus:ring-gold/40";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -47,7 +46,7 @@ export function SignupForm({ next }: Props) {
     strength === "weak"
       ? "bg-amber-500"
       : strength === "ok"
-        ? "bg-gold"
+        ? "bg-tt-gold"
         : "bg-emerald-600";
 
   async function handleSubmit(e: React.FormEvent) {
@@ -91,22 +90,19 @@ export function SignupForm({ next }: Props) {
           return;
         }
 
-        router.push(
-          `/signup/verify?email=${encodeURIComponent(trimmedEmail)}`,
-        );
+        router.push(`/signup/verify?email=${encodeURIComponent(trimmedEmail)}`);
       });
     } catch {
       setError("Something went wrong. Please try again.");
     }
   }
 
+  const safeNext = encodeURIComponent(next);
+
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
       <div>
-        <label
-          htmlFor="signup-email"
-          className="mb-2 block font-serif text-sm font-medium text-royal"
-        >
+        <label htmlFor="signup-email" className={AUTH_LABEL_CLASS}>
           Email
         </label>
         <input
@@ -119,7 +115,7 @@ export function SignupForm({ next }: Props) {
             setEmail(e.target.value);
             setEmailError(null);
           }}
-          className={inputClass}
+          className={AUTH_INPUT_CLASS}
           placeholder="you@example.com"
           aria-invalid={emailError ? true : undefined}
         />
@@ -143,13 +139,13 @@ export function SignupForm({ next }: Props) {
           required
         />
         <div className="mt-2 flex items-center gap-2">
-          <div className="h-2 flex-1 overflow-hidden rounded-full bg-royal/10">
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-tt-line/40">
             <div
               className={`h-full rounded-full transition-all ${strengthColor}`}
               style={{ width: `${strengthPct}%` }}
             />
           </div>
-          <span className="font-sans text-xs tabular-nums text-royal/60">
+          <span className="font-sans text-xs tabular-nums text-tt-ink-muted">
             {password.length} / 8+
           </span>
         </div>
@@ -177,12 +173,12 @@ export function SignupForm({ next }: Props) {
       </div>
 
       {error ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-800">
+        <p className="rounded-tt-md border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-800">
           {error.includes("already exists") ? (
             <>
               {error}{" "}
               <Link
-                href={`/login?next=${encodeURIComponent(next)}`}
+                href={`/login?next=${safeNext}`}
                 className="font-semibold underline"
               >
                 Sign in
@@ -194,32 +190,52 @@ export function SignupForm({ next }: Props) {
         </p>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={busy}
-        className="flex min-h-12 min-w-[44px] w-full items-center justify-center rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 disabled:opacity-60"
-      >
-        {busy ? "Creating…" : "Create account"}
-      </button>
+      <p className="text-center font-sans text-xs leading-relaxed text-tt-ink-muted">
+        By signing up you agree to our{" "}
+        <Link
+          href="/terms"
+          className="font-semibold text-tt-royal underline decoration-tt-gold/45 underline-offset-2"
+        >
+          Terms
+        </Link>{" "}
+        and{" "}
+        <Link
+          href="/privacy"
+          className="font-semibold text-tt-royal underline decoration-tt-gold/45 underline-offset-2"
+        >
+          Privacy
+        </Link>
+        .
+      </p>
 
-      <p className="text-center font-sans text-xs text-royal/55">
+      <Button type="submit" variant="primary" size="lg" className="w-full" disabled={busy}>
+        {busy ? "Creating…" : "Create account"}
+      </Button>
+
+      <p className="text-center font-sans text-xs text-tt-ink-muted">
         We&apos;ll email you an 8-digit code to confirm your account.
       </p>
 
-      <div className="flex items-center gap-3 pt-2">
-        <div className="h-px flex-1 bg-royal/15" />
-        <span className="font-sans text-xs tracking-wide text-royal/45">
-          ── or ──
-        </span>
-        <div className="h-px flex-1 bg-royal/15" />
+      <div className="border-t border-tt-line/60 pt-5">
+        <Link
+          href={`/login?next=${safeNext}${email.trim() ? `&email=${encodeURIComponent(email.trim())}` : ""}`}
+          className="flex min-h-11 w-full items-center justify-center rounded-tt-md border border-tt-line bg-transparent px-4 font-heading text-sm font-semibold text-tt-royal transition hover:bg-tt-surface-warm"
+        >
+          Sign in with a code instead
+        </Link>
       </div>
 
-      <Link
-        href={`/login?next=${encodeURIComponent(next)}${email.trim() ? `&email=${encodeURIComponent(email.trim())}` : ""}`}
-        className="flex min-h-11 w-full min-w-[44px] items-center justify-center rounded-lg border-2 border-gold/70 bg-transparent px-4 font-serif text-sm font-semibold text-royal transition hover:bg-gold/10"
-      >
-        Sign in with a code instead
-      </Link>
+      <p className="text-center font-sans text-sm text-tt-ink-muted">
+        Already have an account?{" "}
+        <Link
+          href={`/login?next=${safeNext}`}
+          className="font-semibold text-tt-royal underline decoration-tt-gold/55 underline-offset-2 hover:text-tt-gold"
+        >
+          Sign in
+        </Link>
+      </p>
+
+      {/* TODO post-launch: social sign-in (Google / Apple) */}
     </form>
   );
 }

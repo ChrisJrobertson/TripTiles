@@ -5,7 +5,7 @@ import { ModalShell } from "@/components/ui/ModalShell";
 import { showToast } from "@/lib/toast";
 import type { ProductTier } from "@/lib/product-tier-labels";
 import { formatProductTierName } from "@/lib/product-tier-labels";
-import { TIERS } from "@/lib/tiers";
+import { TIERS, annualSaveVsMonthlyRoundedGbp } from "@/lib/tiers";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -113,12 +113,15 @@ export function PricingClient({
   const pro = TIERS.pro;
   const family = TIERS.family;
 
+  const proRoundedSave = annualSaveVsMonthlyRoundedGbp(pro);
+  const familyRoundedSave = annualSaveVsMonthlyRoundedGbp(family);
+
   const proPrice = useMemo(() => {
     if (billing === "yearly") {
       return {
         main: formatAnnualPrice(pro.annualGbp),
         sub: `or ${formatMonthlyPrice(pro.monthlyGbp)} billed monthly`,
-        save: `Save £${pro.annualSavingsVsMonthlyGbp.toFixed(2)}/year`,
+        save: `Save £${proRoundedSave}/year on Pro`,
       };
     }
     return {
@@ -126,14 +129,14 @@ export function PricingClient({
       sub: `or ${formatAnnualPrice(pro.annualGbp)} billed annually`,
       save: null,
     };
-  }, [billing, pro]);
+  }, [billing, pro, proRoundedSave]);
 
   const familyPrice = useMemo(() => {
     if (billing === "yearly") {
       return {
         main: formatAnnualPrice(family.annualGbp),
         sub: `or ${formatMonthlyPrice(family.monthlyGbp)} billed monthly`,
-        save: `Save £${family.annualSavingsVsMonthlyGbp.toFixed(2)}/year`,
+        save: `Save £${familyRoundedSave}/year on Family`,
       };
     }
     return {
@@ -141,7 +144,7 @@ export function PricingClient({
       sub: `or ${formatAnnualPrice(family.annualGbp)} billed annually`,
       save: null,
     };
-  }, [billing, family]);
+  }, [billing, family, familyRoundedSave]);
 
   const startCheckout = async (tier: "pro" | "family") => {
     setBusy(tier);
@@ -254,8 +257,9 @@ export function PricingClient({
           </button>
         </div>
         {billing === "yearly" ? (
-          <span className="rounded-full bg-tt-gold/25 px-3 py-1 font-sans text-xs font-semibold text-tt-royal">
-            Save £{TIERS.family.annualSavingsVsMonthlyGbp.toFixed(2)}/year
+          <span className="max-w-md rounded-full bg-tt-gold/25 px-3 py-1 text-center font-sans text-[11px] font-semibold leading-snug text-tt-royal sm:text-xs">
+            vs monthly billing: Pro saves £{proRoundedSave}/yr · Family saves £
+            {familyRoundedSave}/yr
           </span>
         ) : null}
       </div>

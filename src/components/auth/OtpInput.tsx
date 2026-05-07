@@ -38,7 +38,7 @@ export function OtpInput({
       autoFocus={autoFocus}
       aria-invalid={ariaInvalid}
       aria-describedby={ariaDescribedBy}
-      className="min-h-11 w-full min-w-0 rounded-lg border-2 border-royal/25 bg-white px-4 py-2.5 text-center font-mono text-2xl tracking-[0.35em] text-royal outline-none transition focus:border-gold focus:ring-2 focus:ring-gold/40 sm:min-h-[44px] sm:text-3xl sm:tracking-[0.4em]"
+      className="min-h-11 w-full min-w-0 rounded-tt-md border border-tt-line bg-tt-surface px-4 py-2.5 text-center font-mono text-2xl tracking-[0.35em] text-tt-royal outline-none transition focus:border-tt-royal focus:ring-2 focus:ring-tt-royal/25 sm:min-h-[44px] sm:text-3xl sm:tracking-[0.4em]"
       onChange={(e) => {
         const next = e.target.value.replace(/\D/g, "").slice(0, OTP_LENGTH);
         onChange(next);

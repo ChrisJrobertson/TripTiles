@@ -1,6 +1,8 @@
 import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
 import { TRIP_TILES_LOGO_AUTH_IMG_CLASS } from "@/components/brand/triptiles-logo-sizes";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { Card } from "@/components/ui/Card";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
 import { getPublicSiteUrl } from "@/lib/site";
 import type { Metadata } from "next";
@@ -44,45 +46,53 @@ type Props = {
   }>;
 };
 
+const logoFocus =
+  "inline-flex items-center rounded-sm focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tt-royal";
+
 export default async function LoginPage({ searchParams }: Props) {
   const params = await searchParams;
   const next = safeNextPath(params.next);
-  const hasError = Boolean(
-    params.error && String(params.error).trim() !== "",
-  );
-  const initialEmail =
-    typeof params.email === "string" ? params.email : "";
+  const hasError = Boolean(params.error && String(params.error).trim() !== "");
+  const initialEmail = typeof params.email === "string" ? params.email : "";
   const showCallbackNotice = params.notice === "old_callback";
 
   return (
     <main className="min-h-screen bg-transparent px-4 py-12">
-      <div className="mx-auto w-full max-w-md rounded-2xl border border-royal/10 bg-white/80 p-8 shadow-lg shadow-royal/5 backdrop-blur-sm md:p-10">
+      <Card
+        variant="elevated"
+        className="mx-auto w-full max-w-md border border-tt-line/15 bg-tt-surface/92 p-8 shadow-tt-md backdrop-blur-sm md:p-10"
+      >
         <div className="flex justify-center">
           <TripTilesLogoLink
             href="/"
             height={200}
             imgClassName={TRIP_TILES_LOGO_AUTH_IMG_CLASS}
-            className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-sm"
+            className={logoFocus}
           />
         </div>
 
-        <h1 className="mt-8 text-center font-serif text-2xl font-semibold text-royal md:text-3xl">
-          Sign in to TripTiles
-        </h1>
-        <p className="mt-3 text-center font-sans text-sm leading-relaxed text-royal/75">
-          Welcome back. Use an email sign-in code or your password.
-        </p>
-        <p className="mt-2 text-center font-sans text-xs leading-relaxed text-royal/60">
-          Use the email you registered with (there is no separate username). Fill
-          in the password field and choose{" "}
-          <span className="font-semibold text-royal/75">Sign in with password</span>
-          , or leave the password empty and use{" "}
-          <span className="font-semibold text-royal/75">Send sign-in code</span>.
+        <SectionHeader
+          compact
+          className="mt-8 flex-col items-center text-center [&>div:first-child]:items-center [&>div:first-child]:justify-center [&>div:last-child]:w-full [&_p]:mx-auto [&_p]:max-w-md"
+          title="Sign in to TripTiles"
+          subtitle={
+            <>
+              Welcome back. Use an email sign-in code or your password.
+            </>
+          }
+        />
+
+        <p className="mt-2 text-center font-sans text-xs leading-relaxed text-tt-ink-muted">
+          Use the email you registered with (there is no separate username).
+          Fill in the password field and choose{" "}
+          <span className="font-semibold text-tt-royal">Sign in with password</span>,
+          or leave the password empty and use{" "}
+          <span className="font-semibold text-tt-royal">Send sign-in code</span>.
         </p>
 
         {hasError ? (
           <div
-            className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-800"
+            className="mt-6 rounded-tt-md border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-800"
             role="alert"
           >
             <p>{GENERIC_AUTH_ERROR}</p>
@@ -91,22 +101,24 @@ export default async function LoginPage({ searchParams }: Props) {
 
         {showCallbackNotice ? (
           <div
-            className="mt-6 rounded-lg border border-royal/20 bg-cream px-4 py-3 font-sans text-sm text-royal/90"
+            className="mt-6 rounded-tt-md border border-tt-line-soft bg-tt-surface-warm px-4 py-3 font-sans text-sm text-tt-royal"
             role="status"
           >
-            <p className="font-semibold text-royal">{CALLBACK_NOTICE.title}</p>
-            <p className="mt-2 leading-relaxed">{CALLBACK_NOTICE.body}</p>
+            <p className="font-semibold">{CALLBACK_NOTICE.title}</p>
+            <p className="mt-2 leading-relaxed text-tt-ink-muted">
+              {CALLBACK_NOTICE.body}
+            </p>
           </div>
         ) : null}
 
         <LoginForm next={next} initialEmail={initialEmail} />
 
-        <p className="mt-8 text-center font-sans text-sm text-royal/50">
-          <Link href="/" className="text-royal underline underline-offset-2">
+        <p className="mt-8 text-center font-sans text-sm text-tt-ink-soft">
+          <Link href="/" className="text-tt-royal underline underline-offset-2">
             Back to home
           </Link>
         </p>
-      </div>
+      </Card>
     </main>
   );
 }

@@ -1,6 +1,8 @@
 import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
 import { TRIP_TILES_LOGO_AUTH_IMG_CLASS } from "@/components/brand/triptiles-logo-sizes";
 import { SignupForm } from "@/components/auth/SignupForm";
+import { Card } from "@/components/ui/Card";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
 import { getPublicSiteUrl } from "@/lib/site";
 import type { Metadata } from "next";
@@ -30,47 +32,43 @@ type Props = {
   searchParams: Promise<{ next?: string }>;
 };
 
+const logoFocus =
+  "inline-flex items-center rounded-sm focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tt-royal";
+
 export default async function SignupPage({ searchParams }: Props) {
   const sp = await searchParams;
   const next = safeNextPath(sp.next);
 
   return (
     <main className="min-h-screen bg-transparent px-4 py-12">
-      <div className="mx-auto w-full max-w-md rounded-2xl border border-royal/10 bg-white/80 p-8 shadow-lg shadow-royal/5 backdrop-blur-sm md:p-10">
+      <Card
+        variant="elevated"
+        className="mx-auto w-full max-w-md border border-tt-line/15 bg-tt-surface/92 p-8 shadow-tt-md backdrop-blur-sm md:p-10"
+      >
         <div className="flex justify-center">
           <TripTilesLogoLink
             href="/"
             height={200}
             imgClassName={TRIP_TILES_LOGO_AUTH_IMG_CLASS}
-            className="inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-white rounded-sm"
+            className={logoFocus}
           />
         </div>
 
-        <h1 className="mt-8 text-center font-serif text-2xl font-semibold text-royal md:text-3xl">
-          Create your TripTiles account
-        </h1>
-        <p className="mt-3 text-center font-sans text-sm leading-relaxed text-royal/75">
-          Free account. No credit card. Start planning in seconds.
-        </p>
+        <SectionHeader
+          compact
+          className="mt-8 flex-col items-center text-center [&>div:first-child]:items-center [&>div:last-child]:w-full [&_p]:mx-auto [&_p]:max-w-md"
+          title="Create your TripTiles account"
+          subtitle="Free account. No credit card. Start planning in seconds."
+        />
 
         <SignupForm next={next} />
 
-        <p className="mt-6 text-center font-sans text-sm text-royal/70">
-          Already have an account?{" "}
-          <Link
-            href={`/login?next=${encodeURIComponent(next)}`}
-            className="font-semibold text-royal underline decoration-gold/60 underline-offset-2 hover:text-gold"
-          >
-            Sign in
-          </Link>
-        </p>
-
-        <p className="mt-8 text-center font-sans text-sm text-royal/50">
-          <Link href="/" className="text-royal underline underline-offset-2">
+        <p className="mt-8 text-center font-sans text-sm text-tt-ink-soft">
+          <Link href="/" className="text-tt-royal underline underline-offset-2">
             Back to home
           </Link>
         </p>
-      </div>
+      </Card>
     </main>
   );
 }

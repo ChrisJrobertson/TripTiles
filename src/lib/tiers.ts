@@ -198,6 +198,14 @@ export const TIERS = {
 
 export const PUBLIC_TIERS: RetailTier[] = ["free", "pro", "family"];
 
+/** Annual GBP saved vs paying monthly for 12 months (rounded to whole £). */
+export function annualSaveVsMonthlyRoundedGbp(cfg: {
+  monthlyGbp: number;
+  annualGbp: number;
+}): number {
+  return Math.round(cfg.monthlyGbp * 12 - cfg.annualGbp);
+}
+
 /** Maps DB / Stripe labels to a retail tier key; internal staff tiers receive Family-tier entitlements. */
 export function normalizeToRetailTier(tier: string | null | undefined): RetailTier {
   const t = (tier ?? "free").toLowerCase();

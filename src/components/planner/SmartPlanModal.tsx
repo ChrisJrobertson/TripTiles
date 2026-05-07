@@ -1012,7 +1012,7 @@ export function SmartPlanModal({
             <div className="rounded-lg border border-tt-line bg-tt-surface/85 px-3 py-2">
               <span className="inline-flex items-center gap-2 font-sans text-sm text-tt-royal/85">
                 <LogoSpinner size="sm" className="shrink-0" decorative />
-                Smart Plan is thinking — this usually takes 5-10 seconds.
+                Smart Plan is thinking — this usually takes 10-20 seconds.
               </span>
             </div>
           ) : null}

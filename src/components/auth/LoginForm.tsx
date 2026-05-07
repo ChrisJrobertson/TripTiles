@@ -1,14 +1,13 @@
 "use client";
 
 import { sendSignInOtpAction, signInWithPasswordAction } from "@/actions/auth";
+import { AUTH_INPUT_CLASS, AUTH_LABEL_CLASS } from "@/components/auth/auth-field-classes";
 import { useGlobalLoading } from "@/components/app/GlobalLoadingContext";
+import { PasswordField } from "@/components/auth/PasswordField";
+import { Button } from "@/components/ui/Button";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { PasswordField } from "@/components/auth/PasswordField";
-
-const inputClass =
-  "min-h-12 w-full rounded-lg border-2 border-royal/25 bg-white px-4 text-base text-royal outline-none transition focus:border-gold focus:ring-2 focus:ring-gold/40";
 
 type Props = {
   next: string;
@@ -98,7 +97,7 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
         {error ? (
           <p
             id="login-error"
-            className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-800"
+            className="rounded-tt-md border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-800"
           >
             {error}
           </p>
@@ -106,10 +105,7 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
       </div>
 
       <div>
-        <label
-          htmlFor="login-email"
-          className="mb-2 block font-serif text-sm font-medium text-royal"
-        >
+        <label htmlFor="login-email" className={AUTH_LABEL_CLASS}>
           Email address
         </label>
         <input
@@ -120,7 +116,7 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className={inputClass}
+          className={AUTH_INPUT_CLASS}
           placeholder="you@example.com"
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? "login-error" : undefined}
@@ -137,49 +133,47 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
       />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
-        <button
+        <Button
           type="submit"
+          variant="primary"
+          size="lg"
+          className="min-h-12 flex-1"
           disabled={busy}
-          className="flex min-h-12 min-w-[44px] flex-1 items-center justify-center rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {phase === "code" ? "Sending…" : "Send sign-in code"}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="secondary"
+          size="lg"
+          className="min-h-12 flex-1"
           disabled={busy}
           onClick={() => void handlePasswordSignIn()}
-          className="flex min-h-12 min-w-[44px] flex-1 items-center justify-center rounded-lg border-2 border-royal/25 bg-white px-4 font-sans text-sm font-semibold text-royal transition hover:border-royal/40 hover:bg-cream disabled:cursor-not-allowed disabled:opacity-60"
         >
           {phase === "password" ? "Signing in…" : "Sign in with password"}
-        </button>
+        </Button>
       </div>
 
       <p className="text-center font-sans text-xs">
         <Link
           href={`/forgot-password?email=${encodeURIComponent(email.trim())}`}
-          className="font-medium text-royal/70 underline decoration-gold/50 underline-offset-2 hover:text-gold"
+          className="font-medium text-tt-royal underline decoration-tt-gold/50 underline-offset-2 hover:text-tt-gold"
         >
           Forgot password?
         </Link>
       </p>
 
-      <div className="flex items-center gap-3 pt-1">
-        <div className="h-px flex-1 bg-royal/15" />
-        <span className="font-sans text-xs tracking-wide text-royal/45">
-          ── or ──
-        </span>
-        <div className="h-px flex-1 bg-royal/15" />
-      </div>
-
-      <p className="text-center font-sans text-sm text-royal/70">
+      <p className="pt-2 text-center font-sans text-sm text-tt-ink-muted">
         Don&apos;t have an account?{" "}
         <Link
           href={`/signup?next=${encodeURIComponent(next)}`}
-          className="font-semibold text-royal underline decoration-gold/60 underline-offset-2 hover:text-gold"
+          className="font-semibold text-tt-royal underline decoration-tt-gold/55 underline-offset-2 hover:text-tt-gold"
         >
           Create one
         </Link>
       </p>
+
+      {/* TODO post-launch: social sign-in (Google / Apple) */}
     </form>
   );
 }

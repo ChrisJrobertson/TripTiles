@@ -122,7 +122,7 @@ import { PlannerDayTimelineStub } from "@/components/planner/PlannerDayTimelineS
 import { PlannerPlanningDeck } from "@/components/planner/PlannerPlanningDeck";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { dayConditionRow } from "@/lib/planner-day-conditions";
-import { daysUntilTripStart, tripStartValueLabel } from "@/lib/trip-start-label";
+import { daysUntilTripStart } from "@/lib/trip-start-label";
 import {
   computePlannerDayConflicts,
   conflictDotForDay,
@@ -2572,8 +2572,14 @@ export function PlannerClient({
 
   const heroMetadataLine = useMemo(() => {
     if (!activeTrip) return null;
-    const startDiff = daysUntilTripStart(activeTrip.start_date);
-    const departs = tripStartValueLabel(startDiff);
+    const start = parseDate(activeTrip.start_date);
+    const departs = Number.isNaN(start.getTime())
+      ? "—"
+      : start.toLocaleDateString("en-GB", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        });
     const range = formatTripHeroDateRange(activeTrip.start_date, activeTrip.end_date);
     const dest = activeRegionLabel;
     const party = plannerPartyLabel(activeTrip);
@@ -2698,26 +2704,6 @@ export function PlannerClient({
             <div className="relative flex flex-col gap-4">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
                 <div className="min-w-0 flex-1 space-y-3">
-                  <p className="font-meta text-[10px] font-semibold uppercase tracking-[0.14em] text-tt-gold/95">
-                    Current trip
-                    {lastSavedAt ? (
-                      <>
-                        {" "}
-                        <span className="font-normal tracking-normal text-tt-line/55">
-                          ·
-                        </span>{" "}
-                        Auto-saved {formatSavedBrief(lastSavedAt)}
-                      </>
-                    ) : (
-                      <>
-                        {" "}
-                        <span className="font-normal tracking-normal text-tt-line/55">
-                          ·
-                        </span>{" "}
-                        Auto-save while you edit
-                      </>
-                    )}
-                  </p>
                   <div className="flex flex-wrap items-start gap-2">
                     <span
                       className="mt-2 inline-flex shrink-0 items-center gap-2"

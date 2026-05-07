@@ -8,7 +8,9 @@ import {
   verifySignInOtpAction,
   verifySignupOtpAction,
 } from "@/actions/auth";
+import { AUTH_LABEL_CLASS } from "@/components/auth/auth-field-classes";
 import { OTP_LENGTH, OtpInput } from "@/components/auth/OtpInput";
+import { Button } from "@/components/ui/Button";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -131,17 +133,14 @@ export function EmailOtpVerifyForm({ mode, email, next }: Props) {
 
   return (
     <div className="w-full max-w-md space-y-6">
-      <p className="font-serif text-base leading-relaxed text-royal/85">
+      <p className="font-sans text-base leading-relaxed text-tt-royal">
         We&apos;ve sent an 8-digit code to{" "}
-        <span className="break-all font-semibold text-royal">{email}</span>.
+        <span className="break-all font-semibold">{email}</span>.
       </p>
-      <p className="font-sans text-sm text-royal/75">{introLine(mode)}</p>
+      <p className="font-sans text-sm text-tt-ink-muted">{introLine(mode)}</p>
 
       <div className="space-y-3">
-        <label
-          htmlFor="email-otp-input"
-          className="block font-serif text-sm font-medium text-royal"
-        >
+        <label htmlFor="email-otp-input" className={`${AUTH_LABEL_CLASS} mb-0`}>
           Code
         </label>
         <OtpInput
@@ -163,16 +162,20 @@ export function EmailOtpVerifyForm({ mode, email, next }: Props) {
         ) : null}
       </div>
 
-      <button
+      <Button
         type="button"
+        variant="primary"
+        size="lg"
+        className="w-full"
         disabled={verifying || otp.replace(/\D/g, "").length !== OTP_LENGTH}
+        loading={verifying}
+        loadingLabel="Verifying…"
         onClick={() => void handleVerify()}
-        className="flex min-h-11 w-full min-w-[44px] items-center justify-center rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 py-2.5 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-[44px]"
       >
-        {verifying ? "Verifying…" : "Verify"}
-      </button>
+        Verify
+      </Button>
 
-      <p className="text-center font-sans text-sm text-royal/70">
+      <p className="text-center font-sans text-sm text-tt-ink-muted">
         {cooldown > 0 ? (
           <>Didn&apos;t arrive? Resend in {cooldown}s</>
         ) : (
@@ -180,7 +183,7 @@ export function EmailOtpVerifyForm({ mode, email, next }: Props) {
             type="button"
             disabled={resendPending}
             onClick={() => void handleResend()}
-            className="min-h-11 min-w-[44px] font-semibold text-royal underline decoration-gold/60 underline-offset-2 hover:text-gold disabled:opacity-50"
+            className="min-h-11 min-w-[44px] font-semibold text-tt-royal underline decoration-tt-gold/55 underline-offset-2 hover:text-tt-gold disabled:opacity-50"
           >
             {resendPending ? "Sending…" : "Resend code"}
           </button>
@@ -190,7 +193,7 @@ export function EmailOtpVerifyForm({ mode, email, next }: Props) {
       <p className="text-center">
         <Link
           href={backHref}
-          className="inline-flex min-h-11 min-w-[44px] items-center justify-center font-sans text-sm font-medium text-royal underline decoration-gold/50 underline-offset-2 hover:text-gold"
+          className="inline-flex min-h-11 min-w-[44px] items-center justify-center font-sans text-sm font-medium text-tt-royal underline decoration-tt-gold/50 underline-offset-2 hover:text-tt-gold"
         >
           Use a different email
         </Link>

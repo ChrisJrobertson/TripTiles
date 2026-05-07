@@ -3,6 +3,7 @@
 import { updatePasswordAction } from "@/actions/auth";
 import { useGlobalLoading } from "@/components/app/GlobalLoadingContext";
 import { PasswordField } from "@/components/auth/PasswordField";
+import { Button } from "@/components/ui/Button";
 import { showToast } from "@/lib/toast";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -43,7 +44,7 @@ export function ResetPasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-      <h2 className="font-serif text-lg font-semibold text-royal">
+      <h2 className="font-heading text-lg font-semibold text-tt-royal">
         Set a new password
       </h2>
       <PasswordField
@@ -65,17 +66,13 @@ export function ResetPasswordForm() {
         required
       />
       {error ? (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-800">
+        <p className="rounded-tt-md border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-800">
           {error}
         </p>
       ) : null}
-      <button
-        type="submit"
-        disabled={busy}
-        className="flex min-h-12 w-full items-center justify-center rounded-lg bg-gradient-to-r from-gold to-[#b8924f] px-4 font-serif text-base font-semibold text-royal shadow-md transition hover:opacity-95 disabled:opacity-60"
-      >
+      <Button type="submit" variant="primary" size="lg" className="w-full" disabled={busy}>
         {busy ? "Updating…" : "Update password"}
-      </button>
+      </Button>
     </form>
   );
 }

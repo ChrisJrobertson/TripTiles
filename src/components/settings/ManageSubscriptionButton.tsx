@@ -1,15 +1,17 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import { showToast } from "@/lib/toast";
 import { useCallback, useState } from "react";
 
 export function ManageSubscriptionButton({
-  label = "Manage billing",
+  label = "Manage subscription",
   variant = "primary",
+  openInNewTab = false,
 }: {
   label?: string;
-  /** primary: solid border; link: text-style control */
   variant?: "primary" | "link";
+  openInNewTab?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -22,23 +24,45 @@ export function ManageSubscriptionButton({
       });
       const j = (await r.json()) as { url?: string; error?: string };
       if (!r.ok || !j.url) {
-        showToast(j.error ?? "Could not open billing portal.", { type: "error" });
+        showToast(j.error ?? "Could not open billing portal.", {
+          type: "error",
+        });
         return;
       }
-      window.location.href = j.url;
+      if (openInNewTab) {
+        window.open(j.url, "_blank", "noopener,noreferrer");
+      } else {
+        window.location.href = j.url;
+      }
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [openInNewTab]);
 
-  const base =
-    variant === "link"
-      ? "mt-3 inline-flex min-h-11 items-center font-sans text-sm font-semibold text-tt-royal underline underline-offset-4 decoration-tt-gold/50 hover:text-tt-royal/80 disabled:opacity-50"
-      : "mt-6 inline-flex min-h-11 items-center justify-center rounded-tt-md border border-tt-line bg-tt-surface px-5 py-2.5 font-sans text-sm font-semibold text-tt-royal shadow-tt-sm transition hover:bg-tt-royal-soft disabled:opacity-50";
+  if (variant === "link") {
+    return (
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void openPortal()}
+        className="mt-3 inline-flex min-h-11 items-center font-sans text-sm font-semibold text-tt-royal underline decoration-tt-gold/50 underline-offset-4 hover:text-tt-royal/80 disabled:opacity-50"
+      >
+        {busy ? "Opening…" : label}
+      </button>
+    );
+  }
 
   return (
-    <button type="button" disabled={busy} onClick={() => void openPortal()} className={base}>
-      {busy ? "Opening…" : label}
-    </button>
+    <Button
+      type="button"
+      variant="primary"
+      size="md"
+      className="mt-2 w-full sm:w-auto"
+      loading={busy}
+      loadingLabel="Opening…"
+      onClick={() => void openPortal()}
+    >
+      {label}
+    </Button>
   );
 }

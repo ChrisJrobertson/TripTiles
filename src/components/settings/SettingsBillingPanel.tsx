@@ -79,10 +79,9 @@ export function SettingsBillingPanel({
         <div className="mt-4 rounded-tt-md border border-amber-400/90 bg-amber-50 px-4 py-3 font-sans text-sm text-tt-royal">
           <p className="font-semibold">Payment failed — retrying</p>
           <p className="mt-1 text-tt-royal/80">
-            Stripe is attempting to collect payment. Update your card in the
-            billing portal if you need to.
+            Stripe is attempting to collect payment. Use Manage subscription below
+            to update your card in the billing portal.
           </p>
-          <ManageSubscriptionButton label="Manage billing" />
         </div>
       ) : null}
 
@@ -179,30 +178,6 @@ export function SettingsBillingPanel({
         </div>
       </div>
 
-      <p className="mt-4 font-sans text-xs text-tt-royal/55">
-        Change card, cancel, switch between monthly and annual billing, or move
-        between Pro and Family in the Stripe Customer Portal.
-      </p>
-
-      {(() => {
-        const hasStripeCustomer = Boolean(
-          stripeRows.find((p) => p.provider_customer_id?.trim()) ||
-            profileRow.stripe_customer_id?.trim(),
-        );
-        if (hasStripeCustomer) {
-          return (
-            <div className="mt-2 space-y-1">
-              <ManageSubscriptionButton label="Manage billing" />
-              <ManageSubscriptionButton
-                label="Cancel subscription"
-                variant="link"
-              />
-            </div>
-          );
-        }
-        return null;
-      })()}
-
       {productTier === "free" ? (
         <Link
           href="/pricing"
@@ -210,7 +185,32 @@ export function SettingsBillingPanel({
         >
           See pricing
         </Link>
-      ) : null}
+      ) : (
+        (() => {
+          const hasStripeCustomer = Boolean(
+            stripeRows.find((p) => p.provider_customer_id?.trim()) ||
+              profileRow.stripe_customer_id?.trim(),
+          );
+          return (
+            <div className="mt-6 space-y-1">
+              <ManageSubscriptionButton
+                label="Manage subscription"
+                openInNewTab
+              />
+              <p className="max-w-xl font-sans text-xs leading-relaxed text-tt-ink-muted">
+                Change card, cancel, switch monthly/annual, or upgrade/downgrade
+                in the Stripe Customer Portal.
+              </p>
+              {hasStripeCustomer ? (
+                <ManageSubscriptionButton
+                  label="Cancel subscription"
+                  variant="link"
+                />
+              ) : null}
+            </div>
+          );
+        })()
+      )}
     </Card>
   );
 }

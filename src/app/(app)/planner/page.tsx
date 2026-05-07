@@ -1,4 +1,3 @@
-import { PlannerClient } from "@/app/(app)/planner/PlannerClient";
 import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
 import { getActiveTripForUser } from "@/lib/db/trips";
 import { loadPlannerClientServerData } from "@/lib/planner-server-data";
@@ -64,48 +63,19 @@ export default async function PlannerPage({
   }
 
   const trips = loaded.props.initialTrips;
-  if (trips.length > 0) {
-    const active = await getActiveTripForUser(user.id);
-    const tripId = active?.id ?? trips[0]!.id;
 
-    const qs = new URLSearchParams();
-    for (const [k, raw] of Object.entries(sp)) {
-      const v = firstParam(raw);
-      if (v != null && v !== "") qs.set(k, v);
-    }
-    const q = qs.toString();
-    redirect(q ? `/trip/${tripId}?${q}` : `/trip/${tripId}`);
+  if (trips.length === 0) {
+    redirect("/onboarding");
   }
 
-  const p = loaded.props;
-  return (
-    <PlannerClient
-      initialTrips={p.initialTrips}
-      parks={p.parks}
-      regions={p.regions}
-      initialOpenSmartPlan={p.initialOpenSmartPlan}
-      initialAutoGenerate={p.initialAutoGenerate}
-      initialActiveTripId={p.initialActiveTripId}
-      userEmail={p.userEmail}
-      userTier={p.profileTier}
-      productTier={p.productTier}
-      productPlanLabel={p.productPlanLabel}
-      maxActiveTripCap={p.maxActiveTripCap}
-      stripeCustomerId={p.stripeCustomerId}
-      achievementDefs={p.achievementDefs}
-      aiGenerationCountsByTrip={p.aiGenerationCountsByTrip}
-      siteUrl={p.siteUrl}
-      initialTileScrubNotice={p.initialTileScrubNotice}
-      initialCustomTiles={p.initialCustomTiles}
-      customTileLimit={p.customTileLimit}
-      plannerTab={p.plannerTab}
-      initialPlanningSection={p.initialPlanningSection}
-      temperatureUnit={p.initialTemperatureUnit}
-      emailMarketingOptOut={p.emailMarketingOptOut}
-      initialRidePrioritiesByTripId={p.initialRidePrioritiesByTripId}
-      ridePriorityCountByTripAndDay={p.ridePriorityCountByTripAndDay}
-      initialPaymentsByTripId={p.initialPaymentsByTripId}
-      cataloguedParkIds={p.cataloguedParkIds}
-    />
-  );
+  const active = await getActiveTripForUser(user.id);
+  const tripId = active?.id ?? trips[0]!.id;
+
+  const qs = new URLSearchParams();
+  for (const [k, raw] of Object.entries(sp)) {
+    const v = firstParam(raw);
+    if (v != null && v !== "") qs.set(k, v);
+  }
+  const q = qs.toString();
+  redirect(q ? `/trip/${tripId}?${q}` : `/trip/${tripId}`);
 }

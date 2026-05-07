@@ -326,8 +326,8 @@ export default async function MarketingHomePage() {
           </h2>
           <figure className="mx-auto mt-10 max-w-xl rounded-tt-lg border border-tt-line/10 bg-tt-surface p-8 text-center shadow-tt-sm md:p-10">
             <blockquote className="font-sans text-lg leading-relaxed text-tt-royal/90 md:text-xl">
-              &ldquo;Saved me 10 hours of research for our Disney World trip.
-              The timeline made it obvious where we&apos;d overstuffed a
+              &ldquo;Saved me hours of research for our Disney World trip. The
+              timeline made it obvious where we&apos;d overstuffed a
               day.&rdquo;
             </blockquote>
             <figcaption className="mt-6 font-meta text-[11px] font-semibold uppercase tracking-widest text-tt-gold">

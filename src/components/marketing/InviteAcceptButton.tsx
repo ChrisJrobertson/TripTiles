@@ -1,6 +1,7 @@
 "use client";
 
 import { acceptInviteAction } from "@/actions/collaborators";
+import { Button } from "@/components/ui/Button";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -33,14 +34,17 @@ export function InviteAcceptButton({ token, isAuthed }: Props) {
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <button
+      <Button
         type="button"
+        variant="primary"
+        size="lg"
+        className="min-w-[200px]"
+        loading={busy}
+        loadingLabel="Joining…"
         onClick={() => void onAccept()}
-        disabled={busy}
-        className="inline-flex min-h-12 min-w-[200px] items-center justify-center rounded-lg bg-gold px-8 py-3 font-sans text-base font-bold text-royal shadow-sm transition hover:bg-gold/90 disabled:opacity-60"
       >
-        {busy ? "Joining…" : "Accept invite"}
-      </button>
+        Accept invite
+      </Button>
       {error ? (
         <p className="text-center font-sans text-sm text-red-600">{error}</p>
       ) : null}
