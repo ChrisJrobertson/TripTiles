@@ -259,17 +259,16 @@ function initialPlanningSectionFromLegacyTab(
   return null;
 }
 
-export async function loadPlannerClientServerData(input: {
+export async function loadPlannerClientServerFromTrips(input: {
   supabase: SupabaseClient;
   userId: string;
   siteUrl: string;
   searchParams: Record<string, string | string[] | undefined>;
-  /** When set, this trip must appear in the user's trip list (otherwise invalid). */
   forcedTripId: string | null;
+  trips: Awaited<ReturnType<typeof getUserTrips>>;
 }): Promise<PlannerServerData> {
-  const { supabase, userId, siteUrl, searchParams: sp, forcedTripId } = input;
-
-  const trips = await loadPlannerTripRowsCached(userId);
+  const { supabase, userId, siteUrl, searchParams: sp, forcedTripId, trips } =
+    input;
 
   if (trips.length === 0) {
     const profileRead = await loadPlannerProfileReadUncached(supabase, userId);
@@ -439,5 +438,17 @@ export async function loadPlannerClientServerData(input: {
       cataloguedParkIds,
     },
   };
+}
+
+export async function loadPlannerClientServerData(input: {
+  supabase: SupabaseClient;
+  userId: string;
+  siteUrl: string;
+  searchParams: Record<string, string | string[] | undefined>;
+  /** When set, this trip must appear in the user's trip list (otherwise invalid). */
+  forcedTripId: string | null;
+}): Promise<PlannerServerData> {
+  const trips = await loadPlannerTripRowsCached(input.userId);
+  return loadPlannerClientServerFromTrips({ ...input, trips });
 }
 

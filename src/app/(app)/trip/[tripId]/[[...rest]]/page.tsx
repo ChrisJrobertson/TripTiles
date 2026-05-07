@@ -3,7 +3,10 @@ import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
 import { PlannerTripPageSkeleton } from "@/components/planner/PlannerTripPageSkeleton";
 import { getPublicSiteUrl } from "@/lib/site";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
-import { loadPlannerClientServerData } from "@/lib/planner-server-data";
+import {
+  loadPlannerClientServerFromTrips,
+  loadPlannerTripRowsCached,
+} from "@/lib/planner-server-data";
 import { isDateKeyInTripRange } from "@/lib/trip-date-range";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { notFound, redirect } from "next/navigation";
@@ -70,12 +73,51 @@ async function TripPlannerPageContent({
 
   const supabase = await createClient();
   const siteUrl = getPublicSiteUrl() || "http://localhost:3001";
-  const loaded = await loadPlannerClientServerData({
+  const trips = await loadPlannerTripRowsCached(user.id);
+
+  const trip = trips.find((t) => t.id === tripId);
+  if (!trip) notFound();
+
+  if (dayDate && !isDateKeyInTripRange(trip, dayDate)) {
+    notFound();
+  }
+
+  return (
+    <Suspense fallback={<PlannerTripPageSkeleton />}>
+      <TripPlannerPlannerShell
+        supabase={supabase}
+        userId={user.id}
+        siteUrl={siteUrl}
+        searchParams={sp}
+        tripId={tripId}
+        trips={trips}
+      />
+    </Suspense>
+  );
+}
+
+async function TripPlannerPlannerShell({
+  supabase,
+  userId,
+  siteUrl,
+  searchParams: sp,
+  tripId,
+  trips,
+}: {
+  supabase: Awaited<ReturnType<typeof createClient>>;
+  userId: string;
+  siteUrl: string;
+  searchParams: Record<string, string | string[] | undefined>;
+  tripId: string;
+  trips: Awaited<ReturnType<typeof loadPlannerTripRowsCached>>;
+}) {
+  const loaded = await loadPlannerClientServerFromTrips({
     supabase,
-    userId: user.id,
+    userId,
     siteUrl,
     searchParams: sp,
     forcedTripId: tripId,
+    trips,
   });
 
   if (!loaded.ok) {
@@ -84,13 +126,6 @@ async function TripPlannerPageContent({
     }
     if (loaded.error === "trip_not_found") notFound();
     return <ProfileLoadErrorPanel detail={loaded.message} />;
-  }
-
-  const trip = loaded.props.initialTrips.find((t) => t.id === tripId);
-  if (!trip) notFound();
-
-  if (dayDate && !isDateKeyInTripRange(trip, dayDate)) {
-    notFound();
   }
 
   const p = loaded.props;
