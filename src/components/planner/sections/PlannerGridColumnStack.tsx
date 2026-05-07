@@ -11,6 +11,7 @@ import { PlannerDayTimelineStub } from "@/components/planner/PlannerDayTimelineS
 import { PlannerPlanningDeck } from "@/components/planner/PlannerPlanningDeck";
 import { TripDayPageView } from "@/components/planner/TripDayPageView";
 import { SHOW_BOOKING_AFFILIATE_PANEL } from "@/components/planner/sections/planner-section-flags";
+import { usePlannerState } from "@/components/planner/state/PlannerStateContext";
 import { hasAnyAffiliatePartner } from "@/lib/affiliates";
 import type { CrowdLevel } from "@/lib/planner-crowd-level-meta";
 import { resolvePaletteRegionId } from "@/lib/planner-palette-region";
@@ -33,8 +34,6 @@ export type PlannerGridColumnStackProps = {
   siteUrl: string;
   parks: Park[];
   customTilesForPalette: CustomTile[];
-  selectedParkId: string | null;
-  onSelectPark: (id: string | null) => void;
   onAddCustom: (group: string) => void;
   onEditCustom: (tile: CustomTile) => void;
   onDeleteCustom: (tileId: string) => void;
@@ -95,8 +94,6 @@ export type PlannerGridColumnStackProps = {
   ) => void;
   calendarConflictDotsForCalendar: Record<string, "amber" | "grey">;
   goToTodayRingDateKey: string | null;
-  plannerTimelineDateKey: string | null;
-  setPlannerTimelineDateKey: (k: string | null) => void;
   openDayDetail: (
     dateKey: string,
     options?: { focusNotes?: boolean },
@@ -124,8 +121,6 @@ export function PlannerGridColumnStack({
   siteUrl,
   parks,
   customTilesForPalette,
-  selectedParkId,
-  onSelectPark,
   onAddCustom,
   onEditCustom,
   onDeleteCustom,
@@ -163,8 +158,6 @@ export function PlannerGridColumnStack({
   onSlotTimeChange,
   calendarConflictDotsForCalendar,
   goToTodayRingDateKey,
-  plannerTimelineDateKey,
-  setPlannerTimelineDateKey,
   openDayDetail,
   timelineWeatherCrowd,
   plannerDayUndoAvailable,
@@ -178,6 +171,13 @@ export function PlannerGridColumnStack({
   onTripPatch,
   setCompareMode,
 }: PlannerGridColumnStackProps) {
+  const {
+    plannerTimelineDateKey,
+    setPlannerTimelineDateKey,
+    selectedParkId,
+    setSelectedParkId,
+  } = usePlannerState();
+
   return (
     <div
       className={`mt-8 grid items-start gap-6 ${
@@ -204,7 +204,7 @@ export function PlannerGridColumnStack({
             showCruiseTiles={activeTrip.has_cruise}
             colourTheme={normaliseThemeKey(activeTrip.colour_theme)}
             selectedParkId={selectedParkId}
-            onSelectPark={onSelectPark}
+            onSelectPark={setSelectedParkId}
             onAddCustom={onAddCustom}
             onEditCustom={onEditCustom}
             onDeleteCustom={onDeleteCustom}
@@ -311,7 +311,7 @@ export function PlannerGridColumnStack({
                     onGenerateMustDosForPark={runMustDosGen}
                     mustDosGenLoading={mustDosGenLoading}
                     onToggleMustDoDone={handleToggleMustDoDone}
-                    onSelectPark={onSelectPark}
+                    onSelectPark={setSelectedParkId}
                     onMenuExportPdf={() =>
                       document.getElementById("planner-pdf-export-btn")?.click()
                     }

@@ -29,6 +29,7 @@ import {
 } from "@/actions/trips";
 import { ModalShell } from "@/components/ui/ModalShell";
 import { Button } from "@/components/ui/Button";
+import { PlannerStateProvider, usePlannerState } from "@/components/planner/state/PlannerStateContext";
 import { AchievementToast } from "@/components/gamification/AchievementToast";
 import { deleteCustomTileAction } from "@/actions/custom-tiles";
 import {
@@ -582,7 +583,15 @@ type PlannerSlotBooking = {
     | { kind: "clear"; dateKey: string; slot: SlotType };
 };
 
-export function PlannerClient({
+export function PlannerClient(props: Props) {
+  return (
+    <PlannerStateProvider>
+      <PlannerClientInner {...props} />
+    </PlannerStateProvider>
+  );
+}
+
+function PlannerClientInner({
   initialTrips,
   parks,
   regions,
@@ -608,6 +617,10 @@ export function PlannerClient({
   tripRouteBase,
   cataloguedParkIds: cataloguedParkIdsProp,
 }: Props) {
+  const {
+    plannerTimelineDateKey,
+    setPlannerTimelineDateKey,
+  } = usePlannerState();
   const router = useRouter();
   const pathname = usePathname();
   const overviewHref = tripRouteBase ?? "/planner";
@@ -629,7 +642,6 @@ export function PlannerClient({
     }
     return initialTrips[0]?.id ?? "";
   });
-  const [selectedParkId, setSelectedParkId] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -693,10 +705,6 @@ export function PlannerClient({
   const [goToTodayRingDateKey, setGoToTodayRingDateKey] = useState<
     string | null
   >(null);
-  /** Selected day for inline planner timeline (/planner, not routed day panel). */
-  const [plannerTimelineDateKey, setPlannerTimelineDateKey] = useState<
-    string | null
-  >(null);
   const [isTodayVisibleInViewport, setIsTodayVisibleInViewport] = useState(true);
   const smartLandingScrollDoneRef = useRef<string | null>(null);
   /** Loaded eagerly for all trips; Day Detail is the future boundary for lazy per-day fetch. */
@@ -738,7 +746,12 @@ export function PlannerClient({
         ? formatDateISO(parseDate(todayKey))
         : formatDateISO(parseDate(activeTrip.start_date));
     setPlannerTimelineDateKey(picked);
-  }, [activeTrip?.id, activeTrip?.start_date, activeTrip?.end_date]);
+  }, [
+    activeTrip?.id,
+    activeTrip?.start_date,
+    activeTrip?.end_date,
+    setPlannerTimelineDateKey,
+  ]);
 
   const cataloguedParkIdSet = useMemo(
     () => new Set(cataloguedParkIdsProp ?? []),
@@ -2334,7 +2347,7 @@ export function PlannerClient({
         );
       });
     },
-    [tripRouteBase, activeTripId, router],
+    [tripRouteBase, activeTripId, router, setPlannerTimelineDateKey],
   );
 
   const openDayPlanner = useCallback(
@@ -2631,7 +2644,7 @@ export function PlannerClient({
       if (!next) return;
       setPlannerTimelineDateKey(next);
     },
-    [activeTrip, plannerTimelineDateKey],
+    [activeTrip, plannerTimelineDateKey, setPlannerTimelineDateKey],
   );
 
   const handleShareTimelineDay = useCallback(() => {
@@ -3183,8 +3196,6 @@ export function PlannerClient({
               siteUrl={siteUrl}
               parks={parks}
               customTilesForPalette={customTilesForPalette}
-              selectedParkId={selectedParkId}
-              onSelectPark={setSelectedParkId}
               onAddCustom={handleAddCustom}
               onEditCustom={handleEditCustom}
               onDeleteCustom={handleDeleteCustom}
@@ -3229,8 +3240,6 @@ export function PlannerClient({
               onSlotTimeChange={onSlotTimeChange}
               calendarConflictDotsForCalendar={calendarConflictDotsForCalendar}
               goToTodayRingDateKey={goToTodayRingDateKey}
-              plannerTimelineDateKey={plannerTimelineDateKey}
-              setPlannerTimelineDateKey={setPlannerTimelineDateKey}
               openDayDetail={openDayDetail}
               timelineWeatherCrowd={plannerTimelineWeatherCrowd}
               plannerDayUndoAvailable={plannerDayUndoAvailable}
@@ -3402,7 +3411,6 @@ export function PlannerClient({
       {activeTrip ? (
         <MobilePlannerDock
           trip={activeTrip}
-          selectedParkId={selectedParkId}
           onAssign={onAssign}
           onNeedParkFirst={() => showHint("Pick a park first")}
         />

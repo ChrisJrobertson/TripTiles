@@ -2,6 +2,7 @@
 
 import { eachDateKeyInRange } from "@/lib/date-helpers";
 import type { SlotType, Trip } from "@/lib/types";
+import { usePlannerState } from "@/components/planner/state/PlannerStateContext";
 import { useEffect, useMemo, useState } from "react";
 
 const SLOTS: { key: SlotType; label: string }[] = [
@@ -13,17 +14,16 @@ const SLOTS: { key: SlotType; label: string }[] = [
 
 type Props = {
   trip: Trip | null;
-  selectedParkId: string | null;
   onAssign: (dateKey: string, slot: SlotType, parkId: string) => void;
   onNeedParkFirst: () => void;
 };
 
 export function MobilePlannerDock({
   trip,
-  selectedParkId,
   onAssign,
   onNeedParkFirst,
 }: Props) {
+  const { selectedParkId } = usePlannerState();
   const [dateKey, setDateKey] = useState<string>("");
   const [slot, setSlot] = useState<SlotType>("am");
 
