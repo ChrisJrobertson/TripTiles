@@ -478,6 +478,20 @@ export type AiDayTimelineRowTag =
   | "break"
   | "transport";
 
+export type KeyDateCategory = "booking" | "admin" | "travel" | "other";
+
+/** User-managed rows under `preferences.key_dates` (`YYYY-MM-DD` dates only). */
+export type KeyDate = {
+  id: string;
+  title: string;
+  icon: string;
+  description?: string;
+  /** ISO calendar date string `YYYY-MM-DD`. */
+  date: string;
+  category?: KeyDateCategory;
+  sort_order: number;
+};
+
 export type AiDayTimeline = {
   generated_at: string;
   model: AiDayTimelineModelId;
@@ -524,6 +538,8 @@ export type TripPreferences = {
   day_plan_feedback?: Record<string, DayPlanFeedback>;
   /** Append-only style behaviour signals (bounded in app code when sampling). */
   behaviour_signals?: BehaviourSignal[];
+  /** User-owned booking/reminder milestones (editable). Auto departure/return/cruise dates are merged in UI only. */
+  key_dates?: KeyDate[];
 };
 
 export interface Region {

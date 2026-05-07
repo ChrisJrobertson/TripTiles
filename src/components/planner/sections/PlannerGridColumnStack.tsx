@@ -112,6 +112,8 @@ export type PlannerGridColumnStackProps = {
   paymentsByTripId: Record<string, TripPayment[]>;
   onPaymentsChange: (tripId: string, next: TripPayment[]) => void;
   onTripPatch: (patch: Partial<Trip>) => void;
+  regionLabelForKeyDates: string;
+  regionCountryCode?: string | null;
   setCompareMode: (v: boolean) => void;
 };
 
@@ -171,6 +173,8 @@ export function PlannerGridColumnStack({
   paymentsByTripId,
   onPaymentsChange,
   onTripPatch,
+  regionLabelForKeyDates,
+  regionCountryCode = null,
   setCompareMode,
 }: PlannerGridColumnStackProps) {
   const {
@@ -404,6 +408,8 @@ export function PlannerGridColumnStack({
                         trip={activeTrip}
                         payments={paymentsByTripId[activeTrip.id] ?? []}
                         onPaymentsChange={onPaymentsChange}
+                        regionLabelForKeyDates={regionLabelForKeyDates}
+                        regionCountryCode={regionCountryCode}
                       />
                     </div>
                   ) : null}

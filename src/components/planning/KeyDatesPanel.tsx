@@ -1,180 +1,216 @@
 "use client";
 
+export type { PlannerKeyDateRow } from "@/lib/planner/key-dates";
+export { buildPlannerKeyDateRowsSorted } from "@/lib/planner/key-dates";
+
+import {
+  addKeyDateAction,
+  mergeSuggestedKeyDatesAction,
+  removeKeyDateAction,
+  updateKeyDateAction,
+} from "@/actions/trip-key-dates";
 import { CountdownChip } from "@/components/planning/CountdownChip";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import type { Trip } from "@/lib/types";
-import { useMemo } from "react";
-
-type KeyDateRow = {
-  id: string;
-  icon: string;
-  label: string;
-  dateKey: string;
-  notes?: string;
-};
-
-export type PlannerKeyDateRow = KeyDateRow;
-
-/** Region slugs that imply a US visit (ESTA / travel authorisation). */
-const US_ESTA_REGION_IDS = new Set([
-  "orlando",
-  "cali",
-  "florida_combo",
-  "miami",
-  "lasvegas",
-]);
-
-function shiftDateKey(dateKey: string, deltaDays: number): string | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
-  const [y, m, d] = dateKey.split("-").map(Number);
-  const dt = new Date(y!, (m ?? 1) - 1, d ?? 1, 12, 0, 0, 0);
-  if (Number.isNaN(dt.getTime())) return null;
-  dt.setDate(dt.getDate() + deltaDays);
-  const yy = dt.getFullYear();
-  const mm = String(dt.getMonth() + 1).padStart(2, "0");
-  const dd = String(dt.getDate()).padStart(2, "0");
-  return `${yy}-${mm}-${dd}`;
-}
-
-function buildRows(trip: Trip): KeyDateRow[] {
-  const { start_date, end_date, has_cruise, cruise_embark, cruise_disembark, region_id } =
-    trip;
-  const rows: KeyDateRow[] = [];
-
-  const diningOpen = shiftDateKey(start_date, -60);
-  if (diningOpen) {
-    rows.push({
-      id: "dining-60",
-      icon: "🍽️",
-      label: "Disney dining reservations open",
-      dateKey: diningOpen,
-      notes:
-        "Table-service restaurants book up fast — set a reminder for 6am.",
-    });
-  }
-
-  rows.push({
-    id: "ll",
-    icon: "⚡",
-    label: "Disney Lightning Lane",
-    dateKey: start_date,
-    notes:
-      "Book at 7am on each park morning via the My Disney Experience app.",
-  });
-
-  const universal = shiftDateKey(start_date, -14);
-  if (universal) {
-    rows.push({
-      id: "universal-express",
-      icon: "🎢",
-      label: "Universal Express Pass",
-      dateKey: universal,
-      notes: "Book ahead for peak season to guarantee availability.",
-    });
-  }
-
-  if (has_cruise && cruise_embark && /^\d{4}-\d{2}-\d{2}$/.test(cruise_embark)) {
-    const p75 = shiftDateKey(cruise_embark, -75);
-    if (p75) {
-      rows.push({
-        id: "cruise-port",
-        icon: "🚢",
-        label: "Disney Cruise port adventures",
-        dateKey: p75,
-        notes: "Port adventures release by sailing — check your Castaway Club window.",
-      });
-      rows.push({
-        id: "cruise-adult-dining",
-        icon: "🍷",
-        label: "Disney Cruise adult dining",
-        dateKey: p75,
-        notes: "Palo, Enchante, and Remy book early for popular nights.",
-      });
-    }
-  }
-
-  const region = region_id ?? "";
-  if (US_ESTA_REGION_IDS.has(region)) {
-    const esta = shiftDateKey(start_date, -14);
-    if (esta) {
-      rows.push({
-        id: "esta",
-        icon: "🛂",
-        label: "ESTA / travel authorisation",
-        dateKey: esta,
-        notes:
-          "Apply at esta.cbp.dhs.gov — allow 72hrs minimum, ideally weeks ahead.",
-      });
-    }
-  }
-
-  rows.push({
-    id: "depart",
-    icon: "✈️",
-    label: "Departure",
-    dateKey: start_date,
-  });
-
-  rows.push({
-    id: "return",
-    icon: "🏠",
-    label: "Return home",
-    dateKey: end_date,
-  });
-
-  if (has_cruise && cruise_embark && /^\d{4}-\d{2}-\d{2}$/.test(cruise_embark)) {
-    rows.push({
-      id: "cruise-emb",
-      icon: "🚢",
-      label: "Cruise embarkation",
-      dateKey: cruise_embark,
-    });
-  }
-  if (has_cruise && cruise_disembark && /^\d{4}-\d{2}-\d{2}$/.test(cruise_disembark)) {
-    rows.push({
-      id: "cruise-dis",
-      icon: "🚢",
-      label: "Cruise disembarkation",
-      dateKey: cruise_disembark,
-    });
-  }
-
-  return rows.filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.dateKey));
-}
-
-export function buildPlannerKeyDateRowsSorted(trip: Trip): KeyDateRow[] {
-  const list = buildRows(trip);
-  return [...list].sort((a, b) => {
-    if (a.dateKey < b.dateKey) return -1;
-    if (a.dateKey > b.dateKey) return 1;
-    return a.id.localeCompare(b.id);
-  });
-}
+import {
+  applyKeyDatesToPrefs,
+  getMergedKeyDatesSorted,
+  isAutoManagedKeyDateId,
+  tripHasApplicableSuggestedSeeds,
+  type DraftKeyDate,
+} from "@/lib/planner/key-dates";
+import { showToast } from "@/lib/toast";
+import type { KeyDate, KeyDateCategory, Trip } from "@/lib/types";
+import { useCallback, useMemo, useState } from "react";
 
 type Props = {
   trip: Trip;
+  /** Human label for destination (e.g. region short_name) — empty trips use `"your destination"`. */
+  regionLabel: string;
+  /** From loaded regions catalogue; improves UK-domestic classification for suggested seeds. */
+  regionCountryCode?: string | null;
+  /** When set (non–list-only), successful writes merge into trip preferences locally. */
+  onTripPatch?: (patch: Partial<Trip>) => void;
   className?: string;
-  /** Render only the milestone list (no Card or SectionHeader). */
+  /** Render only milestone rows — no chrome, toolbar, or forms. */
   listOnly?: boolean;
 };
 
+const CAT_OPTS: KeyDateCategory[] = ["booking", "admin", "travel", "other"];
+
+function normalizeCategory(cat: string): DraftKeyDate["category"] {
+  const c = cat.trim().toLowerCase();
+  if (CAT_OPTS.includes(c as KeyDateCategory)) return c as KeyDateCategory;
+  return "";
+}
+
 export function KeyDatesPanel({
   trip,
+  regionLabel,
+  regionCountryCode = null,
+  onTripPatch,
   className = "",
   listOnly = false,
 }: Props) {
-  const rows = useMemo(() => {
-    return buildPlannerKeyDateRowsSorted(trip);
-  }, [trip]);
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [mergeBusy, setMergeBusy] = useState(false);
+  const [formIcon, setFormIcon] = useState("📌");
+  const [formTitle, setFormTitle] = useState("");
+  const [formDate, setFormDate] = useState("");
+  const [formDesc, setFormDesc] = useState("");
+  const [formCat, setFormCat] = useState<string>("");
 
-  if (listOnly) {
-    return (
-      <ul className={`space-y-3 ${className}`.trim()}>
-        {rows.map((row) => (
+  const mergedRows = useMemo(
+    () => getMergedKeyDatesSorted(trip),
+    [trip],
+  );
+
+  const showSuggested = tripHasApplicableSuggestedSeeds(
+    trip,
+    regionCountryCode,
+  );
+
+  const applyPrefsRows = useCallback(
+    (rows: KeyDate[]) => {
+      if (!onTripPatch) return;
+      const prefs = trip.preferences;
+      const base =
+        prefs && typeof prefs === "object" && !Array.isArray(prefs)
+          ? { ...(prefs as Record<string, unknown>) }
+          : {};
+      onTripPatch({
+        preferences: applyKeyDatesToPrefs(base, rows),
+      });
+    },
+    [onTripPatch, trip.preferences],
+  );
+
+  const resetForm = () => {
+    setFormIcon("📌");
+    setFormTitle("");
+    setFormDate("");
+    setFormDesc("");
+    setFormCat("");
+  };
+
+  const startAdd = () => {
+    resetForm();
+    setEditingId(null);
+    setAdding(true);
+    setDeleteConfirmId(null);
+  };
+
+  const startEdit = (k: KeyDate) => {
+    if (isAutoManagedKeyDateId(k.id)) return;
+    setAdding(false);
+    setEditingId(k.id);
+    setDeleteConfirmId(null);
+    setFormIcon(k.icon);
+    setFormTitle(k.title);
+    setFormDate(k.date);
+    setFormDesc(k.description ?? "");
+    setFormCat(k.category ?? "");
+  };
+
+  const cancelForm = () => {
+    setAdding(false);
+    setEditingId(null);
+    resetForm();
+  };
+
+  const formActive = adding || editingId !== null;
+
+  const onSave = async () => {
+    const draft: DraftKeyDate = {
+      icon: formIcon,
+      title: formTitle,
+      date: formDate,
+      description: formDesc.trim() || undefined,
+      category: normalizeCategory(formCat),
+    };
+    setBusy(true);
+    if (editingId) {
+      const r = await updateKeyDateAction(trip.id, editingId, draft);
+      setBusy(false);
+      if (!r.ok) {
+        showToast(r.error, { type: "error" });
+        return;
+      }
+      applyPrefsRows(r.key_dates);
+      showToast("Key date updated", {
+        type: "success",
+        debounceKey: "key-date-write",
+        debounceMs: 500,
+      });
+      cancelForm();
+      return;
+    }
+    const r = await addKeyDateAction(trip.id, draft);
+    setBusy(false);
+    if (!r.ok) {
+      showToast(r.error, { type: "error" });
+      return;
+    }
+    applyPrefsRows(r.key_dates);
+    showToast("Key date added", {
+      type: "success",
+      debounceKey: "key-date-write",
+      debounceMs: 500,
+    });
+    cancelForm();
+  };
+
+  const onConfirmDelete = async (id: string) => {
+    setBusy(true);
+    const r = await removeKeyDateAction(trip.id, id);
+    setBusy(false);
+    if (!r.ok) {
+      showToast(r.error, { type: "error" });
+      return;
+    }
+    applyPrefsRows(r.key_dates);
+    showToast("Key date removed", {
+      type: "success",
+      debounceKey: "key-date-write",
+      debounceMs: 500,
+    });
+    setDeleteConfirmId(null);
+  };
+
+  const onMergeSuggested = async () => {
+    setMergeBusy(true);
+    const r = await mergeSuggestedKeyDatesAction(trip.id);
+    setMergeBusy(false);
+    if (!r.ok) {
+      showToast(r.error, { type: "error" });
+      return;
+    }
+    applyPrefsRows(r.key_dates);
+    showToast("Suggested milestones added", {
+      type: "success",
+      debounceKey: "key-date-merge",
+      debounceMs: 600,
+    });
+  };
+
+  const listBody = (
+    <ul className={`space-y-3 ${listOnly ? className : ""}`.trim()}>
+      {mergedRows.map((row) => {
+        const isAuto = isAutoManagedKeyDateId(row.id);
+        const isEditing = editingId === row.id;
+        if (!listOnly && isEditing) return null;
+        const delOpen = deleteConfirmId === row.id;
+        return (
           <li
-            key={`${row.id}-${row.dateKey}`}
-            className="rounded-tt-lg border border-tt-line bg-tt-surface px-3 py-3 shadow-tt-sm sm:px-4"
+            key={`${row.id}-${row.date}`}
+            className={`rounded-tt-lg border border-tt-line bg-tt-surface px-3 py-3 shadow-tt-sm sm:px-4 ${
+              isAuto ? "border-l-4 border-l-tt-line/70" : ""
+            }`}
           >
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
               <div className="min-w-0 flex-1">
@@ -184,11 +220,16 @@ export function KeyDatesPanel({
                   </span>
                   <div className="min-w-0">
                     <p className="font-sans text-sm font-semibold text-tt-ink">
-                      {row.label}
+                      {row.title}
+                      {isAuto ? (
+                        <span className="ml-2 font-meta text-[10px] font-semibold uppercase tracking-wide text-tt-ink-soft">
+                          From trip dates
+                        </span>
+                      ) : null}
                     </p>
-                    {row.notes ? (
+                    {row.description ? (
                       <p className="mt-1 font-sans text-xs italic leading-snug text-tt-ink-soft">
-                        {row.notes}
+                        {row.description}
                       </p>
                     ) : null}
                   </div>
@@ -196,65 +237,219 @@ export function KeyDatesPanel({
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
                 <CountdownChip
-                  targetDate={row.dateKey}
-                  label={`${row.label}: ${row.dateKey}`}
+                  targetDate={row.date}
+                  label={`${row.title}: ${row.date}`}
                   treatPastAsMilestone
                 />
+                {!listOnly && onTripPatch && !isAuto ? (
+                  <>
+                    {!delOpen ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => startEdit(row)}
+                          disabled={busy || formActive || mergeBusy}
+                          className="min-h-[44px] min-w-[5rem] rounded-lg border border-royal/20 bg-cream px-3 py-2 text-sm font-semibold text-royal transition hover:bg-cream/80 disabled:opacity-50"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy || formActive || mergeBusy}
+                          onClick={() => {
+                            setDeleteConfirmId(row.id);
+                            setAdding(false);
+                            setEditingId(null);
+                          }}
+                          className="min-h-[44px] rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-800 transition hover:bg-red-100 disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </>
+                    ) : (
+                      <span className="flex flex-wrap items-center gap-2 text-sm text-royal/80">
+                        <span>Remove this milestone?</span>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void onConfirmDelete(row.id)}
+                          className="min-h-[44px] rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white"
+                        >
+                          Yes, delete
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => setDeleteConfirmId(null)}
+                          className="min-h-[44px] rounded-lg border border-royal/20 px-3 py-2 text-sm font-medium"
+                        >
+                          No
+                        </button>
+                      </span>
+                    )}
+                  </>
+                ) : null}
               </div>
             </div>
           </li>
-        ))}
-      </ul>
-    );
+        );
+      })}
+    </ul>
+  );
+
+  if (listOnly) {
+    return listBody;
   }
+
+  const inner = (
+    <div className={`space-y-6 font-sans text-tt-ink ${className}`.trim()}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <SectionHeader
+          title="Key dates & booking windows"
+          subtitle={`Important calendar dates before you travel — customised for ${regionLabel}.`}
+          icon="📅"
+          className="min-w-0 flex-1"
+        />
+        {!formActive ? (
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <Button type="button" onClick={startAdd}>
+              Add key date
+            </Button>
+            {showSuggested ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={mergeBusy || busy}
+                onClick={() => void onMergeSuggested()}
+              >
+                Add suggested defaults
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {formActive ? (
+        <Card variant="default" className="p-4">
+          <p className="font-heading text-sm font-semibold text-tt-royal">
+            {editingId ? "Edit key date" : "New key date"}
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1 text-sm sm:col-span-1">
+              <span className="font-medium text-tt-ink-muted">Icon</span>
+              <input
+                value={formIcon}
+                onChange={(e) => setFormIcon(e.target.value)}
+                maxLength={30}
+                className="min-h-11 rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 text-tt-ink"
+                placeholder="e.g. 🎟️"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm sm:col-span-1">
+              <span className="font-medium text-tt-ink-muted">Date</span>
+              <input
+                type="date"
+                value={formDate}
+                onChange={(e) => setFormDate(e.target.value)}
+                className="min-h-11 rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 text-tt-ink"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+              <span className="font-medium text-tt-ink-muted">Title</span>
+              <input
+                value={formTitle}
+                onChange={(e) => setFormTitle(e.target.value)}
+                maxLength={200}
+                className="min-h-11 rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 text-tt-ink"
+                placeholder="e.g. Pay villa balance"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+              <span className="font-medium text-tt-ink-muted">
+                Notes (optional)
+              </span>
+              <textarea
+                value={formDesc}
+                onChange={(e) => setFormDesc(e.target.value)}
+                maxLength={300}
+                rows={2}
+                className="rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 text-sm text-tt-ink"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+              <span className="font-medium text-tt-ink-muted">
+                Category (optional)
+              </span>
+              <select
+                value={formCat}
+                onChange={(e) => setFormCat(e.target.value)}
+                className="min-h-11 max-w-xs rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 text-tt-ink"
+              >
+                <option value="">— None —</option>
+                <option value="booking">Booking</option>
+                <option value="admin">Admin</option>
+                <option value="travel">Travel</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="accent"
+              disabled={
+                busy || !formTitle.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(formDate)
+              }
+              onClick={() => void onSave()}
+            >
+              Save
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={busy}
+              onClick={cancelForm}
+            >
+              Cancel
+            </Button>
+          </div>
+        </Card>
+      ) : null}
+
+      {mergedRows.length === 0 && !formActive ? (
+        <EmptyState
+          icon="📅"
+          title="No milestones yet"
+          description={`Track booking windows for ${regionLabel}. Add reminders here or load suggested milestones for your region.`}
+          action={
+            <div className="flex flex-col items-center gap-2">
+              <Button onClick={startAdd}>Add a key date →</Button>
+              {showSuggested ? (
+                <Button
+                  variant="secondary"
+                  disabled={mergeBusy || busy}
+                  onClick={() => void onMergeSuggested()}
+                >
+                  Add suggested defaults
+                </Button>
+              ) : null}
+            </div>
+          }
+        />
+      ) : null}
+
+      {mergedRows.length > 0 ? listBody : null}
+    </div>
+  );
 
   return (
     <Card
       as="section"
       variant="subtle"
-      className={`p-4 backdrop-blur-md sm:p-5 ${className}`}
+      className={`p-4 backdrop-blur-md sm:p-5 ${className}`.trim()}
       aria-labelledby="key-dates-heading"
     >
-      <SectionHeader
-        title="Key dates & booking windows"
-        subtitle="Important dates to put in your calendar before you travel."
-        icon="📅"
-      />
-      <ul className="mt-4 space-y-3">
-        {rows.map((row) => (
-          <li
-            key={`${row.id}-${row.dateKey}`}
-            className="rounded-tt-lg border border-tt-line bg-tt-surface px-3 py-3 shadow-tt-sm sm:px-4"
-          >
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-start gap-2">
-                  <span className="text-lg leading-none" aria-hidden>
-                    {row.icon}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="font-sans text-sm font-semibold text-tt-ink">
-                      {row.label}
-                    </p>
-                    {row.notes ? (
-                      <p className="mt-1 font-sans text-xs italic leading-snug text-tt-ink-soft">
-                        {row.notes}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-                <CountdownChip
-                  targetDate={row.dateKey}
-                  label={`${row.label}: ${row.dateKey}`}
-                  treatPastAsMilestone
-                />
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {inner}
     </Card>
   );
 }

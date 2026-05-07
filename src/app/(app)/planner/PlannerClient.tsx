@@ -1011,6 +1011,12 @@ function PlannerClientInner({
     return r?.short_name ?? r?.name ?? "your destination";
   }, [activeTrip?.region_id, regions]);
 
+  const activeTripRegionCountryCode = useMemo(() => {
+    if (!activeTrip?.region_id) return null;
+    const cc = regions.find((x) => x.id === activeTrip.region_id)?.country_code;
+    return typeof cc === "string" && cc.trim() ? cc.trim() : null;
+  }, [activeTrip?.region_id, regions]);
+
   const mobilePlannerNoteMaps = useMemo(() => {
     if (!activeTrip) {
       return {
@@ -3224,6 +3230,8 @@ function PlannerClientInner({
               payments={paymentsByTripId[activeTrip.id] ?? []}
               onPaymentsChange={handlePaymentsChange}
               onTripPatch={(patch) => applyLocalPatch(activeTrip.id, patch)}
+              regionLabelForKeyDates={regionLabel}
+              regionCountryCode={activeTripRegionCountryCode}
               initialSection={initialPlanningSection}
             />
           ) : (
@@ -3300,6 +3308,8 @@ function PlannerClientInner({
               paymentsByTripId={paymentsByTripId}
               onPaymentsChange={handlePaymentsChange}
               onTripPatch={(patch) => applyLocalPatch(activeTrip.id, patch)}
+              regionLabelForKeyDates={regionLabel}
+              regionCountryCode={activeTripRegionCountryCode}
               setCompareMode={setCompareMode}
             />
           )}

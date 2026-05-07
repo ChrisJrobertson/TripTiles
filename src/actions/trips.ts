@@ -31,6 +31,10 @@ import {
   isTripPlanningProfile,
 } from "@/lib/trip-intelligence";
 import { readMustDosMap } from "@/lib/must-dos";
+import {
+  computeSeedTemplates,
+  hydrateSeedTemplatesWithIds,
+} from "@/lib/planner/key-dates";
 import type {
   Assignments,
   Assignment,
@@ -45,6 +49,7 @@ import type {
 import type { TripMustDosMap } from "@/types/must-dos";
 import { revalidatePath } from "next/cache";
 import { seedTripChecklistIfEmptyAction } from "@/actions/checklist";
+import { getRegionById } from "@/lib/db/regions";
 import { syncTripReminderRows } from "@/lib/trip-reminder-seed";
 import { assertTierAllows, tierErrorToClientPayload } from "@/lib/tier";
 import { TierError } from "@/lib/tier-errors";
@@ -210,6 +215,22 @@ async function createTripActionWithRegion(
             .map((n) => Math.min(17, Math.max(0, Math.floor(Number(n)))))
             .filter((n) => !Number.isNaN(n))
         : [];
+    let regionCountryCode: string | null = null;
+    const ridSeed = typeof input.regionId === "string" ? input.regionId.trim() : "";
+    if (ridSeed) {
+      const reg = await getRegionById(ridSeed);
+      regionCountryCode = reg?.country_code?.trim() ?? null;
+    }
+    const keyDateSeeds = hydrateSeedTemplatesWithIds(
+      computeSeedTemplates({
+        region_id: input.regionId ?? null,
+        start_date: input.startDate,
+        has_cruise: hasCruise,
+        cruise_embark: hasCruise ? input.cruiseEmbark ?? null : null,
+        cruise_disembark: hasCruise ? input.cruiseDisembark ?? null : null,
+        region_country_code: regionCountryCode,
+      }),
+    );
     const row = {
       owner_id: user.id,
       region_id: input.regionId,
@@ -222,7 +243,10 @@ async function createTripActionWithRegion(
       cruise_embark: hasCruise ? input.cruiseEmbark ?? null : null,
       cruise_disembark: hasCruise ? input.cruiseDisembark ?? null : null,
       assignments: {} as Assignments,
-      preferences: {} as Record<string, unknown>,
+      preferences:
+        keyDateSeeds.length > 0
+          ? ({ key_dates: keyDateSeeds } as Record<string, unknown>)
+          : ({} as Record<string, unknown>),
       is_public: false,
       public_slug: null as string | null,
       adults,

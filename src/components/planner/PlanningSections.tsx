@@ -17,6 +17,8 @@ type Props = {
   payments: TripPayment[];
   onPaymentsChange: (tripId: string, next: TripPayment[]) => void;
   onTripPatch: (patch: Partial<Trip>) => void;
+  regionLabelForKeyDates: string;
+  regionCountryCode?: string | null;
   initialSection?: PlanningSectionKey | null;
 };
 
@@ -46,6 +48,8 @@ export function PlanningSections({
   payments,
   onPaymentsChange,
   onTripPatch,
+  regionLabelForKeyDates,
+  regionCountryCode = null,
   initialSection = null,
 }: Props) {
   const defaultOpen = useMemo(
@@ -116,7 +120,12 @@ export function PlanningSections({
                       onPaymentsChange={onPaymentsChange}
                       embedded
                     />
-                    <KeyDatesPanel trip={trip} />
+                    <KeyDatesPanel
+                      trip={trip}
+                      regionLabel={regionLabelForKeyDates}
+                      regionCountryCode={regionCountryCode}
+                      onTripPatch={onTripPatch}
+                    />
                   </div>
                 ) : null}
                 {key === "budget" ? (

@@ -9,6 +9,8 @@ type Props = {
   payments: TripPayment[];
   onPaymentsChange: (tripId: string, next: TripPayment[]) => void;
   onTripPatch: (patch: Partial<Trip>) => void;
+  regionLabelForKeyDates: string;
+  regionCountryCode?: string | null;
   initialSection: "todo" | "payments" | "budget" | null;
 };
 
@@ -17,6 +19,8 @@ export function PlannerPlanningTabPanel({
   payments,
   onPaymentsChange,
   onTripPatch,
+  regionLabelForKeyDates,
+  regionCountryCode = null,
   initialSection,
 }: Props) {
   return (
@@ -25,6 +29,8 @@ export function PlannerPlanningTabPanel({
       payments={payments}
       onPaymentsChange={onPaymentsChange}
       onTripPatch={onTripPatch}
+      regionLabelForKeyDates={regionLabelForKeyDates}
+      regionCountryCode={regionCountryCode}
       initialSection={initialSection}
     />
   );

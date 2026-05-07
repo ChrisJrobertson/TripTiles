@@ -14,6 +14,8 @@ type Props = {
   trip: Trip;
   payments: TripPayment[];
   onPaymentsChange: (tripId: string, next: TripPayment[]) => void;
+  regionLabelForKeyDates: string;
+  regionCountryCode?: string | null;
 };
 
 /**
@@ -23,6 +25,8 @@ export function PlannerPlanningDeck({
   trip,
   payments,
   onPaymentsChange,
+  regionLabelForKeyDates,
+  regionCountryCode = null,
 }: Props) {
   return (
     <div className="mt-8 grid gap-5 xl:grid-cols-3">
@@ -73,7 +77,12 @@ export function PlannerPlanningDeck({
           />
         </div>
         <div className="pt-4">
-          <KeyDatesPanel trip={trip} listOnly />
+          <KeyDatesPanel
+            trip={trip}
+            listOnly
+            regionLabel={regionLabelForKeyDates}
+            regionCountryCode={regionCountryCode}
+          />
         </div>
         <Link
           href={`/trip/${trip.id}?tab=payments`}
