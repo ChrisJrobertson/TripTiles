@@ -48,36 +48,24 @@ import {
   BookingConflictModal,
   type BookingConflictAction,
 } from "@/components/planner/BookingConflictModal";
-import { Calendar } from "@/components/planner/Calendar";
-import { CompareDaysPanel } from "@/components/planner/CompareDaysPanel";
-import { CrowdStrategyBanner } from "@/components/planner/CrowdStrategyBanner";
 import { DayStrategyUpgradeModal } from "@/components/planner/DayStrategyUpgradeModal";
-import { MobileTripCalendarStripNav } from "@/components/planner/MobileTripCalendarStripNav";
-import { MobileDayView } from "@/components/planner/MobileDayView";
-import { PlanningSections } from "@/components/planner/PlanningSections";
 import { CustomTileModal } from "@/components/planner/CustomTileModal";
-import { TripDayPageView } from "@/components/planner/TripDayPageView";
 import { DayPlannerModal } from "@/components/planner/DayPlannerModal";
 import { DayNotesPanel } from "@/components/planner/DayNotesPanel";
 import { AdventureTitleColorControl } from "@/components/planner/AdventureTitleColorControl";
 import { EditableTitle } from "@/components/planner/EditableTitle";
 import { MobilePlannerDock } from "@/components/planner/MobilePlannerDock";
-import { Palette } from "@/components/planner/Palette";
 import { PlannerHeroStats } from "@/components/planner/PlannerHeroStats";
 import { PlannerActionsMenu } from "@/components/planner/PlannerActionsMenu";
 import { PlannerTopNotices } from "@/components/planner/PlannerTopNotices";
 import { SavingIndicator } from "@/components/planner/SavingIndicator";
 import { FamilyInvitePanel } from "@/components/planner/FamilyInvitePanel";
 import { ShareTripPanel } from "@/components/planner/ShareTripPanel";
-import { SkipLineLegend } from "@/components/planner/SkipLineLegend";
 import {
   SmartPlanModal,
   type SmartPlanGeneratePayload,
 } from "@/components/planner/SmartPlanModal";
-import { BookTripAffiliatePanel } from "@/components/planner/BookTripAffiliatePanel";
-import { hasAnyAffiliatePartner } from "@/lib/affiliates";
 import { PdfExportButton } from "@/components/planner/PdfExportButton";
-import { EmptyCalendarCta } from "@/components/planner/EmptyCalendarCta";
 import { TripCreationWizard } from "@/components/planner/TripCreationWizard";
 import { TripThemePicker } from "@/components/planner/TripThemePicker";
 import { Wizard } from "@/components/planner/Wizard";
@@ -118,8 +106,6 @@ import {
   type CrowdLevel,
 } from "@/lib/planner-crowd-level-meta";
 import { crowdLevelFromHeuristicTone } from "@/components/planner/CrowdLevelIndicator";
-import { PlannerDayTimelineStub } from "@/components/planner/PlannerDayTimelineStub";
-import { PlannerPlanningDeck } from "@/components/planner/PlannerPlanningDeck";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { dayConditionRow } from "@/lib/planner-day-conditions";
 import { daysUntilTripStart } from "@/lib/trip-start-label";
@@ -157,7 +143,12 @@ import type {
 import { customTileToPark } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
 import type { TripPayment } from "@/types/payments";
+import dynamic from "next/dynamic";
 import Link from "next/link";
+import { PlannerCrowdAndSkipSection } from "@/components/planner/sections/PlannerCrowdAndSkipSection";
+import { PlannerGridColumnStackSkeleton } from "@/components/planner/sections/PlannerGridColumnStackSkeleton";
+import { PlannerPlanningTabSkeleton } from "@/components/planner/sections/PlannerPlanningTabSkeleton";
+import { resolvePaletteRegionId } from "@/lib/planner-palette-region";
 import { usePathname, useRouter } from "next/navigation";
 import {
   useCallback,
@@ -170,7 +161,21 @@ import {
 } from "react";
 import "./planner.css";
 
-const SHOW_BOOKING_AFFILIATE_PANEL = false;
+const PlannerPlanningTabDynamic = dynamic(
+  () =>
+    import("@/components/planner/sections/PlannerPlanningTabPanel").then(
+      (m) => m.PlannerPlanningTabPanel,
+    ),
+  { loading: () => <PlannerPlanningTabSkeleton />, ssr: true },
+);
+
+const PlannerGridColumnDynamic = dynamic(
+  () =>
+    import("@/components/planner/sections/PlannerGridColumnStack").then(
+      (m) => m.PlannerGridColumnStack,
+    ),
+  { loading: () => <PlannerGridColumnStackSkeleton />, ssr: true },
+);
 
 function formatSavedBrief(at: Date | null): string {
   if (!at) return "";
@@ -296,13 +301,6 @@ function shouldBlockNewTripWizard(
 ): boolean {
   if (maxCap === "unlimited") return false;
   return tripsLength >= maxCap;
-}
-
-function resolvePaletteRegionId(trip: Trip | null): string | null {
-  if (!trip) return null;
-  if (trip.region_id) return trip.region_id;
-  if (trip.destination !== "custom") return trip.destination;
-  return null;
 }
 
 type SmartGenResult = Awaited<ReturnType<typeof generateAIPlanAction>>;
@@ -3179,23 +3177,14 @@ export function PlannerClient({
             />
           </section>
 
-          {showPlannerShell &&
-          typeof activeTrip.preferences?.ai_crowd_summary === "string" &&
-          (activeTrip.preferences.ai_crowd_summary as string).trim() ? (
-            <CrowdStrategyBanner
-              text={(activeTrip.preferences.ai_crowd_summary as string).trim()}
-              seasonPill={crowdSeasonPill ?? undefined}
-            />
-          ) : null}
-
-          {showPlannerShell ? (
-            <div className="mt-3">
-              <SkipLineLegend />
-            </div>
-          ) : null}
+          <PlannerCrowdAndSkipSection
+            showPlannerShell={showPlannerShell}
+            activeTrip={activeTrip}
+            crowdSeasonPill={crowdSeasonPill}
+          />
 
           {plannerTab === "planning" ? (
-            <PlanningSections
+            <PlannerPlanningTabDynamic
               trip={activeTrip}
               payments={paymentsByTripId[activeTrip.id] ?? []}
               onPaymentsChange={handlePaymentsChange}
@@ -3203,273 +3192,84 @@ export function PlannerClient({
               initialSection={initialPlanningSection}
             />
           ) : (
-            <div
-              className={`mt-8 grid items-start gap-6 ${
-                compareMode
-                  ? ""
-                : "lg:grid-cols-[minmax(18rem,20rem)_minmax(0,1fr)] lg:gap-5 xl:gap-6"
-              }`}
-            >
-              {!compareMode ? (
-                <div className="hidden space-y-3 md:block lg:sticky lg:top-20 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:pr-1">
-                  {SHOW_BOOKING_AFFILIATE_PANEL &&
-                  hasAnyAffiliatePartner() ? (
-                    <BookTripAffiliatePanel
-                      destinationLabel={activeRegionLabel}
-                      tripId={activeTrip.id}
-                      startDate={activeTrip.start_date}
-                      endDate={activeTrip.end_date}
-                      siteUrl={siteUrl}
-                    />
-                  ) : null}
-                  <Palette
-                    parks={parks}
-                    customTiles={customTilesForPalette}
-                    regionId={resolvePaletteRegionId(activeTrip)}
-                    showCruiseTiles={activeTrip.has_cruise}
-                    colourTheme={normaliseThemeKey(activeTrip.colour_theme)}
-                    selectedParkId={selectedParkId}
-                    onSelectPark={setSelectedParkId}
-                    onAddCustom={handleAddCustom}
-                    onEditCustom={handleEditCustom}
-                    onDeleteCustom={handleDeleteCustom}
-                  />
-                </div>
-              ) : null}
-              <div className="relative min-w-0 w-full">
-                {compareMode ? (
-                  <CompareDaysPanel
-                    trip={activeTrip}
-                    parks={calendarParks}
-                    assignments={activeTrip.assignments ?? {}}
-                    colourTheme={normaliseThemeKey(activeTrip.colour_theme)}
-                    plannerRegionId={resolvePaletteRegionId(activeTrip)}
-                    temperatureUnit={temperatureUnit}
-                    userDayNotes={mobilePlannerNoteMaps.user}
-                    onSaveUserDayNote={onSaveDayNote}
-                    onTransferSlot={onTransferSlot}
-                    onExit={() => setCompareMode(false)}
-                  />
-                ) : (
-                  <>
-                    {!hasAnyAssignment && !dayDetailOpen ? (
-                      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-3 sm:p-4">
-                        <div className="pointer-events-auto w-full max-w-md">
-                          <EmptyCalendarCta
-                            onGenerateAi={() => {
-                              setSmartError(null);
-                              setSmartOpen(true);
-                            }}
-                            onAddManually={() =>
-                              showHint(
-                                "Pick a park from the list, then tap a day slot to place it.",
-                              )
-                            }
-                            onSurpriseMe={() => handleSurpriseMe(null)}
-                          />
-                        </div>
-                      </div>
-                    ) : null}
-                    <div className="relative min-w-0">
-                      {dayDetailOpen &&
-                      tripRouteBase &&
-                      dayCanonicalForDetail &&
-                      activeTrip ? (
-                        <>
-                          <TripDayPageView
-                            trip={activeTrip}
-                            dayDate={dayCanonicalForDetail}
-                            tripBasePath={tripRouteBase}
-                            parks={calendarParks}
-                            cataloguedParkIdSet={cataloguedParkIdSet}
-                            ridePriorities={
-                              ridePrioritiesByDayForActiveTrip[
-                                dayCanonicalForDetail
-                              ] ?? []
-                            }
-                            productTier={productTier}
-                            plannerRegionId={resolvePaletteRegionId(activeTrip)}
-                            temperatureUnit={temperatureUnit}
-                            onClose={closeDayDetail}
-                            onPrioritiesUpdated={(items) =>
-                              handleRideDayPrioritiesUpdated(
-                                dayCanonicalForDetail,
-                                items,
-                              )
-                            }
-                            onSaveDayNote={onSaveDayNote}
-                            onOpenSmartPlan={() => setSmartOpen(true)}
-                            onOpenDayPlanner={(opts) => {
-                              openDayPlanner(dayCanonicalForDetail, opts);
-                            }}
-                            onUndoDayTweak={handleUndoDayTweak}
-                            onGenerateMustDosForPark={(parkId) => {
-                              void runMustDosGen(dayCanonicalForDetail, parkId);
-                            }}
-                            generatingMustDosParkId={
-                              mustDosGenLoading?.dateKey === dayCanonicalForDetail
-                                ? mustDosGenLoading.parkId
-                                : null
-                            }
-                            onToggleMustDoDone={(parkId, mustDoId, next) => {
-                              void handleToggleMustDoDone(
-                                dayCanonicalForDetail,
-                                parkId,
-                                mustDoId,
-                                next,
-                              );
-                            }}
-                            rideCountsForDay={
-                              dayCanonicalForDetail
-                                ? (rideCountsByDayForActiveTrip[
-                                    dayCanonicalForDetail
-                                  ] ?? null)
-                                : null
-                            }
-                            onTripPatch={(patch) =>
-                              applyLocalPatch(activeTrip.id, patch)
-                            }
-                            ridePrioritiesByDayForTrip={
-                              ridePrioritiesByDayForActiveTrip
-                            }
-                          />
-                          <MobileDayView
-                            trip={activeTrip}
-                            parks={calendarParks}
-                            assignments={activeTrip.assignments ?? {}}
-                            dayNotes={mobilePlannerNoteMaps.ai}
-                            userDayNotes={mobilePlannerNoteMaps.user}
-                            onAssign={onAssign}
-                            onClear={onClear}
-                            crowdSummary={mobileCrowdSummaryText}
-                            readOnly={false}
-                            ridePrioritiesByDay={
-                              ridePrioritiesByDayForActiveTrip
-                            }
-                            rideCountsByDay={rideCountsByDayForActiveTrip}
-                            onRideDayPrioritiesUpdated={
-                              handleRideDayPrioritiesUpdated
-                            }
-                            onOpenDayPlanner={openDayPlanner}
-                            onUndoDayTweak={handleUndoDayTweak}
-                            cataloguedParkIdSet={cataloguedParkIdSet}
-                            onGenerateMustDosForPark={runMustDosGen}
-                            mustDosGenLoading={mustDosGenLoading}
-                            onToggleMustDoDone={handleToggleMustDoDone}
-                            onSelectPark={setSelectedParkId}
-                            onMenuExportPdf={() =>
-                              document
-                                .getElementById("planner-pdf-export-btn")
-                                ?.click()
-                            }
-                            onMenuShare={handleMobileMenuShare}
-                            onMenuSettings={() => undefined}
-                            smartPlanUndoSnapshotAt={
-                              activeTrip.previous_assignments_snapshot_at ?? null
-                            }
-                            onMenuUndoSmartPlan={() =>
-                              setSmartPlanUndoOpen(true)
-                            }
-                            plannerRegionId={resolvePaletteRegionId(activeTrip)}
-                            temperatureUnit={temperatureUnit}
-                            onSaveUserDayNote={onSaveDayNote}
-                            timelineUnlocked={timelineUnlocked}
-                            onSlotTimeChange={onSlotTimeChange}
-                            tripRouteBase={tripRouteBase}
-                            urlSyncedDayDate={dayCanonicalForDetail}
-                          />
-                        </>
-                      ) : (
-                        <>
-                          <div className="hidden md:block">
-                            <Calendar
-                              trip={activeTrip}
-                              parks={calendarParks}
-                              selectedParkId={selectedParkId}
-                              onAssign={onAssign}
-                              onClear={onClear}
-                              onNeedParkFirst={() =>
-                                showHint("Pick a park first")
-                              }
-                              onAfterSlotClear={() => showToast("Slot cleared")}
-                              plannerRegionId={resolvePaletteRegionId(activeTrip)}
-                              temperatureUnit={temperatureUnit}
-                              onSaveDayNote={onSaveDayNote}
-                              timelineUnlocked={timelineUnlocked}
-                              onSlotTimeChange={onSlotTimeChange}
-                              ridePrioritiesByDay={
-                                ridePrioritiesByDayForActiveTrip
-                              }
-                              rideCountsByDay={rideCountsByDayForActiveTrip}
-                              dayConflictDots={calendarConflictDotsForCalendar}
-                              highlightDateKey={goToTodayRingDateKey}
-                              timelineSelectedDateKey={plannerTimelineDateKey}
-                              onTimelineDaySelect={setPlannerTimelineDateKey}
-                              onRideDayPrioritiesUpdated={
-                                handleRideDayPrioritiesUpdated
-                              }
-                              onOpenDayDetail={
-                                tripRouteBase ? openDayDetail : undefined
-                              }
-                            />
-                          </div>
-                          {tripRouteBase ? (
-                            <MobileTripCalendarStripNav
-                              trip={activeTrip}
-                              tripRouteBase={tripRouteBase}
-                              dayNotes={mobilePlannerNoteMaps.ai}
-                              userDayNotes={mobilePlannerNoteMaps.user}
-                            />
-                          ) : null}
-                          {activeTrip ? (
-                            <div className="mt-6 space-y-4 md:mt-8 md:space-y-5">
-                              <PlannerDayTimelineStub
-                                trip={activeTrip}
-                                dateKey={plannerTimelineDateKey}
-                                parks={calendarParks}
-                                plannerRegionId={resolvePaletteRegionId(
-                                  activeTrip,
-                                )}
-                                temperatureUnit={temperatureUnit}
-                                weatherChip={plannerTimelineWeatherCrowd.weather}
-                                crowdLevel={plannerTimelineWeatherCrowd.crowd}
-                                undoAiAvailable={plannerDayUndoAvailable}
-                                onClearSelection={() =>
-                                  setPlannerTimelineDateKey(null)
-                                }
-                                onPrevDay={() => shiftPlannerTimelineDay(-1)}
-                                onNextDay={() => shiftPlannerTimelineDay(1)}
-                                onPlanThisDay={() => setSmartOpen(true)}
-                                onUndoAi={() => {
-                                  if (plannerTimelineDateKey) {
-                                    handleUndoDayTweak(plannerTimelineDateKey);
-                                  }
-                                }}
-                                onShareDay={
-                                  tripRouteBase
-                                    ? handleShareTimelineDay
-                                    : undefined
-                                }
-                                onEditDay={() => {
-                                  if (plannerTimelineDateKey) {
-                                    openDayPlanner(plannerTimelineDateKey);
-                                  }
-                                }}
-                              />
-                              <PlannerPlanningDeck
-                                trip={activeTrip}
-                                payments={paymentsByTripId[activeTrip.id] ?? []}
-                                onPaymentsChange={handlePaymentsChange}
-                              />
-                            </div>
-                          ) : null}
-                        </>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+            <PlannerGridColumnDynamic
+              compareMode={compareMode}
+              activeTrip={activeTrip}
+              activeRegionLabel={activeRegionLabel}
+              siteUrl={siteUrl}
+              parks={parks}
+              customTilesForPalette={customTilesForPalette}
+              selectedParkId={selectedParkId}
+              onSelectPark={setSelectedParkId}
+              onAddCustom={handleAddCustom}
+              onEditCustom={handleEditCustom}
+              onDeleteCustom={handleDeleteCustom}
+              calendarParks={calendarParks}
+              temperatureUnit={temperatureUnit}
+              productTier={productTier}
+              mobilePlannerNoteMaps={mobilePlannerNoteMaps}
+              mobileCrowdSummaryText={mobileCrowdSummaryText}
+              onSaveDayNote={onSaveDayNote}
+              onTransferSlot={onTransferSlot}
+              onAssign={onAssign}
+              onClear={onClear}
+              onNeedParkFirst={() => showHint("Pick a park first")}
+              onAfterSlotClear={() => showToast("Slot cleared")}
+              hasAnyAssignment={hasAnyAssignment}
+              dayDetailOpen={dayDetailOpen}
+              onEmptyCalendarGenerateAi={() => {
+                setSmartError(null);
+                setSmartOpen(true);
+              }}
+              onEmptyCalendarAddManually={() =>
+                showHint(
+                  "Pick a park from the list, then tap a day slot to place it.",
+                )
+              }
+              onEmptyCalendarSurprise={() => handleSurpriseMe(null)}
+              tripRouteBase={tripRouteBase}
+              dayCanonicalForDetail={dayCanonicalForDetail}
+              closeDayDetail={closeDayDetail}
+              ridePrioritiesByDayForActiveTrip={ridePrioritiesByDayForActiveTrip}
+              rideCountsByDayForActiveTrip={rideCountsByDayForActiveTrip}
+              handleRideDayPrioritiesUpdated={handleRideDayPrioritiesUpdated}
+              openDayPlanner={openDayPlanner}
+              handleUndoDayTweak={handleUndoDayTweak}
+              runMustDosGen={runMustDosGen}
+              mustDosGenLoading={mustDosGenLoading}
+              handleToggleMustDoDone={handleToggleMustDoDone}
+              handleMobileMenuShare={handleMobileMenuShare}
+              onMenuUndoSmartPlan={() => setSmartPlanUndoOpen(true)}
+              cataloguedParkIdSet={cataloguedParkIdSet}
+              timelineUnlocked={timelineUnlocked}
+              onSlotTimeChange={onSlotTimeChange}
+              calendarConflictDotsForCalendar={calendarConflictDotsForCalendar}
+              goToTodayRingDateKey={goToTodayRingDateKey}
+              plannerTimelineDateKey={plannerTimelineDateKey}
+              setPlannerTimelineDateKey={setPlannerTimelineDateKey}
+              openDayDetail={openDayDetail}
+              timelineWeatherCrowd={plannerTimelineWeatherCrowd}
+              plannerDayUndoAvailable={plannerDayUndoAvailable}
+              shiftPlannerTimelineDay={shiftPlannerTimelineDay}
+              onPlanThisDay={() => setSmartOpen(true)}
+              onUndoAiTimeline={() => {
+                if (plannerTimelineDateKey) {
+                  handleUndoDayTweak(plannerTimelineDateKey);
+                }
+              }}
+              onShareTimelineDay={
+                tripRouteBase ? handleShareTimelineDay : undefined
+              }
+              onEditTimelineDay={() => {
+                if (plannerTimelineDateKey) {
+                  openDayPlanner(plannerTimelineDateKey);
+                }
+              }}
+              paymentsByTripId={paymentsByTripId}
+              onPaymentsChange={handlePaymentsChange}
+              onTripPatch={(patch) => applyLocalPatch(activeTrip.id, patch)}
+              setCompareMode={setCompareMode}
+            />
           )}
         </main>
         {showPlannerShell && !compareMode ? (

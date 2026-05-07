@@ -18,6 +18,7 @@ import {
   tierFromProfileRow,
 } from "@/lib/supabase/profile-read";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cache } from "react";
 import {
   formatProductTierName,
   getUserTier,
@@ -85,6 +86,10 @@ function firstParam(
   return v;
 }
 
+const getCachedUserTripsForPlanner = cache((userId: string) =>
+  getUserTrips(userId),
+);
+
 function normalisePlannerTab(
   raw: string | undefined,
 ): "planner" | "planning" {
@@ -116,7 +121,7 @@ export async function loadPlannerClientServerData(input: {
   const { supabase, userId, userEmail, siteUrl, searchParams: sp, forcedTripId } =
     input;
 
-  const trips = await getUserTrips(userId);
+  const trips = await getCachedUserTripsForPlanner(userId);
   if (trips.length === 0) {
     type PlannerProfileRow = {
       tier: string;
