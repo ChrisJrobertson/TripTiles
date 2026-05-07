@@ -1,5 +1,4 @@
-import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
-import { TRIP_TILES_LOGO_COMPACT_IMG_CLASS } from "@/components/brand/triptiles-logo-sizes";
+import { Logo } from "@/components/brand/Logo";
 import { APP_PLANNER_VERSION } from "@/lib/planner-version";
 import Link from "next/link";
 
@@ -16,11 +15,13 @@ export function MarketingFooter() {
     <footer className="mt-auto border-t border-tt-line bg-tt-surface/90 px-6 py-12 shadow-tt-sm backdrop-blur-md backdrop-saturate-150">
       <div className="mx-auto grid max-w-5xl gap-10 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <TripTilesLogoLink
+          <Logo
             href="/"
-            height={80}
-            imgClassName={TRIP_TILES_LOGO_COMPACT_IMG_CLASS}
-            className="inline-flex shrink-0 items-center rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-tt-bg"
+            variant="compact"
+            sizePreset="footer"
+            focusVisibleRingOffset="cream"
+            aria-label="TripTiles homepage"
+            className="inline-flex shrink-0 items-center rounded-sm"
           />
           <p className="mt-2 font-sans text-sm text-tt-royal/70">
             Plan your theme park trips in minutes.

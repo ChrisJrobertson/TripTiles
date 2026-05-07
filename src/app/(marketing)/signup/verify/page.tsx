@@ -1,6 +1,5 @@
 import { EmailOtpVerifyForm } from "@/components/auth/EmailOtpVerifyForm";
-import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
-import { TRIP_TILES_LOGO_INLINE_IMG_CLASS } from "@/components/brand/triptiles-logo-sizes";
+import { Logo } from "@/components/brand/Logo";
 import { Card } from "@/components/ui/Card";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { redirect } from "next/navigation";
@@ -12,7 +11,7 @@ type Props = {
 };
 
 const logoFocus =
-  "inline-flex items-center rounded-sm focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tt-royal";
+  "focus-visible:ring-0 focus-visible:ring-offset-0 inline-flex items-center rounded-sm focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tt-royal";
 
 export default async function SignupVerifyPage({ searchParams }: Props) {
   const p = await searchParams;
@@ -29,10 +28,10 @@ export default async function SignupVerifyPage({ searchParams }: Props) {
         className="w-full max-w-md border border-tt-line/15 bg-tt-surface/92 p-8 shadow-tt-md backdrop-blur-sm md:p-10"
       >
         <div className="flex justify-center">
-          <TripTilesLogoLink
+          <Logo
             href="/"
-            height={120}
-            imgClassName={TRIP_TILES_LOGO_INLINE_IMG_CLASS}
+            variant="full"
+            sizePreset="inline"
             className={logoFocus}
           />
         </div>

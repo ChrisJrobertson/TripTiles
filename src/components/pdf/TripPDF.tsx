@@ -20,6 +20,7 @@ import {
 } from "@/lib/planner-crowd-level-meta";
 import { formatMoney } from "@/lib/format";
 import { pdfDayConditionLine } from "@/lib/planner-day-conditions";
+import { getPublicSiteUrl } from "@/lib/site";
 import type {
   Assignments,
   BudgetCategory,
@@ -34,6 +35,7 @@ import type {
 import type { TripPayment } from "@/types/payments";
 import {
   Document,
+  Image as PdfImage,
   Link,
   Page,
   StyleSheet,
@@ -52,6 +54,11 @@ const COLOURS = {
   cream: "#fce7cc",
   muted: "#888888",
 };
+
+function pdfLogoFullSrc(): string {
+  const base = getPublicSiteUrl() || "https://www.triptiles.app";
+  return `${base.replace(/\/$/, "")}/email/logo-full.png`;
+}
 
 const styles = StyleSheet.create({
   page: {
@@ -849,16 +856,10 @@ export function TripPDF({
       creator="TripTiles"
     >
       <Page size="A4" style={styles.coverPage}>
-        <Text
-          style={{
-            fontSize: 12,
-            color: COLOURS.gold,
-            marginBottom: 14,
-            letterSpacing: 3,
-          }}
-        >
-          TRIPTILES
-        </Text>
+        <PdfImage
+          src={pdfLogoFullSrc()}
+          style={{ width: 220, marginBottom: 20 }}
+        />
         <Text style={styles.coverTitle}>{trip.adventure_name}</Text>
         <Text style={styles.coverSubtitle}>{familyName}</Text>
         <Text style={styles.coverMeta}>

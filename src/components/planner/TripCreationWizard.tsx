@@ -1,8 +1,7 @@
 "use client";
 
 import { createTripAction, touchTripAction } from "@/actions/trips";
-import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
-import { TRIP_TILES_LOGO_AUTH_IMG_CLASS } from "@/components/brand/triptiles-logo-sizes";
+import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { InlineLoadingOverlay } from "@/components/ui/InlineLoadingOverlay";
@@ -456,11 +455,12 @@ export function TripCreationWizard({
       >
         {variant === "page" ? (
           <div className="mb-5 flex justify-center">
-            <TripTilesLogoLink
+            <Logo
               href="/planner"
-              height={200}
-              imgClassName={TRIP_TILES_LOGO_AUTH_IMG_CLASS}
-              className="inline-flex items-center rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-tt-surface"
+              variant="full"
+              sizePreset="auth"
+              focusVisibleRingOffset="surface"
+              className="inline-flex items-center rounded-sm focus-visible:ring-tt-gold/50"
             />
           </div>
         ) : null}

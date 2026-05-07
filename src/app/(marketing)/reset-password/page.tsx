@@ -1,5 +1,4 @@
-import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
-import { TRIP_TILES_LOGO_AUTH_IMG_CLASS } from "@/components/brand/triptiles-logo-sizes";
+import { Logo } from "@/components/brand/Logo";
 import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
 import { Card } from "@/components/ui/Card";
 import { createClient } from "@/lib/supabase/server";
@@ -15,7 +14,7 @@ export const metadata: Metadata = {
 };
 
 const logoFocus =
-  "inline-flex items-center rounded-sm focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tt-royal";
+  "focus-visible:ring-0 focus-visible:ring-offset-0 inline-flex items-center rounded-sm focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tt-royal";
 
 export default async function ResetPasswordPage() {
   const supabase = await createClient();
@@ -30,12 +29,7 @@ export default async function ResetPasswordPage() {
         className="mx-auto w-full max-w-md border border-tt-line/15 bg-tt-surface/92 p-8 shadow-tt-md backdrop-blur-sm md:p-10"
       >
         <div className="flex justify-center">
-          <TripTilesLogoLink
-            href="/"
-            height={200}
-            imgClassName={TRIP_TILES_LOGO_AUTH_IMG_CLASS}
-            className={logoFocus}
-          />
+          <Logo href="/" variant="full" sizePreset="auth" className={logoFocus} />
         </div>
 
         {!user ? (

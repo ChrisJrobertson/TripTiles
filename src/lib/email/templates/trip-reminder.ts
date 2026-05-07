@@ -19,7 +19,11 @@ export function tripReminderEmailHtml(input: TripReminderEmailInput): {
     .map((l) => `<li style="margin:0 0 8px 0;">${escapeHtml(l)}</li>`)
     .join("");
   const unsub = `${input.siteUrl}/settings#email-preferences`;
+  const logoCompact = `${input.siteUrl.replace(/\/$/, "")}/email/logo-compact.png`;
   const html = `<!DOCTYPE html><html><body style="font-family:Inter,Segoe UI,sans-serif;background:#fce7cc;color:#2455ac;padding:24px;">
+  <p style="margin:0 0 16px;line-height:0;">
+    <img src="${escapeHtml(logoCompact)}" width="160" alt="TripTiles" style="display:block;border:0;height:auto;outline:none;text-decoration:none;" />
+  </p>
   <p style="margin:0 0 12px;font-size:16px;">Hi there,</p>
   <p style="margin:0 0 16px;font-size:15px;line-height:1.5;">Your trip <strong>${escapeHtml(input.adventureName)}</strong> in <strong>${escapeHtml(input.destinationName)}</strong> is coming up — here are a few practical nudges.</p>
   <ul style="margin:0 0 20px;padding-left:20px;font-size:14px;line-height:1.45;">${bullets}</ul>

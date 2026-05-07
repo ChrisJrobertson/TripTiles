@@ -1,6 +1,7 @@
-import { createServiceRoleClient } from "@/lib/supabase/service-role";
-import { getPublicAdventureTitleFromRow } from "@/lib/public-trip-display";
 import { ImageResponse } from "next/og";
+import { OgLogoLockup } from "@/lib/brand/og-logo-lockup";
+import { getPublicAdventureTitleFromRow } from "@/lib/public-trip-display";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const runtime = "nodejs";
 
@@ -26,13 +27,18 @@ export default async function Image({
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
-          gap: 32,
           background: "#2455ac",
-          color: "#fce7cc",
         }}
       >
-        <div style={{ fontSize: 72, fontWeight: 700, fontFamily: "Georgia, serif" }}>
-          TripTiles
+        <div
+          style={{
+            padding: "18px 26px",
+            background: "#ffffff",
+            borderRadius: 20,
+            boxShadow: "0 12px 36px rgba(11, 30, 92, 0.22)",
+          }}
+        >
+          <OgLogoLockup />
         </div>
       </div>,
       size,
@@ -55,14 +61,26 @@ export default async function Image({
             width: "100%",
             height: "100%",
             display: "flex",
+            flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
+            gap: 28,
             background: "#2455ac",
             color: "#fce7cc",
-            fontSize: 36,
+            fontFamily: "Georgia, serif",
           }}
         >
-          Plan not found
+          <div
+            style={{
+              padding: "14px 20px",
+              background: "#ffffff",
+              borderRadius: 18,
+              boxShadow: "0 10px 28px rgba(11, 30, 92, 0.2)",
+            }}
+          >
+            <OgLogoLockup compact />
+          </div>
+          <div style={{ fontSize: 32 }}>Plan not found</div>
         </div>,
         size,
       );
@@ -122,17 +140,17 @@ export default async function Image({
             gap: 24,
           }}
         >
-          <span
+          <div
             style={{
-              fontSize: 22,
-              letterSpacing: "0.35em",
-              color: "#dd4e14",
-              textTransform: "uppercase",
+              padding: "12px 18px",
+              background: "#ffffff",
+              borderRadius: 18,
+              boxShadow: "0 8px 24px rgba(11, 30, 92, 0.18)",
             }}
           >
-            TripTiles
-          </span>
-          <span style={{ fontSize: 48 }}>✦</span>
+            <OgLogoLockup compact />
+          </div>
+          <span style={{ fontSize: 40, color: "#dd4e14" }}>✦</span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <span style={{ fontSize: 56 }}>🎢</span>
@@ -162,11 +180,18 @@ export default async function Image({
           alignItems: "center",
           justifyContent: "center",
           background: "#2455ac",
-          color: "#fce7cc",
-          fontSize: 36,
         }}
       >
-        TripTiles
+        <div
+          style={{
+            padding: "18px 26px",
+            background: "#ffffff",
+            borderRadius: 20,
+            boxShadow: "0 12px 36px rgba(11, 30, 92, 0.22)",
+          }}
+        >
+          <OgLogoLockup />
+        </div>
       </div>,
       size,
     );

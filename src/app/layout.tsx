@@ -31,13 +31,13 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteBase),
   icons: {
     icon: [
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-      { url: "/favicon-48x48.png", sizes: "48x48", type: "image/png" },
+      { url: "/brand-icon/16", sizes: "16x16", type: "image/png" },
+      { url: "/icon", sizes: "32x32", type: "image/png" },
+      { url: "/brand-icon/48", sizes: "48x48", type: "image/png" },
+      { url: "/brand-icon/192", sizes: "192x192", type: "image/png" },
+      { url: "/brand-icon/512", sizes: "512x512", type: "image/png" },
     ],
-    apple: [
-      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
-    ],
+    apple: [{ url: "/apple-icon", sizes: "180x180", type: "image/png" }],
   },
   manifest: "/site.webmanifest",
   title: {

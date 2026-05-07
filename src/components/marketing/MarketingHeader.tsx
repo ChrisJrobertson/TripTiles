@@ -1,4 +1,4 @@
-import { TripTilesLogoLink } from "@/components/brand/TripTilesLogoLink";
+import { Logo } from "@/components/brand/Logo";
 import Link from "next/link";
 
 export function MarketingHeader() {
@@ -6,10 +6,7 @@ export function MarketingHeader() {
     <header className="relative z-20">
       <div className="tt-logo-band border-b border-tt-line-soft/80 bg-transparent">
         <div className="mx-auto flex max-w-5xl justify-center px-6 py-4 sm:justify-start">
-          <TripTilesLogoLink
-            href="/"
-            imgClassName="h-24 w-auto max-w-[min(100%,24rem)] sm:h-28 md:h-32"
-          />
+          <Logo href="/" variant="full" sizePreset="marketing" aria-label="TripTiles homepage" focusVisibleRingOffset="cream" />
         </div>
       </div>
       <div className="tt-nav-band border-b border-tt-line-soft/80 bg-transparent px-6 py-2">

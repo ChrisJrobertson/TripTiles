@@ -1,6 +1,14 @@
+import { getPublicSiteUrl } from "@/lib/site";
+
 const ROYAL = "#2455ac";
 const GOLD = "#dd4e14";
 const CREAM = "#fce7cc";
+
+/** Absolute PNG URL for the compact programmatic lockup (hosted under `/public/email`). */
+export function emailLogoCompactAbsoluteUrl(): string {
+  const base = getPublicSiteUrl() || "https://www.triptiles.app";
+  return `${base.replace(/\/$/, "")}/email/logo-compact.png`;
+}
 
 export function brandEmailShell(bodyHtml: string): string {
   return `<!DOCTYPE html>
@@ -15,7 +23,9 @@ export function brandEmailShell(bodyHtml: string): string {
       <td align="center">
         <table role="presentation" width="100%" style="max-width:560px;background:#ffffff;border-radius:12px;border:1px solid ${ROYAL}22;overflow:hidden;">
           <tr>
-            <td style="padding:20px 24px;background:${ROYAL};color:${CREAM};font-size:13px;letter-spacing:0.2em;text-transform:uppercase;">TripTiles</td>
+            <td style="padding:18px 24px;background:${ROYAL};">
+              <img src="${emailLogoCompactAbsoluteUrl()}" width="168" alt="TripTiles" style="display:block;border:0;height:auto;outline:none;text-decoration:none;margin:0;" />
+            </td>
           </tr>
           <tr>
             <td style="padding:28px 24px;color:${ROYAL};font-size:15px;line-height:1.55;">
