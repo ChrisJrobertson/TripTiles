@@ -79,16 +79,167 @@ export type PlannerClientServerProps = {
   cataloguedParkIds: string[];
 };
 
+/**
+ * Option X (planner decomposition): assignments and preferences live on each `Trip`
+ * row from {@link loadPlannerTripRowsCached}. Splitting those fields into separate DB
+ * calls would duplicate reads with no UX benefit; callers slice in-memory as needed.
+ */
+export const loadPlannerTripRowsCached = cache((userId: string) =>
+  getUserTrips(userId),
+);
+
+const loadPlannerCatalogGlobalsCached = cache(async () =>
+  Promise.all([
+    getAllParks(),
+    getAllRegions(),
+    getCataloguedParkIds(),
+    getAchievementDefinitions(),
+  ]),
+);
+
+/** User-scoped planner rows (tiles + tier cap inputs), without active-trip pointer fetch. */
+const loadPlannerCustomDataCached = cache(async (userId: string) =>
+  Promise.all([getUserCustomTiles(userId), getCustomTileLimit(userId)]),
+);
+
+const loadPlannerActiveTripPointerCached = cache((userId: string) =>
+  getActiveTripForUser(userId),
+);
+
+/** Stable dedupe key for trip-id-derived loads within one request (sorted ids). */
+function sortedTripIdsKey(tripIds: string[]): string {
+  return [...tripIds].slice().sort().join("\n");
+}
+
+const loadPlannerAiGenerationCountsCached = cache(
+  async (tripIdsKey: string, userId: string) => {
+    const tripIds =
+      tripIdsKey.length === 0 ? [] : tripIdsKey.split("\n").filter(Boolean);
+    return getSuccessfulAiGenerationCountsForTrips(tripIds, userId);
+  },
+);
+
+const loadPlannerRidePriorityCountsCached = cache((tripIdsKey: string) => {
+  const tripIds =
+    tripIdsKey.length === 0 ? [] : tripIdsKey.split("\n").filter(Boolean);
+  return getRidePriorityCountsForTripIds(tripIds);
+});
+
+const loadPlannerRidePrioritiesFullCached = cache((preferredTripId: string) =>
+  getRidePrioritiesForTrip(preferredTripId),
+);
+
+const loadPlannerPaymentsFlatCached = cache((tripIdsKey: string) => {
+  const tripIds =
+    tripIdsKey.length === 0 ? [] : tripIdsKey.split("\n").filter(Boolean);
+  return getPaymentsForTripIds(tripIds);
+});
+
+const loadPlannerProductTierCapsCached = cache(async (userId: string) => {
+  const productTier = await getUserTier(userId);
+  const maxActiveTripCap = await maxActiveTripsForUser(userId);
+  return { productTier, maxActiveTripCap };
+});
+
+async function resolvePlannerTierCapsSafe(
+  userId: string,
+): Promise<{ ok: true; productTier: Tier; maxActiveTripCap: number | "unlimited" } | { ok: false; message: string }> {
+  try {
+    const { productTier, maxActiveTripCap } =
+      await loadPlannerProductTierCapsCached(userId);
+    return { ok: true, productTier, maxActiveTripCap };
+  } catch (e) {
+    if (isTierLoadFailure(e)) {
+      return {
+        ok: false,
+        message: tierLoadFailureUserMessage(),
+      };
+    }
+    throw e;
+  }
+}
+
+type PlannerProfileReadRow = {
+  tier: string;
+  temperature_unit?: string | null;
+  email_marketing_opt_out?: boolean | null;
+  stripe_customer_id?: string | null;
+};
+
+async function loadPlannerProfileReadUncached(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<{ ok: true; data: PlannerProfileReadRow } | { ok: false; message: string }> {
+  const profileRead = await readProfileRow<PlannerProfileReadRow>(
+    supabase,
+    userId,
+    "tier, temperature_unit, email_marketing_opt_out, stripe_customer_id",
+  );
+  if (!profileRead.ok) {
+    return { ok: false, message: profileRead.message };
+  }
+  return { ok: true, data: profileRead.data };
+}
+
+function mapProfileRowToPlannerBundle(pr: PlannerProfileReadRow): PlannerProfileBundle {
+  return {
+    tier: tierFromProfileRow(pr),
+    temperatureUnit: pr.temperature_unit === "f" ? "f" : "c",
+    emailMarketingOptOut: pr.email_marketing_opt_out === true,
+    stripeCustomerId: pr.stripe_customer_id?.trim() || null,
+  };
+}
+
+/** @internal Exported for HYBRID RSC wrappers that share the planner trip read. */
+export function partitionPlannerRidePriorities(
+  tripIds: string[],
+  preferredActiveForRides: string | null,
+  activeFull: TripRidePriority[],
+): Record<string, TripRidePriority[]> {
+  return tripIds.reduce(
+    (acc, id) => {
+      acc[id] = id === preferredActiveForRides ? activeFull : [];
+      return acc;
+    },
+    {} as Record<string, TripRidePriority[]>,
+  );
+}
+
+export function foldPlannerPaymentsSorted(
+  paymentsFlat: TripPayment[],
+  tripIds: string[],
+): Record<string, TripPayment[]> {
+  const initialPaymentsByTripId = paymentsFlat.reduce<
+    Record<string, TripPayment[]>
+  >((acc, row) => {
+    if (!acc[row.trip_id]) acc[row.trip_id] = [];
+    acc[row.trip_id]!.push(row);
+    return acc;
+  }, {});
+  for (const id of tripIds) {
+    if (!initialPaymentsByTripId[id]) initialPaymentsByTripId[id] = [];
+  }
+  for (const id of tripIds) {
+    initialPaymentsByTripId[id]!.sort((a, b) => {
+      const da = a.due_date;
+      const db = b.due_date;
+      if (da == null && db == null) return a.sort_order - b.sort_order;
+      if (da == null) return 1;
+      if (db == null) return -1;
+      if (da < db) return -1;
+      if (da > db) return 1;
+      return a.sort_order - b.sort_order;
+    });
+  }
+  return initialPaymentsByTripId;
+}
+
 function firstParam(
   v: string | string[] | undefined,
 ): string | undefined {
   if (Array.isArray(v)) return v[0];
   return v;
 }
-
-const getCachedUserTripsForPlanner = cache((userId: string) =>
-  getUserTrips(userId),
-);
 
 function normalisePlannerTab(
   raw: string | undefined,
@@ -121,55 +272,32 @@ export async function loadPlannerClientServerData(input: {
   const { supabase, userId, userEmail, siteUrl, searchParams: sp, forcedTripId } =
     input;
 
-  const trips = await getCachedUserTripsForPlanner(userId);
+  const trips = await loadPlannerTripRowsCached(userId);
+
   if (trips.length === 0) {
-    type PlannerProfileRow = {
-      tier: string;
-      temperature_unit?: string | null;
-      email_marketing_opt_out?: boolean | null;
-      stripe_customer_id?: string | null;
-    };
-    const profileRead = await readProfileRow<PlannerProfileRow>(
-      supabase,
-      userId,
-      "tier, temperature_unit, email_marketing_opt_out, stripe_customer_id",
-    );
+    const profileRead = await loadPlannerProfileReadUncached(supabase, userId);
     if (!profileRead.ok) {
       return { ok: false, error: "profile", message: profileRead.message };
     }
     const pr = profileRead.data;
-    const profileBundle: PlannerProfileBundle = {
-      tier: tierFromProfileRow(pr),
-      temperatureUnit: pr.temperature_unit === "f" ? "f" : "c",
-      emailMarketingOptOut: pr.email_marketing_opt_out === true,
-      stripeCustomerId: pr.stripe_customer_id?.trim() || null,
-    };
+    const profileBundle = mapProfileRowToPlannerBundle(pr);
 
-    const [parks, regions, cataloguedParkIds, achievementDefs, customTiles, customTileLimit] =
-      await Promise.all([
-        getAllParks(),
-        getAllRegions(),
-        getCataloguedParkIds(),
-        getAchievementDefinitions(),
-        getUserCustomTiles(userId),
-        getCustomTileLimit(userId),
-      ]);
+    const [catalogBundle, customPair] = await Promise.all([
+      loadPlannerCatalogGlobalsCached(),
+      loadPlannerCustomDataCached(userId),
+    ]);
+    const [parks, regions, cataloguedParkIds, achievementDefs] = catalogBundle;
+    const [customTiles, customTileLimit] = customPair;
 
-    let productTier: Tier = "free";
-    let maxActiveTripCap: number | "unlimited" = 1;
-    try {
-      productTier = await getUserTier(userId);
-      maxActiveTripCap = await maxActiveTripsForUser(userId);
-    } catch (e) {
-      if (isTierLoadFailure(e)) {
-        return {
-          ok: false,
-          error: "tier",
-          message: tierLoadFailureUserMessage(),
-        };
-      }
-      throw e;
+    const tierOut = await resolvePlannerTierCapsSafe(userId);
+    if (!tierOut.ok) {
+      return {
+        ok: false,
+        error: "tier",
+        message: tierOut.message,
+      };
     }
+    const { productTier, maxActiveTripCap } = tierOut;
 
     return {
       ok: true,
@@ -226,109 +354,62 @@ export async function loadPlannerClientServerData(input: {
       ? Math.max(0, Math.floor(Number(tileScrubRaw)))
       : null;
 
-  type PlannerProfileRow = {
-    tier: string;
-    temperature_unit?: string | null;
-    email_marketing_opt_out?: boolean | null;
-    stripe_customer_id?: string | null;
-  };
-  const profileRead = await readProfileRow<PlannerProfileRow>(
-    supabase,
-    userId,
-    "tier, temperature_unit, email_marketing_opt_out, stripe_customer_id",
-  );
+  const profileRead = await loadPlannerProfileReadUncached(supabase, userId);
   if (!profileRead.ok) {
     return { ok: false, error: "profile", message: profileRead.message };
   }
   const pr = profileRead.data;
-  const profileBundle: PlannerProfileBundle = {
-    tier: tierFromProfileRow(pr),
-    temperatureUnit: pr.temperature_unit === "f" ? "f" : "c",
-    emailMarketingOptOut: pr.email_marketing_opt_out === true,
-    stripeCustomerId: pr.stripe_customer_id?.trim() || null,
-  };
-
-  const [
-    parks,
-    regions,
-    activeTrip,
-    achievementDefs,
-    customTiles,
-    customTileLimit,
-    cataloguedParkIds,
-  ] = await Promise.all([
-    getAllParks(),
-    getAllRegions(),
-    getActiveTripForUser(userId),
-    getAchievementDefinitions(),
-    getUserCustomTiles(userId),
-    getCustomTileLimit(userId),
-    getCataloguedParkIds(),
-  ]);
+  const profileBundle = mapProfileRowToPlannerBundle(pr);
 
   const tripIds = trips.map((t) => t.id);
-  const aiGenerationCountsByTrip =
-    await getSuccessfulAiGenerationCountsForTrips(tripIds, userId);
+  const tripIdsKey = sortedTripIdsKey(tripIds);
 
-  const ridePriorityCountByTripAndDay =
-    await getRidePriorityCountsForTripIds(tripIds);
+  const [catalogBundle, customPair, activeTrip] = await Promise.all([
+    loadPlannerCatalogGlobalsCached(),
+    loadPlannerCustomDataCached(userId),
+    loadPlannerActiveTripPointerCached(userId),
+  ]);
+  const [parks, regions, cataloguedParkIds, achievementDefs] = catalogBundle;
+  const [customTiles, customTileLimit] = customPair;
+
+  const [aiGenerationCountsByTrip, ridePriorityCountByTripAndDay] =
+    await Promise.all([
+      loadPlannerAiGenerationCountsCached(tripIdsKey, userId),
+      loadPlannerRidePriorityCountsCached(tripIdsKey),
+    ]);
 
   const preferredActiveForRides =
     forcedTripId ?? activeTrip?.id ?? trips[0]?.id ?? null;
 
   const activeFull =
     preferredActiveForRides != null
-      ? await getRidePrioritiesForTrip(preferredActiveForRides)
+      ? await loadPlannerRidePrioritiesFullCached(preferredActiveForRides)
       : [];
 
-  const initialRidePrioritiesByTripId: Record<string, TripRidePriority[]> =
-    tripIds.reduce(
-      (acc, id) => {
-        acc[id] = id === preferredActiveForRides ? activeFull : [];
-        return acc;
-      },
-      {} as Record<string, TripRidePriority[]>,
-    );
+  const initialRidePrioritiesByTripId = partitionPlannerRidePriorities(
+    tripIds,
+    preferredActiveForRides,
+    activeFull,
+  );
 
-  const paymentsFlat = await getPaymentsForTripIds(tripIds);
-  const initialPaymentsByTripId = paymentsFlat.reduce<
-    Record<string, TripPayment[]>
-  >((acc, row) => {
-    if (!acc[row.trip_id]) acc[row.trip_id] = [];
-    acc[row.trip_id]!.push(row);
-    return acc;
-  }, {});
-  for (const id of tripIds) {
-    if (!initialPaymentsByTripId[id]) initialPaymentsByTripId[id] = [];
-  }
-  for (const id of tripIds) {
-    initialPaymentsByTripId[id]!.sort((a, b) => {
-      const da = a.due_date;
-      const db = b.due_date;
-      if (da == null && db == null) return a.sort_order - b.sort_order;
-      if (da == null) return 1;
-      if (db == null) return -1;
-      if (da < db) return -1;
-      if (da > db) return 1;
-      return a.sort_order - b.sort_order;
-    });
-  }
+  const paymentsFlat =
+    tripIds.length === 0
+      ? []
+      : await loadPlannerPaymentsFlatCached(tripIdsKey);
+  const initialPaymentsByTripId = foldPlannerPaymentsSorted(
+    paymentsFlat,
+    tripIds,
+  );
 
-  let productTier: Tier = "free";
-  let maxActiveTripCap: number | "unlimited" = 1;
-  try {
-    productTier = await getUserTier(userId);
-    maxActiveTripCap = await maxActiveTripsForUser(userId);
-  } catch (e) {
-    if (isTierLoadFailure(e)) {
-      return {
-        ok: false,
-        error: "tier",
-        message: tierLoadFailureUserMessage(),
-      };
-    }
-    throw e;
+  const tierOut = await resolvePlannerTierCapsSafe(userId);
+  if (!tierOut.ok) {
+    return {
+      ok: false,
+      error: "tier",
+      message: tierOut.message,
+    };
   }
+  const { productTier, maxActiveTripCap } = tierOut;
 
   const preferredActive = preferredActiveForRides;
 
