@@ -347,7 +347,7 @@ export function computeSeedTemplates(params: SeedTripParams): Omit<KeyDate, "id"
     push(KEY_DATE_TITLE_DISNEY_DINING_RULES, "🍽️", 0, {
       category: "booking",
       description:
-        "Table-service booking windows and rules differ by resort — check the official app or website for your destination.",
+        "Table-service reservations use different booking windows depending on resort (Tokyo Disneyland, Disneyland Paris, etc.). Open your official Disney park app or site and confirm rules for your park before arrival.",
     });
     push(KEY_DATE_TITLE_ONLINE_CHECKIN, "✈️", -1, {
       category: "travel",

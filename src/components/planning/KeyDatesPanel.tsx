@@ -31,11 +31,16 @@ type Props = {
   regionLabel: string;
   /** From loaded regions catalogue; improves UK-domestic classification for suggested seeds. */
   regionCountryCode?: string | null;
-  /** When set (non–list-only), successful writes merge into trip preferences locally. */
+  /** When set, successful writes merge into trip preferences locally (autos never persist here). */
   onTripPatch?: (patch: Partial<Trip>) => void;
   className?: string;
-  /** Render only milestone rows — no chrome, toolbar, or forms. */
-  listOnly?: boolean;
+  /** When true, milestones are display-only — no toolbar, forms, merge, edit, or delete. */
+  readOnly?: boolean;
+  /**
+   * Parent already provides the titled card/header (e.g. planner deck tile).
+   * Skips wrapping `Card` and the internal `SectionHeader`; keeps Payments-style toolbar + CRUD body.
+   */
+  embedded?: boolean;
 };
 
 const CAT_OPTS: KeyDateCategory[] = ["booking", "admin", "travel", "other"];
@@ -52,7 +57,8 @@ export function KeyDatesPanel({
   regionCountryCode = null,
   onTripPatch,
   className = "",
-  listOnly = false,
+  readOnly = false,
+  embedded = false,
 }: Props) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -199,11 +205,11 @@ export function KeyDatesPanel({
   };
 
   const listBody = (
-    <ul className={`space-y-3 ${listOnly ? className : ""}`.trim()}>
+    <ul className={`space-y-3 ${readOnly ? className : ""}`.trim()}>
       {mergedRows.map((row) => {
         const isAuto = isAutoManagedKeyDateId(row.id);
         const isEditing = editingId === row.id;
-        if (!listOnly && isEditing) return null;
+        if (!readOnly && isEditing) return null;
         const delOpen = deleteConfirmId === row.id;
         return (
           <li
@@ -241,7 +247,7 @@ export function KeyDatesPanel({
                   label={`${row.title}: ${row.date}`}
                   treatPastAsMilestone
                 />
-                {!listOnly && onTripPatch && !isAuto ? (
+                {!readOnly && onTripPatch && !isAuto ? (
                   <>
                     {!delOpen ? (
                       <>
@@ -297,37 +303,50 @@ export function KeyDatesPanel({
     </ul>
   );
 
-  if (listOnly) {
+  if (readOnly) {
     return listBody;
   }
 
-  const inner = (
-    <div className={`space-y-6 font-sans text-tt-ink ${className}`.trim()}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <SectionHeader
-          title="Key dates & booking windows"
-          subtitle={`Important calendar dates before you travel — customised for ${regionLabel}.`}
-          icon="📅"
-          className="min-w-0 flex-1"
-        />
-        {!formActive ? (
-          <div className="flex flex-wrap gap-2 sm:justify-end">
-            <Button type="button" onClick={startAdd}>
-              Add key date
-            </Button>
-            {showSuggested ? (
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={mergeBusy || busy}
-                onClick={() => void onMergeSuggested()}
-              >
-                Add suggested defaults
-              </Button>
-            ) : null}
-          </div>
+  const toolbarBtns =
+    formActive ? null : (
+      <div className="flex flex-wrap gap-2 sm:justify-end">
+        <Button type="button" onClick={startAdd}>
+          Add key date
+        </Button>
+        {showSuggested ? (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={mergeBusy || busy}
+            onClick={() => void onMergeSuggested()}
+          >
+            Add suggested defaults
+          </Button>
         ) : null}
       </div>
+    );
+
+  const inner = (
+    <div
+      className={`space-y-6 font-sans text-tt-ink ${className}`.trim()}
+    >
+      {embedded ? (
+        toolbarBtns ? (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {toolbarBtns}
+          </div>
+        ) : null
+      ) : (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <SectionHeader
+            title="Key dates & booking windows"
+            subtitle={`Important calendar dates before you travel — customised for ${regionLabel}.`}
+            icon="📅"
+            className="min-w-0 flex-1"
+          />
+          {toolbarBtns}
+        </div>
+      )}
 
       {formActive ? (
         <Card variant="default" className="p-4">
@@ -441,6 +460,10 @@ export function KeyDatesPanel({
       {mergedRows.length > 0 ? listBody : null}
     </div>
   );
+
+  if (embedded) {
+    return inner;
+  }
 
   return (
     <Card

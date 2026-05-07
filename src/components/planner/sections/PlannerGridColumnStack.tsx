@@ -410,6 +410,7 @@ export function PlannerGridColumnStack({
                         onPaymentsChange={onPaymentsChange}
                         regionLabelForKeyDates={regionLabelForKeyDates}
                         regionCountryCode={regionCountryCode}
+                        onTripPatch={onTripPatch}
                       />
                     </div>
                   ) : null}

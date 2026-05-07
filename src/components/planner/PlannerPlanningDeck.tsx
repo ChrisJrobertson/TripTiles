@@ -16,6 +16,7 @@ type Props = {
   onPaymentsChange: (tripId: string, next: TripPayment[]) => void;
   regionLabelForKeyDates: string;
   regionCountryCode?: string | null;
+  onTripPatch: (patch: Partial<Trip>) => void;
 };
 
 /**
@@ -27,6 +28,7 @@ export function PlannerPlanningDeck({
   onPaymentsChange,
   regionLabelForKeyDates,
   regionCountryCode = null,
+  onTripPatch,
 }: Props) {
   return (
     <div className="mt-8 grid gap-5 xl:grid-cols-3">
@@ -79,9 +81,10 @@ export function PlannerPlanningDeck({
         <div className="pt-4">
           <KeyDatesPanel
             trip={trip}
-            listOnly
+            embedded
             regionLabel={regionLabelForKeyDates}
             regionCountryCode={regionCountryCode}
+            onTripPatch={onTripPatch}
           />
         </div>
         <Link
