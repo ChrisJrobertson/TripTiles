@@ -1,13 +1,10 @@
-import { AppNavHeader } from "@/components/app/AppNavHeader";
-import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
 import { Card } from "@/components/ui/Card";
 import {
   getAchievementDefinitions,
   getUserAchievements,
 } from "@/lib/db/achievements";
 import { getParksByIds } from "@/lib/db/parks";
-import { getUserTrips, getUserTripCount } from "@/lib/db/trips";
-import { formatProductTierName } from "@/lib/product-tier-labels";
+import { getUserTrips } from "@/lib/db/trips";
 import {
   collectParkIdsFromTrips,
   deriveTripStatus,
@@ -16,10 +13,7 @@ import {
 } from "@/lib/passport-helpers";
 import { getPublicAdventureTitle } from "@/lib/public-trip-display";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
-import { readProfileRow, tierFromProfileRow } from "@/lib/supabase/profile-read";
-import { createClient, getCurrentUser } from "@/lib/supabase/server";
-import { getUserTier } from "@/lib/tier";
-import { getTierConfig } from "@/lib/tiers";
+import { getCurrentUser } from "@/lib/supabase/server";
 import type { Achievement, AchievementDefinition } from "@/lib/types";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -68,24 +62,11 @@ export default async function PassportPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/passport");
 
-  const supabase = await createClient();
-  const [tripsRaw, definitions, earned, profileRead, tripCount, productTier] =
-    await Promise.all([
-      getUserTrips(user.id),
-      getAchievementDefinitions(),
-      getUserAchievements(user.id),
-      readProfileRow<{ tier: string }>(supabase, user.id, "tier"),
-      getUserTripCount(user.id),
-      getUserTier(user.id),
-    ]);
-
-  if (!profileRead.ok) {
-    return <ProfileLoadErrorPanel detail={profileRead.message} />;
-  }
-
-  const navTier = tierFromProfileRow(profileRead.data);
-  const freeMax = getTierConfig("free").features.max_trips ?? 1;
-
+  const [tripsRaw, definitions, earned] = await Promise.all([
+    getUserTrips(user.id),
+    getAchievementDefinitions(),
+    getUserAchievements(user.id),
+  ]);
   const today = utcTodayYMD();
   const trips = [...tripsRaw].sort((a, b) =>
     b.start_date.localeCompare(a.start_date),
@@ -100,14 +81,6 @@ export default async function PassportPage() {
 
   return (
     <div className="min-h-screen bg-transparent pb-16 pt-0">
-      <AppNavHeader
-        userEmail={user.email ?? ""}
-        userTier={navTier}
-        tripCount={tripCount}
-        freeTripLimit={freeMax}
-        planBadgeLabel={formatProductTierName(productTier)}
-        showUpgradeNavCta={productTier === "free"}
-      />
       <main className="mx-auto max-w-3xl space-y-8 px-4 py-8 sm:px-6">
         <header>
           <h1 className="font-heading text-3xl font-semibold text-tt-royal">

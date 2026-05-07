@@ -50,7 +50,6 @@ export type PlannerClientServerProps = {
   parks: Awaited<ReturnType<typeof getAllParks>>;
   regions: Awaited<ReturnType<typeof getAllRegions>>;
   initialActiveTripId: string | null;
-  userEmail: string;
   profileTier: UserTier;
   productTier: Tier;
   productPlanLabel: string;
@@ -263,14 +262,12 @@ function initialPlanningSectionFromLegacyTab(
 export async function loadPlannerClientServerData(input: {
   supabase: SupabaseClient;
   userId: string;
-  userEmail: string;
   siteUrl: string;
   searchParams: Record<string, string | string[] | undefined>;
   /** When set, this trip must appear in the user's trip list (otherwise invalid). */
   forcedTripId: string | null;
 }): Promise<PlannerServerData> {
-  const { supabase, userId, userEmail, siteUrl, searchParams: sp, forcedTripId } =
-    input;
+  const { supabase, userId, siteUrl, searchParams: sp, forcedTripId } = input;
 
   const trips = await loadPlannerTripRowsCached(userId);
 
@@ -306,7 +303,6 @@ export async function loadPlannerClientServerData(input: {
         parks,
         regions,
         initialActiveTripId: null,
-        userEmail,
         profileTier: profileBundle.tier,
         productTier,
         productPlanLabel: formatProductTierName(productTier),
@@ -420,7 +416,6 @@ export async function loadPlannerClientServerData(input: {
       parks,
       regions,
       initialActiveTripId: preferredActive,
-      userEmail,
       profileTier: profileBundle.tier,
       productTier,
       productPlanLabel: formatProductTierName(productTier),
@@ -445,3 +440,4 @@ export async function loadPlannerClientServerData(input: {
     },
   };
 }
+

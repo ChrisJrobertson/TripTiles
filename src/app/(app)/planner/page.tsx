@@ -60,7 +60,6 @@ async function PlannerRedirectContent({
   const loaded = await loadPlannerClientServerData({
     supabase,
     userId: user.id,
-    userEmail: user.email ?? "",
     siteUrl,
     searchParams: sp,
     forcedTripId: null,

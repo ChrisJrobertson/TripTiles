@@ -27,9 +27,8 @@ import {
   updateTripPlanningPreferencesAction,
   updateTripPreferencesPatchAction,
 } from "@/actions/trips";
-import { AppNavHeader } from "@/components/app/AppNavHeader";
-import { Button } from "@/components/ui/Button";
 import { ModalShell } from "@/components/ui/ModalShell";
+import { Button } from "@/components/ui/Button";
 import { AchievementToast } from "@/components/gamification/AchievementToast";
 import { deleteCustomTileAction } from "@/actions/custom-tiles";
 import {
@@ -243,7 +242,6 @@ type Props = {
   parks: Park[];
   regions: Region[];
   initialActiveTripId: string | null;
-  userEmail: string;
   /** From `profiles.tier` (server validates row before render). */
   userTier: UserTier;
   /** Effective Stripe + legacy product tier for caps and nav. */
@@ -589,12 +587,9 @@ export function PlannerClient({
   parks,
   regions,
   initialActiveTripId,
-  userEmail,
   userTier,
   productTier,
-  productPlanLabel,
   maxActiveTripCap,
-  stripeCustomerId,
   achievementDefs,
   aiGenerationCountsByTrip: initialAiCounts,
   siteUrl,
@@ -2666,17 +2661,6 @@ export function PlannerClient({
       className="min-h-screen bg-tt-bg pb-28 pt-2 text-tt-ink lg:pb-16"
       style={shellThemeStyle}
     >
-      <AppNavHeader
-        userEmail={userEmail}
-        userTier={userTier}
-        tripCount={trips.length}
-        freeTripLimit={1}
-        planBadgeLabel={productPlanLabel}
-        activeTripCap={maxActiveTripCap}
-        showUpgradeNavCta={productTier === "free"}
-        stripeCustomerId={stripeCustomerId}
-      />
-
       <div className="mx-auto w-full max-w-screen-2xl px-4 pt-2 sm:px-6 lg:px-8">
         <PlannerTopNotices
           hasTrip={trips.length > 0}

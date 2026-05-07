@@ -1,17 +1,11 @@
 import { AchievementsClient } from "@/app/(app)/achievements/AchievementsClient";
-import { AppNavHeader } from "@/components/app/AppNavHeader";
 import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
 import {
   getAchievementDefinitions,
   getUserAchievements,
 } from "@/lib/db/achievements";
-import { getUserTripCount } from "@/lib/db/trips";
-import { getTierConfig } from "@/lib/tiers";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
-import {
-  readProfileRow,
-  tierFromProfileRow,
-} from "@/lib/supabase/profile-read";
+import { readProfileRow } from "@/lib/supabase/profile-read";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
@@ -45,19 +39,13 @@ export default async function AchievementsPage() {
   if (!user) redirect("/login?next=/achievements");
 
   const supabase = await createClient();
-  const [definitions, earned, profileRead, tripCount] = await Promise.all([
+  const [definitions, earned, profileRead] = await Promise.all([
     getAchievementDefinitions(),
     getUserAchievements(user.id),
     readProfileRow<{
-      tier: string;
       trips_planned_count?: number | null;
       days_planned_count?: number | null;
-    }>(
-      supabase,
-      user.id,
-      "trips_planned_count, days_planned_count, tier",
-    ),
-    getUserTripCount(user.id),
+    }>(supabase, user.id, "trips_planned_count, days_planned_count"),
   ]);
 
   if (!profileRead.ok) {
@@ -65,7 +53,6 @@ export default async function AchievementsPage() {
   }
 
   const raw = profileRead.data;
-  const navTier = tierFromProfileRow(raw);
   const progress = {
     trips_planned_count: Number(raw.trips_planned_count ?? 0),
     days_planned_count: Number(raw.days_planned_count ?? 0),
@@ -73,12 +60,6 @@ export default async function AchievementsPage() {
 
   return (
     <div className="min-h-screen bg-transparent pb-16 pt-0">
-      <AppNavHeader
-        userEmail={user.email ?? ""}
-        userTier={navTier}
-        tripCount={tripCount}
-        freeTripLimit={getTierConfig("free").features.max_trips ?? 1}
-      />
       <AchievementsClient
         definitions={definitions}
         earned={earned}

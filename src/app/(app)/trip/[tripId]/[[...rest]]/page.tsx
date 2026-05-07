@@ -73,7 +73,6 @@ async function TripPlannerPageContent({
   const loaded = await loadPlannerClientServerData({
     supabase,
     userId: user.id,
-    userEmail: user.email ?? "",
     siteUrl,
     searchParams: sp,
     forcedTripId: tripId,
@@ -104,7 +103,6 @@ async function TripPlannerPageContent({
       initialOpenSmartPlan={p.initialOpenSmartPlan}
       initialAutoGenerate={p.initialAutoGenerate}
       initialActiveTripId={p.initialActiveTripId}
-      userEmail={p.userEmail}
       userTier={p.profileTier}
       productTier={p.productTier}
       productPlanLabel={p.productPlanLabel}
