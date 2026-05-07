@@ -6,7 +6,9 @@ import { dayConditionRow } from "@/lib/planner-day-conditions";
 import { parkChromaTileStyle } from "@/lib/theme-colours";
 import { normaliseThemeKey, type ThemeKey } from "@/lib/themes";
 import type { Assignment, Park, SlotType, TemperatureUnit, Trip } from "@/lib/types";
-import { useMemo, useState } from "react";
+import type { DayTimes } from "@/lib/planner/day-times";
+import { getDayTimes, validateDayTimesPair } from "@/lib/planner/day-times";
+import { useEffect, useMemo, useState } from "react";
 
 const SLOTS: { key: SlotType; label: string }[] = [
   { key: "am", label: "AM" },
@@ -24,6 +26,7 @@ type Props = {
   temperatureUnit: TemperatureUnit;
   userDayNotes: Record<string, string>;
   onSaveUserDayNote?: (dateKey: string, text: string) => void;
+  onSaveDayTimes?: (dateKey: string, times: DayTimes | null) => void;
   onTransferSlot: (
     fromDate: string,
     fromSlot: SlotType,
@@ -49,6 +52,70 @@ function dateFromKey(key: string): Date {
   return new Date(y, m - 1, d);
 }
 
+function CompareDayTimesRow({
+  trip,
+  dateKey,
+  onSave,
+}: {
+  trip: Trip;
+  dateKey: string;
+  onSave: (dk: string, times: DayTimes | null) => void;
+}) {
+  const seed = getDayTimes(trip, dateKey);
+  const [arrival, setArrival] = useState(seed?.arrival ?? "");
+  const [departure, setDeparture] = useState(seed?.departure ?? "");
+
+  useEffect(() => {
+    const d = getDayTimes(trip, dateKey);
+    setArrival(d?.arrival ?? "");
+    setDeparture(d?.departure ?? "");
+  }, [trip, dateKey, trip.updated_at]);
+
+  const flush = () => {
+    const a = arrival.trim();
+    const dep = departure.trim();
+    const v = validateDayTimesPair(a || undefined, dep || undefined);
+    if (!v.ok) return;
+    const times: DayTimes | null =
+      a || dep
+        ? {
+            ...(a ? { arrival: a } : {}),
+            ...(dep ? { departure: dep } : {}),
+          }
+        : null;
+    onSave(dateKey, times);
+  };
+
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      <label className="block font-sans text-[0.65rem] text-royal/65">
+        Arrival (HH:mm)
+        <input
+          type="text"
+          inputMode="numeric"
+          placeholder="09:00"
+          className="mt-0.5 w-full rounded border border-royal/20 bg-white px-1.5 py-1 font-sans text-xs text-royal"
+          value={arrival}
+          onChange={(e) => setArrival(e.target.value)}
+          onBlur={() => flush()}
+        />
+      </label>
+      <label className="block font-sans text-[0.65rem] text-royal/65">
+        Departure (HH:mm)
+        <input
+          type="text"
+          inputMode="numeric"
+          placeholder="22:00"
+          className="mt-0.5 w-full rounded border border-royal/20 bg-white px-1.5 py-1 font-sans text-xs text-royal"
+          value={departure}
+          onChange={(e) => setDeparture(e.target.value)}
+          onBlur={() => flush()}
+        />
+      </label>
+    </div>
+  );
+}
+
 export function CompareDaysPanel({
   trip,
   parks,
@@ -58,6 +125,7 @@ export function CompareDaysPanel({
   temperatureUnit,
   userDayNotes,
   onSaveUserDayNote,
+  onSaveDayTimes,
   onTransferSlot,
   onExit,
 }: Props) {
@@ -170,6 +238,13 @@ export function CompareDaysPanel({
             );
           })}
         </div>
+        {onSaveDayTimes ? (
+          <CompareDayTimesRow
+            trip={trip}
+            dateKey={dateKey}
+            onSave={onSaveDayTimes}
+          />
+        ) : null}
         {onSaveUserDayNote ? (
           <textarea
             className="mt-3 min-h-[4rem] w-full rounded-lg border border-royal/15 bg-cream/50 px-2 py-1 font-sans text-xs text-royal"

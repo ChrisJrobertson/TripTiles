@@ -17,6 +17,11 @@ import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
 import { parkChromaTileStyle } from "@/lib/theme-colours";
 import { isThemePark } from "@/lib/park-categories";
+import {
+  formatWindowLabel,
+  getDayTimes,
+  getEffectiveDayWindow,
+} from "@/lib/planner/day-times";
 import { dayConditionRow } from "@/lib/planner-day-conditions";
 import {
   listThemeParksForAiMustDosFallback,
@@ -177,7 +182,7 @@ export type MobileDayViewProps = {
    */
   onOpenDayDetail?: (
     dateKey: string,
-    options?: { focusNotes?: boolean },
+    options?: { focusNotes?: boolean; focusDayTimes?: boolean },
   ) => void;
   /** Opens the consolidated ✨ Plan this day modal (adjust + strategy). */
   onOpenDayPlanner?: (
@@ -1184,6 +1189,41 @@ export function MobileDayView({
                   ) : (
                     <span className="italic text-royal/55">Add note…</span>
                   )}
+                </button>
+              </div>
+              <div className="mt-3 flex min-h-11 flex-col gap-2 border-t border-royal/10 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                <span className="font-sans text-xs font-semibold text-royal/70">
+                  At the park
+                </span>
+                <button
+                  type="button"
+                  className="min-h-11 w-full rounded-lg border border-royal/15 bg-cream px-3 py-2 text-left font-sans text-sm font-medium text-royal transition hover:bg-white sm:w-auto"
+                  onClick={() =>
+                    onOpenDayDetail(activeDay.dateKey, {
+                      focusDayTimes: true,
+                    })
+                  }
+                >
+                  {(() => {
+                    const dt = getDayTimes(trip, activeDay.dateKey);
+                    const a = dt?.arrival?.trim();
+                    const d = dt?.departure?.trim();
+                    if (a || d) {
+                      return (
+                        <span className="line-clamp-2">
+                          {a ?? "…"} – {d ?? "…"}
+                        </span>
+                      );
+                    }
+                    const pb = new Map(parks.map((p) => [p.id, p]));
+                    const w = getEffectiveDayWindow(trip, activeDay.dateKey, pb);
+                    return (
+                      <span className="italic text-royal/55">
+                        Automatic ({formatWindowLabel(w.start, w.end)}) — tap to
+                        customise
+                      </span>
+                    );
+                  })()}
                 </button>
               </div>
             </div>

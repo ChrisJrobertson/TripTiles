@@ -2,6 +2,10 @@
 
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { parseDate } from "@/lib/date-helpers";
+import {
+  formatWindowLabel,
+  getEffectiveDayWindow,
+} from "@/lib/planner/day-times";
 import { buildAmPmPresentation } from "@/lib/planner-am-pm-display";
 import type { CrowdLevel } from "@/lib/planner-crowd-level-meta";
 import type { Assignment, Park, SlotType, TemperatureUnit, Trip } from "@/lib/types";
@@ -60,6 +64,8 @@ type Props = {
   onUndoAi: () => void;
   onShareDay?: () => void;
   onEditDay: () => void;
+  /** Opens day detail focused on arrival/departure when set. */
+  onOpenDayWindow?: () => void;
 };
 
 export function PlannerDayTimelineStub({
@@ -76,6 +82,7 @@ export function PlannerDayTimelineStub({
   onUndoAi,
   onShareDay,
   onEditDay,
+  onOpenDayWindow,
 }: Props) {
   const parkById = useMemo(() => new Map(parks.map((p) => [p.id, p])), [parks]);
 
@@ -114,6 +121,12 @@ export function PlannerDayTimelineStub({
   });
 
   const title = primaryDayTitle(assignment, parkById);
+  const dayWindow = getEffectiveDayWindow(trip, dateKey, parkById);
+  const dayWindowLabel = formatWindowLabel(dayWindow.start, dayWindow.end);
+  const dayWindowTitle =
+    dayWindow.source === "user"
+      ? `Your at-park window: ${dayWindowLabel}`
+      : `At the park: ${dayWindowLabel}`;
 
   const filledRows = SLOT_ORDER.flatMap(({ slot, stubTime }) => {
     const pid = getParkIdFromSlotValue(assignment[slot]);
@@ -208,6 +221,25 @@ export function PlannerDayTimelineStub({
           </Button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {onOpenDayWindow ? (
+            <button
+              type="button"
+              title={dayWindowTitle}
+              onClick={onOpenDayWindow}
+              className="inline-flex max-w-[14rem] rounded-full border border-tt-line bg-tt-surface px-2.5 py-1 text-left font-meta text-[11px] font-semibold text-tt-ink underline decoration-tt-line/50 underline-offset-2 transition hover:border-tt-royal/35 hover:bg-white"
+            >
+              {dayWindow.source === "user" ? "Your hours: " : "At the park: "}
+              <span className="truncate">{dayWindowLabel}</span>
+            </button>
+          ) : (
+            <span
+              className="inline-flex max-w-[14rem] rounded-full border border-tt-line bg-tt-surface px-2.5 py-1 font-meta text-[11px] font-semibold text-tt-ink"
+              title={dayWindowTitle}
+            >
+              {dayWindow.source === "user" ? "Your hours: " : "At the park: "}
+              <span className="truncate">{dayWindowLabel}</span>
+            </span>
+          )}
           <span className="inline-flex rounded-full border border-tt-line bg-tt-surface px-2.5 py-1 font-meta text-[11px] font-semibold text-tt-ink">
             {weatherChip ?? "—"}
           </span>

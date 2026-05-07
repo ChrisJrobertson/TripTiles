@@ -19,6 +19,10 @@ import {
   formatDateKey,
   parseDate,
 } from "@/lib/date-helpers";
+import {
+  formatDayConstraintBlockForDate,
+  formatDayConstraintsBlockForSmartPlan,
+} from "@/lib/planner/day-times";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import {
   formatDayRidePicksForPrompt,
@@ -1497,6 +1501,8 @@ function buildPlannerUserMessage(params: {
   /** Hard meal-slot rules for Smart Plan when profile declines dining tiles. */
   structuralMealPolicyBlock?: string | null;
   tripCalendarAuthorityBlock?: string | null;
+  /** Full-trip Smart Plan only — per-day at-park windows for the model. */
+  dayConstraintsBlock?: string | null;
 }): string {
   const {
     mode,
@@ -1519,6 +1525,7 @@ function buildPlannerUserMessage(params: {
     tripPlanningContextSummary,
     structuralMealPolicyBlock,
     tripCalendarAuthorityBlock,
+    dayConstraintsBlock,
   } = params;
 
   const userConstraintsBlock =
@@ -1533,6 +1540,10 @@ END USER CONSTRAINTS
       : "";
 
   const isFullTrip = !dateKey;
+  const dayConstraintsFull =
+    isFullTrip && dayConstraintsBlock?.trim()
+      ? `${dayConstraintsBlock.trim()}\n\n`
+      : "";
   // Overwrite mode (full trip only): the "CURRENT TRIP ASSIGNMENTS … respect
   // them" + "NEVER change" block is intentionally omitted. The USER PRIORITIES
   // block + an OVERWRITE MODE directive replace it so Claude generates a
@@ -1645,7 +1656,7 @@ Your job is to annotate and complete the guest's calendar tile choices:
 - Generate a trip-wide crowd_reasoning summary that matches the assignments you output.
 - Omit "must_dos" entirely — sequenced attractions are handled later by AI Day Strategy from safe day intents.`;
 
-    return `${userConstraintsBlock}${overwriteIntro}${fullTripBlock}${coreTrip}
+    return `${userConstraintsBlock}${dayConstraintsFull}${overwriteIntro}${fullTripBlock}${coreTrip}
 
 ${calendarAuthority}${tripCtx}${mealPolicy}${crowdSection}
 ${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}${dayPacingAndRidesBlock}
@@ -1656,7 +1667,7 @@ ${dateKey ? `For this date only (${dateKey}), add planner_day_notes with 1–2 h
 Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and planner_day_notes when possible — no must_dos).`;
   }
 
-  return `${userConstraintsBlock}${overwriteIntro}${fullTripBlock}${coreTrip}
+  return `${userConstraintsBlock}${dayConstraintsFull}${overwriteIntro}${fullTripBlock}${coreTrip}
 
 ${calendarAuthority}${tripCtx}${mealPolicy}${crowdSection}
 ${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}${dayPacingAndRidesBlock}
@@ -1910,6 +1921,9 @@ export async function runGenerateAIPlan(
   const sortedDateKeys = sortDateKeysFromSet(dateAllow);
   const sortedAllTripDateKeys = sortDateKeysFromSet(fullDateAllow);
   const parksById = new Map(parksForPrompt.map((p) => [p.id, p]));
+  const dayConstraintsForFullTrip = !normalizedDateKey
+    ? formatDayConstraintsBlockForSmartPlan(trip, parksById)
+    : null;
 
   const childAges = trip.child_ages?.length
     ? ` (ages ${trip.child_ages.join(", ")})`
@@ -2069,6 +2083,7 @@ export async function runGenerateAIPlan(
     preserveExistingSlots: input.preserveExistingSlots !== false,
     structuralMealPolicyBlock: structuralMealPolicyUserBlock,
     tripCalendarAuthorityBlock: tripCalendarAuthorityPrompt,
+    dayConstraintsBlock: dayConstraintsForFullTrip,
   });
   // Diagnostic preview so we can verify in Vercel runtime logs that the
   // OVERWRITE branch is producing a different prompt structure than the
@@ -3192,6 +3207,8 @@ function buildDayTimelineUserMessage(params: {
   tempC: number;
   weatherSummary: string;
   skipLineOn: boolean;
+  /** Hard at-park window for timeline JSON. */
+  dayConstraintBlock?: string;
 }): string {
   const d = parseDate(`${params.dateKey}T12:00:00`);
   const w = d.toLocaleDateString("en-GB", { weekday: "long" });
@@ -3214,7 +3231,7 @@ Parks assigned to slots today (user may have set these):
 
 If a slot is empty, you may recommend a park from the region's catalogue. Otherwise respect the user's choice.
 
-Return the JSON only.`;
+${params.dayConstraintBlock?.trim() ? `${params.dayConstraintBlock.trim()}\n\n` : ""}Return the JSON only.`;
 }
 
 function mapApiModelToAiDayModelId(anthropicModel: string): AiDayTimelineModelId {
@@ -3508,6 +3525,12 @@ ${brief}
 
 END USER CONSTRAINTS`
     : "";
+  const parkByIdForDay = new Map(parksForPrompt.map((p) => [p.id, p] as const));
+  const dayConstraintBlock = formatDayConstraintBlockForDate(
+    trip,
+    dateKey,
+    parkByIdForDay,
+  );
   const userBlock = buildDayTimelineUserMessage({
     userConstraintsBlock,
     trip,
@@ -3520,6 +3543,7 @@ END USER CONSTRAINTS`
     tempC,
     weatherSummary,
     skipLineOn,
+    dayConstraintBlock,
   });
 
   const parksSystemText = buildParksListSystemText(
@@ -4780,8 +4804,15 @@ export async function generateDayStrategy(input: {
     );
   }
 
+  const dayConstraintBlock = formatDayConstraintBlockForDate(
+    trip,
+    dateKey,
+    parkById,
+  );
   const userMsg = [
     `PARK(S) FOR THIS PLAN: ${parksPlanLabel}`,
+    dayConstraintBlock,
+    "",
     `PRIMARY PARK ID (stored with strategy): ${primaryParkId}`,
     `DATE: ${dateKey} (${dow})`,
     `DAY OF TRIP: Day ${dayIndex} of ${totalDays}`,

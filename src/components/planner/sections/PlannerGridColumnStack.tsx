@@ -46,6 +46,7 @@ export type PlannerGridColumnStackProps = {
   };
   mobileCrowdSummaryText: string | null;
   onSaveDayNote: (dateKey: string, note: string) => void;
+  onSaveDayTimes: (dateKey: string, times: { arrival?: string; departure?: string } | null) => void;
   onTransferSlot: (
     fromDate: string,
     fromSlot: SlotType,
@@ -96,7 +97,7 @@ export type PlannerGridColumnStackProps = {
   goToTodayRingDateKey: string | null;
   openDayDetail: (
     dateKey: string,
-    options?: { focusNotes?: boolean },
+    options?: { focusNotes?: boolean; focusDayTimes?: boolean },
   ) => void;
   timelineWeatherCrowd: {
     weather: string | null;
@@ -130,6 +131,7 @@ export function PlannerGridColumnStack({
   mobilePlannerNoteMaps,
   mobileCrowdSummaryText,
   onSaveDayNote,
+  onSaveDayTimes,
   onTransferSlot,
   onAssign,
   onClear,
@@ -222,6 +224,7 @@ export function PlannerGridColumnStack({
             temperatureUnit={temperatureUnit}
             userDayNotes={mobilePlannerNoteMaps.user}
             onSaveUserDayNote={onSaveDayNote}
+            onSaveDayTimes={onSaveDayTimes}
             onTransferSlot={onTransferSlot}
             onExit={() => setCompareMode(false)}
           />
@@ -262,6 +265,7 @@ export function PlannerGridColumnStack({
                       handleRideDayPrioritiesUpdated(dayCanonicalForDetail, items)
                     }
                     onSaveDayNote={onSaveDayNote}
+                    onSaveDayTimes={onSaveDayTimes}
                     onOpenSmartPlan={onPlanThisDay}
                     onOpenDayPlanner={(opts) =>
                       openDayPlanner(dayCanonicalForDetail, opts)
@@ -344,6 +348,7 @@ export function PlannerGridColumnStack({
                       plannerRegionId={resolvePaletteRegionId(activeTrip)}
                       temperatureUnit={temperatureUnit}
                       onSaveDayNote={onSaveDayNote}
+                      onSaveDayTimes={onSaveDayTimes}
                       timelineUnlocked={timelineUnlocked}
                       onSlotTimeChange={onSlotTimeChange}
                       ridePrioritiesByDay={ridePrioritiesByDayForActiveTrip}
@@ -386,6 +391,14 @@ export function PlannerGridColumnStack({
                         onUndoAi={onUndoAiTimeline}
                         onShareDay={onShareTimelineDay}
                         onEditDay={onEditTimelineDay}
+                        onOpenDayWindow={
+                          plannerTimelineDateKey
+                            ? () =>
+                                openDayDetail(plannerTimelineDateKey, {
+                                  focusDayTimes: true,
+                                })
+                            : undefined
+                        }
                       />
                       <PlannerPlanningDeck
                         trip={activeTrip}

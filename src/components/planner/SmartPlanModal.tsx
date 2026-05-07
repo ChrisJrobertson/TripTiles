@@ -4,6 +4,7 @@ import { generateDaySequenceAction } from "@/actions/day-sequencer";
 import {
   saveTripPlanningProfileAction,
   updateTripPlanningPreferencesAction,
+  updateTripPreferencesPatchAction,
 } from "@/actions/trips";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { daysBetween, parseDate } from "@/lib/date-helpers";
@@ -37,6 +38,13 @@ import {
   type HolidaySmartWizardState,
 } from "@/lib/smart-plan-holiday-wizard";
 import { readTripPlanningProfile } from "@/lib/trip-intelligence";
+import type { DayTimes } from "@/lib/planner/day-times";
+import {
+  buildDayTimesPreferencesPatch,
+  defaultDayTimesFormHint,
+  getDayTimes,
+  validateDayTimesPair,
+} from "@/lib/planner/day-times";
 import {
   useCallback,
   useEffect,
@@ -151,6 +159,8 @@ export function SmartPlanModal({
   const [entSingleLl, setEntSingleLl] = useState(false);
   const [entUx, setEntUx] = useState(false);
   const [entEarly, setEntEarly] = useState(false);
+  const [dayArrival, setDayArrival] = useState("");
+  const [dayDeparture, setDayDeparture] = useState("");
   const [sequencerBusy, setSequencerBusy] = useState(false);
   const [sequencerStatusIdx, setSequencerStatusIdx] = useState(0);
   const [touringSequence, setTouringSequence] =
@@ -195,8 +205,13 @@ export function SmartPlanModal({
     setTouringPace(seqPace);
     if (scope === "day" && dayDateKey) {
       setDayPlannerSource(defaultDayPlannerMode(trip, dayDateKey));
+      const dt = getDayTimes(trip, dayDateKey);
+      setDayArrival(dt?.arrival ?? "");
+      setDayDeparture(dt?.departure ?? "");
     } else {
       setDayPlannerSource("ai");
+      setDayArrival("");
+      setDayDeparture("");
     }
     // Re-seed when the modal opens, trip changes, or saved trip_planning_profile updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -242,6 +257,45 @@ export function SmartPlanModal({
   );
 
   const isDayScope = scope === "day" && Boolean(dayDateKey);
+
+  const persistDayScopeTimes = useCallback(async (): Promise<boolean> => {
+    if (!isDayScope || !dayDateKey || !trip) return true;
+    const a = dayArrival.trim();
+    const d = dayDeparture.trim();
+    const v = validateDayTimesPair(a || undefined, d || undefined);
+    if (!v.ok) {
+      showToast(v.message);
+      return false;
+    }
+    const times: DayTimes | null =
+      a || d
+        ? {
+            ...(a ? { arrival: a } : {}),
+            ...(d ? { departure: d } : {}),
+          }
+        : null;
+    const patch = buildDayTimesPreferencesPatch(trip.preferences, dayDateKey, times);
+    const res = await updateTripPreferencesPatchAction({
+      tripId: trip.id,
+      patch,
+    });
+    if (!res.ok) {
+      showToast(res.error);
+      return false;
+    }
+    const prefsBase = (trip.preferences ?? {}) as Record<string, unknown>;
+    onTripPatch?.({
+      preferences: { ...prefsBase, ...patch },
+    });
+    return true;
+  }, [
+    isDayScope,
+    dayDateKey,
+    trip,
+    dayArrival,
+    dayDeparture,
+    onTripPatch,
+  ]);
 
   const dayHasCalendarTiles = useMemo(() => {
     if (!trip || !isDayScope || !dayDateKey) return false;
@@ -380,6 +434,7 @@ export function SmartPlanModal({
       if (!trip) return;
       if (isGenerating || sequencerBusy || profileSaving) return;
       if (showTouringPlanToggle && dayPlannerSource === "touring") {
+        if (!(await persistDayScopeTimes())) return;
         await runTouringGenerate();
         return;
       }
@@ -431,6 +486,7 @@ export function SmartPlanModal({
           const scopeForTiles =
             holidayWizard.scope ?? "fill_empty_days_only";
           const replaceTiles = smartPlanOverwriteFromScope(scopeForTiles);
+          if (!(await persistDayScopeTimes())) return;
           await onGenerate({
             mode: "smart",
             userPrompt,
@@ -462,6 +518,7 @@ export function SmartPlanModal({
             includeUniversalSkipTips: skipUniversal,
           };
 
+      if (!(await persistDayScopeTimes())) return;
       await onGenerate({
         mode,
         userPrompt: customText.trim(),
@@ -478,6 +535,7 @@ export function SmartPlanModal({
       showTouringPlanToggle,
       dayPlannerSource,
       runTouringGenerate,
+      persistDayScopeTimes,
       mode,
       customText,
       holidayStep,
@@ -692,6 +750,53 @@ export function SmartPlanModal({
             you travel.
           </div>
         )}
+        {isDayScope && !touringSubmitReady ? (
+          <div className="mt-4 rounded-lg border border-tt-line-soft bg-tt-surface/90 px-4 py-3">
+            <h3 className="font-sans text-sm font-semibold text-tt-royal">
+              At the park (optional)
+            </h3>
+            <p className="mt-1 font-sans text-xs leading-relaxed text-tt-ink-muted">
+              {defaultDayTimesFormHint()} Times are saved when you run the plan.
+            </p>
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label className="block font-sans text-xs text-tt-ink-muted">
+                Arrival (HH:mm)
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="09:00"
+                  className="mt-1 w-full rounded-lg border border-tt-line bg-white px-3 py-2 font-mono text-sm text-tt-royal"
+                  value={dayArrival}
+                  onChange={(e) => setDayArrival(e.target.value)}
+                  disabled={isGenerating || profileSaving || sequencerBusy}
+                />
+              </label>
+              <label className="block font-sans text-xs text-tt-ink-muted">
+                Departure (HH:mm)
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="22:00"
+                  className="mt-1 w-full rounded-lg border border-tt-line bg-white px-3 py-2 font-mono text-sm text-tt-royal"
+                  value={dayDeparture}
+                  onChange={(e) => setDayDeparture(e.target.value)}
+                  disabled={isGenerating || profileSaving || sequencerBusy}
+                />
+              </label>
+            </div>
+            <button
+              type="button"
+              className="mt-2 font-sans text-xs font-medium text-tt-royal underline decoration-tt-line/60"
+              onClick={() => {
+                setDayArrival("");
+                setDayDeparture("");
+              }}
+              disabled={isGenerating || profileSaving || sequencerBusy}
+            >
+              Clear — use automatic hours for this day
+            </button>
+          </div>
+        ) : null}
         {!touringSubmitReady && mode === "custom" ? (
           <p className="mt-2 font-sans text-[0.7rem] leading-snug text-tt-ink-soft">
             <strong className="text-tt-ink-muted">Tip:</strong> leave &quot;Overwrite

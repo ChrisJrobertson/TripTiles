@@ -512,6 +512,8 @@ export type TripPreferences = {
   ai_day_strategy?: Record<string, AIDayStrategy>;
   ai_day_intent?: Record<string, DayPlanningIntent>;
   day_notes?: Record<string, string>;
+  /** Optional per-day arrival/departure at the park for AI windows (`YYYY-MM-DD` keys). */
+  day_times?: Record<string, { arrival?: string; departure?: string }>;
   must_dos?: unknown;
   must_dos_snapshot?: unknown;
   /** Hex color for the editable “adventure” segment of the trip title; null/omitted = default royal. */

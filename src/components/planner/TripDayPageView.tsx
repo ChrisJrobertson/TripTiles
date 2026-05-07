@@ -37,6 +37,11 @@ import { plannerUserDayNotes } from "@/lib/planner-note-maps";
 import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
 import { buildSkipLineDayTimelineRows } from "@/lib/skip-line-day-timeline";
 import { isThemePark } from "@/lib/park-categories";
+import {
+  defaultDayTimesFormHint,
+  getDayTimes,
+  validateDayTimesPair,
+} from "@/lib/planner/day-times";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import type { Tier } from "@/lib/tier";
 import { AIDayStrategyPanel } from "@/components/planner/AIDayStrategyPanel";
@@ -113,6 +118,10 @@ export type TripDayPageViewProps = {
   onClose: () => void;
   onPrioritiesUpdated: (items: TripRidePriority[]) => void;
   onSaveDayNote: (dateKey: string, text: string) => void;
+  onSaveDayTimes: (
+    dateKey: string,
+    times: { arrival?: string; departure?: string } | null,
+  ) => void;
   onOpenSmartPlan: () => void;
   /** Consolidated AI for this day (slots + ride strategy). */
   onOpenDayPlanner: (options?: { tab?: "adjust" | "strategy" }) => void;
@@ -150,6 +159,7 @@ export function TripDayPageView({
   onClose,
   onPrioritiesUpdated,
   onSaveDayNote,
+  onSaveDayTimes,
   onOpenSmartPlan,
   onOpenDayPlanner,
   onUndoDayTweak,
@@ -176,8 +186,13 @@ export function TripDayPageView({
     return m[dayDate] ?? "";
   });
   const [noteDirty, setNoteDirty] = useState(false);
+  const [timesDraft, setTimesDraft] = useState(() => {
+    const dt = getDayTimes(trip, dayDate);
+    return { arrival: dt?.arrival ?? "", departure: dt?.departure ?? "" };
+  });
+  const [timesDirty, setTimesDirty] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
-  useUnsavedChanges(noteDirty);
+  useUnsavedChanges(noteDirty || timesDirty);
 
   useEffect(() => {
     const m = plannerUserDayNotes(trip);
@@ -186,9 +201,19 @@ export function TripDayPageView({
   }, [trip, dayDate]);
 
   useEffect(() => {
+    const dt = getDayTimes(trip, dayDate);
+    setTimesDraft({ arrival: dt?.arrival ?? "", departure: dt?.departure ?? "" });
+    setTimesDirty(false);
+  }, [trip, dayDate]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     if (window.location.hash === "#day-notes") {
       const el = document.getElementById("day-notes");
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    if (window.location.hash === "#day-times") {
+      const el = document.getElementById("day-times");
       el?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [dayDate]);
@@ -211,13 +236,13 @@ export function TripDayPageView({
 
   const queueAction = useCallback(
     (action: () => void) => {
-      if (noteDirty) {
+      if (noteDirty || timesDirty) {
         setPendingAction(() => action);
         return;
       }
       action();
     },
-    [noteDirty],
+    [noteDirty, timesDirty],
   );
 
   const saveNoteDraft = useCallback(() => {
@@ -225,6 +250,27 @@ export function TripDayPageView({
     onSaveDayNote(dayDate, noteDraft.slice(0, 500));
     setNoteDirty(false);
   }, [dayDate, noteDraft, noteDirty, onSaveDayNote]);
+
+  const saveTimesDraft = useCallback((): boolean => {
+    if (!timesDirty) return true;
+    const a = timesDraft.arrival.trim();
+    const d = timesDraft.departure.trim();
+    const v = validateDayTimesPair(a || undefined, d || undefined);
+    if (!v.ok) {
+      showToast(v.message);
+      return false;
+    }
+    const payload =
+      a || d
+        ? {
+            ...(a ? { arrival: a } : {}),
+            ...(d ? { departure: d } : {}),
+          }
+        : null;
+    onSaveDayTimes(dayDate, payload);
+    setTimesDirty(false);
+    return true;
+  }, [dayDate, onSaveDayTimes, timesDraft.arrival, timesDraft.departure, timesDirty]);
 
   const runPendingAction = useCallback(() => {
     const action = pendingAction;
@@ -234,13 +280,17 @@ export function TripDayPageView({
 
   const confirmSaveAndContinue = useCallback(() => {
     saveNoteDraft();
+    if (!saveTimesDraft()) return;
     runPendingAction();
-  }, [runPendingAction, saveNoteDraft]);
+  }, [runPendingAction, saveNoteDraft, saveTimesDraft]);
 
   const confirmDiscardAndContinue = useCallback(() => {
     const m = plannerUserDayNotes(trip);
     setNoteDraft(m[dayDate] ?? "");
     setNoteDirty(false);
+    const dt = getDayTimes(trip, dayDate);
+    setTimesDraft({ arrival: dt?.arrival ?? "", departure: dt?.departure ?? "" });
+    setTimesDirty(false);
     runPendingAction();
   }, [trip, dayDate, runPendingAction]);
 
@@ -931,6 +981,69 @@ export function TripDayPageView({
                 )
               )}
             </ul>
+          </section>
+
+          <section id="day-times" className="mt-6 border-t border-royal/10 pt-4">
+            <h2 className="font-sans text-xs font-semibold uppercase tracking-wide text-royal/70">
+              At the park
+            </h2>
+            <p className="mt-1 font-sans text-xs leading-relaxed text-royal/60">
+              {defaultDayTimesFormHint()}
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="block font-sans text-xs text-royal/75">
+                Arrival (24h, HH:mm)
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className="mt-1 w-full rounded-lg border border-royal/20 bg-white px-3 py-2 font-mono text-sm text-royal focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/40"
+                  placeholder="e.g. 09:00"
+                  value={timesDraft.arrival}
+                  onChange={(e) => {
+                    setTimesDraft((s) => ({ ...s, arrival: e.target.value }));
+                    setTimesDirty(true);
+                  }}
+                  onBlur={() => {
+                    if (!timesDirty) return;
+                    saveTimesDraft();
+                  }}
+                  aria-label="Arrival at park"
+                />
+              </label>
+              <label className="block font-sans text-xs text-royal/75">
+                Departure (24h, HH:mm)
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className="mt-1 w-full rounded-lg border border-royal/20 bg-white px-3 py-2 font-mono text-sm text-royal focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold/40"
+                  placeholder="e.g. 22:00"
+                  value={timesDraft.departure}
+                  onChange={(e) => {
+                    setTimesDraft((s) => ({ ...s, departure: e.target.value }));
+                    setTimesDirty(true);
+                  }}
+                  onBlur={() => {
+                    if (!timesDirty) return;
+                    saveTimesDraft();
+                  }}
+                  aria-label="Departure from park"
+                />
+              </label>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setTimesDraft({ arrival: "", departure: "" });
+                  onSaveDayTimes(dayDate, null);
+                  setTimesDirty(false);
+                }}
+              >
+                Use automatic hours
+              </Button>
+            </div>
           </section>
 
           <section id="day-notes" className="mt-6 border-t border-royal/10 pb-10 pt-4">

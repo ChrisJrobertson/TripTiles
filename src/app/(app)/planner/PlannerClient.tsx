@@ -96,6 +96,8 @@ import {
   MONTHS_SHORT,
   parseDate,
 } from "@/lib/date-helpers";
+import type { DayTimes } from "@/lib/planner/day-times";
+import { buildDayTimesPreferencesPatch } from "@/lib/planner/day-times";
 import {
   buildTripStatsShareText,
   computeTripStats,
@@ -2330,7 +2332,10 @@ function PlannerClientInner({
   );
 
   const openDayDetail = useCallback(
-    (dateKey: string, options?: { focusNotes?: boolean }) => {
+    (
+      dateKey: string,
+      options?: { focusNotes?: boolean; focusDayTimes?: boolean },
+    ) => {
       const daySeg = formatDateISO(parseDate(dateKey));
       setPlannerTimelineDateKey(daySeg);
       if (!tripRouteBase || !activeTripId) return;
@@ -2341,10 +2346,13 @@ function PlannerClientInner({
           String(el.scrollTop),
         );
       }
+      const hash = options?.focusDayTimes
+        ? "#day-times"
+        : options?.focusNotes
+          ? "#day-notes"
+          : "";
       startTransition(() => {
-        router.push(
-          `${tripRouteBase}/day/${daySeg}${options?.focusNotes ? "#day-notes" : ""}`,
-        );
+        router.push(`${tripRouteBase}/day/${daySeg}${hash}`);
       });
     },
     [tripRouteBase, activeTripId, router, setPlannerTimelineDateKey],
@@ -2524,6 +2532,36 @@ function PlannerClientInner({
       const res = await updateTripPreferencesPatchAction({
         tripId: activeTripId,
         patch: { day_notes: mergedNotes },
+      });
+      if (!res.ok) {
+        showToast(res.error);
+        startTransition(() => router.refresh());
+      }
+    },
+    [activeTripId, trips, applyLocalPatch, router],
+  );
+
+  const onSaveDayTimes = useCallback(
+    async (dateKey: string, times: DayTimes | null) => {
+      if (!activeTripId) return;
+      const t = trips.find((x) => x.id === activeTripId);
+      if (!t) return;
+      const patch = buildDayTimesPreferencesPatch(t.preferences, dateKey, times);
+      const prefsBase =
+        t.preferences &&
+        typeof t.preferences === "object" &&
+        !Array.isArray(t.preferences)
+          ? { ...t.preferences }
+          : {};
+      applyLocalPatch(activeTripId, {
+        preferences: {
+          ...prefsBase,
+          ...patch,
+        },
+      });
+      const res = await updateTripPreferencesPatchAction({
+        tripId: activeTripId,
+        patch,
       });
       if (!res.ok) {
         showToast(res.error);
@@ -3205,6 +3243,7 @@ function PlannerClientInner({
               mobilePlannerNoteMaps={mobilePlannerNoteMaps}
               mobileCrowdSummaryText={mobileCrowdSummaryText}
               onSaveDayNote={onSaveDayNote}
+              onSaveDayTimes={onSaveDayTimes}
               onTransferSlot={onTransferSlot}
               onAssign={onAssign}
               onClear={onClear}

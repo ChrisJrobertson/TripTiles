@@ -21,7 +21,14 @@ import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
 import { parkChromaTileStyle } from "@/lib/theme-colours";
 import { normaliseThemeKey, themedEmptySlotSurfaceStyle } from "@/lib/themes";
 import { dayConditionRow } from "@/lib/planner-day-conditions";
+import { showToast } from "@/lib/toast";
 import type { Assignment, Park, SlotType, TemperatureUnit, Trip } from "@/lib/types";
+import type { DayTimes } from "@/lib/planner/day-times";
+import {
+  defaultDayTimesFormHint,
+  getDayTimes,
+  validateDayTimesPair,
+} from "@/lib/planner/day-times";
 import type { TripRidePriority } from "@/types/attractions";
 import {
   CrowdLevelIndicator,
@@ -60,6 +67,8 @@ type Props = {
   temperatureUnit?: TemperatureUnit;
   /** Persist user day notes (`preferences.day_notes`). */
   onSaveDayNote?: (dateKey: string, text: string) => void;
+  /** Persist arrival/departure overrides (`preferences.day_times`). */
+  onSaveDayTimes?: (dateKey: string, times: DayTimes | null) => void;
   /** Pro+ timeline editing for this day popover. */
   timelineUnlocked?: boolean;
   onSlotTimeChange?: (
@@ -86,7 +95,10 @@ type Props = {
    * When set (logged-in trip planner), opens `/trip/.../day/...` instead of an
    * inline expander. Replaces the grid day-note editor with the day detail view.
    */
-  onOpenDayDetail?: (dateKey: string, options?: { focusNotes?: boolean }) => void;
+  onOpenDayDetail?: (
+    dateKey: string,
+    options?: { focusNotes?: boolean; focusDayTimes?: boolean },
+  ) => void;
 };
 
 const MEAL_SLOTS: { key: SlotType; label: string; area: string }[] = [
@@ -193,6 +205,7 @@ export function Calendar({
   plannerRegionId,
   temperatureUnit = "c",
   onSaveDayNote,
+  onSaveDayTimes,
   timelineUnlocked = false,
   onSlotTimeChange,
   ridePrioritiesByDay = {},
@@ -246,6 +259,8 @@ export function Calendar({
     top: number;
     left: number;
   } | null>(null);
+  const [popoverArrival, setPopoverArrival] = useState("");
+  const [popoverDeparture, setPopoverDeparture] = useState("");
   const popoverRef = useRef<HTMLDivElement>(null);
   /** Restore keyboard focus to the 💡 control after the dialog closes. */
   const noteToggleTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -260,6 +275,13 @@ export function Calendar({
       el?.focus();
     });
   }, []);
+
+  useEffect(() => {
+    if (!notePopover) return;
+    const dt = getDayTimes(trip, notePopover.dateKey);
+    setPopoverArrival(dt?.arrival ?? "");
+    setPopoverDeparture(dt?.departure ?? "");
+  }, [notePopover, trip]);
 
   useEffect(() => {
     if (!notePopover) return;
@@ -431,6 +453,11 @@ export function Calendar({
               const mon = MONTHS_SHORT[day.getMonth()];
               const crowdLine = dayCrowdNote(trip, key);
               const dayNote = dayUserNote(trip, key);
+              const savedDayTimes = getDayTimes(trip, key);
+              const hasSavedDayTimes = Boolean(
+                savedDayTimes?.arrival?.trim() ||
+                  savedDayTimes?.departure?.trim(),
+              );
               const hasInsight = Boolean(crowdLine || dayNote);
               const tone = crowdToneByDateKey.get(key) ?? null;
               const crowdLevel = tone ? crowdLevelFromHeuristicTone(tone) : null;
@@ -590,6 +617,15 @@ export function Calendar({
                           🎢 {rideCount}
                         </span>
                       ) : null}
+                      {hasSavedDayTimes ? (
+                        <span
+                          className="font-sans text-[0.55rem] text-tt-ink-soft"
+                          title="Custom at-park hours saved"
+                          aria-label="Custom at-park hours saved"
+                        >
+                          🕐
+                        </span>
+                      ) : null}
                       </button>
                     ) : (
                       <div className="min-w-0 flex flex-1 flex-wrap items-center justify-center gap-1 text-center">
@@ -624,6 +660,15 @@ export function Calendar({
                         {rideCount > 0 ? (
                           <span className="font-sans text-[0.55rem] font-medium text-tt-ink-soft">
                             🎢 {rideCount}
+                          </span>
+                        ) : null}
+                        {hasSavedDayTimes ? (
+                          <span
+                            className="font-sans text-[0.55rem] text-tt-ink-soft"
+                            title="Custom at-park hours saved"
+                            aria-hidden
+                          >
+                            🕐
                           </span>
                         ) : null}
                       </div>
@@ -1089,6 +1134,90 @@ export function Calendar({
                     <span className="font-semibold text-royal">Timeline</span>{" "}
                     tab when available.
                   </p>
+                ) : null}
+                {onSaveDayTimes ? (
+                  <div className="mt-3 space-y-2 border-t border-royal/15 pt-2">
+                    <p className="font-sans text-[0.65rem] leading-snug text-royal/65">
+                      {defaultDayTimesFormHint()}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="block font-sans text-[0.65rem] text-royal/70">
+                        Arrival
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="09:00"
+                          className="mt-0.5 w-full rounded border border-royal/20 bg-white px-1.5 py-1 font-mono text-xs text-royal"
+                          value={popoverArrival}
+                          onChange={(e) => setPopoverArrival(e.target.value)}
+                        />
+                      </label>
+                      <label className="block font-sans text-[0.65rem] text-royal/70">
+                        Departure
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="22:00"
+                          className="mt-0.5 w-full rounded border border-royal/20 bg-white px-1.5 py-1 font-mono text-xs text-royal"
+                          value={popoverDeparture}
+                          onChange={(e) => setPopoverDeparture(e.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="rounded-md bg-royal px-2 py-1.5 font-sans text-xs font-semibold text-white"
+                        onClick={() => {
+                          const a = popoverArrival.trim();
+                          const d = popoverDeparture.trim();
+                          const v = validateDayTimesPair(
+                            a || undefined,
+                            d || undefined,
+                          );
+                          if (!v.ok) {
+                            showToast(v.message);
+                            return;
+                          }
+                          const payload: DayTimes | null =
+                            a || d
+                              ? {
+                                  ...(a ? { arrival: a } : {}),
+                                  ...(d ? { departure: d } : {}),
+                                }
+                              : null;
+                          onSaveDayTimes(notePopover.dateKey, payload);
+                        }}
+                      >
+                        Save times
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-md border border-royal/25 bg-cream px-2 py-1.5 font-sans text-xs font-medium text-royal"
+                        onClick={() => {
+                          setPopoverArrival("");
+                          setPopoverDeparture("");
+                          onSaveDayTimes(notePopover.dateKey, null);
+                        }}
+                      >
+                        Use automatic hours
+                      </button>
+                      {onOpenDayDetail ? (
+                        <button
+                          type="button"
+                          className="rounded-md border border-royal/25 px-2 py-1.5 font-sans text-xs font-medium text-royal"
+                          onClick={() => {
+                            closeNotePopover();
+                            onOpenDayDetail(notePopover.dateKey, {
+                              focusDayTimes: true,
+                            });
+                          }}
+                        >
+                          Open day page
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
                 ) : null}
               </>
             ) : onSlotTimeChange ? (
