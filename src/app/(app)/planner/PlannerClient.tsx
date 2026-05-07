@@ -5,6 +5,7 @@ import {
   countFilledSlots,
   getParkIdFromSlotValue,
 } from "@/lib/assignment-slots";
+import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
 import {
   generateAIPlanAction,
   generateDayStrategy,
@@ -20,6 +21,7 @@ import {
   touchTripAction,
   undoSmartPlanAction,
   updateAssignmentsAction,
+  updateAssignmentsWithTimelineClearAction,
   updateTripColourThemeAction,
   updateTripFromWizardAction,
   updateTripMetadataAction,
@@ -585,6 +587,33 @@ type PlannerSlotBooking = {
     | { kind: "clear"; dateKey: string; slot: SlotType };
 };
 
+function preferencesWithoutAiTimelineDates(
+  prefs: Record<string, unknown> | undefined,
+  dateKeys: string[],
+): Record<string, unknown> {
+  const base =
+    prefs && typeof prefs === "object" && !Array.isArray(prefs)
+      ? { ...prefs }
+      : {};
+  if (dateKeys.length === 0) return base;
+  const raw = base.ai_day_timeline;
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const next = { ...(raw as Record<string, unknown>) };
+    for (const dk of dateKeys) {
+      delete next[dk];
+    }
+    base.ai_day_timeline = next;
+  }
+  return base;
+}
+
+function tripDayHasAiTimeline(
+  trip: Trip,
+  dateKey: string,
+): boolean {
+  return Boolean(getAiDayTimelineForDate(trip.preferences, dateKey));
+}
+
 export function PlannerClient(props: Props) {
   return (
     <PlannerStateProvider>
@@ -729,6 +758,10 @@ function PlannerClientInner({
     useState<DayConflictDotSummary>({});
   const [plannerSlotBooking, setPlannerSlotBooking] =
     useState<PlannerSlotBooking | null>(null);
+  const [timelineEditGuard, setTimelineEditGuard] = useState<{
+    dateKeys: string[];
+    pending: () => void;
+  } | null>(null);
   const [dayStrategyUpgradeOpen, setDayStrategyUpgradeOpen] = useState(false);
   const [undoDayTweakPrompt, setUndoDayTweakPrompt] = useState<{
     dateKey: string;
@@ -736,6 +769,8 @@ function PlannerClientInner({
   } | null>(null);
   const [undoDayTweakBusy, setUndoDayTweakBusy] = useState(false);
   const activeTrip = trips.find((t) => t.id === activeTripId) ?? null;
+  const tripsRef = useRef(trips);
+  tripsRef.current = trips;
 
   useEffect(() => {
     if (!activeTrip?.id) {
@@ -1313,6 +1348,74 @@ function PlannerClientInner({
       }, ASSIGN_DEBOUNCE_MS);
     },
     [clearAssignTimer, router, withSaving],
+  );
+
+  const commitAssignmentsUpdate = useCallback(
+    (
+      tripId: string,
+      nextAssignments: Assignments,
+      opts?: {
+        clearAiTimelineDateKeys?: string[];
+        /** Dates whose slot rows changed — day_snapshots dropped like assign-only saves. */
+        touchedAssignmentDates?: string[];
+      },
+    ) => {
+      const clearDates = opts?.clearAiTimelineDateKeys ?? [];
+      const touched = new Set(opts?.touchedAssignmentDates ?? []);
+      clearDates.forEach((d) => touched.add(d));
+
+      clearAssignTimer();
+      setTrips((prev) =>
+        prev.map((t) => {
+          if (t.id !== tripId) return t;
+          return {
+            ...t,
+            assignments: nextAssignments,
+            ...(clearDates.length > 0
+              ? {
+                  preferences: preferencesWithoutAiTimelineDates(
+                    t.preferences as Record<string, unknown> | undefined,
+                    clearDates,
+                  ),
+                }
+              : {}),
+            updated_at: new Date().toISOString(),
+            previous_assignments_snapshot: null,
+            previous_preferences_snapshot: null,
+            previous_assignments_snapshot_at: null,
+            day_snapshots: (t.day_snapshots ?? []).filter(
+              (snap) => !touched.has(snap.date),
+            ),
+          };
+        }),
+      );
+
+      if (clearDates.length > 0) {
+        void (async () => {
+          await withSaving(async () => {
+            const res = await updateAssignmentsWithTimelineClearAction({
+              tripId,
+              assignments: nextAssignments,
+              clearAiTimelineDateKeys: clearDates,
+            });
+            if (!res.ok) {
+              showToast(res.error ?? "Couldn't save — please try again");
+              startTransition(() => router.refresh());
+              return;
+            }
+            startTransition(() => router.refresh());
+          });
+        })();
+      } else {
+        scheduleAssignmentsSave(tripId, nextAssignments);
+      }
+    },
+    [
+      clearAssignTimer,
+      router,
+      withSaving,
+      scheduleAssignmentsSave,
+    ],
   );
 
   useEffect(() => {
@@ -1979,66 +2082,40 @@ function PlannerClientInner({
   const applySlotAssign = useCallback(
     (dateKey: string, slot: SlotType, parkId: string) => {
       if (!activeTripId) return;
-      setTrips((prev) =>
-        prev.map((t) => {
-          if (t.id !== activeTripId) return t;
-          const nextAss: Assignments = { ...t.assignments };
-          const day = { ...(nextAss[dateKey] ?? {}) };
-          day[slot] = parkId;
-          nextAss[dateKey] = day;
-          const next = {
-            ...t,
-            assignments: nextAss,
-            updated_at: new Date().toISOString(),
-            previous_assignments_snapshot: null,
-            previous_preferences_snapshot: null,
-            previous_assignments_snapshot_at: null,
-            day_snapshots: (t.day_snapshots ?? []).filter(
-              (snap) => snap.date !== dateKey,
-            ),
-          };
-          scheduleAssignmentsSave(t.id, nextAss);
-          return next;
-        }),
-      );
+      const t = tripsRef.current.find((x) => x.id === activeTripId);
+      if (!t) return;
+      const nextAss: Assignments = { ...t.assignments };
+      const day = { ...(nextAss[dateKey] ?? {}) };
+      day[slot] = parkId;
+      nextAss[dateKey] = day;
+      commitAssignmentsUpdate(activeTripId, nextAss, {
+        touchedAssignmentDates: [dateKey],
+      });
     },
-    [activeTripId, scheduleAssignmentsSave],
+    [activeTripId, commitAssignmentsUpdate],
   );
 
   const applySlotClear = useCallback(
     (dateKey: string, slot: SlotType) => {
       if (!activeTripId) return;
-      setTrips((prev) =>
-        prev.map((t) => {
-          if (t.id !== activeTripId) return t;
-          const nextAss: Assignments = { ...t.assignments };
-          const day = { ...(nextAss[dateKey] ?? {}) };
-          delete day[slot];
-          if (Object.keys(day).length === 0) delete nextAss[dateKey];
-          else nextAss[dateKey] = day;
-          const next = {
-            ...t,
-            assignments: nextAss,
-            updated_at: new Date().toISOString(),
-            previous_assignments_snapshot: null,
-            previous_preferences_snapshot: null,
-            previous_assignments_snapshot_at: null,
-            day_snapshots: (t.day_snapshots ?? []).filter(
-              (snap) => snap.date !== dateKey,
-            ),
-          };
-          scheduleAssignmentsSave(t.id, nextAss);
-          return next;
-        }),
-      );
+      const t = tripsRef.current.find((x) => x.id === activeTripId);
+      if (!t) return;
+      const nextAss: Assignments = { ...t.assignments };
+      const day = { ...(nextAss[dateKey] ?? {}) };
+      delete day[slot];
+      if (Object.keys(day).length === 0) delete nextAss[dateKey];
+      else nextAss[dateKey] = day;
+      commitAssignmentsUpdate(activeTripId, nextAss, {
+        touchedAssignmentDates: [dateKey],
+      });
     },
-    [activeTripId, scheduleAssignmentsSave],
+    [activeTripId, commitAssignmentsUpdate],
   );
 
   const onAssign = useCallback(
     (dateKey: string, slot: SlotType, parkId: string) => {
       if (!activeTripId) return;
-      const t = trips.find((x) => x.id === activeTripId);
+      const t = tripsRef.current.find((x) => x.id === activeTripId);
       if (!t) return;
       const day = t.assignments[dateKey] ?? {};
       const oldSlotVal = day[slot];
@@ -2060,21 +2137,40 @@ function PlannerClientInner({
         });
         return;
       }
+      const needsTimelineGuard = tripDayHasAiTimeline(t, dateKey);
+      if (needsTimelineGuard) {
+        setTimelineEditGuard({
+          dateKeys: [dateKey],
+          pending: () => {
+            const trip = tripsRef.current.find((x) => x.id === activeTripId);
+            if (!trip || !activeTripId) return;
+            const nextAss: Assignments = { ...trip.assignments };
+            const d = { ...(nextAss[dateKey] ?? {}) };
+            d[slot] = parkId;
+            nextAss[dateKey] = d;
+            commitAssignmentsUpdate(activeTripId, nextAss, {
+              clearAiTimelineDateKeys: [dateKey],
+              touchedAssignmentDates: [dateKey],
+            });
+          },
+        });
+        return;
+      }
       applySlotAssign(dateKey, slot, parkId);
     },
     [
       activeTripId,
-      trips,
       ridePrioritiesByDayForActiveTrip,
       parkByIdPlanner,
       applySlotAssign,
+      commitAssignmentsUpdate,
     ],
   );
 
   const onClear = useCallback(
     (dateKey: string, slot: SlotType) => {
       if (!activeTripId) return;
-      const t = trips.find((x) => x.id === activeTripId);
+      const t = tripsRef.current.find((x) => x.id === activeTripId);
       if (!t) return;
       const day = t.assignments[dateKey] ?? {};
       const oldSlotVal = day[slot];
@@ -2094,46 +2190,68 @@ function PlannerClientInner({
         });
         return;
       }
+      const needsTimelineGuard = tripDayHasAiTimeline(t, dateKey);
+      if (needsTimelineGuard) {
+        setTimelineEditGuard({
+          dateKeys: [dateKey],
+          pending: () => {
+            const trip = tripsRef.current.find((x) => x.id === activeTripId);
+            if (!trip || !activeTripId) return;
+            const nextAss: Assignments = { ...trip.assignments };
+            const d = { ...(nextAss[dateKey] ?? {}) };
+            delete d[slot];
+            if (Object.keys(d).length === 0) delete nextAss[dateKey];
+            else nextAss[dateKey] = d;
+            commitAssignmentsUpdate(activeTripId, nextAss, {
+              clearAiTimelineDateKeys: [dateKey],
+              touchedAssignmentDates: [dateKey],
+            });
+          },
+        });
+        return;
+      }
       applySlotClear(dateKey, slot);
     },
     [
       activeTripId,
-      trips,
       ridePrioritiesByDayForActiveTrip,
       parkByIdPlanner,
       applySlotClear,
+      commitAssignmentsUpdate,
     ],
   );
 
   const onSlotTimeChange = useCallback(
     (dateKey: string, slot: SlotType, timeHHmm: string) => {
       if (!activeTripId) return;
-      setTrips((prev) =>
-        prev.map((t) => {
-          if (t.id !== activeTripId) return t;
-          const nextAss = assignmentWithUpdatedSlotTime(
-            t.assignments,
-            dateKey,
-            slot,
-            timeHHmm,
-          );
-          if (nextAss === t.assignments) return t;
-          scheduleAssignmentsSave(t.id, nextAss);
-          return {
-            ...t,
-            assignments: nextAss,
-            updated_at: new Date().toISOString(),
-            previous_assignments_snapshot: null,
-            previous_preferences_snapshot: null,
-            previous_assignments_snapshot_at: null,
-            day_snapshots: (t.day_snapshots ?? []).filter(
-              (snap) => snap.date !== dateKey,
-            ),
-          };
-        }),
-      );
+      const t = tripsRef.current.find((x) => x.id === activeTripId);
+      if (!t) return;
+      const needsTimelineGuard = tripDayHasAiTimeline(t, dateKey);
+      const applyTime = () => {
+        const trip = tripsRef.current.find((x) => x.id === activeTripId);
+        if (!trip || !activeTripId) return;
+        const nextAss = assignmentWithUpdatedSlotTime(
+          trip.assignments,
+          dateKey,
+          slot,
+          timeHHmm,
+        );
+        if (nextAss === trip.assignments) return;
+        commitAssignmentsUpdate(activeTripId, nextAss, {
+          clearAiTimelineDateKeys: needsTimelineGuard ? [dateKey] : undefined,
+          touchedAssignmentDates: [dateKey],
+        });
+      };
+      if (needsTimelineGuard) {
+        setTimelineEditGuard({
+          dateKeys: [dateKey],
+          pending: applyTime,
+        });
+        return;
+      }
+      applyTime();
     },
-    [activeTripId, scheduleAssignmentsSave],
+    [activeTripId, commitAssignmentsUpdate],
   );
 
   const onTransferSlot = useCallback(
@@ -2144,39 +2262,44 @@ function PlannerClientInner({
       toSlot: SlotType,
     ) => {
       if (!activeTripId) return;
-      setTrips((prev) =>
-        prev.map((t) => {
-          if (t.id !== activeTripId) return t;
-          const nextAss: Assignments = { ...t.assignments };
-          const da = { ...(nextAss[fromDate] ?? {}) };
-          const db = { ...(nextAss[toDate] ?? {}) };
-          const a = da[fromSlot];
-          const b = db[toSlot];
-          if (a === undefined && b === undefined) return t;
-          if (a !== undefined) db[toSlot] = a;
-          else delete db[toSlot];
-          if (b !== undefined) da[fromSlot] = b;
-          else delete da[fromSlot];
-          if (Object.keys(da).length === 0) delete nextAss[fromDate];
-          else nextAss[fromDate] = da;
-          if (Object.keys(db).length === 0) delete nextAss[toDate];
-          else nextAss[toDate] = db;
-          scheduleAssignmentsSave(t.id, nextAss);
-          return {
-            ...t,
-            assignments: nextAss,
-            updated_at: new Date().toISOString(),
-            previous_assignments_snapshot: null,
-            previous_preferences_snapshot: null,
-            previous_assignments_snapshot_at: null,
-            day_snapshots: (t.day_snapshots ?? []).filter(
-              (snap) => snap.date !== fromDate && snap.date !== toDate,
-            ),
-          };
-        }),
-      );
+      const t = tripsRef.current.find((x) => x.id === activeTripId);
+      if (!t) return;
+      const clearDates: string[] = [];
+      if (tripDayHasAiTimeline(t, fromDate)) clearDates.push(fromDate);
+      if (tripDayHasAiTimeline(t, toDate)) clearDates.push(toDate);
+      const runTransfer = () => {
+        const trip = tripsRef.current.find((x) => x.id === activeTripId);
+        if (!trip || !activeTripId) return;
+        const nextAss: Assignments = { ...trip.assignments };
+        const da = { ...(nextAss[fromDate] ?? {}) };
+        const db = { ...(nextAss[toDate] ?? {}) };
+        const a = da[fromSlot];
+        const b = db[toSlot];
+        if (a === undefined && b === undefined) return;
+        if (a !== undefined) db[toSlot] = a;
+        else delete db[toSlot];
+        if (b !== undefined) da[fromSlot] = b;
+        else delete da[fromSlot];
+        if (Object.keys(da).length === 0) delete nextAss[fromDate];
+        else nextAss[fromDate] = da;
+        if (Object.keys(db).length === 0) delete nextAss[toDate];
+        else nextAss[toDate] = db;
+        commitAssignmentsUpdate(activeTripId, nextAss, {
+          clearAiTimelineDateKeys:
+            clearDates.length > 0 ? [...new Set(clearDates)] : undefined,
+          touchedAssignmentDates: [fromDate, toDate],
+        });
+      };
+      if (clearDates.length > 0) {
+        setTimelineEditGuard({
+          dateKeys: [...new Set(clearDates)],
+          pending: runTransfer,
+        });
+        return;
+      }
+      runTransfer();
     },
-    [activeTripId, scheduleAssignmentsSave],
+    [activeTripId, commitAssignmentsUpdate],
   );
 
   const handleTripEmailReminders = useCallback(
@@ -3724,6 +3847,50 @@ function PlannerClientInner({
         </ModalShell>
       ) : null}
 
+      {timelineEditGuard ? (
+        <ModalShell
+          zClassName="z-[132]"
+          overlayClassName="bg-tt-royal/55 backdrop-blur-[1px]"
+          maxWidthClass="max-w-md"
+          panelClassName="p-6"
+          role="dialog"
+          aria-modal={true}
+          aria-labelledby="timeline-edit-guard-title"
+        >
+          <h2
+            id="timeline-edit-guard-title"
+            className="font-heading text-lg font-semibold text-tt-royal"
+          >
+            This day has a detailed plan
+          </h2>
+          <p className="mt-3 font-sans text-sm leading-relaxed text-tt-royal/85">
+            Plan this day ✨ built an hour-by-hour timeline for this date.
+            Changing a calendar slot will clear that timeline so tiles and the
+            detailed view stay in sync.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-end gap-2 border-t border-tt-line-soft pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setTimelineEditGuard(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => {
+                const run = timelineEditGuard.pending;
+                setTimelineEditGuard(null);
+                run();
+              }}
+            >
+              Continue
+            </Button>
+          </div>
+        </ModalShell>
+      ) : null}
+
       <BookingConflictModal
         open={plannerSlotBooking != null}
         dayDate={plannerSlotBooking?.dayDate ?? ""}
@@ -3734,12 +3901,39 @@ function PlannerClientInner({
         onDismiss={() => setPlannerSlotBooking(null)}
         onProceedKeepBooking={() => {
           const b = plannerSlotBooking;
-          if (!b) return;
+          if (!b || !activeTripId) return;
           setPlannerSlotBooking(null);
-          if (b.pending.kind === "assign") {
-            applySlotAssign(b.pending.dateKey, b.pending.slot, b.pending.parkId);
+          const dk = b.pending.dateKey;
+          const trip = tripsRef.current.find((x) => x.id === activeTripId);
+          const needsTimelineClear = trip ? tripDayHasAiTimeline(trip, dk) : false;
+
+          const applyPending = () => {
+            const tr = tripsRef.current.find((x) => x.id === activeTripId);
+            if (!tr || !activeTripId) return;
+            const nextAss: Assignments = { ...tr.assignments };
+            if (b.pending.kind === "assign") {
+              const day = { ...(nextAss[dk] ?? {}) };
+              day[b.pending.slot] = b.pending.parkId;
+              nextAss[dk] = day;
+            } else {
+              const day = { ...(nextAss[dk] ?? {}) };
+              delete day[b.pending.slot];
+              if (Object.keys(day).length === 0) delete nextAss[dk];
+              else nextAss[dk] = day;
+            }
+            commitAssignmentsUpdate(activeTripId, nextAss, {
+              clearAiTimelineDateKeys: needsTimelineClear ? [dk] : undefined,
+              touchedAssignmentDates: [dk],
+            });
+          };
+
+          if (needsTimelineClear) {
+            setTimelineEditGuard({
+              dateKeys: [dk],
+              pending: applyPending,
+            });
           } else {
-            applySlotClear(b.pending.dateKey, b.pending.slot);
+            applyPending();
           }
         }}
         onProceedClearBooking={() => {
@@ -3759,14 +3953,37 @@ function PlannerClientInner({
               b.dayDate,
               b.anchors.map((x) => x.attractionId),
             );
-            if (b.pending.kind === "assign") {
-              applySlotAssign(
-                b.pending.dateKey,
-                b.pending.slot,
-                b.pending.parkId,
-              );
+            const dk = b.pending.dateKey;
+            const trip = tripsRef.current.find((x) => x.id === activeTripId);
+            const needsTimelineClear = trip ? tripDayHasAiTimeline(trip, dk) : false;
+
+            const applyPending = () => {
+              const tr = tripsRef.current.find((x) => x.id === activeTripId);
+              if (!tr || !activeTripId) return;
+              const nextAss: Assignments = { ...tr.assignments };
+              if (b.pending.kind === "assign") {
+                const day = { ...(nextAss[dk] ?? {}) };
+                day[b.pending.slot] = b.pending.parkId;
+                nextAss[dk] = day;
+              } else {
+                const day = { ...(nextAss[dk] ?? {}) };
+                delete day[b.pending.slot];
+                if (Object.keys(day).length === 0) delete nextAss[dk];
+                else nextAss[dk] = day;
+              }
+              commitAssignmentsUpdate(activeTripId, nextAss, {
+                clearAiTimelineDateKeys: needsTimelineClear ? [dk] : undefined,
+                touchedAssignmentDates: [dk],
+              });
+            };
+
+            if (needsTimelineClear) {
+              setTimelineEditGuard({
+                dateKeys: [dk],
+                pending: applyPending,
+              });
             } else {
-              applySlotClear(b.pending.dateKey, b.pending.slot);
+              applyPending();
             }
           })();
         }}

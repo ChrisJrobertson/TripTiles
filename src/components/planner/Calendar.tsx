@@ -11,6 +11,10 @@ import {
 } from "@/lib/date-helpers";
 import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
 import { displayDayForTimelinePanel } from "@/lib/ai-timeline-to-slot-times";
+import {
+  describeDerivedSlotTooltip,
+  deriveDayPlanFromTimeline,
+} from "@/lib/planner/derive-slots-from-timeline";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { PlannerAmPmCalendarCells } from "@/components/planner/PlannerAmPmCalendarCells";
 import { truncateForPreview } from "@/lib/truncate-text";
@@ -239,6 +243,21 @@ export function Calendar({
     }
     return m;
   }, [trip.preferences?.ai_day_crowd_notes]);
+  const aiTimelineByDateKey = useMemo(() => {
+    const m = new Map<
+      string,
+      NonNullable<ReturnType<typeof getAiDayTimelineForDate>>
+    >();
+    let d = parseDate(trip.start_date);
+    const end = parseDate(trip.end_date);
+    while (d.getTime() <= end.getTime()) {
+      const dk = formatDateKey(d);
+      const rich = getAiDayTimelineForDate(trip.preferences, dk);
+      if (rich) m.set(dk, rich);
+      d = addDays(d, 1);
+    }
+    return m;
+  }, [trip.start_date, trip.end_date, trip.preferences]);
   const popoverId = useId();
   const [notePopover, setNotePopover] = useState<NotePopoverState | null>(
     null,
@@ -495,12 +514,15 @@ export function Calendar({
               );
 
               const conflictDot = dayConflictDots[key];
+              const aiRich = aiTimelineByDateKey.get(key);
 
               return (
                 <div
                   key={key}
                   id={`planner-day-${key}`}
                   className={`relative flex min-h-[7rem] flex-col rounded-tt-md border border-tt-line bg-tt-surface/95 shadow-tt-sm transition hover:border-tt-royal/30 sm:min-h-[8rem] md:min-h-[5.25rem]${
+                    aiRich ? " border-l-[3px] border-l-amber-400/85" : ""
+                  }${
                     highlightDateKey === key || timelineSelectedDateKey === key
                       ? " ring-2 ring-tt-royal ring-offset-2 ring-offset-tt-surface"
                       : ""
@@ -728,12 +750,131 @@ export function Calendar({
                       onAfterSlotClear={onAfterSlotClear}
                       useDayDetailShell={useDayDetailShell}
                       onOpenDayDetail={onOpenDayDetail}
+                      aiTimeline={aiRich ?? undefined}
                     />
-                    {MEAL_SLOTS.map(({ key: slot, label, area }) => {
+                    {(() => {
+                      const mealDerivedPlan = aiRich
+                        ? deriveDayPlanFromTimeline(aiRich)
+                        : null;
+                      return MEAL_SLOTS.map(({ key: slot, label, area }) => {
                       const pid = getParkIdFromSlotValue(ass[slot]);
                       const park = pid ? parkById.get(pid) : undefined;
+                      const derivedMeal =
+                        slot === "lunch"
+                          ? mealDerivedPlan?.lunch
+                          : mealDerivedPlan?.dinner;
+                      const derivedMealTip =
+                        aiRich && derivedMeal
+                          ? describeDerivedSlotTooltip(aiRich, derivedMeal)
+                          : undefined;
                       const isMeal = slot === "lunch" || slot === "dinner";
                       const mealPrefix = isMeal ? "🍽️ " : "";
+                      if (derivedMeal) {
+                        const canOpenDerived =
+                          !readOnly &&
+                          useDayDetailShell &&
+                          Boolean(onOpenDayDetail);
+                        const ariaDerived = `${label} planned: ${derivedMeal.label}`;
+                        return (
+                          <div
+                            key={slot}
+                            className={`group planner-slot relative flex min-h-0 flex-1 flex-col overflow-hidden rounded ${area} border border-tt-gold/35 bg-tt-gold-soft/25 transition hover:brightness-[1.04] ${
+                              canOpenDerived || !readOnly
+                                ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-gold/50 focus-visible:ring-inset"
+                                : ""
+                            }`}
+                            data-day-interactive
+                            role="button"
+                            tabIndex={0}
+                            aria-label={ariaDerived}
+                            title={derivedMealTip ?? ariaDerived}
+                            onClick={(e) => {
+                              if (readOnly) return;
+                              if (canOpenDerived && onOpenDayDetail) {
+                                e.stopPropagation();
+                                if (
+                                  inTripRange(day, trip) &&
+                                  onTimelineDaySelect
+                                ) {
+                                  onTimelineDaySelect(key);
+                                }
+                                onOpenDayDetail(key);
+                                return;
+                              }
+                              e.stopPropagation();
+                              if (selectedParkId) {
+                                onAssign(key, slot, selectedParkId);
+                              } else {
+                                onNeedParkFirst();
+                              }
+                            }}
+                            onKeyDown={(e) => {
+                              if (readOnly) return;
+                              if (
+                                canOpenDerived &&
+                                onOpenDayDetail &&
+                                (e.key === "Enter" || e.key === " ")
+                              ) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (
+                                  inTripRange(day, trip) &&
+                                  onTimelineDaySelect
+                                ) {
+                                  onTimelineDaySelect(key);
+                                }
+                                onOpenDayDetail(key);
+                                return;
+                              }
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (selectedParkId) {
+                                  onAssign(key, slot, selectedParkId);
+                                } else {
+                                  onNeedParkFirst();
+                                }
+                              }
+                            }}
+                          >
+                            <span className="planner-slot-label md:hidden">
+                              {label}
+                            </span>
+                            <div
+                              className="relative mt-2 flex min-h-0 flex-1 flex-row items-center gap-0.5 pl-0.5 pr-1 md:mt-0 md:items-stretch md:pl-1 md:pr-1"
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                if (readOnly) return;
+                                onClear(key, slot);
+                                onAfterSlotClear?.();
+                              }}
+                            >
+                              {!readOnly ? (
+                                <button
+                                  type="button"
+                                  className="planner-slot-clear relative right-auto top-auto z-[1] flex h-5 w-5 shrink-0 items-center justify-center opacity-100 transition-opacity duration-150 md:opacity-0 md:group-hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-[color:var(--tt-ring)]/55"
+                                  data-day-interactive
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onClear(key, slot);
+                                  }}
+                                  aria-label="Clear slot"
+                                >
+                                  ×
+                                </button>
+                              ) : null}
+                              <span className="line-clamp-3 min-w-0 flex-1 self-center font-sans text-[0.6rem] font-medium leading-tight text-tt-royal sm:text-[0.65rem] md:self-center md:py-0.5">
+                                {mealPrefix}✨ {derivedMeal.label}
+                                {derivedMeal.sublabel ? (
+                                  <span className="block truncate text-[0.52rem] font-normal opacity-80 sm:text-[0.54rem]">
+                                    {derivedMeal.sublabel}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      }
                       const slotAria = park
                         ? `${label} slot: ${park.name}`
                         : `${label} slot: empty`;
@@ -903,7 +1044,8 @@ export function Calendar({
                           )}
                         </div>
                       );
-                    })}
+                    });
+                    })()}
                   </div>
                   {!readOnly && onSaveDayNote && useDayDetailShell && onOpenDayDetail ? (
                     <div className="border-t border-tt-line-soft px-1 py-1" data-day-interactive>

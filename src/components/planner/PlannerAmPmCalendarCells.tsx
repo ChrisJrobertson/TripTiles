@@ -1,13 +1,19 @@
 "use client";
 
-import { parkChromaTileStyle } from "@/lib/theme-colours";
-import { themedEmptySlotSurfaceStyle, type ThemeKey } from "@/lib/themes";
+import {
+  describeDerivedSlotTooltip,
+  deriveDayPlanFromTimeline,
+  type DerivedSlot,
+} from "@/lib/planner/derive-slots-from-timeline";
 import {
   buildAmPmPresentation,
+  halfDayDisplayForPlannerSlot,
   type AmPmCalendarPresentation,
   type HalfDayDisplay,
 } from "@/lib/planner-am-pm-display";
-import type { Assignment, Park, SlotType } from "@/lib/types";
+import { parkChromaTileStyle } from "@/lib/theme-colours";
+import { themedEmptySlotSurfaceStyle, type ThemeKey } from "@/lib/themes";
+import type { AiDayTimeline, Assignment, Park, SlotType } from "@/lib/types";
 import type { CSSProperties } from "react";
 
 type Props = {
@@ -23,6 +29,8 @@ type Props = {
   onAfterSlotClear?: () => void;
   useDayDetailShell: boolean;
   onOpenDayDetail?: (dateKey: string) => void;
+  /** When set, AM/PM rows derive from Plan-this-day timeline (split layout). */
+  aiTimeline?: AiDayTimeline | null;
 };
 
 const REST_UNIFIED_PRIMARY = "Rest / Pool";
@@ -66,6 +74,8 @@ function SplitHalfSlot({
   onAfterSlotClear,
   useDayDetailShell,
   onOpenDayDetail,
+  derivedOverride,
+  derivedTooltip,
 }: {
   dateKey: string;
   slot: "am" | "pm";
@@ -81,7 +91,97 @@ function SplitHalfSlot({
   onAfterSlotClear?: Props["onAfterSlotClear"];
   useDayDetailShell: boolean;
   onOpenDayDetail?: Props["onOpenDayDetail"];
+  derivedOverride?: DerivedSlot | null;
+  derivedTooltip?: string;
 }) {
+  if (derivedOverride) {
+    const canOpen =
+      !readOnly && useDayDetailShell && Boolean(onOpenDayDetail);
+    const aria = `${halfPrefix} planned: ${derivedOverride.label}`;
+    return (
+      <div
+        className={`group planner-slot relative flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-tt-gold/35 bg-tt-gold-soft/25 ${areaClass} transition hover:brightness-[1.04] ${
+          canOpen
+            ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-gold/50 focus-visible:ring-inset"
+            : readOnly
+              ? ""
+              : "cursor-pointer hover:brightness-[1.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--tt-ring)]/50 focus-visible:ring-inset"
+        }`}
+        data-day-interactive
+        role={canOpen || !readOnly ? "button" : undefined}
+        tabIndex={canOpen || !readOnly ? 0 : undefined}
+        aria-label={aria}
+        title={derivedTooltip ?? aria}
+        onClick={(e) => {
+          if (readOnly) return;
+          if (canOpen && onOpenDayDetail) {
+            e.stopPropagation();
+            onOpenDayDetail(dateKey);
+            return;
+          }
+          e.stopPropagation();
+          if (selectedParkId) {
+            onAssign(dateKey, slot, selectedParkId);
+          } else {
+            onNeedParkFirst();
+          }
+        }}
+        onKeyDown={(e) => {
+          if (readOnly) return;
+          if (canOpen && onOpenDayDetail && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            e.stopPropagation();
+            onOpenDayDetail(dateKey);
+            return;
+          }
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            e.stopPropagation();
+            if (selectedParkId) {
+              onAssign(dateKey, slot, selectedParkId);
+            } else {
+              onNeedParkFirst();
+            }
+          }
+        }}
+      >
+        <div
+          className="relative flex min-h-0 flex-1 flex-row items-center gap-0.5 pl-0.5 pr-1 pt-3 md:min-h-[1.75rem] md:pl-1 md:pr-1 md:pt-2"
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            if (readOnly) return;
+            onClear(dateKey, slot);
+            onAfterSlotClear?.();
+          }}
+        >
+          {!readOnly ? (
+            <button
+              type="button"
+              className="planner-slot-clear relative right-auto top-auto z-[1] flex h-5 w-5 shrink-0 items-center justify-center opacity-100 transition-opacity duration-150 md:opacity-0 md:group-hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-[color:var(--tt-ring)]/55"
+              data-day-interactive
+              onClick={(e) => {
+                e.stopPropagation();
+                onClear(dateKey, slot);
+              }}
+              aria-label="Clear slot"
+            >
+              ×
+            </button>
+          ) : null}
+          <span className="line-clamp-3 min-w-0 flex-1 font-sans text-[0.6rem] font-medium leading-snug sm:text-[0.62rem] md:leading-tight text-tt-royal">
+            <span className="font-semibold opacity-80">{halfPrefix}</span> ✨{" "}
+            {derivedOverride.label}
+            {derivedOverride.sublabel ? (
+              <span className="block truncate text-[0.52rem] font-normal opacity-80 sm:text-[0.54rem]">
+                {derivedOverride.sublabel}
+              </span>
+            ) : null}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   const park = display.state === "park" ? display.park : undefined;
   const slotAria = park
     ? `${halfPrefix} ${park.name}`
@@ -327,6 +427,69 @@ function UnifiedSpanSlot({
 
 export function PlannerAmPmCalendarCells(props: Props) {
   const presentation = buildAmPmPresentation(props.assignment, props.parkById);
+  const ai = props.aiTimeline;
+
+  if (ai) {
+    const derivedPlan = deriveDayPlanFromTimeline(ai);
+    const amDisp = halfDayDisplayForPlannerSlot(
+      "am",
+      presentation,
+      props.assignment,
+      props.parkById,
+    );
+    const pmDisp = halfDayDisplayForPlannerSlot(
+      "pm",
+      presentation,
+      props.assignment,
+      props.parkById,
+    );
+    const amTip = derivedPlan.am
+      ? describeDerivedSlotTooltip(ai, derivedPlan.am)
+      : undefined;
+    const pmTip = derivedPlan.pm
+      ? describeDerivedSlotTooltip(ai, derivedPlan.pm)
+      : undefined;
+    return (
+      <>
+        <SplitHalfSlot
+          dateKey={props.dateKey}
+          slot="am"
+          halfPrefix="AM"
+          display={amDisp}
+          derivedOverride={derivedPlan.am}
+          derivedTooltip={amTip}
+          areaClass="planner-slot-am"
+          themeKey={props.themeKey}
+          readOnly={props.readOnly}
+          selectedParkId={props.selectedParkId}
+          onAssign={props.onAssign}
+          onClear={props.onClear}
+          onNeedParkFirst={props.onNeedParkFirst}
+          onAfterSlotClear={props.onAfterSlotClear}
+          useDayDetailShell={props.useDayDetailShell}
+          onOpenDayDetail={props.onOpenDayDetail}
+        />
+        <SplitHalfSlot
+          dateKey={props.dateKey}
+          slot="pm"
+          halfPrefix="PM"
+          display={pmDisp}
+          derivedOverride={derivedPlan.pm}
+          derivedTooltip={pmTip}
+          areaClass="planner-slot-pm"
+          themeKey={props.themeKey}
+          readOnly={props.readOnly}
+          selectedParkId={props.selectedParkId}
+          onAssign={props.onAssign}
+          onClear={props.onClear}
+          onNeedParkFirst={props.onNeedParkFirst}
+          onAfterSlotClear={props.onAfterSlotClear}
+          useDayDetailShell={props.useDayDetailShell}
+          onOpenDayDetail={props.onOpenDayDetail}
+        />
+      </>
+    );
+  }
 
   if (presentation.mode === "split") {
     return (

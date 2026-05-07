@@ -11,7 +11,16 @@ import {
 import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
 import { displayDayForTimelinePanel } from "@/lib/ai-timeline-to-slot-times";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
-import { buildAmPmPresentation, type HalfDayDisplay } from "@/lib/planner-am-pm-display";
+import {
+  buildAmPmPresentation,
+  halfDayDisplayForPlannerSlot,
+  type HalfDayDisplay,
+} from "@/lib/planner-am-pm-display";
+import {
+  deriveDayPlanFromTimeline,
+  describeDerivedSlotTooltip,
+  type DerivedSlot,
+} from "@/lib/planner/derive-slots-from-timeline";
 import { MobileRidesSheet } from "@/components/planner/MobileRidesSheet";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
@@ -34,6 +43,7 @@ import {
 } from "@/lib/themes";
 import type {
   AIDayStrategy,
+  AiDayTimeline,
   Assignment,
   Assignments,
   Park,
@@ -242,12 +252,15 @@ function MobileDayStrip({
   activeIndex,
   onJumpTo,
   dayLinkHref,
+  detailedPlanDateKeys,
 }: {
   days: MobilePlannerDay[];
   activeIndex: number;
   onJumpTo: (i: number) => void;
   /** When set, chips navigate as `<Link>` to day URLs instead of updating local index. */
   dayLinkHref?: (dateKey: string) => string;
+  /** Days with Plan-this-day ✨ timeline saved — subtle left accent on chip. */
+  detailedPlanDateKeys: ReadonlySet<string>;
 }) {
   const chipRefs = useRef<(HTMLButtonElement | HTMLAnchorElement | null)[]>([]);
 
@@ -271,11 +284,15 @@ function MobileDayStrip({
               prefetch={false}
               aria-label={`Day ${i + 1}: ${formatDateLong(day.date)}`}
               aria-current={activeIndex === i ? "date" : undefined}
-              className={
+              className={`${
                 activeIndex === i
                   ? "flex min-w-[56px] flex-col items-center rounded-lg bg-royal px-3 py-2 font-bold text-cream shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
                   : "flex min-w-[56px] flex-col items-center rounded-lg border border-gold/30 bg-white px-3 py-2 text-royal transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 active:bg-cream"
-              }
+              }${
+                detailedPlanDateKeys.has(day.dateKey)
+                  ? " border-l-[3px] border-l-amber-400/85"
+                  : ""
+              }`}
             >
               <span
                 className={`text-[10px] font-semibold uppercase tracking-wider ${
@@ -304,11 +321,15 @@ function MobileDayStrip({
               onClick={() => onJumpTo(i)}
               aria-label={`Day ${i + 1}: ${formatDateLong(day.date)}`}
               aria-pressed={activeIndex === i}
-              className={
+              className={`${
                 activeIndex === i
                   ? "flex min-w-[56px] flex-col items-center rounded-lg bg-royal px-3 py-2 font-bold text-cream shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
                   : "flex min-w-[56px] flex-col items-center rounded-lg border border-gold/30 bg-white px-3 py-2 text-royal transition focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 active:bg-cream"
-              }
+              }${
+                detailedPlanDateKeys.has(day.dateKey)
+                  ? " border-l-[3px] border-l-amber-400/85"
+                  : ""
+              }`}
             >
               <span
                 className={`text-[10px] font-semibold uppercase tracking-wider ${
@@ -347,6 +368,9 @@ function MobileAmPmHalfRow({
   readOnly,
   onClear,
   onTapAdd,
+  derivedOverride,
+  derivedTooltip,
+  onOpenDerivedPlan,
 }: {
   halfPrefix: "AM" | "PM";
   slot: "am" | "pm";
@@ -356,7 +380,76 @@ function MobileAmPmHalfRow({
   readOnly: boolean;
   onClear: (dateKey: string, slot: SlotType) => void;
   onTapAdd: (slot: SlotType) => void;
+  derivedOverride?: DerivedSlot | null;
+  derivedTooltip?: string;
+  /** Opens ✨ Plan this day / day detail when tapping a timeline-derived summary. */
+  onOpenDerivedPlan?: (dateKey: string) => void;
 }) {
+  if (derivedOverride) {
+    const aria = `${halfPrefix} planned: ${derivedOverride.label}`;
+    const canOpen = Boolean(!readOnly && onOpenDerivedPlan);
+    return (
+      <div
+        className={`flex min-h-[52px] items-center gap-3 border border-gold/35 bg-amber-50/40 px-4 py-2 transition hover:brightness-[1.03] ${
+          canOpen || !readOnly ? "cursor-pointer" : ""
+        }`}
+        role={canOpen || !readOnly ? "button" : undefined}
+        tabIndex={canOpen || !readOnly ? 0 : undefined}
+        aria-label={aria}
+        title={derivedTooltip ?? aria}
+        onClick={() => {
+          if (readOnly) return;
+          if (canOpen && onOpenDerivedPlan) {
+            onOpenDerivedPlan(dateKey);
+            return;
+          }
+          onTapAdd(slot);
+        }}
+        onKeyDown={(e) => {
+          if (readOnly) return;
+          if (
+            canOpen &&
+            onOpenDerivedPlan &&
+            (e.key === "Enter" || e.key === " ")
+          ) {
+            e.preventDefault();
+            onOpenDerivedPlan(dateKey);
+            return;
+          }
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onTapAdd(slot);
+          }
+        }}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-sans text-base font-medium leading-snug text-royal">
+            <span className="text-[11px] font-bold opacity-80">{halfPrefix}</span>{" "}
+            <span aria-hidden>✨</span> {derivedOverride.label}
+            {derivedOverride.sublabel ? (
+              <span className="mt-0.5 block truncate text-xs font-normal text-royal/75">
+                {derivedOverride.sublabel}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        {!readOnly ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClear(dateKey, slot);
+            }}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl opacity-50 transition hover:opacity-80 active:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+            aria-label={`Clear ${halfPrefix}`}
+          >
+            ×
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
   const park = display.state === "park" ? display.park : undefined;
   const shellStyle = park
     ? parkChromaTileStyle(park.bg_colour, park.fg_colour, colourTheme)
@@ -417,6 +510,8 @@ function MobileAmPmSection({
   readOnly,
   onClear,
   onTapAdd,
+  aiTimeline,
+  onOpenDerivedPlan,
 }: {
   dateKey: string;
   assignment: Assignment;
@@ -425,8 +520,62 @@ function MobileAmPmSection({
   readOnly: boolean;
   onClear: (dateKey: string, slot: SlotType) => void;
   onTapAdd: (slot: SlotType) => void;
+  aiTimeline?: AiDayTimeline | null;
+  onOpenDerivedPlan?: (dateKey: string) => void;
 }) {
   const p = buildAmPmPresentation(assignment, parkById);
+
+  if (aiTimeline?.timeline?.length) {
+    const derivedPlan = deriveDayPlanFromTimeline(aiTimeline);
+    const amDisp = halfDayDisplayForPlannerSlot(
+      "am",
+      p,
+      assignment,
+      parkById,
+    );
+    const pmDisp = halfDayDisplayForPlannerSlot(
+      "pm",
+      p,
+      assignment,
+      parkById,
+    );
+    const amTip = derivedPlan.am
+      ? describeDerivedSlotTooltip(aiTimeline, derivedPlan.am)
+      : undefined;
+    const pmTip = derivedPlan.pm
+      ? describeDerivedSlotTooltip(aiTimeline, derivedPlan.pm)
+      : undefined;
+    return (
+      <div className="divide-y divide-royal/10 overflow-hidden rounded-lg border border-royal/10 shadow-sm">
+        <MobileAmPmHalfRow
+          halfPrefix="AM"
+          slot="am"
+          display={amDisp}
+          dateKey={dateKey}
+          colourTheme={colourTheme}
+          readOnly={readOnly}
+          onClear={onClear}
+          onTapAdd={onTapAdd}
+          derivedOverride={derivedPlan.am}
+          derivedTooltip={amTip}
+          onOpenDerivedPlan={onOpenDerivedPlan}
+        />
+        <MobileAmPmHalfRow
+          halfPrefix="PM"
+          slot="pm"
+          display={pmDisp}
+          dateKey={dateKey}
+          colourTheme={colourTheme}
+          readOnly={readOnly}
+          onClear={onClear}
+          onTapAdd={onTapAdd}
+          derivedOverride={derivedPlan.pm}
+          derivedTooltip={pmTip}
+          onOpenDerivedPlan={onOpenDerivedPlan}
+        />
+      </div>
+    );
+  }
 
   if (p.mode === "split") {
     return (
@@ -528,6 +677,9 @@ function MobileSlotCard({
   onClear,
   onTapAdd,
   colourTheme,
+  derivedMeal,
+  derivedTooltip,
+  onOpenDerivedPlan,
 }: {
   slot: SlotType;
   dateKey: string;
@@ -537,9 +689,80 @@ function MobileSlotCard({
   onClear: (dateKey: string, slot: SlotType) => void;
   onTapAdd: () => void;
   colourTheme: ThemeKey;
+  derivedMeal?: DerivedSlot | null;
+  derivedTooltip?: string;
+  onOpenDerivedPlan?: (dateKey: string) => void;
 }) {
   const meta = SLOTS.find((s) => s.key === slot)!;
   const park = assignmentId ? parkById.get(assignmentId) : undefined;
+
+  if (derivedMeal) {
+    const aria = `${meta.label} planned: ${derivedMeal.label}`;
+    const canOpen = Boolean(!readOnly && onOpenDerivedPlan);
+    return (
+      <div
+        className={`flex min-h-[64px] items-center gap-3 rounded-lg border border-gold/35 bg-amber-50/40 px-4 py-3 shadow-sm transition hover:brightness-[1.03] ${
+          canOpen || !readOnly ? "cursor-pointer" : ""
+        }`}
+        role={canOpen || !readOnly ? "button" : undefined}
+        tabIndex={canOpen || !readOnly ? 0 : undefined}
+        aria-label={aria}
+        title={derivedTooltip ?? aria}
+        onClick={() => {
+          if (readOnly) return;
+          if (canOpen && onOpenDerivedPlan) {
+            onOpenDerivedPlan(dateKey);
+            return;
+          }
+          onTapAdd();
+        }}
+        onKeyDown={(e) => {
+          if (readOnly) return;
+          if (
+            canOpen &&
+            onOpenDerivedPlan &&
+            (e.key === "Enter" || e.key === " ")
+          ) {
+            e.preventDefault();
+            onOpenDerivedPlan(dateKey);
+            return;
+          }
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onTapAdd();
+          }
+        }}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-royal/70">
+            {meta.label}
+          </div>
+          <div className="truncate font-sans text-lg font-medium text-royal">
+            {mealPrefix(slot)}
+            <span aria-hidden>✨</span> {derivedMeal.label}
+            {derivedMeal.sublabel ? (
+              <span className="mt-0.5 block truncate text-sm font-normal text-royal/75">
+                {derivedMeal.sublabel}
+              </span>
+            ) : null}
+          </div>
+        </div>
+        {!readOnly ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClear(dateKey, slot);
+            }}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl opacity-50 transition hover:opacity-80 active:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+            aria-label={`Clear ${meta.label} slot`}
+          >
+            ×
+          </button>
+        ) : null}
+      </div>
+    );
+  }
 
   const shellStyle = park
     ? parkChromaTileStyle(park.bg_colour, park.fg_colour, colourTheme)
@@ -675,6 +898,27 @@ export function MobileDayView({
   const days = useMemo(
     () => buildTripDays(trip, dayNotes, userDayNotes),
     [trip, dayNotes, userDayNotes],
+  );
+
+  const detailedPlanDateKeys = useMemo(() => {
+    const s = new Set<string>();
+    for (const d of days) {
+      if (getAiDayTimelineForDate(trip.preferences, d.dateKey)) {
+        s.add(d.dateKey);
+      }
+    }
+    return s;
+  }, [days, trip.preferences]);
+
+  const openDerivedDayPlan = useCallback(
+    (dateKey: string) => {
+      if (onOpenDayPlanner) {
+        onOpenDayPlanner(dateKey);
+        return;
+      }
+      onOpenDayDetail?.(dateKey);
+    },
+    [onOpenDayPlanner, onOpenDayDetail],
   );
 
   const [todayIndex, setTodayIndex] = useState(-1);
@@ -964,6 +1208,7 @@ export function MobileDayView({
         activeIndex={safeIndex}
         onJumpTo={setActiveIndex}
         dayLinkHref={useUrlDayNav ? dayLinkHref : undefined}
+        detailedPlanDateKeys={detailedPlanDateKeys}
       />
 
       <div
@@ -1096,6 +1341,17 @@ export function MobileDayView({
             <div className="space-y-3">
               {(() => {
                 const ass = assignments[activeDay.dateKey] ?? {};
+                const aiRich = getAiDayTimelineForDate(
+                  trip.preferences,
+                  activeDay.dateKey,
+                );
+                const mealDerivedPlan = aiRich
+                  ? deriveDayPlanFromTimeline(aiRich)
+                  : null;
+                const derivedPlanHandler =
+                  onOpenDayPlanner || onOpenDayDetail
+                    ? openDerivedDayPlan
+                    : undefined;
                 return (
                   <>
                     <MobileAmPmSection
@@ -1108,9 +1364,19 @@ export function MobileDayView({
                       onTapAdd={(slot) =>
                         openParksForSlot(activeDay.dateKey, slot)
                       }
+                      aiTimeline={aiRich ?? null}
+                      onOpenDerivedPlan={derivedPlanHandler}
                     />
                     {SLOTS.map(({ key: slot }) => {
                       const id = getParkIdFromSlotValue(ass[slot]);
+                      const derivedMeal =
+                        slot === "lunch"
+                          ? mealDerivedPlan?.lunch
+                          : mealDerivedPlan?.dinner;
+                      const derivedMealTip =
+                        aiRich && derivedMeal
+                          ? describeDerivedSlotTooltip(aiRich, derivedMeal)
+                          : undefined;
                       return (
                         <MobileSlotCard
                           key={slot}
@@ -1124,6 +1390,9 @@ export function MobileDayView({
                             openParksForSlot(activeDay.dateKey, slot)
                           }
                           colourTheme={colourTheme}
+                          derivedMeal={derivedMeal ?? undefined}
+                          derivedTooltip={derivedMealTip}
+                          onOpenDerivedPlan={derivedPlanHandler}
                         />
                       );
                     })}

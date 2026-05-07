@@ -617,6 +617,87 @@ export async function updateAssignmentsAction(input: {
   }
 }
 
+/** Atomically updates assignments and removes `ai_day_timeline` entries for listed dates (slot edit after Plan-this-day). */
+export async function updateAssignmentsWithTimelineClearAction(input: {
+  tripId: string;
+  assignments: Assignments;
+  clearAiTimelineDateKeys: string[];
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return { ok: false, error: "Not signed in." };
+
+    const now = new Date().toISOString();
+    const supabase = await createClient();
+    const { data: existing, error: fetchErr } = await supabase
+      .from("trips")
+      .select("assignments, preferences, day_snapshots")
+      .eq("id", input.tripId)
+      .eq("owner_id", user.id)
+      .maybeSingle();
+
+    if (fetchErr) return { ok: false, error: fetchErr.message };
+    if (!existing) return { ok: false, error: "Trip not found." };
+
+    const currentAssignments =
+      existing.assignments &&
+      typeof existing.assignments === "object" &&
+      !Array.isArray(existing.assignments)
+        ? (existing.assignments as Assignments)
+        : {};
+    const changedDates = new Set<string>();
+    for (const date of new Set([
+      ...Object.keys(currentAssignments),
+      ...Object.keys(input.assignments),
+    ])) {
+      if (!dayAssignmentsEqual(currentAssignments[date], input.assignments[date])) {
+        changedDates.add(date);
+      }
+    }
+
+    const prevPrefs =
+      existing.preferences &&
+      typeof existing.preferences === "object" &&
+      !Array.isArray(existing.preferences)
+        ? ({ ...existing.preferences } as Record<string, unknown>)
+        : {};
+    if (input.clearAiTimelineDateKeys.length > 0) {
+      const rawTm = prevPrefs.ai_day_timeline;
+      if (rawTm && typeof rawTm === "object" && !Array.isArray(rawTm)) {
+        const tm = { ...(rawTm as Record<string, unknown>) };
+        for (const dk of input.clearAiTimelineDateKeys) {
+          delete tm[dk];
+        }
+        prevPrefs.ai_day_timeline = tm;
+      }
+    }
+
+    const { error } = await supabase
+      .from("trips")
+      .update({
+        assignments: input.assignments,
+        preferences: prevPrefs,
+        day_snapshots: filterDaySnapshots(existing.day_snapshots, changedDates),
+        updated_at: now,
+        last_opened_at: now,
+        previous_assignments_snapshot: null,
+        previous_preferences_snapshot: null,
+        previous_assignments_snapshot_at: null,
+      })
+      .eq("id", input.tripId)
+      .eq("owner_id", user.id);
+
+    if (error) return { ok: false, error: error.message };
+    revalidatePlanner();
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unknown error",
+    };
+  }
+}
+
 export async function undoSmartPlanAction(
   tripId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {

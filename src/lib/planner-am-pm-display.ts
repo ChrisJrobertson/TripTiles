@@ -101,3 +101,25 @@ export function buildAmPmPresentation(
     afternoon: toHalf(pmId),
   };
 }
+
+/** AM/PM row display when forcing split cells while unified presentation would merge (e.g. Plan-this-day timeline). */
+export function halfDayDisplayForPlannerSlot(
+  slot: "am" | "pm",
+  pres: AmPmCalendarPresentation,
+  ass: Assignment,
+  parkById: ReadonlyMap<string, Park>,
+): HalfDayDisplay {
+  if (pres.mode === "split") {
+    return slot === "am" ? pres.morning : pres.afternoon;
+  }
+  if (pres.mode === "unified_rest_day") {
+    return { state: "park", park: pres.stylePark };
+  }
+  if (pres.mode === "unified_travel_day" || pres.mode === "unified_full_day") {
+    return { state: "park", park: pres.park };
+  }
+  const id = getParkIdFromSlotValue(slot === "am" ? ass.am : ass.pm);
+  if (!id) return { state: "flexible" };
+  const park = parkById.get(id);
+  return park ? { state: "park", park } : { state: "flexible" };
+}
