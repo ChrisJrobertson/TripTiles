@@ -215,6 +215,11 @@ export type MobileDayViewProps = {
   tripRouteBase?: string | null;
   /** Current path day yyyy-mm-dd; pair with tripRouteBase for URL-linked navigation. */
   urlSyncedDayDate?: string | null;
+  /**
+   * Selected tile from the planner palette (same as desktop). When set, tapping
+   * a slot assigns this park instead of only opening the parks drawer.
+   */
+  paletteSelectedParkId?: string | null;
 };
 
 function buildTripDays(
@@ -368,6 +373,8 @@ function MobileAmPmHalfRow({
   readOnly,
   onClear,
   onTapAdd,
+  onAssign,
+  paletteSelectedParkId,
   derivedOverride,
   derivedTooltip,
   onOpenDerivedPlan,
@@ -380,6 +387,8 @@ function MobileAmPmHalfRow({
   readOnly: boolean;
   onClear: (dateKey: string, slot: SlotType) => void;
   onTapAdd: (slot: SlotType) => void;
+  onAssign: (dateKey: string, slot: SlotType, parkId: string) => void;
+  paletteSelectedParkId?: string | null;
   derivedOverride?: DerivedSlot | null;
   derivedTooltip?: string;
   /** Opens ✨ Plan this day / day detail when tapping a timeline-derived summary. */
@@ -387,7 +396,9 @@ function MobileAmPmHalfRow({
 }) {
   if (derivedOverride) {
     const aria = `${halfPrefix} planned: ${derivedOverride.label}`;
-    const canOpen = Boolean(!readOnly && onOpenDerivedPlan);
+    const canOpen = Boolean(
+      !readOnly && onOpenDerivedPlan && !paletteSelectedParkId,
+    );
     return (
       <div
         className={`flex min-h-[52px] items-center gap-3 border border-gold/35 bg-amber-50/40 px-4 py-2 transition hover:brightness-[1.03] ${
@@ -396,9 +407,17 @@ function MobileAmPmHalfRow({
         role={canOpen || !readOnly ? "button" : undefined}
         tabIndex={canOpen || !readOnly ? 0 : undefined}
         aria-label={aria}
-        title={derivedTooltip ?? aria}
+        title={
+          paletteSelectedParkId && !readOnly
+            ? `${derivedTooltip ?? aria} — tap to place selected park`
+            : (derivedTooltip ?? aria)
+        }
         onClick={() => {
           if (readOnly) return;
+          if (paletteSelectedParkId) {
+            onAssign(dateKey, slot, paletteSelectedParkId);
+            return;
+          }
           if (canOpen && onOpenDerivedPlan) {
             onOpenDerivedPlan(dateKey);
             return;
@@ -407,17 +426,16 @@ function MobileAmPmHalfRow({
         }}
         onKeyDown={(e) => {
           if (readOnly) return;
-          if (
-            canOpen &&
-            onOpenDerivedPlan &&
-            (e.key === "Enter" || e.key === " ")
-          ) {
-            e.preventDefault();
-            onOpenDerivedPlan(dateKey);
-            return;
-          }
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
+            if (paletteSelectedParkId) {
+              onAssign(dateKey, slot, paletteSelectedParkId);
+              return;
+            }
+            if (canOpen && onOpenDerivedPlan) {
+              onOpenDerivedPlan(dateKey);
+              return;
+            }
             onTapAdd(slot);
           }
         }}
@@ -459,8 +477,12 @@ function MobileAmPmHalfRow({
     <div
       className={`flex min-h-[52px] items-center gap-3 px-4 py-2 ${
         park ? "hover:brightness-[1.03]" : ""
-      }`}
+      }${paletteSelectedParkId && !readOnly ? " cursor-pointer" : ""}`}
       style={shellStyle}
+      onClick={() => {
+        if (readOnly || !paletteSelectedParkId || !park) return;
+        onAssign(dateKey, slot, paletteSelectedParkId);
+      }}
     >
       <div className="min-w-0 flex-1">
         {park ? (
@@ -479,18 +501,29 @@ function MobileAmPmHalfRow({
         ) : (
           <button
             type="button"
-            onClick={() => onTapAdd(slot)}
+            onClick={() => {
+              if (paletteSelectedParkId) {
+                onAssign(dateKey, slot, paletteSelectedParkId);
+              } else {
+                onTapAdd(slot);
+              }
+            }}
             className="w-full text-left font-sans text-sm text-royal/60 transition active:text-royal focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
           >
             <span className="font-semibold text-royal/55">{halfPrefix}</span>{" "}
-            <span className="italic">Tap to add</span>
+            <span className="italic">
+              {paletteSelectedParkId ? "Tap to place selected park" : "Tap to add"}
+            </span>
           </button>
         )}
       </div>
       {park && !readOnly ? (
         <button
           type="button"
-          onClick={() => onClear(dateKey, slot)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClear(dateKey, slot);
+          }}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl opacity-50 transition hover:opacity-80 active:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
           style={{ color: "inherit" }}
           aria-label={`Clear ${halfPrefix}`}
@@ -510,6 +543,8 @@ function MobileAmPmSection({
   readOnly,
   onClear,
   onTapAdd,
+  onAssign,
+  paletteSelectedParkId,
   aiTimeline,
   onOpenDerivedPlan,
 }: {
@@ -520,6 +555,8 @@ function MobileAmPmSection({
   readOnly: boolean;
   onClear: (dateKey: string, slot: SlotType) => void;
   onTapAdd: (slot: SlotType) => void;
+  onAssign: (dateKey: string, slot: SlotType, parkId: string) => void;
+  paletteSelectedParkId?: string | null;
   aiTimeline?: AiDayTimeline | null;
   onOpenDerivedPlan?: (dateKey: string) => void;
 }) {
@@ -556,6 +593,8 @@ function MobileAmPmSection({
           readOnly={readOnly}
           onClear={onClear}
           onTapAdd={onTapAdd}
+          onAssign={onAssign}
+          paletteSelectedParkId={paletteSelectedParkId}
           derivedOverride={derivedPlan.am}
           derivedTooltip={amTip}
           onOpenDerivedPlan={onOpenDerivedPlan}
@@ -569,6 +608,8 @@ function MobileAmPmSection({
           readOnly={readOnly}
           onClear={onClear}
           onTapAdd={onTapAdd}
+          onAssign={onAssign}
+          paletteSelectedParkId={paletteSelectedParkId}
           derivedOverride={derivedPlan.pm}
           derivedTooltip={pmTip}
           onOpenDerivedPlan={onOpenDerivedPlan}
@@ -589,6 +630,8 @@ function MobileAmPmSection({
           readOnly={readOnly}
           onClear={onClear}
           onTapAdd={onTapAdd}
+          onAssign={onAssign}
+          paletteSelectedParkId={paletteSelectedParkId}
         />
         <MobileAmPmHalfRow
           halfPrefix="PM"
@@ -599,6 +642,8 @@ function MobileAmPmSection({
           readOnly={readOnly}
           onClear={onClear}
           onTapAdd={onTapAdd}
+          onAssign={onAssign}
+          paletteSelectedParkId={paletteSelectedParkId}
         />
       </div>
     );
@@ -633,8 +678,15 @@ function MobileAmPmSection({
 
   return (
     <div
-      className="flex min-h-[64px] items-center gap-3 rounded-lg px-4 py-3 shadow-sm hover:brightness-[1.03]"
+      className={`flex min-h-[64px] items-center gap-3 rounded-lg px-4 py-3 shadow-sm hover:brightness-[1.03]${
+        paletteSelectedParkId && !readOnly ? " cursor-pointer" : ""
+      }`}
       style={shellStyle}
+      onClick={() => {
+        if (readOnly || !paletteSelectedParkId) return;
+        onAssign(dateKey, "am", paletteSelectedParkId);
+        onAssign(dateKey, "pm", paletteSelectedParkId);
+      }}
     >
       <div className="min-w-0 flex-1">
         <div
@@ -653,7 +705,8 @@ function MobileAmPmSection({
       {!readOnly ? (
         <button
           type="button"
-          onClick={() => {
+          onClick={(e) => {
+            e.stopPropagation();
             onClear(dateKey, "am");
             onClear(dateKey, "pm");
           }}
@@ -676,6 +729,8 @@ function MobileSlotCard({
   readOnly,
   onClear,
   onTapAdd,
+  onAssign,
+  paletteSelectedParkId,
   colourTheme,
   derivedMeal,
   derivedTooltip,
@@ -688,6 +743,8 @@ function MobileSlotCard({
   readOnly: boolean;
   onClear: (dateKey: string, slot: SlotType) => void;
   onTapAdd: () => void;
+  onAssign: (dateKey: string, slot: SlotType, parkId: string) => void;
+  paletteSelectedParkId?: string | null;
   colourTheme: ThemeKey;
   derivedMeal?: DerivedSlot | null;
   derivedTooltip?: string;
@@ -698,7 +755,9 @@ function MobileSlotCard({
 
   if (derivedMeal) {
     const aria = `${meta.label} planned: ${derivedMeal.label}`;
-    const canOpen = Boolean(!readOnly && onOpenDerivedPlan);
+    const canOpen = Boolean(
+      !readOnly && onOpenDerivedPlan && !paletteSelectedParkId,
+    );
     return (
       <div
         className={`flex min-h-[64px] items-center gap-3 rounded-lg border border-gold/35 bg-amber-50/40 px-4 py-3 shadow-sm transition hover:brightness-[1.03] ${
@@ -707,9 +766,17 @@ function MobileSlotCard({
         role={canOpen || !readOnly ? "button" : undefined}
         tabIndex={canOpen || !readOnly ? 0 : undefined}
         aria-label={aria}
-        title={derivedTooltip ?? aria}
+        title={
+          paletteSelectedParkId && !readOnly
+            ? `${derivedTooltip ?? aria} — tap to place selected park`
+            : (derivedTooltip ?? aria)
+        }
         onClick={() => {
           if (readOnly) return;
+          if (paletteSelectedParkId) {
+            onAssign(dateKey, slot, paletteSelectedParkId);
+            return;
+          }
           if (canOpen && onOpenDerivedPlan) {
             onOpenDerivedPlan(dateKey);
             return;
@@ -718,17 +785,16 @@ function MobileSlotCard({
         }}
         onKeyDown={(e) => {
           if (readOnly) return;
-          if (
-            canOpen &&
-            onOpenDerivedPlan &&
-            (e.key === "Enter" || e.key === " ")
-          ) {
-            e.preventDefault();
-            onOpenDerivedPlan(dateKey);
-            return;
-          }
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
+            if (paletteSelectedParkId) {
+              onAssign(dateKey, slot, paletteSelectedParkId);
+              return;
+            }
+            if (canOpen && onOpenDerivedPlan) {
+              onOpenDerivedPlan(dateKey);
+              return;
+            }
             onTapAdd();
           }
         }}
@@ -772,8 +838,12 @@ function MobileSlotCard({
     <div
       className={`flex min-h-[64px] items-center gap-3 rounded-lg px-4 py-3 shadow-sm ${
         park ? "hover:brightness-[1.05]" : "border border-royal/10"
-      }`}
+      }${paletteSelectedParkId && !readOnly && park ? " cursor-pointer" : ""}`}
       style={shellStyle}
+      onClick={() => {
+        if (readOnly || !paletteSelectedParkId || !park) return;
+        onAssign(dateKey, slot, paletteSelectedParkId);
+      }}
     >
       <div className="min-w-0 flex-1">
         <div
@@ -812,17 +882,26 @@ function MobileSlotCard({
         ) : (
           <button
             type="button"
-            onClick={onTapAdd}
+            onClick={() => {
+              if (paletteSelectedParkId) {
+                onAssign(dateKey, slot, paletteSelectedParkId);
+              } else {
+                onTapAdd();
+              }
+            }}
             className="font-sans text-sm italic text-royal/50 transition active:text-royal focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
           >
-            Tap to add
+            {paletteSelectedParkId ? "Tap to place selected park" : "Tap to add"}
           </button>
         )}
       </div>
       {park && !readOnly ? (
         <button
           type="button"
-          onClick={() => onClear(dateKey, slot)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClear(dateKey, slot);
+          }}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl opacity-50 transition hover:opacity-80 active:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
           style={{ color: "inherit" }}
           aria-label={`Clear ${meta.label} slot`}
@@ -867,6 +946,7 @@ export function MobileDayView({
   cataloguedParkIdSet: cataloguedParkIdSetProp = EMPTY_CATALOGUED_PARK_ID_SET,
   tripRouteBase = null,
   urlSyncedDayDate = null,
+  paletteSelectedParkId = null,
 }: MobileDayViewProps) {
   void _crowdSummary;
   const router = useRouter();
@@ -1364,6 +1444,8 @@ export function MobileDayView({
                       onTapAdd={(slot) =>
                         openParksForSlot(activeDay.dateKey, slot)
                       }
+                      onAssign={onAssign}
+                      paletteSelectedParkId={paletteSelectedParkId}
                       aiTimeline={aiRich ?? null}
                       onOpenDerivedPlan={derivedPlanHandler}
                     />
@@ -1389,6 +1471,8 @@ export function MobileDayView({
                           onTapAdd={() =>
                             openParksForSlot(activeDay.dateKey, slot)
                           }
+                          onAssign={onAssign}
+                          paletteSelectedParkId={paletteSelectedParkId}
                           colourTheme={colourTheme}
                           derivedMeal={derivedMeal ?? undefined}
                           derivedTooltip={derivedMealTip}

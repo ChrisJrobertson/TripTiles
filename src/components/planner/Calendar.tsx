@@ -787,36 +787,19 @@ export function Calendar({
                             role="button"
                             tabIndex={0}
                             aria-label={ariaDerived}
-                            title={derivedMealTip ?? ariaDerived}
+                            title={
+                              selectedParkId && !readOnly
+                                ? `${derivedMealTip ?? ariaDerived} — tap to place selected park`
+                                : (derivedMealTip ?? ariaDerived)
+                            }
                             onClick={(e) => {
                               if (readOnly) return;
-                              if (canOpenDerived && onOpenDayDetail) {
-                                e.stopPropagation();
-                                if (
-                                  inTripRange(day, trip) &&
-                                  onTimelineDaySelect
-                                ) {
-                                  onTimelineDaySelect(key);
-                                }
-                                onOpenDayDetail(key);
-                                return;
-                              }
                               e.stopPropagation();
                               if (selectedParkId) {
                                 onAssign(key, slot, selectedParkId);
-                              } else {
-                                onNeedParkFirst();
+                                return;
                               }
-                            }}
-                            onKeyDown={(e) => {
-                              if (readOnly) return;
-                              if (
-                                canOpenDerived &&
-                                onOpenDayDetail &&
-                                (e.key === "Enter" || e.key === " ")
-                              ) {
-                                e.preventDefault();
-                                e.stopPropagation();
+                              if (canOpenDerived && onOpenDayDetail) {
                                 if (
                                   inTripRange(day, trip) &&
                                   onTimelineDaySelect
@@ -826,14 +809,31 @@ export function Calendar({
                                 onOpenDayDetail(key);
                                 return;
                               }
+                              onNeedParkFirst();
+                            }}
+                            onKeyDown={(e) => {
+                              if (readOnly) return;
                               if (e.key === "Enter" || e.key === " ") {
                                 e.preventDefault();
                                 e.stopPropagation();
                                 if (selectedParkId) {
                                   onAssign(key, slot, selectedParkId);
-                                } else {
-                                  onNeedParkFirst();
+                                  return;
                                 }
+                                if (
+                                  canOpenDerived &&
+                                  onOpenDayDetail
+                                ) {
+                                  if (
+                                    inTripRange(day, trip) &&
+                                    onTimelineDaySelect
+                                  ) {
+                                    onTimelineDaySelect(key);
+                                  }
+                                  onOpenDayDetail(key);
+                                  return;
+                                }
+                                onNeedParkFirst();
                               }
                             }}
                           >
@@ -893,8 +893,12 @@ export function Calendar({
                           !readOnly &&
                             park &&
                             useDayDetailShell &&
-                            onOpenDayDetail,
+                            onOpenDayDetail &&
+                            !selectedParkId,
                         );
+                      const canOverwriteWithSelection = Boolean(
+                        !readOnly && park && selectedParkId,
+                      );
                       return (
                         <div
                           key={slot}
@@ -908,64 +912,79 @@ export function Calendar({
                             readOnly || park
                               ? ""
                               : "cursor-pointer hover:brightness-[1.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--tt-ring)]/50 focus-visible:ring-inset"
-                          }${canOpenDayPanel ? " cursor-pointer" : ""}`}
+                          }${
+                            canOpenDayPanel || canOverwriteWithSelection
+                              ? " cursor-pointer"
+                              : ""
+                          }`}
                           style={park ? filledSlotStyle : emptySlotStyle}
                           role={
-                            canOpenDayPanel
+                            canOpenDayPanel ||
+                            canOverwriteWithSelection ||
+                            (!readOnly && !park)
                               ? "button"
-                              : readOnly || park
-                                ? undefined
-                                : "button"
+                              : undefined
                           }
                           tabIndex={
-                            canOpenDayPanel
+                            canOpenDayPanel ||
+                            canOverwriteWithSelection ||
+                            (!readOnly && !park)
                               ? 0
-                              : readOnly || park
-                                ? undefined
-                                : 0
+                              : undefined
                           }
                           aria-label={
-                            canOpenDayPanel
-                              ? `Open day planner — ${slotAria}`
-                              : slotAria
+                            canOverwriteWithSelection
+                              ? `Place selected park — ${slotAria}`
+                              : canOpenDayPanel
+                                ? `Open day planner — ${slotAria}`
+                                : slotAria
                           }
                           title={
-                            canOpenDayPanel
-                              ? "Open day planner (rides, must-dos, and notes)"
-                              : slotAria
+                            canOverwriteWithSelection
+                              ? "Place selected park on this slot (tap)"
+                              : canOpenDayPanel
+                                ? "Open day planner (rides, must-dos, and notes)"
+                                : slotAria
                           }
                           onClick={(e) => {
                             if (readOnly) return;
-                            if (park) {
-                              if (useDayDetailShell && onOpenDayDetail) {
-                                e.stopPropagation();
-                                if (
-                                  inTripRange(day, trip) &&
-                                  onTimelineDaySelect
-                                ) {
-                                  onTimelineDaySelect(key);
-                                }
-                                onOpenDayDetail(key);
-                              }
-                              return;
-                            }
                             e.stopPropagation();
                             if (selectedParkId) {
                               onAssign(key, slot, selectedParkId);
-                            } else {
+                              return;
+                            }
+                            if (
+                              park &&
+                              useDayDetailShell &&
+                              onOpenDayDetail
+                            ) {
+                              if (
+                                inTripRange(day, trip) &&
+                                onTimelineDaySelect
+                              ) {
+                                onTimelineDaySelect(key);
+                              }
+                              onOpenDayDetail(key);
+                              return;
+                            }
+                            if (!park) {
                               onNeedParkFirst();
                             }
                           }}
                           onKeyDown={(e) => {
                             if (readOnly) return;
-                            if (park) {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (selectedParkId) {
+                                onAssign(key, slot, selectedParkId);
+                                return;
+                              }
                               if (
+                                park &&
                                 useDayDetailShell &&
-                                onOpenDayDetail &&
-                                (e.key === "Enter" || e.key === " ")
+                                onOpenDayDetail
                               ) {
-                                e.preventDefault();
-                                e.stopPropagation();
                                 if (
                                   inTripRange(day, trip) &&
                                   onTimelineDaySelect
@@ -973,15 +992,9 @@ export function Calendar({
                                   onTimelineDaySelect(key);
                                 }
                                 onOpenDayDetail(key);
+                                return;
                               }
-                              return;
-                            }
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              if (selectedParkId) {
-                                onAssign(key, slot, selectedParkId);
-                              } else {
+                              if (!park) {
                                 onNeedParkFirst();
                               }
                             }
