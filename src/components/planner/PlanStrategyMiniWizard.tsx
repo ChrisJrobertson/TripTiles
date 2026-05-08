@@ -394,8 +394,8 @@ export function PlanStrategyMiniWizard({
         </h2>
         <p className="mt-2 font-sans text-sm text-tt-ink-muted">
           {embedded
-            ? "Save once — we&apos;ll generate your ride strategy in this window."
-            : "Save once — we&apos;ll continue with your AI Day Strategy."}
+            ? "Save once — we'll generate your ride strategy in this window."
+            : "Save once — we'll continue with your AI Day Strategy."}
         </p>
 
         {saveTimedOut ? (
