@@ -135,7 +135,7 @@ export function AchievementsClient({
             Trip Passport
           </h1>
           <p className="mt-3 max-w-2xl font-sans text-sm leading-relaxed text-royal/75">
-            Stamps you've earned from planning adventures — and the ones
+            Stamps you’ve earned from planning adventures — and the ones
             still waiting for your next trip.
           </p>
 

@@ -95,7 +95,7 @@ export function DayParkMustDosSection({
               className="rounded-xl border border-royal/12 bg-white/90 p-3"
             >
               <div className="mb-3 rounded-r-md border-l-[3px] border-l-gold bg-cream p-3 text-sm text-royal/85">
-                AI suggestions for {name}. We don't have detailed ride data
+                AI suggestions for {name}. We don’t have detailed ride data
                 for this park yet — verify times, heights, and closures on the
                 official site before you go.
               </div>

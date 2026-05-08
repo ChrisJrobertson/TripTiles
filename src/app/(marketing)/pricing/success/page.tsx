@@ -48,7 +48,7 @@ export default async function PricingSuccessPage({
             : "Stripe will email your receipt once checkout completes."}
         </p>
         <p className="mt-2 font-sans text-xs text-royal/55">
-          If your tier doesn't update immediately, wait a few seconds — our
+          If your tier doesn’t update immediately, wait a few seconds — our
           server confirms subscriptions via Stripe webhook.
         </p>
         <Link

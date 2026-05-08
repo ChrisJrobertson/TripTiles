@@ -58,7 +58,7 @@ export function TwoPathPlanningSection({
       <div className="mx-auto w-full max-w-lg space-y-4">
         <div className="text-center">
           <h2 className="font-heading text-xl font-semibold text-tt-royal md:text-2xl">
-            You're set up — how do you want to start?
+            You’re set up — how do you want to start?
           </h2>
           <p className="mt-2 font-sans text-sm text-tt-royal/75">
             Pick one to open your planner. You can always switch later.
@@ -72,7 +72,7 @@ export function TwoPathPlanningSection({
           >
             <IconCalendarGrid className="h-10 w-10 shrink-0 text-tt-royal" />
             <h3 className="mt-4 font-heading text-lg font-semibold text-tt-royal">
-              I'll plan it myself
+              I’ll plan it myself
             </h3>
             <p className="mt-2 flex-1 font-sans text-sm leading-relaxed text-tt-royal/80">
               Start with an empty calendar and drag your parks in.
@@ -123,7 +123,7 @@ export function TwoPathPlanningSection({
             </h3>
             <p className="mt-3 flex-1 font-sans text-sm leading-relaxed text-tt-royal/80">
               Drag parks, restaurants, and activities onto your calendar.
-              Rearrange anything, any time. You're in full control.
+              Rearrange anything, any time. You’re in full control.
             </p>
           </article>
         </Link>
@@ -142,7 +142,7 @@ export function TwoPathPlanningSection({
               Let Trip plan it
             </h3>
             <p className="mt-3 flex-1 font-sans text-sm leading-relaxed text-tt-royal/80">
-              Set must-dos, dining anchors, and who's traveling — Trip
+              Set must-dos, dining anchors, and who’s traveling — Trip
               drafts a day-by-day itinerary in seconds, then the timeline and
               nudges help you harden the plan. Tweak anything you like.
             </p>

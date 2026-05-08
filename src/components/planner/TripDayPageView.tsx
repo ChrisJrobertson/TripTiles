@@ -604,7 +604,7 @@ export function TripDayPageView({
         </p>
       ) : (
         <p className="mt-1 font-sans text-sm italic text-royal/55">
-          Detailed crowd modelling isn't available for this region yet —
+          Detailed crowd modelling isn’t available for this region yet —
           Smart Plan still uses park hours, your travel dates, and group profile
           to shape a sensible day.
         </p>

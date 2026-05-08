@@ -144,9 +144,9 @@ export default async function MarketingHomePage() {
             <p className="mt-6 max-w-xl font-sans text-lg leading-relaxed text-tt-royal/80">
               Smart Plan drafts from your must-dos and dining anchors, a
               day-by-day timeline with clash checks, and plain-English nudges
-              when something won't work. Free to try, from £
+              when something won’t work. Free to try, from £
               {tierPro.monthlyGbp.toFixed(2)}/mo or £
-              {tierPro.annualGbp.toFixed(0)}/yr when you're ready — deep
+              {tierPro.annualGbp.toFixed(0)}/yr when you’re ready — deep
               planning for Disney + Universal, plus general planning tools for
               300+ parks worldwide.
             </p>
@@ -328,7 +328,7 @@ export default async function MarketingHomePage() {
           <figure className="mx-auto mt-10 max-w-xl rounded-tt-lg border border-tt-line/10 bg-tt-surface p-8 text-center shadow-tt-sm md:p-10">
             <blockquote className="font-sans text-lg leading-relaxed text-tt-royal/90 md:text-xl">
               &ldquo;Saved me hours of research for our Disney World trip. The
-              timeline made it obvious where we'd overstuffed a
+              timeline made it obvious where we’d overstuffed a
               day.&rdquo;
             </blockquote>
             <figcaption className="mt-6 font-meta text-[11px] font-semibold uppercase tracking-widest text-tt-gold">

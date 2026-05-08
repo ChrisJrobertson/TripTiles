@@ -213,7 +213,7 @@ export function SignupForm({ next }: Props) {
       </Button>
 
       <p className="text-center font-sans text-xs text-tt-ink-muted">
-        We'll email you an 8-digit code to confirm your account.
+        We’ll email you an 8-digit code to confirm your account.
       </p>
 
       <div className="border-t border-tt-line/60 pt-5">

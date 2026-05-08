@@ -93,6 +93,17 @@ export function PlannerDayTimelineStub({
     return Math.round((e - s) / 86400000) + 1;
   }, [trip.start_date, trip.end_date]);
 
+  const themeParkIdsForPlan = useMemo(() => {
+    if (!dateKey) return [];
+    const ass = trip.assignments[dateKey] ?? {};
+    const ids = [
+      getParkIdFromSlotValue(ass.am),
+      getParkIdFromSlotValue(ass.pm),
+    ].filter(Boolean) as string[];
+    const unique = [...new Set(ids)];
+    return unique.filter((id) => isThemePark(parkById.get(id)?.park_group));
+  }, [dateKey, trip.assignments, parkById]);
+
   if (!dateKey) {
     return (
       <section className="mt-6 rounded-tt-xl border border-tt-line bg-tt-surface shadow-tt-md">
@@ -114,15 +125,6 @@ export function PlannerDayTimelineStub({
   }
 
   const assignment = trip.assignments[dateKey] ?? {};
-  const themeParkIdsForPlan = useMemo(() => {
-    const ass = trip.assignments[dateKey] ?? {};
-    const ids = [
-      getParkIdFromSlotValue(ass.am),
-      getParkIdFromSlotValue(ass.pm),
-    ].filter(Boolean) as string[];
-    const unique = [...new Set(ids)];
-    return unique.filter((id) => isThemePark(parkById.get(id)?.park_group));
-  }, [dateKey, trip.assignments, parkById]);
   const dayIdx = tripDayNumber(trip, dateKey);
   const headingDate = parseDate(`${dateKey}T12:00:00`).toLocaleDateString("en-GB", {
     weekday: "short",

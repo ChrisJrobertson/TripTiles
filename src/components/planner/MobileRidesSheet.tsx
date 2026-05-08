@@ -37,7 +37,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   tripId: string;
-  regionId: string;
+  regionId: string | null;
   dayDate: string;
   parkIds: string[];
   childAges: number[];

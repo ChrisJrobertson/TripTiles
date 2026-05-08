@@ -418,7 +418,7 @@ export function PlanStrategyMiniWizard({
         ) : saveError ? (
           <div className="mt-6 space-y-4">
             <p className="font-sans text-sm leading-relaxed text-tt-royal/85">
-              We saved your details, but couldn't finish the strategy.{" "}
+              We saved your details, but couldn’t finish the strategy.{" "}
               <span className="font-medium text-tt-royal">{saveError}</span> Try
               again, or close and run{" "}
               <span className="font-semibold">{helpCtaLabel}</span> from the day

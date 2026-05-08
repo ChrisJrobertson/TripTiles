@@ -155,7 +155,7 @@ export default async function PublicPlanPage({
           </p>
           {wantsClone && !isAuthed ? (
             <p className="text-royal/70">
-              Sign in when prompted, then you'll return to finish the clone.
+              Sign in when prompted, then you’ll return to finish the clone.
             </p>
           ) : null}
         </div>

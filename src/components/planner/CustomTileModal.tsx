@@ -248,7 +248,7 @@ export function CustomTileModal({
           {title}
         </h2>
         <p className="mt-2 font-sans text-sm leading-relaxed text-tt-royal/75">
-          Add a place, activity, or attraction to your trip that isn't in our
+          Add a place, activity, or attraction to your trip that isn’t in our
           built-in list.
         </p>
 

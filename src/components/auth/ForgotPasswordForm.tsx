@@ -34,7 +34,7 @@ export function ForgotPasswordForm() {
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-5">
       <p className="font-sans text-sm leading-relaxed text-tt-ink-muted">
-        Enter your email and we'll send an 8-digit code you can use on the
+        Enter your email and we’ll send an 8-digit code you can use on the
         next step.
       </p>
       <div>

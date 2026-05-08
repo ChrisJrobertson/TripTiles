@@ -65,7 +65,7 @@ import type { Assignment } from "@/lib/types";
 export type ExpandedDayPanelProps = {
   tripId: string;
   /** Trip region — skip-line legend uses queue-park catalogue helpers. */
-  regionId: string;
+  regionId: string | null;
   dayDate: string;
   parkIds: string[];
   childAges: number[];

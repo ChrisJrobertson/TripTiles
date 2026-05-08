@@ -496,7 +496,7 @@ export function TripCreationWizard({
               Welcome{firstName ? `, ${firstName}` : ""}!
             </h1>
             <p className="mt-3 font-sans text-sm leading-relaxed text-tt-royal/75">
-              Let's set up your first adventure — it only takes a minute.
+              Let’s set up your first adventure — it only takes a minute.
             </p>
           </div>
         ) : null}
@@ -534,7 +534,7 @@ export function TripCreationWizard({
                 </p>
                 {regionId === "cruise" ? (
                   <p className="mt-2 font-sans text-sm text-tt-royal/75">
-                    You've picked a cruise-focused region — ship and port
+                    You’ve picked a cruise-focused region — ship and port
                     tiles stay available in your drawer.
                   </p>
                 ) : (
@@ -599,7 +599,7 @@ export function TripCreationWizard({
         {step === 3 ? (
           <div className="mt-6 space-y-4">
             <h1 className="font-heading text-xl font-semibold text-tt-royal">
-              Who's going?
+              Who’s going?
             </h1>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block font-sans text-sm text-tt-royal">
@@ -628,7 +628,7 @@ export function TripCreationWizard({
             {children > 0 ? (
               <>
                 <label className="block font-sans text-sm text-tt-royal">
-                  Children's ages (years, comma-separated)
+                  Children’s ages (years, comma-separated)
                   <input
                     className="mt-1 min-h-[44px] w-full rounded-lg border-2 border-tt-royal/20 px-3 py-2"
                     value={childAgesText}
@@ -681,7 +681,7 @@ export function TripCreationWizard({
                       }}
                     />
                     <HintDetails label="Why we ask (?)" >
-                      We use this to flag rides your child can't ride. Disney rides often require 38, 40, 44, or 48 inches; we'll warn you automatically.
+                      We use this to flag rides your child can’t ride. Disney rides often require 38, 40, 44, or 48 inches; we’ll warn you automatically.
                     </HintDetails>
                   </div>
                 ))}
@@ -705,7 +705,7 @@ export function TripCreationWizard({
                 ))}
               </select>
               <HintDetails label="What this means (?)" >
-                We'll factor walking distance and stroller parking into your day plans.
+                We’ll factor walking distance and stroller parking into your day plans.
               </HintDetails>
             </div>
           </div>
@@ -744,7 +744,7 @@ export function TripCreationWizard({
                 Trip type
               </h2>
               <HintDetails label="Why we ask (?)" >
-                We'll tailor your plan — first-timers get crowd-strategy tips, milestones get reservation timing, and so on.
+                We’ll tailor your plan — first-timers get crowd-strategy tips, milestones get reservation timing, and so on.
               </HintDetails>
               <div className="mt-2 flex flex-col gap-2">
                 {TRIP_TYPE_OPTIONS.map((t) => (
@@ -874,12 +874,12 @@ export function TripCreationWizard({
               How are you handling the queues?
             </h1>
             <p className="font-sans text-sm text-tt-royal/75">
-              These help us suggest the best ride order. Don't worry if you
-              don't know — pick Not sure and we'll explain on each day.
+              These help us suggest the best ride order. Don’t worry if you
+              don’t know — pick Not sure and we’ll explain on each day.
             </p>
             {!showQueueStep ? (
               <div className="rounded-xl border border-tt-royal/15 bg-cream p-4 font-sans text-sm text-tt-royal/80">
-                Skip-the-line details aren't required for this destination.
+                Skip-the-line details aren’t required for this destination.
               </div>
             ) : null}
             {showDisneyBlock ? (
@@ -920,7 +920,7 @@ export function TripCreationWizard({
                   className="mt-2 font-sans text-xs font-semibold text-gold underline"
                   onClick={() => setLlMultiExplainOpen((v) => !v)}
                 >
-                  What's Multi Pass?
+                  What’s Multi Pass?
                 </button>
                 {llMultiExplainOpen ? (
                   <p className="mt-2 rounded-lg bg-cream px-3 py-2 font-sans text-xs leading-relaxed text-tt-royal/85">
@@ -960,7 +960,7 @@ export function TripCreationWizard({
                   className="mt-2 font-sans text-xs font-semibold text-gold underline"
                   onClick={() => setLlSingleExplainOpen((v) => !v)}
                 >
-                  What's Single Pass?
+                  What’s Single Pass?
                 </button>
                 {llSingleExplainOpen ? (
                   <p className="mt-2 rounded-lg bg-cream px-3 py-2 font-sans text-xs leading-relaxed text-tt-royal/85">
@@ -1075,15 +1075,15 @@ export function TripCreationWizard({
               Park days vs rest days?
             </h1>
             <HintDetails label="About park hopping (?)" >
-              Hopping needs Park Hopper tickets. Most plans don't need it,
-              but it's useful on short trips.
+              Hopping needs Park Hopper tickets. Most plans don’t need it,
+              but it’s useful on short trips.
             </HintDetails>
             <div className="flex flex-col gap-2">
               {(
                 [
                   ["yes", "Yes — happy to do multiple parks per day"],
                   ["no", "No — one park per day max"],
-                  ["undecided", "Haven't decided"],
+                  ["undecided", "Haven’t decided"],
                 ] as const
               ).map(([id, label]) => (
                 <button
@@ -1148,7 +1148,7 @@ export function TripCreationWizard({
                 }`}
               >
                 <span className="font-heading font-semibold text-tt-royal">
-                  I'll plan it myself
+                  I’ll plan it myself
                 </span>
                 <p className="mt-2 font-sans text-xs text-tt-royal/75">
                   Blank calendar — your answers still save for AI features later.
@@ -1180,7 +1180,7 @@ export function TripCreationWizard({
                 onChange={(e) =>
                   setAdditionalNotes(e.target.value.slice(0, 2000))
                 }
-                placeholder='e.g. "We're staying at Reunion Resort", "My daughter loves Frozen", "Need a rest day mid-trip"'
+                placeholder='e.g. "We\u2019re staying at Reunion Resort", "My daughter loves Frozen", "Need a rest day mid-trip"'
               />
               <span className="mt-1 block text-right text-xs text-tt-royal/50">
                 {additionalNotes.length} / 2000
@@ -1212,7 +1212,7 @@ export function TripCreationWizard({
                   else goNext();
                 }}
               >
-                Skip — I'll add this later
+                Skip — I’ll add this later
               </Button>
             ) : null}
             {step6Skippable && showQueueStep ? (
@@ -1223,7 +1223,7 @@ export function TripCreationWizard({
                 className="border border-tt-gold/40 bg-tt-gold-soft text-tt-royal shadow-none hover:bg-tt-gold-soft/90"
                 onClick={goNext}
               >
-                Skip — I'll add this later
+                Skip — I’ll add this later
               </Button>
             ) : null}
             {step < 8 ? (

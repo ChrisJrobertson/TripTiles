@@ -378,7 +378,7 @@ export function SmartPlanHolidayWizardSteps({
             What should Smart Plan do?
           </h3>
           <p className="font-sans text-xs leading-relaxed text-tt-royal/65">
-            This sets how aggressive the next run is. You'll see a recap on
+            This sets how aggressive the next run is. You’ll see a recap on
             the last step before anything changes.
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
