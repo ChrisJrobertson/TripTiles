@@ -939,9 +939,11 @@ export function TripDayPageView({
             </section>
           ) : null}
 
+          {showSkipLineSection ? (
           <div className="mb-3">
             <SkipLineLegend />
           </div>
+          ) : null}
 
           {dayStrategyRow ? (
             <AIDayStrategyPanel strategy={dayStrategyRow} />

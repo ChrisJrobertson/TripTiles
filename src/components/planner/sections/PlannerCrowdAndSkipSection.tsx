@@ -2,19 +2,33 @@
 
 import { CrowdStrategyBanner } from "@/components/planner/CrowdStrategyBanner";
 import { SkipLineLegend } from "@/components/planner/SkipLineLegend";
-import type { Trip } from "@/lib/types";
+import type { Park, Trip } from "@/lib/types";
+import {
+  regionHasDisneyQueueParks,
+  regionHasUniversalQueueParks,
+} from "@/lib/wizard-queue-step-region";
+import { useMemo } from "react";
 
 type Props = {
   showPlannerShell: boolean;
   activeTrip: Trip;
+  parks: Park[];
   crowdSeasonPill: string | null;
 };
 
 export function PlannerCrowdAndSkipSection({
   showPlannerShell,
   activeTrip,
+  parks,
   crowdSeasonPill,
 }: Props) {
+  const showSkipLineLegend = useMemo(
+    () =>
+      regionHasDisneyQueueParks(parks, activeTrip.region_id) ||
+      regionHasUniversalQueueParks(parks, activeTrip.region_id),
+    [parks, activeTrip.region_id],
+  );
+
   return (
     <>
       {showPlannerShell &&
@@ -26,7 +40,7 @@ export function PlannerCrowdAndSkipSection({
         />
       ) : null}
 
-      {showPlannerShell ? (
+      {showPlannerShell && showSkipLineLegend ? (
         <div className="mt-3">
           <SkipLineLegend />
         </div>

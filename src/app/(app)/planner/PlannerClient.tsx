@@ -3344,6 +3344,7 @@ function PlannerClientInner({
           <PlannerCrowdAndSkipSection
             showPlannerShell={showPlannerShell}
             activeTrip={activeTrip}
+            parks={parks}
             crowdSeasonPill={crowdSeasonPill}
           />
 
