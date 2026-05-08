@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { getSlotTimeFromValue, getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import type { SkipLineDayTimelineRow } from "@/lib/skip-line-day-timeline";
 import type {
@@ -140,11 +141,11 @@ function SkipLineReturnSection({
                   r.warn ? "text-amber-900 dark:text-amber-200" : "text-royal dark:text-neutral-100"
                 }`}
               >
-                {r.title}
+                {sanitizeAiPlannerDisplayText(r.title)}
               </p>
               {r.subtitle ? (
                 <p className="mt-0.5 font-sans text-xs text-royal/65 dark:text-neutral-300/80">
-                  {r.subtitle}
+                  {sanitizeAiPlannerDisplayText(r.subtitle)}
                 </p>
               ) : null}
             </div>
@@ -218,12 +219,12 @@ export function DayTimeline({
                   {rows.map((r, i) => (
                     <Row key={`${r.time}-${i}`} time={r.time}>
                       <p className="font-sans font-medium">
-                        {r.title}
+                        {sanitizeAiPlannerDisplayText(r.title)}
                         {r.tag ? <TagPill tag={r.tag} /> : null}
                       </p>
                       {r.subtitle ? (
                         <p className="mt-0.5 font-sans text-xs text-royal/60 dark:text-neutral-300/80">
-                          {r.subtitle}
+                          {sanitizeAiPlannerDisplayText(r.subtitle)}
                         </p>
                       ) : null}
                     </Row>
@@ -303,7 +304,7 @@ export function DayTimeline({
     >
       {dayNotes ? (
         <p className="mb-4 font-sans text-sm leading-relaxed text-royal/75 dark:text-neutral-200/90">
-          {dayNotes}
+          {sanitizeAiPlannerDisplayText(dayNotes)}
         </p>
       ) : null}
 

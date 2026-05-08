@@ -20,7 +20,7 @@ import { PlannerAmPmCalendarCells } from "@/components/planner/PlannerAmPmCalend
 import { truncateForPreview } from "@/lib/truncate-text";
 import { DayTimelinePanel } from "@/components/planner/DayTimelinePanel";
 import { ExpandedDayPanel } from "@/components/planner/ExpandedDayPanel";
-import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
 import { parkChromaTileStyle } from "@/lib/theme-colours";
 import { normaliseThemeKey, themedEmptySlotSurfaceStyle } from "@/lib/themes";
@@ -135,7 +135,7 @@ function dayCrowdNote(trip: Trip, dateKey: string): string | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const v = (raw as Record<string, unknown>)[dateKey];
   if (typeof v !== "string" || !v.trim()) return null;
-  return sanitizeDayNote(v.trim());
+  return sanitizeAiPlannerDisplayText(v.trim());
 }
 
 function dayUserNote(trip: Trip, dateKey: string): string {
@@ -239,7 +239,10 @@ export function Calendar({
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return m;
     for (const [dk, val] of Object.entries(raw)) {
       if (typeof val !== "string" || !val.trim()) continue;
-      m.set(dk, heuristicCrowdToneFromNoteText(sanitizeDayNote(val.trim())));
+      m.set(
+        dk,
+        heuristicCrowdToneFromNoteText(sanitizeAiPlannerDisplayText(val.trim())),
+      );
     }
     return m;
   }, [trip.preferences?.ai_day_crowd_notes]);

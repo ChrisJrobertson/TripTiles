@@ -13,7 +13,7 @@ import {
   getParkIdFromSlotValue,
   getSlotTimeFromValue,
 } from "@/lib/assignment-slots";
-import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { resolvePlannerCrowdStrategyText } from "@/lib/planner/crowd-strategy-display-text";
 import {
   crowdPdfSymbolForTone,
@@ -534,7 +534,7 @@ function dayCrowdNoteText(
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const v = (raw as Record<string, unknown>)[dateKey];
   if (typeof v !== "string" || !v.trim()) return null;
-  return sanitizeDayNote(v.trim());
+  return sanitizeAiPlannerDisplayText(v.trim());
 }
 
 function dayUserNotePdf(trip: Trip, dateKey: string): string {
@@ -611,7 +611,7 @@ export function TripPDF({
         )
       : null;
   const crowdSummary = crowdSummaryResolved
-    ? sanitizeDayNote(crowdSummaryResolved.trim())
+    ? sanitizeAiPlannerDisplayText(crowdSummaryResolved.trim())
     : null;
 
   const displayCurrency =

@@ -11,9 +11,10 @@
     "lint": "eslint",
     "smoke": "node --env-file=.env.local --import tsx scripts/smoke-test-supabase.ts",
     "preflight": "node --env-file=.env.local --import tsx scripts/preflight-launch-check.ts",
+    "content-quality": "node --import tsx scripts/content-quality-guard.ts",
     "verify:profiles-schema": "node scripts/verify-profiles-columns.mjs",
     "verify:smart-plan-cruise": "npx tsx scripts/verify-smart-plan-cruise-filter.ts",
-    "test": "npx tsx src/lib/skip-line-clashes.test.ts",
+    "test": "npx tsx src/lib/skip-line-clashes.test.ts && npx tsx src/lib/ai-sanitize-notes.test.ts",
     "test:skip-line-clashes": "npx tsx src/lib/skip-line-clashes.test.ts",
     "deploy:vercel": "vercel --prod --yes"
   },

@@ -22,7 +22,7 @@ import {
   type DerivedSlot,
 } from "@/lib/planner/derive-slots-from-timeline";
 import { MobileRidesSheet } from "@/components/planner/MobileRidesSheet";
-import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
 import { parkChromaTileStyle } from "@/lib/theme-colours";
 import { isThemePark } from "@/lib/park-categories";
@@ -235,7 +235,7 @@ function buildTripDays(
     const rawAi = dayNotes[dateKey];
     const aiSan =
       typeof rawAi === "string" && rawAi.trim()
-        ? sanitizeDayNote(rawAi.trim())
+        ? sanitizeAiPlannerDisplayText(rawAi.trim())
         : null;
     const tone = heuristicCrowdToneFromNoteText(aiSan);
     const u = userDayNotes[dateKey];
@@ -1363,7 +1363,7 @@ export function MobileDayView({
               >
                 <span className="font-semibold text-royal">📈 Crowd strategy </span>
                 <span className="text-royal/85">
-                  {sanitizeDayNote(crowdSummary.trim())}
+                  {sanitizeAiPlannerDisplayText(crowdSummary.trim())}
                 </span>
               </div>
             ) : null}

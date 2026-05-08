@@ -1,5 +1,6 @@
 "use client";
 
+import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { filterUserFacingAiWarningLinesForUi } from "@/lib/ai-user-facing-warnings";
 import type { AIDayStrategy, AIDayStrategyRideStepType } from "@/lib/types";
 import { useMemo } from "react";
@@ -29,6 +30,10 @@ function rideTypeEmoji(t: AIDayStrategyRideStepType): string {
     default:
       return "🎢";
   }
+}
+
+function aiUiText(raw: string): string {
+  return sanitizeAiPlannerDisplayText(raw);
 }
 
 function formatRelativeTime(iso: string): string {
@@ -95,7 +100,7 @@ export function AIDayStrategyPanel({
           </p>
           <ul className="mt-2 list-disc space-y-1 pl-4 font-sans text-xs text-royal/85">
             {qualityWarningsUi.map((w, i) => (
-              <li key={i}>{w}</li>
+              <li key={i}>{aiUiText(w)}</li>
             ))}
           </ul>
         </div>
@@ -106,7 +111,7 @@ export function AIDayStrategyPanel({
           {strategy.arrival_recommendation.replace("_", " ")}
         </p>
         <p className="mt-1 font-sans text-sm leading-relaxed text-royal">
-          {strategy.arrival_reason}
+          {aiUiText(strategy.arrival_reason)}
         </p>
       </div>
 
@@ -127,14 +132,14 @@ export function AIDayStrategyPanel({
                 <div className="min-w-0 flex-1">
                   <p className="font-sans text-sm font-semibold text-royal">
                     <span className="mr-1">{rideTypeEmoji(row.type)}</span>
-                    {row.ride_or_event}
+                    {aiUiText(row.ride_or_event)}
                   </p>
                   <p className="mt-0.5 font-sans text-xs leading-relaxed text-royal/75">
-                    {row.notes}
+                    {row.notes ? aiUiText(row.notes) : null}
                   </p>
                   {row.height_warning ? (
                     <p className="mt-1 font-sans text-[11px] text-royal/65">
-                      {row.height_warning}
+                      {aiUiText(row.height_warning)}
                     </p>
                   ) : null}
                 </div>
@@ -152,7 +157,7 @@ export function AIDayStrategyPanel({
           </p>
           <ul className="mt-2 list-disc space-y-1 pl-4 font-sans text-xs text-royal/75">
             {strategy.optional_sequence_notes.map((line, i) => (
-              <li key={i}>{line}</li>
+              <li key={i}>{aiUiText(line)}</li>
             ))}
           </ul>
         </div>
@@ -167,16 +172,16 @@ export function AIDayStrategyPanel({
           <ul className="mt-2 list-disc space-y-1 pl-4 font-sans text-sm text-royal/85">
             {strategy.lightning_lane_strategy.multi_pass_bookings.map((b, j) => (
               <li key={j}>
-                {b.ride} — book for {b.book_for_time}
+                {aiUiText(b.ride)} — book for {b.book_for_time}
               </li>
             ))}
           </ul>
           {strategy.lightning_lane_strategy.single_pass_recommendations?.length ? (
             <p className="mt-2 font-sans text-xs text-royal/75">
               <span className="font-semibold">Single Pass ideas: </span>
-              {strategy.lightning_lane_strategy.single_pass_recommendations.join(
-                ", ",
-              )}
+              {strategy.lightning_lane_strategy.single_pass_recommendations
+                .map((s) => aiUiText(s))
+                .join(", ")}
             </p>
           ) : null}
         </div>
@@ -202,7 +207,7 @@ export function AIDayStrategyPanel({
           <p className="font-sans text-xs font-semibold text-royal">⚠️ Heads up</p>
           <ul className="mt-1 list-disc space-y-1 pl-4 font-sans text-sm text-royal/85">
             {topWarningsUi.map((w, i) => (
-              <li key={i}>{w}</li>
+              <li key={i}>{aiUiText(w)}</li>
             ))}
           </ul>
         </div>

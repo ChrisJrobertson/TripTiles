@@ -1,6 +1,6 @@
 "use client";
 
-import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { truncateForPreview } from "@/lib/truncate-text";
 import { useCallback, useId, useState } from "react";
 import { CrowdLevelIndicator } from "./CrowdLevelIndicator";
@@ -16,7 +16,7 @@ type Props = {
 export function CrowdStrategyBanner({ text, seasonPill }: Props) {
   const id = useId();
   const [open, setOpen] = useState(false);
-  const cleaned = sanitizeDayNote(text.trim());
+  const cleaned = sanitizeAiPlannerDisplayText(text.trim());
   const preview = truncateForPreview(cleaned, PREVIEW_LEN);
 
   const toggle = useCallback(() => setOpen((o) => !o), []);

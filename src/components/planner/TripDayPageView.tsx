@@ -31,7 +31,7 @@ import {
   heuristicCrowdToneFromNoteText,
   type CrowdLevel,
 } from "@/lib/planner-crowd-level-meta";
-import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { truncateForPreview } from "@/lib/truncate-text";
 import { plannerUserDayNotes } from "@/lib/planner-note-maps";
 import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
@@ -374,7 +374,7 @@ export function TripDayPageView({
     typeof rawAi === "object" &&
     !Array.isArray(rawAi) &&
     typeof (rawAi as Record<string, string>)[dayDate] === "string"
-      ? sanitizeDayNote(
+      ? sanitizeAiPlannerDisplayText(
           String((rawAi as Record<string, string>)[dayDate]).trim(),
         )
       : null;
@@ -438,10 +438,7 @@ export function TripDayPageView({
 
   const smartPlanPreviewLine =
     aiNoteForDay && aiNoteForDay.length > 0
-      ? truncateForPreview(
-          sanitizeDayNote(aiNoteForDay.split(/\n+/)[0]!.trim()),
-          220,
-        )
+      ? truncateForPreview(aiNoteForDay.split(/\n+/)[0]!.trim(), 220)
       : null;
 
   const todayK = todayKey();
@@ -908,7 +905,7 @@ export function TripDayPageView({
                       Transport
                     </p>
                     <p className="mt-1.5 font-sans text-sm leading-snug text-royal/85 dark:text-neutral-200">
-                      {richTimeline.transport}
+                      {sanitizeAiPlannerDisplayText(richTimeline.transport)}
                     </p>
                   </aside>
                 </div>

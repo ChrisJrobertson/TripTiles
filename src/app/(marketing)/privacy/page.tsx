@@ -37,9 +37,8 @@ export default function PrivacyPage() {
       </p>
       <p className="text-sm text-royal/70">
         <strong>Registered address (sole trader):</strong>{" "}
-        <span className="rounded bg-royal/5 px-1">
-          [YOUR UK REGISTERED ADDRESS – replace in source or ask TripTiles]
-        </span>
+        United Kingdom. For the postal address used on formal notices, contact{" "}
+        <a href="mailto:hello@triptiles.app">hello@triptiles.app</a>.
       </p>
 
       <section id="who-we-are">

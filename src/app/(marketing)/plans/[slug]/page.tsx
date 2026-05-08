@@ -12,7 +12,7 @@ import { customTileToPark } from "@/lib/types";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { resolvePlannerCrowdStrategyText } from "@/lib/planner/crowd-strategy-display-text";
 import { getCurrentUser } from "@/lib/supabase/server";
 import {
@@ -128,7 +128,9 @@ export default async function PublicPlanPage({
     parks,
     trip.preferences?.ai_crowd_summary,
   );
-  const crowd = crowdResolved ? sanitizeDayNote(crowdResolved.trim()) : null;
+  const crowd = crowdResolved
+    ? sanitizeAiPlannerDisplayText(crowdResolved.trim())
+    : null;
   const publicAdventure = getPublicAdventureTitle(trip);
   const publicFamily = getPublicFamilyLine(trip);
 

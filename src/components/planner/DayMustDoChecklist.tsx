@@ -1,5 +1,6 @@
 "use client";
 
+import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { useCallback, useEffect, useState } from "react";
 
 function storageKey(tripId: string, dateKey: string, index: number): string {
@@ -68,7 +69,7 @@ export function DayMustDoChecklist({ tripId, dateKey, items }: Props) {
               onChange={() => toggle(i)}
             />
             <span className="min-w-0 font-sans text-sm leading-snug text-royal/90 dark:text-neutral-100">
-              {line}
+              {sanitizeAiPlannerDisplayText(line)}
             </span>
           </li>
         ))}

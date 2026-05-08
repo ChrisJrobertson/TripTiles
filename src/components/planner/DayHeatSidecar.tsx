@@ -1,5 +1,6 @@
 "use client";
 
+import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import {
   CROWD_LEVEL_META,
   type CrowdLevel,
@@ -38,7 +39,7 @@ export function DayHeatSidecar({
       </p>
       <p className="mt-1.5 font-sans text-sm leading-snug text-royal/85 dark:text-neutral-200">
         {heatPlanOverride && heatPlanOverride.trim().length > 0
-          ? heatPlanOverride
+          ? sanitizeAiPlannerDisplayText(heatPlanOverride)
           : advice}
       </p>
       <p className="mt-2 font-sans text-xs text-royal/55 dark:text-neutral-300/80">

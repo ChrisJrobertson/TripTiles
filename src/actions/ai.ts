@@ -70,7 +70,10 @@ import {
 import { getSuccessfulAiGenerationCountForTrip } from "@/lib/db/ai-generations";
 import { getCrowdPatternsForParkIds } from "@/lib/data/crowd-patterns";
 import { getMonthlyConditions } from "@/data/destination-conditions";
-import { sanitizeDayNote, sanitizeStructuralSmartPlanPlannerNote } from "@/lib/ai-sanitize-notes";
+import {
+  sanitizeAiPlannerDisplayText,
+  sanitizeStructuralSmartPlanPlannerNote,
+} from "@/lib/ai-sanitize-notes";
 import {
   formatSmartPlanTripCalendarAuthorityBlock,
   stripWrongWeekdaysFromTripDateNote,
@@ -463,7 +466,8 @@ function parseCrowdMetadata(
   let crowd_reasoning: string | undefined;
   if (typeof obj.crowd_reasoning === "string") {
     const t = obj.crowd_reasoning.trim();
-    if (t) crowd_reasoning = sanitizeDayNote(softTruncateToMax(t, 400));
+    if (t)
+      crowd_reasoning = sanitizeAiPlannerDisplayText(softTruncateToMax(t, 400));
   }
   const day_crowd_notes: Record<string, string> = {};
   const notes = obj.day_crowd_notes;
@@ -472,7 +476,10 @@ function parseCrowdMetadata(
       if (!allowedDates.has(k)) continue;
       if (typeof v !== "string") continue;
       const s = v.trim();
-      if (s) day_crowd_notes[k] = sanitizeDayNote(softTruncateToMax(s, 150));
+      if (s)
+        day_crowd_notes[k] = sanitizeAiPlannerDisplayText(
+          softTruncateToMax(s, 150),
+        );
     }
   }
   const planner_day_notes: Record<string, string> = {};
@@ -484,7 +491,7 @@ function parseCrowdMetadata(
       const s = v.trim();
       if (s) {
         const cleaned = sanitizeStructuralSmartPlanPlannerNote(
-          sanitizeDayNote(softTruncateToMax(s, 350)),
+          sanitizeAiPlannerDisplayText(softTruncateToMax(s, 350)),
         ).trimEnd();
         if (cleaned) planner_day_notes[k] = cleaned;
       }
@@ -779,7 +786,7 @@ function parseDayTweakJson(
   }
   const dayNote =
     typeof obj.day_note === "string"
-      ? sanitizeDayNote(softTruncateToMax(obj.day_note.trim(), 120))
+      ? sanitizeAiPlannerDisplayText(softTruncateToMax(obj.day_note.trim(), 120))
       : "";
   const crowd =
     obj.crowd_level === "quiet" ||
@@ -3282,7 +3289,7 @@ function parseAndValidateDayTimelineJson(
     if (r.subtitle != null) {
       if (typeof r.subtitle !== "string") return { ok: false, reason: "bad_subtitle" };
       const s = r.subtitle.trim();
-      if (s) subtitle = sanitizeDayNote(s);
+      if (s) subtitle = sanitizeAiPlannerDisplayText(s);
     }
     let tag: AiDayTimelineRowTag | undefined;
     if (r.tag != null) {
@@ -3294,7 +3301,7 @@ function parseAndValidateDayTimelineJson(
     timeline.push({
       time: r.time,
       block: r.block as AiDayTimelineBlock,
-      title: r.title.trim(),
+      title: sanitizeAiPlannerDisplayText(r.title.trim()),
       subtitle,
       tag,
     });
@@ -3303,13 +3310,13 @@ function parseAndValidateDayTimelineJson(
   if (o.heat_plan != null) {
     if (typeof o.heat_plan !== "string") return { ok: false, reason: "bad_heat" };
     const h = o.heat_plan.trim();
-    if (h) heat = sanitizeDayNote(h);
+    if (h) heat = sanitizeAiPlannerDisplayText(h);
   }
   let transport: string | undefined;
   if (o.transport != null) {
     if (typeof o.transport !== "string") return { ok: false, reason: "bad_transport" };
     const t = o.transport.trim();
-    if (t) transport = sanitizeDayNote(t);
+    if (t) transport = sanitizeAiPlannerDisplayText(t);
   }
   if (!Array.isArray(o.must_do)) {
     return { ok: false, reason: "must_do_not_array" };
@@ -3322,7 +3329,7 @@ function parseAndValidateDayTimelineJson(
     if (typeof m !== "string" || !m.trim()) {
       return { ok: false, reason: "bad_must_do" };
     }
-    must_do.push(sanitizeDayNote(m.trim()));
+    must_do.push(sanitizeAiPlannerDisplayText(m.trim()));
   }
   const value: AiDayTimeline = {
     generated_at: "",
@@ -3503,7 +3510,7 @@ export async function generateDayTimeline(
       !Array.isArray(m) &&
       typeof (m as Record<string, unknown>)[dateKey] === "string"
     ) {
-      return sanitizeDayNote(
+      return sanitizeAiPlannerDisplayText(
         String((m as Record<string, string>)[dateKey]).trim(),
       );
     }

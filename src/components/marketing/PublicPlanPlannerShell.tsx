@@ -7,7 +7,7 @@ import {
   plannerUserDayNotes,
 } from "@/lib/planner-note-maps";
 import { copyTextToClipboard } from "@/lib/clipboard-access";
-import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { resolvePlannerCrowdStrategyText } from "@/lib/planner/crowd-strategy-display-text";
 import { normaliseThemeKey, plannerThemeStyleVars } from "@/lib/themes";
 import type { Park, Trip } from "@/lib/types";
@@ -28,7 +28,7 @@ export function PublicPlanPlannerShell({ trip, parks, shareUrl }: Props) {
       parks,
       trip.preferences?.ai_crowd_summary,
     );
-    return resolved ? sanitizeDayNote(resolved.trim()) : null;
+    return resolved ? sanitizeAiPlannerDisplayText(resolved.trim()) : null;
   }, [trip, parks]);
 
   const themeShellStyle = useMemo(

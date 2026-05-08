@@ -110,7 +110,7 @@ import {
   type CrowdLevel,
 } from "@/lib/planner-crowd-level-meta";
 import { crowdLevelFromHeuristicTone } from "@/components/planner/CrowdLevelIndicator";
-import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { dayConditionRow } from "@/lib/planner-day-conditions";
 import { daysUntilTripStart } from "@/lib/trip-start-label";
 import {
@@ -195,7 +195,7 @@ function formatSavedBrief(at: Date | null): string {
 function dayCrowdNoteForDate(trip: Trip, dateKey: string): string | null {
   const raw = plannerAiDayCrowdNotes(trip)[dateKey]?.trim();
   if (!raw) return null;
-  return sanitizeDayNote(raw);
+  return sanitizeAiPlannerDisplayText(raw);
 }
 
 function formatTripHeroDateRange(startIso: string, endIso: string): string {

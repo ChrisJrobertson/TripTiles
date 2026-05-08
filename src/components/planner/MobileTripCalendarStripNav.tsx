@@ -1,7 +1,7 @@
 "use client";
 
 import { CrowdLevelIndicator } from "@/components/planner/CrowdLevelIndicator";
-import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { sanitizeAiPlannerDisplayText, sanitizeDayNote } from "@/lib/ai-sanitize-notes";
 import {
   addDays,
   formatDateISO,
@@ -59,7 +59,7 @@ function buildStripDays(
     const rawAi = dayNotes[dateKey];
     const aiSan =
       typeof rawAi === "string" && rawAi.trim()
-        ? sanitizeDayNote(rawAi.trim())
+        ? sanitizeAiPlannerDisplayText(rawAi.trim())
         : null;
     const rawUser = userDayNotes[dateKey];
     const userSan =
