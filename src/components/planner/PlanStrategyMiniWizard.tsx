@@ -418,7 +418,7 @@ export function PlanStrategyMiniWizard({
         ) : saveError ? (
           <div className="mt-6 space-y-4">
             <p className="font-sans text-sm leading-relaxed text-tt-royal/85">
-              We saved your details, but couldn&apos;t finish the strategy.{" "}
+              We saved your details, but couldn't finish the strategy.{" "}
               <span className="font-medium text-tt-royal">{saveError}</span> Try
               again, or close and run{" "}
               <span className="font-semibold">{helpCtaLabel}</span> from the day
@@ -837,7 +837,7 @@ export function PlanStrategyMiniWizard({
               {showUniversal ? (
                 <div className="rounded-xl border border-royal/10 bg-white/80 p-3">
                   <p className="font-sans text-sm font-semibold text-tt-royal">
-                    Universal — Express &amp; Single Rider
+                    Universal — Express & Single Rider
                   </p>
                   <p className="mt-2 font-sans text-xs text-tt-royal/70">Express</p>
                   <select

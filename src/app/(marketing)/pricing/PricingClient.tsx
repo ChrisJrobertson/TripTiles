@@ -208,7 +208,7 @@ export function PricingClient({
             Welcome aboard
           </p>
           <p className="mt-3 font-sans text-sm text-tt-royal/80">
-            We&apos;re confirming your subscription with Smart Plan access…
+            We're confirming your subscription with Smart Plan access…
           </p>
           {fallbackBanner ? (
             <p className="mt-4 font-sans text-xs text-tt-royal/70">

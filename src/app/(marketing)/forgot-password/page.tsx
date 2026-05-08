@@ -28,7 +28,7 @@ export default function ForgotPasswordPage() {
           compact
           className="mt-8 flex-col items-center text-center [&>div]:items-center"
           title="Reset your password"
-          subtitle="We&apos;ll email you an 8-digit code to continue."
+          subtitle="We'll email you an 8-digit code to continue."
         />
         <Suspense
           fallback={

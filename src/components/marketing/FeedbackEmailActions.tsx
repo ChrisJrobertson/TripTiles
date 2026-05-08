@@ -68,7 +68,7 @@ export function FeedbackEmailActions() {
           htmlFor="feedback-category"
           className="block font-sans text-sm font-semibold text-tt-royal"
         >
-          What&apos;s this about?
+          What's this about?
         </label>
         <select
           id="feedback-category"

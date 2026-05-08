@@ -164,7 +164,7 @@ export function LoginForm({ next, initialEmail = "" }: Props) {
       </p>
 
       <p className="pt-2 text-center font-sans text-sm text-tt-ink-muted">
-        Don&apos;t have an account?{" "}
+        Don't have an account?{" "}
         <Link
           href={`/signup?next=${encodeURIComponent(next)}`}
           className="font-semibold text-tt-royal underline decoration-tt-gold/55 underline-offset-2 hover:text-tt-gold"

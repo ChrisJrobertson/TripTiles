@@ -40,7 +40,7 @@ export default function AppError({
           ) : (
             <>
               Your work is usually saved automatically. Try again — if this
-              keeps happening, use Feedback from the menu and we&apos;ll dig in.
+              keeps happening, use Feedback from the menu and we'll dig in.
             </>
           )}
         </p>

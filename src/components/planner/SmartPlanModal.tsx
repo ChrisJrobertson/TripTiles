@@ -601,7 +601,7 @@ export function SmartPlanModal({
         Skip-the-line passes
       </h3>
       <p className="mt-1 font-sans text-xs leading-relaxed text-tt-ink-muted">
-        Turn off what you don&apos;t use so Smart Plan doesn&apos;t assume paid
+        Turn off what you don't use so Smart Plan doesn't assume paid
         queue-skipping products.
       </p>
       {hasDisneyQueueParks ? (
@@ -646,7 +646,7 @@ export function SmartPlanModal({
           <span className="font-semibold text-tt-royal">
             Universal Express-style tips
           </span>{" "}
-          — off if you don&apos;t hold Express on your tickets.
+          — off if you don't hold Express on your tickets.
         </span>
       </label>
       ) : null}
@@ -813,8 +813,8 @@ export function SmartPlanModal({
         ) : null}
         {!touringSubmitReady && mode === "custom" ? (
           <p className="mt-2 font-sans text-[0.7rem] leading-snug text-tt-ink-soft">
-            <strong className="text-tt-ink-muted">Tip:</strong> leave &quot;Overwrite
-            existing tiles&quot; off to keep what you&apos;ve placed; use{" "}
+            <strong className="text-tt-ink-muted">Tip:</strong> leave "Overwrite
+            existing tiles" off to keep what you've placed; use{" "}
             <strong>↶ Undo Smart Plan</strong> after a run if you want to revert.
           </p>
         ) : !touringSubmitReady && smartUsingWizard && smartOnPreviewStep ? (
@@ -825,7 +825,7 @@ export function SmartPlanModal({
           </p>
         ) : !touringSubmitReady && smartUsingWizard ? (
           <p className="mt-2 font-sans text-[0.7rem] leading-snug text-tt-ink-soft">
-            Use <strong className="text-tt-ink-muted">Next</strong> — you&apos;ll confirm
+            Use <strong className="text-tt-ink-muted">Next</strong> — you'll confirm
             everything on the preview step before TripTiles changes the calendar.
           </p>
         ) : null}
@@ -872,8 +872,8 @@ export function SmartPlanModal({
                 </h3>
                 <p className="mt-1 font-sans text-xs leading-relaxed text-tt-ink-muted">
                   These change the wait times the plan assumes. Lightning Lane
-                  turns your must-dos into ~10&nbsp;min waits; Universal Express
-                  turns Express-eligible rides into ~15&nbsp;min waits.
+                  turns your must-dos into ~10 min waits; Universal Express
+                  turns Express-eligible rides into ~15 min waits.
                 </p>
                 <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-md border border-tt-line-soft bg-cream/50 px-2 py-2">
                   <input
@@ -1011,7 +1011,7 @@ export function SmartPlanModal({
               ) : (
             <label className="block">
               <span className="font-sans text-sm font-medium text-tt-royal">
-                Your trip style &amp; priorities
+                Your trip style & priorities
               </span>
               <textarea
                 value={customText}
@@ -1057,7 +1057,7 @@ export function SmartPlanModal({
             <p className="mt-1.5 font-sans text-xs leading-relaxed text-tt-ink-muted">
               <strong className="font-semibold text-tt-royal/85">Default:</strong>{" "}
               we only fill <strong>empty</strong> AM, PM, lunch, and dinner
-              slots. Tiles you&apos;ve already set are left as-is — nothing is
+              slots. Tiles you've already set are left as-is — nothing is
               overwritten unless you choose otherwise below.
             </p>
             <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-lg border border-tt-line-soft bg-tt-surface/95 p-3 transition hover:border-gold/40">

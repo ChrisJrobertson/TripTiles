@@ -33,7 +33,7 @@ export function EmailPreferencesSettings({ initialOptOut }: Props) {
             Opt out of marketing-style emails
           </span>
           <span className="mt-1 block font-sans text-xs leading-relaxed text-tt-royal/65">
-            When ticked, we won&apos;t send trip milestone reminder emails or
+            When ticked, we won't send trip milestone reminder emails or
             similar promotional messages. Transactional mail (password resets,
             receipts) may still be sent.
           </span>

@@ -83,7 +83,7 @@ export function Palette({
         <SectionHeader title="Parks" subtitle="Build your day by choosing a tile." />
         <p className="mt-3 font-sans text-sm leading-relaxed text-tt-ink-muted">
           No park tiles are available for this destination in the catalog yet.
-          Add your own with &quot;Add custom&quot; inside a category below, or
+          Add your own with "Add custom" inside a category below, or
           try editing the trip region.
         </p>
       </Surface>

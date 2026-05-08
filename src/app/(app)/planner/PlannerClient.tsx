@@ -3281,7 +3281,7 @@ function PlannerClientInner({
                     </p>
                     <label className="mt-2 flex min-h-[44px] cursor-pointer items-center justify-between gap-3 rounded-lg border border-royal/15 bg-white px-3 py-2">
                       <span className="font-sans text-sm text-royal">
-                        Show cruise &amp; ship tiles in the drawer
+                        Show cruise & ship tiles in the drawer
                       </span>
                       <input
                         type="checkbox"
@@ -3335,8 +3335,8 @@ function PlannerClientInner({
                     </label>
                     {emailMarketingOptOut ? (
                       <p className="mt-2 font-sans text-xs text-royal/60">
-                        You&apos;ve opted out of marketing emails in Settings —
-                        we won&apos;t send trip reminders.
+                        You've opted out of marketing emails in Settings —
+                        we won't send trip reminders.
                       </p>
                     ) : null}
                   </div>
@@ -3483,7 +3483,7 @@ function PlannerClientInner({
             Your planner is ready
           </h2>
           <p className="mx-auto mt-4 max-w-lg font-sans text-sm leading-relaxed text-royal/80 sm:text-base">
-            Start your first TripTiles adventure. We&apos;ll help you plan a
+            Start your first TripTiles adventure. We'll help you plan a
             theme park trip your family will actually follow.
           </p>
           <div className="mx-auto mt-8 flex w-full max-w-md flex-col gap-3 sm:flex-row sm:justify-center">

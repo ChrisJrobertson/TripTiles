@@ -59,7 +59,7 @@ export default function TermsPage() {
         <ul>
           <li>Abuse the AI (e.g. jailbreaks, illegal content generation).</li>
           <li>Attempt to reverse-engineer or disrupt the service.</li>
-          <li>Scrape or republish other users&apos; private trip data.</li>
+          <li>Scrape or republish other users' private trip data.</li>
           <li>Use TripTiles for unlawful purposes or spam invites/shares.</li>
         </ul>
         <p>We may suspend accounts for violations at our discretion.</p>
@@ -118,7 +118,7 @@ export default function TermsPage() {
           Price changes
         </h3>
         <p>
-          We may change subscription prices with 30 days&apos; advance notice by
+          We may change subscription prices with 30 days' advance notice by
           email. Your existing subscription continues at the price you signed up
           at until your next renewal.
         </p>
@@ -168,7 +168,7 @@ export default function TermsPage() {
       <section id="warranty">
         <h2>8. Warranty disclaimer</h2>
         <p>
-          The service is provided &quot;as is&quot; without warranties of any
+          The service is provided "as is" without warranties of any
           kind to the fullest extent permitted by law. We do not guarantee
           uptime, accuracy, or fitness for a particular purpose.
         </p>

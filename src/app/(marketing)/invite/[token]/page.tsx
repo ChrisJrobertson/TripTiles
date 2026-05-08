@@ -66,7 +66,7 @@ export default async function InvitePage({ params }: Props) {
           {preview.familyName} · {preview.startDate} → {preview.endDate}
         </p>
         <p className="mt-6 font-sans text-sm leading-relaxed text-tt-royal">
-          You&apos;ve been invited to collaborate on this trip. Accept to open it
+          You've been invited to collaborate on this trip. Accept to open it
           in your planner.
         </p>
         <div className="mt-8">
@@ -74,7 +74,7 @@ export default async function InvitePage({ params }: Props) {
         </div>
         {!isAuthed ? (
           <p className="mt-6 font-sans text-xs text-tt-ink-muted">
-            You&apos;ll be asked to sign in or create a free account first.
+            You'll be asked to sign in or create a free account first.
           </p>
         ) : null}
       </Card>

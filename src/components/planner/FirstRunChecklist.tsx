@@ -102,7 +102,7 @@ export function FirstRunChecklist({
             onClick={dismissForever}
             className="mt-2 font-sans text-[0.65rem] font-medium text-royal/45 hover:text-royal"
           >
-            Don&apos;t show again
+            Don't show again
           </button>
         </div>
       </details>

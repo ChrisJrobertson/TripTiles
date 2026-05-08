@@ -134,7 +134,7 @@ export function EmailOtpVerifyForm({ mode, email, next }: Props) {
   return (
     <div className="w-full max-w-md space-y-6">
       <p className="font-sans text-base leading-relaxed text-tt-royal">
-        We&apos;ve sent an 8-digit code to{" "}
+        We've sent an 8-digit code to{" "}
         <span className="break-all font-semibold">{email}</span>.
       </p>
       <p className="font-sans text-sm text-tt-ink-muted">{introLine(mode)}</p>
@@ -177,7 +177,7 @@ export function EmailOtpVerifyForm({ mode, email, next }: Props) {
 
       <p className="text-center font-sans text-sm text-tt-ink-muted">
         {cooldown > 0 ? (
-          <>Didn&apos;t arrive? Resend in {cooldown}s</>
+          <>Didn't arrive? Resend in {cooldown}s</>
         ) : (
           <button
             type="button"
