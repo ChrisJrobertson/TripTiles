@@ -496,7 +496,7 @@ function MobileAmPmHalfRow({
         ) : readOnly ? (
           <p className="font-sans text-sm text-royal/55">
             <span className="font-semibold text-royal/50">{halfPrefix}</span>{" "}
-            <span className="italic text-royal/45">Flexible</span>
+            <span className="italic text-royal/45">Free</span>
           </p>
         ) : (
           <button
@@ -1078,6 +1078,17 @@ export function MobileDayView({
       themeParkIdsAmPm.filter((id) => cataloguedParkIdSetProp.has(id)),
     [themeParkIdsAmPm, cataloguedParkIdSetProp],
   );
+  const showAtParkForActiveDay = useMemo(() => {
+    const ass = assignments[activeDay.dateKey] ?? {};
+    const p = buildAmPmPresentation(ass, parkById);
+    if (p.mode === "unified_rest_day" || p.mode === "unified_travel_day") {
+      return false;
+    }
+    if (p.mode === "split") {
+      return p.morning.state === "park" || p.afternoon.state === "park";
+    }
+    return true;
+  }, [assignments, activeDay.dateKey, parkById]);
 
   const hasAiMustDosForActiveDay = useMemo(
     () =>
@@ -1544,6 +1555,7 @@ export function MobileDayView({
                   )}
                 </button>
               </div>
+              {showAtParkForActiveDay ? (
               <div className="mt-3 flex min-h-11 flex-col gap-2 border-t border-royal/10 pt-3 sm:flex-row sm:items-center sm:justify-between">
                 <span className="font-sans text-xs font-semibold text-royal/70">
                   At the park
@@ -1579,6 +1591,7 @@ export function MobileDayView({
                   })()}
                 </button>
               </div>
+              ) : null}
             </div>
           ) : !readOnly && onSaveUserDayNote ? (
             <div className="mt-4 rounded-xl border border-royal/10 bg-white/90 p-3">
@@ -1739,13 +1752,13 @@ export function MobileDayView({
 
       {/* Mobile menu sheet */}
       <div
-        className={`fixed inset-0 z-40 md:hidden ${menuOpen ? "" : "pointer-events-none"}`}
+        className={`fixed inset-0 z-[130] md:hidden ${menuOpen ? "" : "pointer-events-none"}`}
         aria-hidden={!menuOpen}
       >
         <div
           role="presentation"
           style={{ touchAction: "none" }}
-          className={`absolute inset-0 bg-royal/50 transition-opacity duration-300 ${
+          className={`absolute inset-0 bg-royal/70 transition-opacity duration-300 ${
             menuOpen ? "opacity-100" : "opacity-0"
           }`}
           onClick={() => setMenuOpen(false)}

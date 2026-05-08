@@ -189,7 +189,7 @@ function SplitHalfSlot({
   const park = display.state === "park" ? display.park : undefined;
   const slotAria = park
     ? `${halfPrefix} ${park.name}`
-    : `${halfPrefix} Flexible`;
+    : `${halfPrefix} Free`;
   const emptySlotStyle: CSSProperties | undefined = park
     ? undefined
     : themedEmptySlotSurfaceStyle();
@@ -316,7 +316,7 @@ function SplitHalfSlot({
         <div className="flex min-h-0 flex-1 flex-col justify-center pb-0.5 pl-0.5 pr-1 pt-3 md:min-h-[1.75rem] md:justify-center md:pt-2">
           <span className="font-sans text-[0.58rem] font-medium leading-snug text-royal/55 sm:text-[0.6rem]">
             <span className="font-semibold text-royal/50">{halfPrefix}</span>{" "}
-            <span className="italic">Flexible</span>
+            <span className="italic">Free</span>
           </span>
         </div>
       )}

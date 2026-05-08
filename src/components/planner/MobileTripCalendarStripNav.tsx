@@ -291,7 +291,7 @@ export function MobileTripCalendarStripNav({
         })}
       </div>
       <p className="px-4 pb-3 font-sans text-xs leading-relaxed text-royal/65">
-        Tap a day to edit slots, rides, and notes — or pick a tile from the drawer on larger screens.
+        Tap a day to edit it. Tap any slot to add a park.
       </p>
 
       {noteSheet ? (
