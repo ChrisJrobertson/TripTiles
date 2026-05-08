@@ -1357,16 +1357,10 @@ export function MobileDayView({
                 </span>
               </div>
             ) : null}
-            {!readOnly && onOpenDayPlanner ? (
+            {!readOnly && onOpenDayPlanner && themeParkIdsAmPm.length > 0 ? (
               <button
                 type="button"
-                disabled={themeParkIdsAmPm.length === 0}
-                title={
-                  themeParkIdsAmPm.length === 0
-                    ? "Assign a theme park day first"
-                    : undefined
-                }
-                className="mt-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-royal px-4 py-3 font-sans text-sm font-semibold text-cream shadow-sm transition active:bg-royal/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 disabled:cursor-not-allowed disabled:opacity-55"
+                className="mt-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-royal px-4 py-3 font-sans text-sm font-semibold text-cream shadow-sm transition active:bg-royal/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
                 onClick={() => onOpenDayPlanner(activeDay.dateKey)}
               >
                 <span aria-hidden>✨</span>

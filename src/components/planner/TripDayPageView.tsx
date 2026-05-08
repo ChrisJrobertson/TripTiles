@@ -811,6 +811,7 @@ export function TripDayPageView({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 font-sans text-xs text-tt-ink-muted">
+            {amPmThemeIdsForRides.length > 0 ? (
             <Button
               type="button"
               size="sm"
@@ -819,6 +820,7 @@ export function TripDayPageView({
               <span aria-hidden>✨</span>
               Plan this day
             </Button>
+            ) : null}
             {daySnapshotCount > 0 && latestDaySnapshot ? (
               <Button
                 type="button"
