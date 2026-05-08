@@ -1158,6 +1158,7 @@ export function Calendar({
           onRideDayPrioritiesUpdated ? (
             <ExpandedDayPanel
               tripId={trip.id}
+              regionId={trip.region_id}
               dayDate={expandedDay}
               dayAssignment={trip.assignments[expandedDay] as
                 | Partial<Assignment>

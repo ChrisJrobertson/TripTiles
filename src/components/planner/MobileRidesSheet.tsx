@@ -20,6 +20,10 @@ import {
   waitMinutesColourClass,
 } from "@/lib/ride-plan-display";
 import type { Park } from "@/lib/types";
+import {
+  regionHasDisneyQueueParks,
+  regionHasUniversalQueueParks,
+} from "@/lib/wizard-queue-step-region";
 import { buildBookFirstSkipNudges } from "@/lib/book-first-skip-nudges";
 import { showToast } from "@/lib/toast";
 import type { Attraction, TripRidePriority } from "@/types/attractions";
@@ -33,6 +37,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   tripId: string;
+  regionId: string;
   dayDate: string;
   parkIds: string[];
   childAges: number[];
@@ -62,6 +67,7 @@ export function MobileRidesSheet({
   open,
   onClose,
   tripId,
+  regionId,
   dayDate,
   parkIds,
   childAges,
@@ -77,6 +83,13 @@ export function MobileRidesSheet({
   const [pending, setPending] = useState(false);
 
   const parkById = useMemo(() => new Map(parks.map((p) => [p.id, p])), [parks]);
+
+  const showSkipLineLegend = useMemo(
+    () =>
+      regionHasDisneyQueueParks(parks, regionId) ||
+      regionHasUniversalQueueParks(parks, regionId),
+    [parks, regionId],
+  );
 
   const sorted = useMemo(
     () => sortPrioritiesForDay(ridePriorities),
@@ -291,9 +304,11 @@ export function MobileRidesSheet({
               </p>
             ) : (
               <>
+                {showSkipLineLegend ? (
                 <div className="mb-3">
                   <SkipLineLegend />
                 </div>
+                ) : null}
                 <div className="mb-3 rounded-lg border border-gold/25 bg-white/80 px-3 py-2">
                   <p className="font-sans text-[11px] font-semibold uppercase tracking-wide text-royal">
                     {includeDisneySkipTips || includeUniversalSkipTips

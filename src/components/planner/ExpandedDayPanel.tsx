@@ -27,6 +27,10 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { SkipLineLegend } from "@/components/planner/SkipLineLegend";
+import {
+  regionHasDisneyQueueParks,
+  regionHasUniversalQueueParks,
+} from "@/lib/wizard-queue-step-region";
 import { RidePriorityGuestStack } from "@/components/planner/RidePriorityGuestStack";
 import { parseDate } from "@/lib/date-helpers";
 import type { Park } from "@/lib/types";
@@ -60,6 +64,8 @@ import type { Assignment } from "@/lib/types";
 
 export type ExpandedDayPanelProps = {
   tripId: string;
+  /** Trip region — skip-line legend uses queue-park catalogue helpers. */
+  regionId: string;
   dayDate: string;
   parkIds: string[];
   childAges: number[];
@@ -322,6 +328,7 @@ function SortableRideRow({
 
 export function ExpandedDayPanel({
   tripId,
+  regionId,
   dayDate,
   parkIds,
   childAges,
@@ -395,6 +402,13 @@ export function ExpandedDayPanel({
         return isUniversalParkGroup(g);
       }),
     [parkById, parkIds],
+  );
+
+  const showSkipLineLegend = useMemo(
+    () =>
+      regionHasDisneyQueueParks(parks, regionId) ||
+      regionHasUniversalQueueParks(parks, regionId),
+    [parks, regionId],
   );
 
   useEffect(() => {
@@ -681,9 +695,11 @@ export function ExpandedDayPanel({
             </button>
           </div>
 
+          {showSkipLineLegend ? (
           <div className="mb-3">
             <SkipLineLegend />
           </div>
+          ) : null}
         </>
       ) : null}
 

@@ -921,7 +921,7 @@ export function MobileDayView({
   userDayNotes,
   onAssign,
   onClear,
-  crowdSummary: _crowdSummary,
+  crowdSummary,
   readOnly = false,
   onSelectPark,
   onMenuExportPdf,
@@ -948,7 +948,6 @@ export function MobileDayView({
   urlSyncedDayDate = null,
   paletteSelectedParkId = null,
 }: MobileDayViewProps) {
-  void _crowdSummary;
   const router = useRouter();
   const useUrlDayNav = Boolean(tripRouteBase && urlSyncedDayDate);
   const pushTripDay = useCallback(
@@ -1354,6 +1353,17 @@ export function MobileDayView({
                 />
                 <span className="font-sans text-xs text-royal/80">
                   Crowds: {activeDay.crowdLabel}
+                </span>
+              </div>
+            ) : null}
+            {crowdSummary?.trim() ? (
+              <div
+                className="mt-3 rounded-xl border border-gold/40 bg-white px-3 py-2 font-sans text-xs leading-snug text-royal/90 shadow-sm"
+                role="status"
+              >
+                <span className="font-semibold text-royal">📈 Crowd strategy </span>
+                <span className="text-royal/85">
+                  {sanitizeDayNote(crowdSummary.trim())}
                 </span>
               </div>
             ) : null}
@@ -1835,6 +1845,7 @@ export function MobileDayView({
           open={ridesSheetOpen}
           onClose={() => setRidesSheetOpen(false)}
           tripId={trip.id}
+          regionId={trip.region_id}
           dayDate={activeDay.dateKey}
           parkIds={themeParkIdsForCatalogueSheet}
           childAges={trip.child_ages ?? []}
