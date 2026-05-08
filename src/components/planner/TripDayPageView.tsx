@@ -38,6 +38,10 @@ import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
 import { buildSkipLineDayTimelineRows } from "@/lib/skip-line-day-timeline";
 import { isThemePark } from "@/lib/park-categories";
 import {
+  regionHasDisneyQueueParks,
+  regionHasUniversalQueueParks,
+} from "@/lib/wizard-queue-step-region";
+import {
   defaultDayTimesFormHint,
   getDayTimes,
   validateDayTimesPair,
@@ -579,6 +583,15 @@ export function TripDayPageView({
   const refreshTrip = () => {
     startTransition(() => router.refresh());
   };
+  const hasDisneyQueueParks = useMemo(
+    () => regionHasDisneyQueueParks(parks, trip.region_id),
+    [parks, trip.region_id],
+  );
+  const hasUniversalQueueParks = useMemo(
+    () => regionHasUniversalQueueParks(parks, trip.region_id),
+    [parks, trip.region_id],
+  );
+  const showSkipLineSection = hasDisneyQueueParks || hasUniversalQueueParks;
 
   const renderSmartPlanBody = () => (
     <>
@@ -591,9 +604,12 @@ export function TripDayPageView({
         </p>
       ) : (
         <p className="mt-1 font-sans text-sm italic text-royal/55">
-          No crowd tip for this day yet — run Smart Plan for the trip.
+          Detailed crowd modelling isn&apos;t available for this region yet —
+          Smart Plan still uses park hours, your travel dates, and group profile
+          to shape a sensible day.
         </p>
       )}
+      {showSkipLineSection ? (
       <div className="mt-3 rounded-lg border border-gold/30 bg-white px-3 py-2.5">
         <p className="font-sans text-[11px] font-semibold uppercase tracking-wide text-royal/60">
           Skip-the-line passes
@@ -601,6 +617,7 @@ export function TripDayPageView({
         <p className="mt-1 font-sans text-xs leading-relaxed text-royal/65">
           Choose before you generate — Smart Plan uses these for this trip.
         </p>
+        {hasDisneyQueueParks ? (
         <label className="mt-2 flex cursor-pointer items-start gap-2.5 rounded-md border border-royal/10 bg-cream/40 px-2 py-2">
           <input
             type="checkbox"
@@ -620,6 +637,8 @@ export function TripDayPageView({
             </span>
           </span>
         </label>
+        ) : null}
+        {hasUniversalQueueParks ? (
         <label className="mt-1.5 flex cursor-pointer items-start gap-2.5 rounded-md border border-royal/10 bg-cream/40 px-2 py-2">
           <input
             type="checkbox"
@@ -639,7 +658,9 @@ export function TripDayPageView({
             </span>
           </span>
         </label>
+        ) : null}
       </div>
+      ) : null}
       <button
         type="button"
         className="mt-3 min-h-11 w-full rounded-lg bg-royal px-4 py-2.5 font-sans text-sm font-semibold text-cream shadow-sm transition hover:bg-royal/90"

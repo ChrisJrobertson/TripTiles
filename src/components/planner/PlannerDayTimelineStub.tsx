@@ -45,7 +45,7 @@ function primaryDayTitle(
   if (p.morning.state === "park") bits.push(p.morning.park.name);
   if (p.afternoon.state === "park") bits.push(p.afternoon.park.name);
   if (bits.length) return [...new Set(bits)].join(" · ");
-  return "Flexible day";
+  return "Free day";
 }
 
 type Props = {
@@ -121,6 +121,11 @@ export function PlannerDayTimelineStub({
   });
 
   const title = primaryDayTitle(assignment, parkById);
+  const amPm = buildAmPmPresentation(assignment, parkById);
+  const showAtParkWindow =
+    amPm.mode === "unified_full_day" ||
+    (amPm.mode === "split" &&
+      (amPm.morning.state === "park" || amPm.afternoon.state === "park"));
   const dayWindow = getEffectiveDayWindow(trip, dateKey, parkById);
   const dayWindowLabel = formatWindowLabel(dayWindow.start, dayWindow.end);
   const dayWindowTitle =
@@ -221,7 +226,8 @@ export function PlannerDayTimelineStub({
           </Button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {onOpenDayWindow ? (
+          {showAtParkWindow ? (
+            onOpenDayWindow ? (
             <button
               type="button"
               title={dayWindowTitle}
@@ -231,7 +237,7 @@ export function PlannerDayTimelineStub({
               {dayWindow.source === "user" ? "Your hours: " : "At the park: "}
               <span className="truncate">{dayWindowLabel}</span>
             </button>
-          ) : (
+            ) : (
             <span
               className="inline-flex max-w-[14rem] rounded-full border border-tt-line bg-tt-surface px-2.5 py-1 font-meta text-[11px] font-semibold text-tt-ink"
               title={dayWindowTitle}
@@ -239,7 +245,8 @@ export function PlannerDayTimelineStub({
               {dayWindow.source === "user" ? "Your hours: " : "At the park: "}
               <span className="truncate">{dayWindowLabel}</span>
             </span>
-          )}
+            )
+          ) : null}
           <span className="inline-flex rounded-full border border-tt-line bg-tt-surface px-2.5 py-1 font-meta text-[11px] font-semibold text-tt-ink">
             {weatherChip ?? "—"}
           </span>
@@ -258,8 +265,8 @@ export function PlannerDayTimelineStub({
         {filledRows.length === 0 ? (
           <div className="px-4 py-14 text-center">
             <p className="font-sans text-sm text-tt-ink-muted">
-              Nothing planned for this day yet — drag a tile onto the calendar or tap{" "}
-              <span className="font-semibold text-tt-royal">Plan this day ✨</span>.
+              Nothing planned for this day yet — tap Plan this day ✨ or tap a slot
+              to add a park.
             </p>
           </div>
         ) : (

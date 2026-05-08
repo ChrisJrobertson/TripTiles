@@ -307,6 +307,7 @@ export function PlannerGridColumnStack({
                     dayNotes={mobilePlannerNoteMaps.ai}
                     userDayNotes={mobilePlannerNoteMaps.user}
                     onAssign={onAssign}
+                    paletteSelectedParkId={selectedParkId}
                     onClear={onClear}
                     crowdSummary={mobileCrowdSummaryText}
                     readOnly={false}

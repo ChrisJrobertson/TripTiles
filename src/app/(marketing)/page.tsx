@@ -69,7 +69,7 @@ const FEATURES_STATIC = [
   {
     icon: "🌍",
     title: "300+ parks",
-    body: "Disney, Universal, Legoland, SeaWorld, and regional favourites — same tools everywhere.",
+    body: "Deep planning for Disney + Universal in major parks, with general planning tools across 45 destinations.",
   },
 ] as const;
 
@@ -80,7 +80,7 @@ const FAQ = [
   },
   {
     q: "Which theme parks are included?",
-    a: "We cover Disney, Universal, Legoland, SeaWorld, and hundreds of regional parks across 45 destinations.",
+    a: "We cover Disney, Universal, Legoland, SeaWorld, and hundreds of regional parks across 45 destinations, with deepest crowd modelling in Disney + Universal regions.",
   },
   {
     q: "Do I need to create an account?",
@@ -146,8 +146,9 @@ export default async function MarketingHomePage() {
               day-by-day timeline with clash checks, and plain-English nudges
               when something won&apos;t work. Free to try, from £
               {tierPro.monthlyGbp.toFixed(2)}/mo or £
-              {tierPro.annualGbp.toFixed(0)}/yr when you&apos;re ready — Disney,
-              Universal, and 300+ parks worldwide.
+              {tierPro.annualGbp.toFixed(0)}/yr when you&apos;re ready — deep
+              planning for Disney + Universal, plus general planning tools for
+              300+ parks worldwide.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <Link href="/signup?next=/planner" className={marketingLinkAccentLg}>
@@ -223,7 +224,7 @@ export default async function MarketingHomePage() {
                 Fill your calendar
               </h3>
               <p className="mt-2 font-sans text-sm leading-relaxed text-tt-royal/75">
-                Drag tiles, or run Smart Plan from crowd patterns, dates, and
+                Place tiles, or run Smart Plan from crowd patterns, dates, and
                 group size — the timeline and nudges help you catch overloaded
                 days before you go.
               </p>

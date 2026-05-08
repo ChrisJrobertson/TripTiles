@@ -96,12 +96,15 @@ function SplitHalfSlot({
 }) {
   if (derivedOverride) {
     const canOpen =
-      !readOnly && useDayDetailShell && Boolean(onOpenDayDetail);
+      !readOnly &&
+      useDayDetailShell &&
+      Boolean(onOpenDayDetail) &&
+      !selectedParkId;
     const aria = `${halfPrefix} planned: ${derivedOverride.label}`;
     return (
       <div
         className={`group planner-slot relative flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-tt-gold/35 bg-tt-gold-soft/25 ${areaClass} transition hover:brightness-[1.04] ${
-          canOpen
+          canOpen || !readOnly
             ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-gold/50 focus-visible:ring-inset"
             : readOnly
               ? ""
@@ -111,37 +114,38 @@ function SplitHalfSlot({
         role={canOpen || !readOnly ? "button" : undefined}
         tabIndex={canOpen || !readOnly ? 0 : undefined}
         aria-label={aria}
-        title={derivedTooltip ?? aria}
+        title={
+          selectedParkId && !readOnly
+            ? `${derivedTooltip ?? aria} — tap to place selected park`
+            : (derivedTooltip ?? aria)
+        }
         onClick={(e) => {
           if (readOnly) return;
-          if (canOpen && onOpenDayDetail) {
-            e.stopPropagation();
-            onOpenDayDetail(dateKey);
-            return;
-          }
           e.stopPropagation();
           if (selectedParkId) {
             onAssign(dateKey, slot, selectedParkId);
-          } else {
-            onNeedParkFirst();
+            return;
           }
-        }}
-        onKeyDown={(e) => {
-          if (readOnly) return;
-          if (canOpen && onOpenDayDetail && (e.key === "Enter" || e.key === " ")) {
-            e.preventDefault();
-            e.stopPropagation();
+          if (canOpen && onOpenDayDetail) {
             onOpenDayDetail(dateKey);
             return;
           }
+          onNeedParkFirst();
+        }}
+        onKeyDown={(e) => {
+          if (readOnly) return;
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             e.stopPropagation();
             if (selectedParkId) {
               onAssign(dateKey, slot, selectedParkId);
-            } else {
-              onNeedParkFirst();
+              return;
             }
+            if (canOpen && onOpenDayDetail) {
+              onOpenDayDetail(dateKey);
+              return;
+            }
+            onNeedParkFirst();
           }
         }}
       >
@@ -185,7 +189,7 @@ function SplitHalfSlot({
   const park = display.state === "park" ? display.park : undefined;
   const slotAria = park
     ? `${halfPrefix} ${park.name}`
-    : `${halfPrefix} Flexible`;
+    : `${halfPrefix} Free`;
   const emptySlotStyle: CSSProperties | undefined = park
     ? undefined
     : themedEmptySlotSurfaceStyle();
@@ -193,7 +197,14 @@ function SplitHalfSlot({
     ? parkChromaTileStyle(park.bg_colour, park.fg_colour, themeKey)
     : undefined;
   const canOpenDayPanel = Boolean(
-    !readOnly && park && useDayDetailShell && onOpenDayDetail,
+    !readOnly &&
+      park &&
+      useDayDetailShell &&
+      onOpenDayDetail &&
+      !selectedParkId,
+  );
+  const canOverwriteWithSelection = Boolean(
+    !readOnly && park && selectedParkId,
   );
 
   return (
@@ -204,63 +215,68 @@ function SplitHalfSlot({
         readOnly || park
           ? ""
           : "cursor-pointer hover:brightness-[1.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--tt-ring)]/50 focus-visible:ring-inset"
-      }${canOpenDayPanel ? " cursor-pointer" : ""}`}
+      }${
+        canOpenDayPanel || canOverwriteWithSelection ? " cursor-pointer" : ""
+      }`}
       style={park ? filledSlotStyle : emptySlotStyle}
       data-day-interactive
       role={
-        canOpenDayPanel
+        canOpenDayPanel ||
+        canOverwriteWithSelection ||
+        (!readOnly && !park)
           ? "button"
-          : readOnly || park
-            ? undefined
-            : "button"
+          : undefined
       }
-      tabIndex={canOpenDayPanel ? 0 : readOnly || park ? undefined : 0}
+      tabIndex={
+        canOpenDayPanel ||
+        canOverwriteWithSelection ||
+        (!readOnly && !park)
+          ? 0
+          : undefined
+      }
       aria-label={
-        canOpenDayPanel
-          ? `Open day planner — ${slotAria}`
-          : slotAria
+        canOverwriteWithSelection
+          ? `Place selected park — ${slotAria}`
+          : canOpenDayPanel
+            ? `Open day planner — ${slotAria}`
+            : slotAria
       }
       title={
-        canOpenDayPanel
-          ? "Open day planner (rides, must-dos, and notes)"
-          : slotAria
+        canOverwriteWithSelection
+          ? "Place selected park on this slot (tap)"
+          : canOpenDayPanel
+            ? "Open day planner (rides, must-dos, and notes)"
+            : slotAria
       }
       onClick={(e) => {
         if (readOnly) return;
-        if (park) {
-          if (useDayDetailShell && onOpenDayDetail) {
-            e.stopPropagation();
-            onOpenDayDetail(dateKey);
-          }
-          return;
-        }
         e.stopPropagation();
         if (selectedParkId) {
           onAssign(dateKey, slot, selectedParkId);
-        } else {
+          return;
+        }
+        if (park && useDayDetailShell && onOpenDayDetail) {
+          onOpenDayDetail(dateKey);
+          return;
+        }
+        if (!park) {
           onNeedParkFirst();
         }
       }}
       onKeyDown={(e) => {
         if (readOnly) return;
-        if (park) {
-          if (
-            useDayDetailShell &&
-            onOpenDayDetail &&
-            (e.key === "Enter" || e.key === " ")
-          ) {
-            e.preventDefault();
-            e.stopPropagation();
-            onOpenDayDetail(dateKey);
-          }
-          return;
-        }
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           e.stopPropagation();
           if (selectedParkId) {
             onAssign(dateKey, slot, selectedParkId);
-          } else {
+            return;
+          }
+          if (park && useDayDetailShell && onOpenDayDetail) {
+            onOpenDayDetail(dateKey);
+            return;
+          }
+          if (!park) {
             onNeedParkFirst();
           }
         }
@@ -300,7 +316,7 @@ function SplitHalfSlot({
         <div className="flex min-h-0 flex-1 flex-col justify-center pb-0.5 pl-0.5 pr-1 pt-3 md:min-h-[1.75rem] md:justify-center md:pt-2">
           <span className="font-sans text-[0.58rem] font-medium leading-snug text-royal/55 sm:text-[0.6rem]">
             <span className="font-semibold text-royal/50">{halfPrefix}</span>{" "}
-            <span className="italic">Flexible</span>
+            <span className="italic">Free</span>
           </span>
         </div>
       )}
@@ -317,6 +333,8 @@ function UnifiedSpanSlot({
   onAfterSlotClear,
   useDayDetailShell,
   onOpenDayDetail,
+  selectedParkId,
+  onAssign,
 }: {
   dateKey: string;
   presentation: Exclude<AmPmCalendarPresentation, { mode: "split" }>;
@@ -326,11 +344,17 @@ function UnifiedSpanSlot({
   onAfterSlotClear?: Props["onAfterSlotClear"];
   useDayDetailShell: boolean;
   onOpenDayDetail?: Props["onOpenDayDetail"];
+  selectedParkId: string | null;
+  onAssign: Props["onAssign"];
 }) {
   const style = unifiedShellStyle(presentation, themeKey);
   const canOpenDayPanel = Boolean(
-    !readOnly && useDayDetailShell && onOpenDayDetail,
+    !readOnly &&
+      useDayDetailShell &&
+      onOpenDayDetail &&
+      !selectedParkId,
   );
+  const canPlaceFullDaySelection = Boolean(!readOnly && selectedParkId);
 
   let primaryLine: string;
   let secondaryLine: string;
@@ -355,37 +379,53 @@ function UnifiedSpanSlot({
   return (
     <div
       className={`group planner-slot planner-slot-am-pm-span relative flex min-h-0 flex-col overflow-hidden rounded transition hover:brightness-[1.06] ${
-        canOpenDayPanel ? "cursor-pointer" : ""
+        canOpenDayPanel || canPlaceFullDaySelection ? "cursor-pointer" : ""
       }`}
       style={style}
       data-day-interactive
-      role={canOpenDayPanel ? "button" : undefined}
-      tabIndex={canOpenDayPanel ? 0 : undefined}
+      role={canOpenDayPanel || canPlaceFullDaySelection ? "button" : undefined}
+      tabIndex={
+        canOpenDayPanel || canPlaceFullDaySelection ? 0 : undefined
+      }
       aria-label={
-        canOpenDayPanel ? `Open day planner — ${ariaUnified}` : ariaUnified
+        canPlaceFullDaySelection
+          ? `Place selected park — full day (AM and PM) — ${ariaUnified}`
+          : canOpenDayPanel
+            ? `Open day planner — ${ariaUnified}`
+            : ariaUnified
       }
       title={
-        canOpenDayPanel
-          ? "Open day planner (rides, must-dos, and notes)"
-          : undefined
+        canPlaceFullDaySelection
+          ? "Place selected park on both AM and PM (tap)"
+          : canOpenDayPanel
+            ? "Open day planner (rides, must-dos, and notes)"
+            : undefined
       }
       onClick={(e) => {
         if (readOnly) return;
+        e.stopPropagation();
+        if (selectedParkId) {
+          onAssign(dateKey, "am", selectedParkId);
+          onAssign(dateKey, "pm", selectedParkId);
+          return;
+        }
         if (useDayDetailShell && onOpenDayDetail) {
-          e.stopPropagation();
           onOpenDayDetail(dateKey);
         }
       }}
       onKeyDown={(e) => {
         if (readOnly) return;
-        if (
-          useDayDetailShell &&
-          onOpenDayDetail &&
-          (e.key === "Enter" || e.key === " ")
-        ) {
+        if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           e.stopPropagation();
-          onOpenDayDetail(dateKey);
+          if (selectedParkId) {
+            onAssign(dateKey, "am", selectedParkId);
+            onAssign(dateKey, "pm", selectedParkId);
+            return;
+          }
+          if (useDayDetailShell && onOpenDayDetail) {
+            onOpenDayDetail(dateKey);
+          }
         }
       }}
     >
@@ -540,6 +580,8 @@ export function PlannerAmPmCalendarCells(props: Props) {
       onAfterSlotClear={props.onAfterSlotClear}
       useDayDetailShell={props.useDayDetailShell}
       onOpenDayDetail={props.onOpenDayDetail}
+      selectedParkId={props.selectedParkId}
+      onAssign={props.onAssign}
     />
   );
 }

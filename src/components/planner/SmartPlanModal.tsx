@@ -16,6 +16,10 @@ import {
 import type { ParkDaySequenceOutput } from "@/lib/day-sequencer";
 import { planningPaceToSequencerPace } from "@/lib/day-sequencer";
 import type { SequencerPace } from "@/lib/day-sequencer";
+import {
+  regionHasDisneyQueueParks,
+  regionHasUniversalQueueParks,
+} from "@/lib/wizard-queue-step-region";
 import { showToast } from "@/lib/toast";
 import { sortPrioritiesForDay } from "@/lib/ride-plan-display";
 import type { Park, PlanningPace, Trip, TripPlanningPreferences } from "@/lib/types";
@@ -567,6 +571,12 @@ export function SmartPlanModal({
 
   const touringSubmitReady =
     showTouringPlanToggle && dayPlannerSource === "touring";
+  const hasDisneyQueueParks = regionHasDisneyQueueParks(parks, trip.region_id);
+  const hasUniversalQueueParks = regionHasUniversalQueueParks(
+    parks,
+    trip.region_id,
+  );
+  const showSkipLineSection = hasDisneyQueueParks || hasUniversalQueueParks;
 
   const smartUsingWizard = mode === "smart" && !touringSubmitReady;
   const smartOnPreviewStep =
@@ -594,6 +604,7 @@ export function SmartPlanModal({
         Turn off what you don&apos;t use so Smart Plan doesn&apos;t assume paid
         queue-skipping products.
       </p>
+      {hasDisneyQueueParks ? (
       <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-lg border border-tt-line-soft bg-tt-surface/90 p-3">
         <input
           type="checkbox"
@@ -614,6 +625,8 @@ export function SmartPlanModal({
           — rope-drop and general queue advice still applies when unchecked.
         </span>
       </label>
+      ) : null}
+      {hasUniversalQueueParks ? (
       <label className="mt-2 flex cursor-pointer items-start gap-3 rounded-lg border border-tt-line-soft bg-tt-surface/90 p-3">
         <input
           type="checkbox"
@@ -636,6 +649,7 @@ export function SmartPlanModal({
           — off if you don&apos;t hold Express on your tickets.
         </span>
       </label>
+      ) : null}
     </section>
   );
 
@@ -820,7 +834,7 @@ export function SmartPlanModal({
           onSubmit={(e) => void handleSubmit(e)}
           className="mt-4 min-w-0 space-y-4"
         >
-          {!touringSubmitReady && mode === "custom" ? (
+          {!touringSubmitReady && mode === "custom" && showSkipLineSection ? (
             <div className="space-y-3">{skipTheLineSection}</div>
           ) : touringSubmitReady ? (
             <div className="space-y-4 rounded-lg border border-tt-line-soft bg-tt-surface/85 px-4 py-4">
