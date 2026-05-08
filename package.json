@@ -16,6 +16,7 @@
     "import:alignment": "node --env-file=.env.local --import tsx scripts/import/alignment-import.ts",
     "backfill:alignment-safe": "node --env-file=.env.local --import tsx scripts/safe-backfill-park-alignment.ts",
     "verify:orlando-baseline": "node --env-file=.env.local --import tsx scripts/verify-orlando-catalogue-baseline.ts",
+    "verify:florida-baseline": "node --env-file=.env.local --import tsx scripts/verify-florida-catalogue-baseline.ts",
     "verify:profiles-schema": "node scripts/verify-profiles-columns.mjs",
     "verify:smart-plan-cruise": "npx tsx scripts/verify-smart-plan-cruise-filter.ts",
     "test": "npx tsx src/lib/skip-line-clashes.test.ts && npx tsx src/lib/ai-sanitize-notes.test.ts && npx tsx src/lib/ai/region-briefing.test.ts && npx tsx src/lib/region-skip-line-ui.test.ts && npx tsx src/lib/data-import/import-validation.test.ts",

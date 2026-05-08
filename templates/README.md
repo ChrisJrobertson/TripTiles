@@ -79,12 +79,22 @@ node --env-file=.env.local --import tsx scripts/safe-backfill-park-alignment.ts
 node --env-file=.env.local --import tsx scripts/safe-backfill-park-alignment.ts --apply
 ```
 
-Only: (1) copy `regions.country` into empty `parks.country` when the park has exactly one `region_id`, excluding protected regions; (2) insert `region_skip_line_systems` = `none` for regions with no Disney/Universal flags and no existing mapping rows.
+Only: (1) copy `regions.country` into empty `parks.country` when the park has exactly one `region_id`, excluding protected regions; (2) insert `region_skip_line_systems` = `none` for regions with no Disney/Universal flags and no existing mapping rows; (3) set `parks.icon` to the default 🎢 when null or blank (all built-in parks).
 
-## Orlando baseline
+## Florida catalogue checksum (recommended)
+
+Per-region counts + SHA-256 over canonical rows for `orlando`, `florida_combo`, and `miami` across `parks`, `attractions`, `park_areas`, `region_briefings`, and `park_briefings`:
 
 ```bash
-node --env-file=.env.local --import tsx scripts/verify-orlando-catalogue-baseline.ts
+npm run verify:florida-baseline
 ```
 
-Save the JSON output before bulk imports; compare after.
+Save the JSON before bulk imports; re-run after — identical DB state yields identical hashes.
+
+## Orlando baseline (legacy counts only)
+
+```bash
+npm run verify:orlando-baseline
+```
+
+Same as before: built-in parks containing `orlando` plus attraction count.
