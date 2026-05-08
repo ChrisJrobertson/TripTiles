@@ -7,6 +7,7 @@ import {
   getEffectiveDayWindow,
 } from "@/lib/planner/day-times";
 import { buildAmPmPresentation } from "@/lib/planner-am-pm-display";
+import { isThemePark } from "@/lib/park-categories";
 import type { CrowdLevel } from "@/lib/planner-crowd-level-meta";
 import type { Assignment, Park, SlotType, TemperatureUnit, Trip } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
@@ -113,6 +114,15 @@ export function PlannerDayTimelineStub({
   }
 
   const assignment = trip.assignments[dateKey] ?? {};
+  const themeParkIdsForPlan = useMemo(() => {
+    const ass = trip.assignments[dateKey] ?? {};
+    const ids = [
+      getParkIdFromSlotValue(ass.am),
+      getParkIdFromSlotValue(ass.pm),
+    ].filter(Boolean) as string[];
+    const unique = [...new Set(ids)];
+    return unique.filter((id) => isThemePark(parkById.get(id)?.park_group));
+  }, [dateKey, trip.assignments, parkById]);
   const dayIdx = tripDayNumber(trip, dateKey);
   const headingDate = parseDate(`${dateKey}T12:00:00`).toLocaleDateString("en-GB", {
     weekday: "short",
@@ -209,9 +219,11 @@ export function PlannerDayTimelineStub({
 
       <div className="flex flex-col gap-3 border-b border-tt-line-soft bg-tt-bg-soft/50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="flex flex-wrap items-center gap-2">
+          {themeParkIdsForPlan.length > 0 ? (
           <Button type="button" variant="primary" size="sm" onClick={onPlanThisDay}>
             Plan this day ✨
           </Button>
+          ) : null}
           <Button
             type="button"
             variant="secondary"
