@@ -28,18 +28,29 @@ export default function TermsPage() {
         <strong>Last updated:</strong> 20 April 2026
       </p>
       <p className="text-sm text-royal/70">
-        <strong>Registered address:</strong> United Kingdom (sole trader). For
-        the postal address used on formal notices, contact{" "}
-        <a href="mailto:hello@triptiles.app">hello@triptiles.app</a>.
+        <strong>SynqForge Ltd</strong> (trading as <strong>TripTiles</strong>),
+        a company registered in England and Wales (company number{" "}
+        <strong>16808271</strong>). Registered office: 3rd Floor, 86-90 Paul
+        Street, London, EC2A 4NE, United Kingdom. Contact:{" "}
+        <a href="mailto:hello@triptiles.app">hello@triptiles.app</a>. Privacy
+        enquiries:{" "}
+        <a href="mailto:privacy@triptiles.app">privacy@triptiles.app</a>.
       </p>
 
       <section id="about">
         <h2>1. About TripTiles</h2>
         <p>
-          TripTiles is operated by <strong>Chris Robertson</strong> as a sole
-          trader in the United Kingdom. The service is provided at{" "}
-          <a href={site}>{site.replace(/^https?:\/\//, "")}</a>. By using
-          TripTiles you agree to these terms.
+          These terms form a contract between you and{" "}
+          <strong>SynqForge Ltd</strong> (trading as{" "}
+          <strong>TripTiles</strong>). Throughout these terms,{" "}
+          <strong>we</strong>, <strong>us</strong>, and <strong>our</strong>{" "}
+          refer to SynqForge Ltd.
+        </p>
+        <p>
+          <strong>TripTiles</strong> means the trip planning service operated
+          by SynqForge Ltd at{" "}
+          <a href={site}>{site.replace(/^https?:\/\//, "")}</a>. By accessing or
+          using TripTiles you agree to these terms.
         </p>
       </section>
 
@@ -71,7 +82,8 @@ export default function TermsPage() {
           Payments and subscriptions
         </h3>
         <p>
-          TripTiles offers two paid subscription tiers (Pro and Family), billed
+          SynqForge Ltd (trading as TripTiles) offers two paid subscription tiers
+          (Pro and Family), billed
           monthly or annually via Stripe. You can cancel at any time via the
           customer portal in your account settings. On cancellation you retain
           access until the end of your current billing period.
@@ -137,7 +149,7 @@ export default function TermsPage() {
         <h2>5. User content</h2>
         <p>
           You own the trip plans, itineraries, and custom tiles you create. By
-          marking a trip public you grant TripTiles a limited licence to display
+          marking a trip public you grant us a limited licence to display
           it on our services. You retain copyright. We may remove content that
           violates these terms. Public plans may be cloned by design.
         </p>
@@ -146,7 +158,8 @@ export default function TermsPage() {
       <section id="ip">
         <h2>6. Intellectual property</h2>
         <p>
-          The TripTiles name, branding, design, and software are our property.
+          The TripTiles name, branding, and content are owned or licensed by
+          SynqForge Ltd.
           Park information is compiled from public sources. Affiliate links may
           be provided for Booking.com and GetYourGuide (and Amazon where
           applicable).
