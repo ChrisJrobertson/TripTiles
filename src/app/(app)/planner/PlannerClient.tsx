@@ -150,6 +150,7 @@ import type { TripPayment } from "@/types/payments";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { PlannerCrowdAndSkipSection } from "@/components/planner/sections/PlannerCrowdAndSkipSection";
+import { resolvePlannerCrowdStrategyText } from "@/lib/planner/crowd-strategy-display-text";
 import { PlannerGridColumnStackSkeleton } from "@/components/planner/sections/PlannerGridColumnStackSkeleton";
 import { PlannerPlanningTabSkeleton } from "@/components/planner/sections/PlannerPlanningTabSkeleton";
 import { resolvePaletteRegionId } from "@/lib/planner-palette-region";
@@ -1066,10 +1067,13 @@ function PlannerClientInner({
   }, [activeTrip]);
 
   const mobileCrowdSummaryText = useMemo(() => {
-    if (!activeTrip?.preferences) return null;
-    const s = activeTrip.preferences.ai_crowd_summary;
-    return typeof s === "string" && s.trim() ? s.trim() : null;
-  }, [activeTrip?.preferences]);
+    if (!activeTrip) return null;
+    return resolvePlannerCrowdStrategyText(
+      activeTrip,
+      parks,
+      activeTrip.preferences?.ai_crowd_summary,
+    );
+  }, [activeTrip, parks]);
 
   const activeRegionLabel = useMemo(() => {
     const rid = activeTrip?.region_id;
@@ -3344,6 +3348,7 @@ function PlannerClientInner({
           <PlannerCrowdAndSkipSection
             showPlannerShell={showPlannerShell}
             activeTrip={activeTrip}
+            parks={parks}
             crowdSeasonPill={crowdSeasonPill}
           />
 
