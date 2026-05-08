@@ -14,6 +14,7 @@ import {
   getSlotTimeFromValue,
 } from "@/lib/assignment-slots";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { resolvePlannerCrowdStrategyText } from "@/lib/planner/crowd-strategy-display-text";
 import {
   crowdPdfSymbolForTone,
   heuristicCrowdToneFromNoteText,
@@ -599,12 +600,19 @@ export function TripPDF({
   const weekRows = buildPdfWeekRows(trip.start_date, trip.end_date);
   const tripDaySet = new Set(days);
 
-  const crowdSummary =
+  const crowdSummaryResolved =
     includeNotes &&
     typeof trip.preferences?.ai_crowd_summary === "string" &&
     trip.preferences.ai_crowd_summary.trim()
-      ? sanitizeDayNote(trip.preferences.ai_crowd_summary.trim())
+      ? resolvePlannerCrowdStrategyText(
+          trip,
+          parks,
+          trip.preferences.ai_crowd_summary,
+        )
       : null;
+  const crowdSummary = crowdSummaryResolved
+    ? sanitizeDayNote(crowdSummaryResolved.trim())
+    : null;
 
   const displayCurrency =
     trip.budget_currency?.trim() ||

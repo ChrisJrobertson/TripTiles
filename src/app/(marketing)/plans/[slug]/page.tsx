@@ -13,6 +13,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { sanitizeDayNote } from "@/lib/ai-sanitize-notes";
+import { resolvePlannerCrowdStrategyText } from "@/lib/planner/crowd-strategy-display-text";
 import { getCurrentUser } from "@/lib/supabase/server";
 import {
   getPublicAdventureTitle,
@@ -122,12 +123,12 @@ export default async function PublicPlanPage({
   const destLabel =
     region?.short_name?.trim() || region?.name?.trim() || "Trip";
 
-  const crowdRaw =
-    typeof trip.preferences?.ai_crowd_summary === "string" &&
-    trip.preferences.ai_crowd_summary.trim()
-      ? trip.preferences.ai_crowd_summary.trim()
-      : null;
-  const crowd = crowdRaw ? sanitizeDayNote(crowdRaw) : null;
+  const crowdResolved = resolvePlannerCrowdStrategyText(
+    trip,
+    parks,
+    trip.preferences?.ai_crowd_summary,
+  );
+  const crowd = crowdResolved ? sanitizeDayNote(crowdResolved.trim()) : null;
   const publicAdventure = getPublicAdventureTitle(trip);
   const publicFamily = getPublicFamilyLine(trip);
 
@@ -154,7 +155,7 @@ export default async function PublicPlanPage({
           </p>
           {wantsClone && !isAuthed ? (
             <p className="text-royal/70">
-              Sign in when prompted, then you&apos;ll return to finish the clone.
+              Sign in when prompted, then you'll return to finish the clone.
             </p>
           ) : null}
         </div>
