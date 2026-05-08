@@ -5,11 +5,15 @@
  *  1) parks.country ← regions.country when park.country empty and cardinality(region_ids)=1
  *  2) region_skip_line_systems: insert ('none') for regions with has_disney/has_universal false
  *     and no existing mapping rows
+ *  3) parks.icon ← default 🎢 when icon is null or whitespace-only (all built-in parks)
  *
  *   node --env-file=.env.local --import tsx scripts/safe-backfill-park-alignment.ts
  *   node --env-file=.env.local --import tsx scripts/safe-backfill-park-alignment.ts --apply
  */
 import { createClient } from "@supabase/supabase-js";
+
+/** Documented default when catalogue row has no icon (product convention). */
+const DEFAULT_PARK_ICON = "🎢";
 
 const PROTECTED_REGIONS = (process.env.ALIGNMENT_PROTECT_REGION_IDS ?? "orlando,cali")
   .split(",")
@@ -28,13 +32,14 @@ async function main(): Promise<void> {
 
   const summary: Record<string, number> = {
     parks_country_updates: 0,
+    parks_icon_updates: 0,
     region_none_inserts: 0,
     skipped_protected_parks: 0,
   };
 
   const { data: parks, error: pe } = await sb
     .from("parks")
-    .select("id, country, region_ids, is_custom")
+    .select("id, country, region_ids, is_custom, icon")
     .eq("is_custom", false);
   if (pe) {
     console.error(pe.message);
@@ -67,6 +72,23 @@ async function main(): Promise<void> {
     const { error } = await sb.from("parks").update({ country: rc }).eq("id", p.id as string);
     if (!error) summary.parks_country_updates = Number(summary.parks_country_updates) + 1;
     else console.error("update failed", p.id, error.message);
+  }
+
+  for (const p of parks ?? []) {
+    if (p.is_custom) continue;
+    const iconRaw = p.icon as string | null | undefined;
+    const hasIcon = iconRaw != null && String(iconRaw).trim().length > 0;
+    if (hasIcon) continue;
+    if (!apply) {
+      summary.parks_icon_updates = Number(summary.parks_icon_updates) + 1;
+      continue;
+    }
+    const { error } = await sb
+      .from("parks")
+      .update({ icon: DEFAULT_PARK_ICON })
+      .eq("id", p.id as string);
+    if (!error) summary.parks_icon_updates = Number(summary.parks_icon_updates) + 1;
+    else console.error("icon update failed", p.id, error.message);
   }
 
   const { data: regs, error: r2 } = await sb
