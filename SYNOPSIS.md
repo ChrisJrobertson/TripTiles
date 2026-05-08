@@ -27,7 +27,3 @@ This document summarises the shipped set of marketing, settings, Passport, and p
 
 - **`getParksByIds`** in `src/lib/db/parks.ts` for passport stamps.
 - **`src/lib/passport-helpers.ts`** for park ID collection and trip status helpers.
-
-## Reference
-
-- Visual/copy reference remains **`redesign.html`** at repo root (not wired into the Next app).
