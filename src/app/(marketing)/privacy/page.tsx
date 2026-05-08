@@ -25,28 +25,26 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <LegalArticle title="Privacy policy">
-      <p className="rounded-lg border border-gold/40 bg-white/80 p-4 text-sm text-royal/85">
-        <strong className="text-royal">Template notice:</strong> This is a
-        template privacy policy. We are a small, pre-launch product and aim for
-        substantive compliance with UK GDPR principles. If you have specific
-        questions about data handling, email us at{" "}
-        <a href="mailto:privacy@triptiles.app">privacy@triptiles.app</a>.
-      </p>
       <p className="text-sm text-royal/70">
         <strong>Last updated:</strong> 11 April 2026
       </p>
       <p className="text-sm text-royal/70">
-        <strong>Registered address (sole trader):</strong>{" "}
-        United Kingdom. For the postal address used on formal notices, contact{" "}
-        <a href="mailto:hello@triptiles.app">hello@triptiles.app</a>.
+        <strong>SynqForge Ltd</strong> (trading as <strong>TripTiles</strong>),
+        a company registered in England and Wales (company number{" "}
+        <strong>16808271</strong>). Registered office: 3rd Floor, 86-90 Paul
+        Street, London, EC2A 4NE, United Kingdom. Contact:{" "}
+        <a href="mailto:hello@triptiles.app">hello@triptiles.app</a>. Privacy
+        enquiries:{" "}
+        <a href="mailto:privacy@triptiles.app">privacy@triptiles.app</a>.
       </p>
 
       <section id="who-we-are">
         <h2>1. Who we are</h2>
         <p>
-          TripTiles is operated by <strong>Chris Robertson</strong> as a sole
-          trader in the United Kingdom. For data protection purposes, Chris
-          Robertson is the <strong>data controller</strong> under UK GDPR.
+          <strong>SynqForge Ltd</strong> (trading as <strong>TripTiles</strong>)
+          is the <strong>data controller</strong> for personal data processed
+          through the TripTiles service. We are responsible for deciding how and
+          why your data is processed, and for keeping it safe.
         </p>
         <p>
           Contact for privacy matters:{" "}
