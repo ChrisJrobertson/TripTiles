@@ -27,7 +27,8 @@ export const loadAppNavHeaderProps = cache(
         readProfileRow<{
           tier: string;
           stripe_customer_id?: string | null;
-        }>(supabase, user.id, "tier, stripe_customer_id"),
+          display_name?: string | null;
+        }>(supabase, user.id, "tier, stripe_customer_id, display_name"),
         getUserTripCount(user.id),
         getUserTier(user.id),
         maxActiveTripsForUser(user.id),
@@ -38,6 +39,7 @@ export const loadAppNavHeaderProps = cache(
     if (!profileRead.ok) {
       return {
         userEmail: user.email ?? "",
+        displayName: null,
         userTier: null,
         tierLoadError: true,
         tripCount,
@@ -50,6 +52,7 @@ export const loadAppNavHeaderProps = cache(
     }
 
     const profileRow = profileRead.data;
+    const displayName = profileRow.display_name ?? null;
     const profileTier = tierFromProfileRow(profileRow);
     const navTier = (
       productTier === "free" ? "free" : profileTier
@@ -57,6 +60,7 @@ export const loadAppNavHeaderProps = cache(
 
     return {
       userEmail: user.email ?? "",
+      displayName,
       userTier: navTier,
       tripCount,
       freeTripLimit: freeMax,

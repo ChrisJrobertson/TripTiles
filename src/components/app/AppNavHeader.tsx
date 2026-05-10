@@ -15,6 +15,8 @@ import { showToast } from "@/lib/toast";
 
 type NavProps = {
   userEmail: string;
+  /** Profile display name; nav falls back to email when empty or unavailable. */
+  displayName: string | null;
   userTier: UserTier | null;
   /** When true, the profile tier could not be loaded — do not show Free or Upgrade. */
   tierLoadError?: boolean;
@@ -107,8 +109,21 @@ function mobileNavLinkClass(active: boolean) {
     : "block rounded-full px-3 py-2 font-sans text-sm font-medium text-tt-ink-muted hover:bg-[#f3f4f6]";
 }
 
+function navUserLabel(displayName: string | null, email: string): string {
+  const d = displayName?.trim();
+  return d || email;
+}
+
+function navUserTitle(displayName: string | null, email: string): string {
+  const d = displayName?.trim();
+  const e = email.trim();
+  if (d && e) return `${d} (${e})`;
+  return e || d || "";
+}
+
 function AppNavHeaderFallback({
   userEmail,
+  displayName,
   userTier,
   tierLoadError = false,
   tripCount,
@@ -133,6 +148,8 @@ function AppNavHeaderFallback({
     ? `Your plan: ${tripCount}/${cap} trips · ${badge}`
     : badge;
   const planPillText = tierLoadError ? "Plan" : `${badge} plan`;
+  const userLabel = navUserLabel(displayName, userEmail);
+  const userTitle = navUserTitle(displayName, userEmail);
 
   return (
     <header className="relative z-30 border-b border-tt-line/90 bg-white shadow-[0_1px_0_rgba(21,32,58,0.04)]">
@@ -242,11 +259,15 @@ function AppNavHeaderFallback({
           ) : null}
           <span
             className="hidden max-w-[9rem] truncate font-sans text-xs text-tt-ink-muted lg:inline lg:max-w-[12rem] lg:text-sm"
-            title={userEmail}
+            title={userTitle}
           >
-            {userEmail}
+            {userLabel}
           </span>
-          <UserAvatarInitial email={userEmail} className="hidden sm:flex" />
+          <UserAvatarInitial
+            email={userEmail}
+            displayName={displayName}
+            className="hidden sm:flex"
+          />
           <SignOutButton />
         </div>
       </div>
@@ -256,6 +277,7 @@ function AppNavHeaderFallback({
 
 function AppNavHeaderInner({
   userEmail,
+  displayName,
   userTier,
   tierLoadError = false,
   tripCount,
@@ -308,6 +330,9 @@ function AppNavHeaderInner({
     pathname?.startsWith("/achievements/");
   const settingsActive =
     pathname === "/settings" || pathname?.startsWith("/settings/");
+
+  const userLabel = navUserLabel(displayName, userEmail);
+  const userTitle = navUserTitle(displayName, userEmail);
 
   const linkPrimary = (
     key: string,
@@ -461,11 +486,15 @@ function AppNavHeaderInner({
           ) : null}
           <span
             className="hidden max-w-[9rem] truncate font-sans text-xs text-tt-ink-muted lg:inline lg:max-w-[12rem] lg:text-sm"
-            title={userEmail}
+            title={userTitle}
           >
-            {userEmail}
+            {userLabel}
           </span>
-          <UserAvatarInitial email={userEmail} className="hidden sm:flex" />
+          <UserAvatarInitial
+            email={userEmail}
+            displayName={displayName}
+            className="hidden sm:flex"
+          />
           <SignOutButton />
         </div>
       </div>
