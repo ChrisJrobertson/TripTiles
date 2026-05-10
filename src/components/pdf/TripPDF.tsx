@@ -25,6 +25,7 @@ import { getPublicSiteUrl } from "@/lib/site";
 import type {
   Assignments,
   BudgetCategory,
+  ChecklistCategory,
   CustomTile,
   Park,
   SlotAssignmentValue,
@@ -198,7 +199,7 @@ const styles = StyleSheet.create({
   },
   calendarCell: {
     flex: 1,
-    minHeight: 34,
+    minHeight: 30,
     padding: 2,
     borderWidth: 0.5,
     borderColor: "#e0dcd4",
@@ -448,8 +449,15 @@ const styles = StyleSheet.create({
   packingItemLine: {
     fontSize: 10,
     color: COLOURS.royal,
-    marginBottom: 3,
+    marginBottom: 2,
     paddingLeft: 4,
+  },
+  checklistCategoryTitle: {
+    fontSize: 11,
+    fontWeight: "bold",
+    color: COLOURS.gold,
+    marginTop: 10,
+    marginBottom: 4,
   },
 });
 
@@ -491,6 +499,25 @@ const BUDGET_PDF_CAT_ORDER: BudgetCategory[] = [
   "shopping",
   "other",
 ];
+
+/** Same section order as Organise → Todo checklist in the app. */
+const PDF_CHECKLIST_CATEGORY_ORDER: ChecklistCategory[] = [
+  "packing_essentials",
+  "packing_clothing",
+  "packing_kids",
+  "packing_tech",
+  "before_you_go",
+  "at_the_park",
+];
+
+const PDF_CHECKLIST_CATEGORY_LABEL: Record<ChecklistCategory, string> = {
+  packing_essentials: "Essentials",
+  packing_clothing: "Clothing",
+  packing_kids: "Kids",
+  packing_tech: "Tech",
+  before_you_go: "Before you go",
+  at_the_park: "At the park",
+};
 
 const BUDGET_PDF_LABEL: Record<BudgetCategory, string> = {
   flights: "Flights",
@@ -857,6 +884,20 @@ export function TripPDF({
     }) ||
     Boolean(bookingAffiliateLinks && bookingAffiliateLinks.length > 0);
 
+  /** Fewer weeks per PDF page keeps type readable and avoids one endless sheet. */
+  const CALENDAR_WEEKS_PER_PAGE = 2;
+  const calendarWeekChunks: Date[][][] = [];
+  for (let i = 0; i < weekRows.length; i += CALENDAR_WEEKS_PER_PAGE) {
+    calendarWeekChunks.push(weekRows.slice(i, i + CALENDAR_WEEKS_PER_PAGE));
+  }
+  if (calendarWeekChunks.length === 0) {
+    calendarWeekChunks.push([]);
+  }
+
+  const showPdfIntroPage =
+    Boolean(crowdSummary) ||
+    Boolean(includeNotes && sortedTripPayments.length > 0);
+
   return (
     <Document
       title={`${trip.adventure_name} - TripTiles`}
@@ -903,175 +944,211 @@ export function TripPDF({
         ) : null}
       </Page>
 
-      <Page size="A4" style={styles.page} wrap>
-        {crowdSummary ? (
-          <View style={styles.strategyBlock} wrap>
-            <Text style={styles.sectionTitle}>Crowd strategy</Text>
-            <Text style={styles.strategyBody}>{crowdSummary}</Text>
-            <View style={styles.strategyLegendRow} wrap>
-              <Text style={styles.legendLabel}>Legend:</Text>
-              <View style={styles.legendItem}>
-                <Text style={[styles.legendSymbol, { color: "#22c55e" }]}>
-                  ●
-                </Text>
-                <Text style={styles.legendText}>Quiet</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <Text style={[styles.legendSymbol, { color: "#eab308" }]}>
-                  ◐
-                </Text>
-                <Text style={styles.legendText}>Moderate</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <Text style={[styles.legendSymbol, { color: "#ef4444" }]}>
-                  ▲
-                </Text>
-                <Text style={styles.legendText}>Busy crowds</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <Text style={styles.legendText}>💡 Has tips (day notes)</Text>
+      {showPdfIntroPage ? (
+        <Page size="A4" style={styles.page} wrap>
+          {crowdSummary ? (
+            <View style={styles.strategyBlock} wrap>
+              <Text style={styles.sectionTitle}>Crowd strategy</Text>
+              <Text style={styles.strategyBody}>{crowdSummary}</Text>
+              <View style={styles.strategyLegendRow} wrap>
+                <Text style={styles.legendLabel}>Legend:</Text>
+                <View style={styles.legendItem}>
+                  <Text style={[styles.legendSymbol, { color: "#22c55e" }]}>
+                    ●
+                  </Text>
+                  <Text style={styles.legendText}>Quiet</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <Text style={[styles.legendSymbol, { color: "#eab308" }]}>
+                    ◐
+                  </Text>
+                  <Text style={styles.legendText}>Moderate</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <Text style={[styles.legendSymbol, { color: "#ef4444" }]}>
+                    ▲
+                  </Text>
+                  <Text style={styles.legendText}>Busy crowds</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <Text style={styles.legendText}>💡 Has tips (day notes)</Text>
+                </View>
               </View>
             </View>
-          </View>
-        ) : null}
-        {includeNotes && sortedTripPayments.length > 0 ? (
-          <View style={styles.paymentsPdfBlock} wrap>
-            <Text style={styles.sectionTitle}>Payments</Text>
-            {sortedTripPayments.map((p) => (
-              <Text key={p.id} style={styles.paymentPdfLine}>
-                {p.label} —{" "}
-                {formatPdfMoney(p.amount_pence / 100, p.currency)}
-                {p.due_date ? ` · due ${p.due_date}` : ""}
+          ) : null}
+          {includeNotes && sortedTripPayments.length > 0 ? (
+            <View style={styles.paymentsPdfBlock} wrap>
+              <Text style={styles.sectionTitle}>Payments</Text>
+              {sortedTripPayments.map((p) => (
+                <Text key={p.id} style={styles.paymentPdfLine}>
+                  {p.label} —{" "}
+                  {formatPdfMoney(p.amount_pence / 100, p.currency)}
+                  {p.due_date ? ` · due ${p.due_date}` : ""}
+                </Text>
+              ))}
+              <Text style={styles.paymentPdfTotal}>
+                Totals: {paymentPdfTotalsText}
               </Text>
-            ))}
-            <Text style={styles.paymentPdfTotal}>
-              Totals: {paymentPdfTotalsText}
+            </View>
+          ) : null}
+          {watermark ? (
+            <Text style={styles.watermark} fixed>
+              Made with TripTiles · triptiles.app
             </Text>
-          </View>
-        ) : null}
-        <Text style={styles.sectionTitle}>Itinerary calendar</Text>
+          ) : null}
+          <Text style={styles.footer} fixed>
+            Generated with TripTiles · triptiles.app · Your holiday, beautifully
+            planned
+          </Text>
+        </Page>
+      ) : null}
 
-        <View style={styles.calendarDowRow} wrap={false}>
-          {DAYS_OF_WEEK.map((dow) => (
-            <View key={dow} style={styles.calendarDowCell}>
-              <Text style={styles.calendarDowText}>{dow}</Text>
+      {calendarWeekChunks.map((chunk, chunkIdx) => (
+        <Page
+          key={`cal-page-${chunkIdx}-${formatDateKey(chunk[0]?.[0] ?? start)}`}
+          size="A4"
+          style={styles.page}
+          wrap
+        >
+          <Text style={styles.sectionTitle}>
+            {chunkIdx === 0
+              ? "Itinerary calendar"
+              : "Itinerary calendar (continued)"}
+          </Text>
+
+          <View style={styles.calendarDowRow} wrap={false}>
+            {DAYS_OF_WEEK.map((dow) => (
+              <View key={dow} style={styles.calendarDowCell}>
+                <Text style={styles.calendarDowText}>{dow}</Text>
+              </View>
+            ))}
+          </View>
+
+          {chunk.map((week, wi) => (
+            <View
+              key={`cal-${chunkIdx}-w-${wi}-${formatDateKey(week[0]!)}`}
+              style={styles.calendarWeekRow}
+              wrap={false}
+            >
+              {week.map((d) => {
+                const cellKey = formatDateKey(d);
+                const inTrip = tripDaySet.has(cellKey);
+                const dayAssign = assignments[cellKey] ?? {};
+                const crowdNote =
+                  inTrip && includeNotes
+                    ? dayCrowdNoteText(trip, cellKey)
+                    : null;
+                const crowdTone = crowdNote
+                  ? heuristicCrowdToneFromNoteText(crowdNote)
+                  : null;
+                const crowdSym = crowdTone
+                  ? crowdPdfSymbolForTone(crowdTone)
+                  : null;
+
+                return (
+                  <View
+                    key={cellKey}
+                    style={[
+                      styles.calendarCell,
+                      !inTrip ? styles.calendarCellOut : {},
+                    ]}
+                  >
+                    {inTrip ? (
+                      <>
+                        <View style={styles.calendarCellDayRow}>
+                          <Text style={styles.calendarCellDay}>
+                            {d.getDate()} {MONTHS_SHORT[d.getMonth()]}
+                          </Text>
+                          {crowdSym ? (
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: "bold",
+                                color: crowdSym.color,
+                              }}
+                            >
+                              {crowdSym.symbol}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <View style={styles.calendarSlotStack}>
+                          {SLOT_ORDER.map((slot) => {
+                            const raw = dayAssign[slot];
+                            const id = getParkIdFromSlotValue(raw);
+                            const borderCol = SLOT_BORDER_PDF[slot];
+                            const isMeal =
+                              slot === "lunch" || slot === "dinner";
+                            const mealPrefix = isMeal ? "🍽️ " : "";
+                            const item = id ? itemsById.get(id) : undefined;
+                            const bg = id
+                              ? (colourById.get(id) ?? COLOURS.royal)
+                              : undefined;
+                            const fg = id
+                              ? (fgById.get(id) ?? "#ffffff")
+                              : COLOURS.muted;
+                            const baseLine = item
+                              ? `${mealPrefix}${item.icon ? `${item.icon} ` : ""}${item.name}`
+                              : id
+                                ? "—"
+                                : "";
+                            const mealSuffix =
+                              slot === "lunch"
+                                ? " (lunch)"
+                                : slot === "dinner"
+                                  ? " (dinner)"
+                                  : "";
+                            const line =
+                              item && slotLineUsesCustomTime(raw)
+                                ? `${formatTwelveHour(getSlotTimeFromValue(slot, raw))} — ${baseLine}${isMeal ? mealSuffix : ""}`
+                                : baseLine || (id ? "—" : "");
+                            return (
+                              <View
+                                key={slot}
+                                style={[
+                                  styles.calendarSlotRow,
+                                  {
+                                    borderLeftColor: borderCol,
+                                    backgroundColor: bg ?? "transparent",
+                                  },
+                                ]}
+                              >
+                                {id ? (
+                                  <Text
+                                    style={[
+                                      styles.calendarSlotText,
+                                      { color: fg },
+                                    ]}
+                                  >
+                                    {line}
+                                  </Text>
+                                ) : (
+                                  <Text style={styles.calendarSlotText}>
+                                    {" "}
+                                  </Text>
+                                )}
+                              </View>
+                            );
+                          })}
+                        </View>
+                      </>
+                    ) : null}
+                  </View>
+                );
+              })}
             </View>
           ))}
-        </View>
 
-        {weekRows.map((week, wi) => (
-          <View key={wi} style={styles.calendarWeekRow} wrap={false}>
-            {week.map((d) => {
-              const cellKey = formatDateKey(d);
-              const inTrip = tripDaySet.has(cellKey);
-              const dayAssign = assignments[cellKey] ?? {};
-              const crowdNote =
-                inTrip && includeNotes ? dayCrowdNoteText(trip, cellKey) : null;
-              const crowdTone = crowdNote
-                ? heuristicCrowdToneFromNoteText(crowdNote)
-                : null;
-              const crowdSym = crowdTone
-                ? crowdPdfSymbolForTone(crowdTone)
-                : null;
-
-              return (
-                <View
-                  key={cellKey}
-                  style={[
-                    styles.calendarCell,
-                    !inTrip ? styles.calendarCellOut : {},
-                  ]}
-                >
-                  {inTrip ? (
-                    <>
-                      <View style={styles.calendarCellDayRow}>
-                        <Text style={styles.calendarCellDay}>
-                          {d.getDate()} {MONTHS_SHORT[d.getMonth()]}
-                        </Text>
-                        {crowdSym ? (
-                          <Text
-                            style={{
-                              fontSize: 10,
-                              fontWeight: "bold",
-                              color: crowdSym.color,
-                            }}
-                          >
-                            {crowdSym.symbol}
-                          </Text>
-                        ) : null}
-                      </View>
-                      <View style={styles.calendarSlotStack}>
-                        {SLOT_ORDER.map((slot) => {
-                          const raw = dayAssign[slot];
-                          const id = getParkIdFromSlotValue(raw);
-                          const borderCol = SLOT_BORDER_PDF[slot];
-                          const isMeal =
-                            slot === "lunch" || slot === "dinner";
-                          const mealPrefix = isMeal ? "🍽️ " : "";
-                          const item = id ? itemsById.get(id) : undefined;
-                          const bg = id
-                            ? (colourById.get(id) ?? COLOURS.royal)
-                            : undefined;
-                          const fg = id
-                            ? (fgById.get(id) ?? "#ffffff")
-                            : COLOURS.muted;
-                          const baseLine = item
-                            ? `${mealPrefix}${item.icon ? `${item.icon} ` : ""}${item.name}`
-                            : id
-                              ? "—"
-                              : "";
-                          const mealSuffix =
-                            slot === "lunch"
-                              ? " (lunch)"
-                              : slot === "dinner"
-                                ? " (dinner)"
-                                : "";
-                          const line =
-                            item && slotLineUsesCustomTime(raw)
-                              ? `${formatTwelveHour(getSlotTimeFromValue(slot, raw))} — ${baseLine}${isMeal ? mealSuffix : ""}`
-                              : baseLine || (id ? "—" : "");
-                          return (
-                            <View
-                              key={slot}
-                              style={[
-                                styles.calendarSlotRow,
-                                {
-                                  borderLeftColor: borderCol,
-                                  backgroundColor: bg ?? "transparent",
-                                },
-                              ]}
-                            >
-                              {id ? (
-                                <Text
-                                  style={[styles.calendarSlotText, { color: fg }]}
-                                >
-                                  {line}
-                                </Text>
-                              ) : (
-                                <Text style={styles.calendarSlotText}> </Text>
-                              )}
-                            </View>
-                          );
-                        })}
-                      </View>
-                    </>
-                  ) : null}
-                </View>
-              );
-            })}
-          </View>
-        ))}
-
-        {watermark ? (
-          <Text style={styles.watermark} fixed>
-            Made with TripTiles · triptiles.app
+          {watermark ? (
+            <Text style={styles.watermark} fixed>
+              Made with TripTiles · triptiles.app
+            </Text>
+          ) : null}
+          <Text style={styles.footer} fixed>
+            Generated with TripTiles · triptiles.app · Your holiday, beautifully
+            planned
           </Text>
-        ) : null}
-        <Text style={styles.footer} fixed>
-          Generated with TripTiles · triptiles.app · Your holiday, beautifully
-          planned
-        </Text>
-      </Page>
+        </Page>
+      ))}
 
       {budgetItems.length > 0 ? (
         <Page size="A4" style={styles.page} wrap>
@@ -1094,7 +1171,7 @@ export function TripPDF({
             if (rows.length === 0) return null;
             const sub = rows.reduce((s, r) => s + r.amount, 0);
             return (
-              <View key={cat} wrap={false}>
+              <View key={cat} wrap>
                 <Text style={styles.budgetCatTitle}>
                   {BUDGET_PDF_LABEL[cat]} —{" "}
                   {formatPdfMoney(sub, displayCurrency)}
@@ -1127,15 +1204,27 @@ export function TripPDF({
 
       {checklistItems.length > 0 ? (
         <Page size="A4" style={styles.page} wrap>
-          <Text style={styles.sectionTitle}>Packing checklist</Text>
+          <Text style={styles.sectionTitle}>Todo list</Text>
           <Text style={styles.packingIntro}>
-            Print this page and tick off items as you pack.
+            Grouped like Organise — print and tick off as you go.
           </Text>
-          {checklistItems.map((row) => (
-            <Text key={row.id} style={styles.packingItemLine}>
-              ☐ {row.label}
-            </Text>
-          ))}
+          {PDF_CHECKLIST_CATEGORY_ORDER.map((cat) => {
+            const rows = checklistItems.filter((it) => it.category === cat);
+            if (rows.length === 0) return null;
+            return (
+              <View key={cat} wrap>
+                <Text style={styles.checklistCategoryTitle}>
+                  {PDF_CHECKLIST_CATEGORY_LABEL[cat]}
+                </Text>
+                {rows.map((row) => (
+                  <Text key={row.id} style={styles.packingItemLine}>
+                    {row.is_checked ? "☑ " : "☐ "}
+                    {row.label}
+                  </Text>
+                ))}
+              </View>
+            );
+          })}
           {watermark ? (
             <Text style={styles.watermark} fixed>
               Made with TripTiles · triptiles.app
@@ -1167,7 +1256,7 @@ export function TripPDF({
             );
             if (!noteText && !userNote && !weatherLine) return null;
             return (
-              <View key={`note-${dayKey}`} wrap={false}>
+              <View key={`note-${dayKey}`} wrap>
                 <Text style={styles.dayHeader}>
                   Day {i + 1} · {label}
                 </Text>
@@ -1191,7 +1280,7 @@ export function TripPDF({
             );
           })}
           {bookingAffiliateLinks && bookingAffiliateLinks.length > 0 ? (
-            <View wrap={false} style={styles.bookingSection}>
+            <View wrap style={styles.bookingSection}>
               <Text style={styles.bookingTitle}>Book your trip</Text>
               {bookingAffiliateLinks.map((link, idx) => (
                 <Link key={idx} src={link.url} style={styles.bookingLink}>
