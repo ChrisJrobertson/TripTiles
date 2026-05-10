@@ -542,6 +542,8 @@ export type TripPreferences = {
   key_dates?: KeyDate[];
 };
 
+export type RegionDataQualityTier = "deep" | "standard" | "light";
+
 export interface Region {
   id: string;
   name: string;
@@ -554,6 +556,9 @@ export interface Region {
   is_active: boolean;
   is_featured: boolean;
   sort_order: number;
+  has_disney: boolean;
+  has_universal: boolean;
+  data_quality_tier: RegionDataQualityTier;
 }
 
 export interface Park {

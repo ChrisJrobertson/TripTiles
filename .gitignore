@@ -24,6 +24,10 @@
 .DS_Store
 *.pem
 
+# Catalogue exports — keep canonical snapshot under docs/catalogue/
+triptiles-catalogue-*.xlsx
+!docs/catalogue/triptiles-catalogue-*.xlsx
+
 # debug
 npm-debug.log*
 yarn-debug.log*

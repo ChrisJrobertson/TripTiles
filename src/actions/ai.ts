@@ -109,6 +109,7 @@ import { isThemePark } from "@/lib/park-categories";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { normaliseMustDoItems, readMustDosMap } from "@/lib/must-dos";
 import type { ParkMustDo, TripMustDosMap } from "@/types/must-dos";
+import { buildAiRegionBriefingBlock } from "@/lib/ai/region-briefing";
 import { buildAiParkIdResolver, type AiParkIdResolver } from "@/lib/ai-park-id-coerce";
 import {
   collectUserBrief,
@@ -1203,18 +1204,21 @@ export async function tweakDay(input: {
     customTileRows,
     trip.has_cruise,
   );
-  const userPrompt = `Trip: ${trip.family_name}, ${region.name}, ${trip.start_date}-${trip.end_date}, ${trip.adults} adults / ${trip.children} children aged ${(trip.child_ages ?? []).join(", ") || "none"}
+  const userPrompt = [
+    buildAiRegionBriefingBlock(region, parksForPrompt),
+    `Trip: ${trip.family_name}, ${region.name}, ${trip.start_date}-${trip.end_date}, ${trip.adults} adults / ${trip.children} children aged ${(trip.child_ages ?? []).join(", ") || "none"}
 Day to tweak: ${dateKey} (Day ${dayNumber} of ${sortedDates.length})
 Current day state: ${JSON.stringify(currentDay)}
 Current day labels: ${SLOT_TYPES.map((slot) => {
-    const id = getParkIdFromSlotValue(currentDay[slot]);
-    return `${slot}: ${id ? (parkNameById.get(id) ?? id) : "empty"}`;
-  }).join(", ")}
+      const id = getParkIdFromSlotValue(currentDay[slot]);
+      return `${slot}: ${id ? (parkNameById.get(id) ?? id) : "empty"}`;
+    }).join(", ")}
 Other days assigned (DO NOT MODIFY):
 ${otherDays || "None"}
 User trip preferences:
 ${tripPrefs || "No saved Smart Plan preferences."}
-${input.mode === "freetext" ? `\nUSER REQUEST: ${input.freetext?.trim()}` : ""}`;
+${input.mode === "freetext" ? `\nUSER REQUEST: ${input.freetext?.trim()}` : ""}`,
+  ].join("\n\n");
 
   const supabase = await createClient();
   const { data: profile } = await supabase
@@ -2064,34 +2068,37 @@ export async function runGenerateAIPlan(
         )
       : null;
 
-  const composedUserMessage = buildPlannerUserMessage({
-    mode: input.mode,
-    userPrompt: input.userPrompt,
-    userBrief,
-    fullTripAssignmentsBlock,
-    mandatoryAnchorsBlock,
-    userPrioritiesBlockOverwrite,
-    dateKey: normalizedDateKey ?? undefined,
-    regionName: `${region.name} (${region.country})`,
-    trip,
-    cruiseInstruction,
-    childAges,
-    crowdJson,
-    wizardContext,
-    diningHint,
-    namedRestaurantHint,
-    tripPlanningContextSummary,
-    existingDayPlanLines: formatDaySlotLinesWithTimesForPrompt(
+  const composedUserMessage = [
+    buildAiRegionBriefingBlock(region, parksForPrompt),
+    buildPlannerUserMessage({
+      mode: input.mode,
+      userPrompt: input.userPrompt,
+      userBrief,
+      fullTripAssignmentsBlock,
+      mandatoryAnchorsBlock,
+      userPrioritiesBlockOverwrite,
+      dateKey: normalizedDateKey ?? undefined,
+      regionName: `${region.name} (${region.country})`,
       trip,
-      normalizedDateKey,
-      parksById,
-    ),
-    dayRidePicksLines,
-    preserveExistingSlots: input.preserveExistingSlots !== false,
-    structuralMealPolicyBlock: structuralMealPolicyUserBlock,
-    tripCalendarAuthorityBlock: tripCalendarAuthorityPrompt,
-    dayConstraintsBlock: dayConstraintsForFullTrip,
-  });
+      cruiseInstruction,
+      childAges,
+      crowdJson,
+      wizardContext,
+      diningHint,
+      namedRestaurantHint,
+      tripPlanningContextSummary,
+      existingDayPlanLines: formatDaySlotLinesWithTimesForPrompt(
+        trip,
+        normalizedDateKey,
+        parksById,
+      ),
+      dayRidePicksLines,
+      preserveExistingSlots: input.preserveExistingSlots !== false,
+      structuralMealPolicyBlock: structuralMealPolicyUserBlock,
+      tripCalendarAuthorityBlock: tripCalendarAuthorityPrompt,
+      dayConstraintsBlock: dayConstraintsForFullTrip,
+    }),
+  ].join("\n\n");
   // Diagnostic preview so we can verify in Vercel runtime logs that the
   // OVERWRITE branch is producing a different prompt structure than the
   // PRESERVE branch. Bounded to 300 chars to avoid log spam.
@@ -2956,12 +2963,15 @@ export async function generateMustDosForPark(input: {
         )
       : null;
 
-  const userBlock = `Park: ${park.name} (${region.country}).
+  const userBlock = [
+    buildAiRegionBriefingBlock(region, parksForPrompt),
+    `Park: ${park.name} (${region.country}).
 Resort/region: ${region.name}.
 Calendar date: ${dateKey} (${weekday}, ${month}).
 Family: ${trip.adults} adults, ${trip.children} children (${childAges}).
 ${wizardContext ? `Planning notes:\n${wizardContext}\n` : ""}
-Produce 4–6 specific named attractions in rough chronological order for a full day at this park. Return JSON only.`;
+Produce 4–6 specific named attractions in rough chronological order for a full day at this park. Return JSON only.`,
+  ].join("\n\n");
 
   const supabase = await createClient();
   const { data: profile } = await supabase
@@ -3538,20 +3548,23 @@ END USER CONSTRAINTS`
     dateKey,
     parkByIdForDay,
   );
-  const userBlock = buildDayTimelineUserMessage({
-    userConstraintsBlock,
-    trip,
-    dateKey,
-    amName,
-    lunchName,
-    pmName,
-    dinnerName,
-    crowdLevel,
-    tempC,
-    weatherSummary,
-    skipLineOn,
-    dayConstraintBlock,
-  });
+  const userBlock = [
+    buildAiRegionBriefingBlock(region, parksForPrompt),
+    buildDayTimelineUserMessage({
+      userConstraintsBlock,
+      trip,
+      dateKey,
+      amName,
+      lunchName,
+      pmName,
+      dinnerName,
+      crowdLevel,
+      tempC,
+      weatherSummary,
+      skipLineOn,
+      dayConstraintBlock,
+    }),
+  ].join("\n\n");
 
   const parksSystemText = buildParksListSystemText(
     `${region.name} (${region.country})`,
@@ -4871,7 +4884,13 @@ export async function generateDayStrategy(input: {
   ].join("\n");
 
   const brief = collectUserBrief(trip, {});
-  const userBlock = brief ? `${userMsg}\n\nUSER CONSTRAINTS:\n${brief}` : userMsg;
+  const userBlock = brief
+    ? [
+        buildAiRegionBriefingBlock(region, parksForPrompt),
+        userMsg,
+        `USER CONSTRAINTS:\n${brief}`,
+      ].join("\n\n")
+    : [buildAiRegionBriefingBlock(region, parksForPrompt), userMsg].join("\n\n");
 
   const model = SMART_PLAN_MODEL;
   const promptKey = `day_strategy:${dateKey}:${primaryParkId}`;

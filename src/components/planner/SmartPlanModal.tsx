@@ -17,12 +17,18 @@ import type { ParkDaySequenceOutput } from "@/lib/day-sequencer";
 import { planningPaceToSequencerPace } from "@/lib/day-sequencer";
 import type { SequencerPace } from "@/lib/day-sequencer";
 import {
-  regionHasDisneyQueueParks,
-  regionHasUniversalQueueParks,
-} from "@/lib/wizard-queue-step-region";
+  regionHasDisneySkipProducts,
+  regionHasUniversalSkipProducts,
+} from "@/lib/region-skip-line-ui";
 import { showToast } from "@/lib/toast";
 import { sortPrioritiesForDay } from "@/lib/ride-plan-display";
-import type { Park, PlanningPace, Trip, TripPlanningPreferences } from "@/lib/types";
+import type {
+  Park,
+  PlanningPace,
+  Region,
+  Trip,
+  TripPlanningPreferences,
+} from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
 import { LogoSpinner } from "@/components/ui/LogoSpinner";
 import { ModalShell } from "@/components/ui/ModalShell";
@@ -103,6 +109,8 @@ type Props = {
   trip: Trip | null;
   /** Built-in parks for the trip region (for must-do chips). */
   parks: Park[];
+  /** Loaded region row (drives skip-line UI when `has_disney` / `has_universal` are set). */
+  region?: Region | null;
   /** Region label e.g. short_name for copy. */
   regionLabel: string;
   generationsUsedThisTrip: number;
@@ -129,6 +137,7 @@ export function SmartPlanModal({
   onClose,
   trip,
   parks,
+  region = null,
   regionLabel,
   generationsUsedThisTrip,
   freeTierCap = DEFAULT_FREE_CAP,
@@ -571,8 +580,13 @@ export function SmartPlanModal({
 
   const touringSubmitReady =
     showTouringPlanToggle && dayPlannerSource === "touring";
-  const hasDisneyQueueParks = regionHasDisneyQueueParks(parks, trip.region_id);
-  const hasUniversalQueueParks = regionHasUniversalQueueParks(
+  const hasDisneyQueueParks = regionHasDisneySkipProducts(
+    region,
+    parks,
+    trip.region_id,
+  );
+  const hasUniversalQueueParks = regionHasUniversalSkipProducts(
+    region,
     parks,
     trip.region_id,
   );

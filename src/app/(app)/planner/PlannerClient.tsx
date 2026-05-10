@@ -1082,6 +1082,12 @@ function PlannerClientInner({
     return r?.short_name?.trim() || r?.name?.trim() || "Orlando";
   }, [activeTrip?.region_id, regions]);
 
+  const activeRegion = useMemo(() => {
+    const rid = activeTrip?.region_id;
+    if (!rid) return null;
+    return regions.find((x) => x.id === rid) ?? null;
+  }, [activeTrip?.region_id, regions]);
+
   const customTilesForPalette = useMemo(() => {
     const rid = resolvePaletteRegionId(activeTrip);
     if (!rid) return [];
@@ -3649,6 +3655,7 @@ function PlannerClientInner({
         }}
         trip={activeTrip}
         parks={smartPlanParks}
+        region={activeRegion}
         regionLabel={regionLabel}
         generationsUsedThisTrip={aiGenByTrip[activeTripId] ?? 0}
         showFreeTierNote={isFreeTierForTripLimit(productTier)}
