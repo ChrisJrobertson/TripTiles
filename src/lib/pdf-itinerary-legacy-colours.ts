@@ -2,7 +2,7 @@
  * Frozen saturated palette for PDF itinerary strips and read-only calendar preview.
  * Planner logged-in calendar uses soft pastels from `parks.bg_colour` / `fg_colour` (DB).
  *
- * Source: park seeds prior to `20260511120000_planner_calendar_pastel_park_colours.sql`
+ * Source: park seeds prior to `20260513120001_planner_calendar_pastel_park_colours.sql`
  * (TripTiles catalogue, May 2026).
  */
 
