@@ -111,7 +111,7 @@ export async function generateDaySequenceAction(input: {
   entitlements: {
     has_lightning_lane_multi_pass: boolean;
     has_lightning_lane_single_pass: boolean;
-    has_universal_express: boolean;
+    has_express_pass: boolean;
     has_early_entry: boolean;
   };
   pace?: SequencerPace;

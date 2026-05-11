@@ -94,6 +94,8 @@ function SplitHalfSlot({
   derivedOverride?: DerivedSlot | null;
   derivedTooltip?: string;
 }) {
+  const park = display.state === "park" ? display.park : undefined;
+
   if (derivedOverride) {
     const canOpen =
       !readOnly &&
@@ -101,15 +103,29 @@ function SplitHalfSlot({
       Boolean(onOpenDayDetail) &&
       !selectedParkId;
     const aria = `${halfPrefix} planned: ${derivedOverride.label}`;
+    const useParkChromaShell = Boolean(park);
+    const parkChromaShellStyle: CSSProperties | undefined =
+      park != null
+        ? parkChromaTileStyle(park.bg_colour, park.fg_colour, themeKey)
+        : undefined;
     return (
       <div
-        className={`group planner-slot relative flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-tt-gold/35 bg-tt-gold-soft/25 ${areaClass} transition hover:brightness-[1.04] ${
-          canOpen || !readOnly
-            ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-gold/50 focus-visible:ring-inset"
-            : readOnly
-              ? ""
-              : "cursor-pointer hover:brightness-[1.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--tt-ring)]/50 focus-visible:ring-inset"
-        }`}
+        className={
+          useParkChromaShell
+            ? `group planner-slot relative flex min-h-0 flex-1 flex-col overflow-hidden rounded ${areaClass} transition hover:brightness-[1.06] ${
+                canOpen || !readOnly
+                  ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--tt-ring)]/50 focus-visible:ring-inset"
+                  : ""
+              }`
+            : `group planner-slot relative flex min-h-0 flex-1 flex-col overflow-hidden rounded border border-tt-gold/35 bg-tt-gold-soft/25 ${areaClass} transition hover:brightness-[1.04] ${
+                canOpen || !readOnly
+                  ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-gold/50 focus-visible:ring-inset"
+                  : readOnly
+                    ? ""
+                    : "cursor-pointer hover:brightness-[1.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--tt-ring)]/50 focus-visible:ring-inset"
+              }`
+        }
+        style={parkChromaShellStyle}
         data-day-interactive
         role={canOpen || !readOnly ? "button" : undefined}
         tabIndex={canOpen || !readOnly ? 0 : undefined}
@@ -172,7 +188,11 @@ function SplitHalfSlot({
               ×
             </button>
           ) : null}
-          <span className="line-clamp-3 min-w-0 flex-1 font-sans text-[0.6rem] font-medium leading-snug sm:text-[0.62rem] md:leading-tight text-tt-royal">
+          <span
+            className={`line-clamp-3 min-w-0 flex-1 font-sans text-[0.6rem] font-medium leading-snug sm:text-[0.62rem] md:leading-tight${
+              useParkChromaShell ? "" : " text-tt-royal"
+            }`}
+          >
             <span className="font-semibold opacity-80">{halfPrefix}</span> ✨{" "}
             {derivedOverride.label}
             {derivedOverride.sublabel ? (
@@ -186,7 +206,6 @@ function SplitHalfSlot({
     );
   }
 
-  const park = display.state === "park" ? display.park : undefined;
   const slotAria = park
     ? `${halfPrefix} ${park.name}`
     : `${halfPrefix} Free`;

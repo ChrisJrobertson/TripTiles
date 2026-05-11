@@ -6,14 +6,18 @@ export type AttractionCategory =
 
 export type ThrillLevel = "gentle" | "moderate" | "thrilling" | "intense";
 
-export type SkipLineSystem = "disney_lightning_lane" | "universal_express";
+export type SkipLineSystem =
+  | "lightning_lane"
+  | "premier_access"
+  | "express"
+  | "none";
 
 export type SkipLineTier =
   | "single_pass"
   | "multi_pass_tier1"
   | "multi_pass_tier2"
-  | "express"
-  | "express_now";
+  | "multi_pass"
+  | "express";
 
 export type RidePriority = "must_do" | "if_time";
 

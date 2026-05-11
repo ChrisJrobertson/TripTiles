@@ -7,7 +7,7 @@ function tierRank(t: SkipLineTier | null | undefined): number {
     multi_pass_tier1: 1,
     single_pass: 2,
     express: 2,
-    express_now: 2,
+    multi_pass: 2,
     multi_pass_tier2: 3,
   };
   return order[t] ?? 50;
@@ -64,7 +64,7 @@ export function buildBookFirstSkipNudges(
       const tierHint =
         tier === "multi_pass_tier1"
           ? "tier-1 Multi Pass / headliner"
-          : tier === "single_pass" || tier === "express" || tier === "express_now"
+          : tier === "single_pass" || tier === "express" || tier === "multi_pass"
             ? "high-demand queue"
             : "skip line";
       lines.push(

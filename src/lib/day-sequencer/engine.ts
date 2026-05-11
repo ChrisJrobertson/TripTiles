@@ -86,7 +86,7 @@ function timeBucketForMinuteResolved(
 }
 
 function disneyLlEligible(a: Attraction): boolean {
-  return a.skip_line_system === "disney_lightning_lane";
+  return a.skip_line_system === "lightning_lane";
 }
 
 function effectiveWaitMinutes(args: {
@@ -110,7 +110,7 @@ function effectiveWaitMinutes(args: {
     a.skip_line_tier === "single_pass";
   if (single) return 10;
 
-  if (e.has_universal_express && a.skip_line_system === "universal_express") {
+  if (e.has_express_pass && a.skip_line_system === "express") {
     return 15;
   }
 

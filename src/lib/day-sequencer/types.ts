@@ -24,7 +24,8 @@ export interface DayAnchor {
 export interface DayEntitlements {
   has_lightning_lane_multi_pass: boolean;
   has_lightning_lane_single_pass: boolean;
-  has_universal_express: boolean;
+  /** Universal Express Pass (and regional equivalents) — canonical DB id `express`. */
+  has_express_pass: boolean;
   has_early_entry: boolean;
 }
 

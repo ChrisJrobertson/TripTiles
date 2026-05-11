@@ -27,7 +27,7 @@ export function skipLineBadgeLabel(tier: SkipLineTier | null): string {
   if (tier === "single_pass") return "SP";
   if (tier === "multi_pass_tier1") return "T1";
   if (tier === "multi_pass_tier2") return "T2";
-  if (tier === "express_now") return "NOW";
+  if (tier === "multi_pass") return "MP";
   return "EXP";
 }
 
@@ -42,7 +42,9 @@ export function skipLineBadgeStyle(tier: SkipLineTier | null): {
     return { backgroundColor: "#2455ac", color: "#fff" };
   if (tier === "multi_pass_tier2")
     return { backgroundColor: "#3fa2ec", color: "#fff" };
-  if (tier === "express" || tier === "express_now")
+  if (tier === "multi_pass")
+    return { backgroundColor: "#6b5cff", color: "#fff" };
+  if (tier === "express")
     return { backgroundColor: "#a2df56", color: "#fff" };
   return { backgroundColor: "#2455ac", color: "#fff" };
 }

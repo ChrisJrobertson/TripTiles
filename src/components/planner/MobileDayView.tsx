@@ -394,16 +394,30 @@ function MobileAmPmHalfRow({
   /** Opens ✨ Plan this day / day detail when tapping a timeline-derived summary. */
   onOpenDerivedPlan?: (dateKey: string) => void;
 }) {
+  const park = display.state === "park" ? display.park : undefined;
+
   if (derivedOverride) {
     const aria = `${halfPrefix} planned: ${derivedOverride.label}`;
     const canOpen = Boolean(
       !readOnly && onOpenDerivedPlan && !paletteSelectedParkId,
     );
+    const derivedParkChroma =
+      park != null
+        ? parkChromaTileStyle(park.bg_colour, park.fg_colour, colourTheme)
+        : undefined;
+    const derivedShellIsPark = Boolean(park);
     return (
       <div
-        className={`flex min-h-[52px] items-center gap-3 border border-gold/35 bg-amber-50/40 px-4 py-2 transition hover:brightness-[1.03] ${
-          canOpen || !readOnly ? "cursor-pointer" : ""
-        }`}
+        className={
+          derivedShellIsPark
+            ? `flex min-h-[52px] items-center gap-3 px-4 py-2 transition hover:brightness-[1.03] ${
+                canOpen || !readOnly ? "cursor-pointer" : ""
+              }`
+            : `flex min-h-[52px] items-center gap-3 border border-gold/35 bg-amber-50/40 px-4 py-2 transition hover:brightness-[1.03] ${
+                canOpen || !readOnly ? "cursor-pointer" : ""
+              }`
+        }
+        style={derivedParkChroma}
         role={canOpen || !readOnly ? "button" : undefined}
         tabIndex={canOpen || !readOnly ? 0 : undefined}
         aria-label={aria}
@@ -441,11 +455,20 @@ function MobileAmPmHalfRow({
         }}
       >
         <div className="min-w-0 flex-1">
-          <div className="truncate font-sans text-base font-medium leading-snug text-royal">
+          <div
+            className={`truncate font-sans text-base font-medium leading-snug${
+              derivedShellIsPark ? "" : " text-royal"
+            }`}
+            style={derivedShellIsPark ? { color: "inherit" } : undefined}
+          >
             <span className="text-[11px] font-bold opacity-80">{halfPrefix}</span>{" "}
             <span aria-hidden>✨</span> {derivedOverride.label}
             {derivedOverride.sublabel ? (
-              <span className="mt-0.5 block truncate text-xs font-normal text-royal/75">
+              <span
+                className={`mt-0.5 block truncate text-xs font-normal${
+                  derivedShellIsPark ? "" : " text-royal/75"
+                }`}
+              >
                 {derivedOverride.sublabel}
               </span>
             ) : null}
@@ -459,6 +482,7 @@ function MobileAmPmHalfRow({
               onClear(dateKey, slot);
             }}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl opacity-50 transition hover:opacity-80 active:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+            style={derivedShellIsPark ? { color: "inherit" } : undefined}
             aria-label={`Clear ${halfPrefix}`}
           >
             ×
@@ -468,7 +492,6 @@ function MobileAmPmHalfRow({
     );
   }
 
-  const park = display.state === "park" ? display.park : undefined;
   const shellStyle = park
     ? parkChromaTileStyle(park.bg_colour, park.fg_colour, colourTheme)
     : themedEmptySlotSurfaceStyle();
@@ -758,11 +781,23 @@ function MobileSlotCard({
     const canOpen = Boolean(
       !readOnly && onOpenDerivedPlan && !paletteSelectedParkId,
     );
+    const derivedMealParkChroma =
+      park != null
+        ? parkChromaTileStyle(park.bg_colour, park.fg_colour, colourTheme)
+        : undefined;
+    const derivedMealShellIsPark = Boolean(park);
     return (
       <div
-        className={`flex min-h-[64px] items-center gap-3 rounded-lg border border-gold/35 bg-amber-50/40 px-4 py-3 shadow-sm transition hover:brightness-[1.03] ${
-          canOpen || !readOnly ? "cursor-pointer" : ""
-        }`}
+        className={
+          derivedMealShellIsPark
+            ? `flex min-h-[64px] items-center gap-3 rounded-lg px-4 py-3 shadow-sm transition hover:brightness-[1.03] ${
+                canOpen || !readOnly ? "cursor-pointer" : ""
+              }`
+            : `flex min-h-[64px] items-center gap-3 rounded-lg border border-gold/35 bg-amber-50/40 px-4 py-3 shadow-sm transition hover:brightness-[1.03] ${
+                canOpen || !readOnly ? "cursor-pointer" : ""
+              }`
+        }
+        style={derivedMealParkChroma}
         role={canOpen || !readOnly ? "button" : undefined}
         tabIndex={canOpen || !readOnly ? 0 : undefined}
         aria-label={aria}
@@ -800,14 +835,28 @@ function MobileSlotCard({
         }}
       >
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-royal/70">
+          <div
+            className={`text-[11px] font-semibold uppercase tracking-wider${
+              derivedMealShellIsPark ? "" : " text-royal/70"
+            }`}
+            style={derivedMealShellIsPark ? { color: "inherit", opacity: 0.75 } : undefined}
+          >
             {meta.label}
           </div>
-          <div className="truncate font-sans text-lg font-medium text-royal">
+          <div
+            className={`truncate font-sans text-lg font-medium${
+              derivedMealShellIsPark ? "" : " text-royal"
+            }`}
+            style={derivedMealShellIsPark ? { color: "inherit" } : undefined}
+          >
             {mealPrefix(slot)}
             <span aria-hidden>✨</span> {derivedMeal.label}
             {derivedMeal.sublabel ? (
-              <span className="mt-0.5 block truncate text-sm font-normal text-royal/75">
+              <span
+                className={`mt-0.5 block truncate text-sm font-normal${
+                  derivedMealShellIsPark ? "" : " text-royal/75"
+                }`}
+              >
                 {derivedMeal.sublabel}
               </span>
             ) : null}
@@ -821,6 +870,7 @@ function MobileSlotCard({
               onClear(dateKey, slot);
             }}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-2xl opacity-50 transition hover:opacity-80 active:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+            style={derivedMealShellIsPark ? { color: "inherit" } : undefined}
             aria-label={`Clear ${meta.label} slot`}
           >
             ×

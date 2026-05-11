@@ -778,14 +778,32 @@ export function Calendar({
                           useDayDetailShell &&
                           Boolean(onOpenDayDetail);
                         const ariaDerived = `${label} planned: ${derivedMeal.label}`;
+                        const derivedMealParkChroma: CSSProperties | undefined =
+                          park
+                            ? parkChromaTileStyle(
+                                park.bg_colour,
+                                park.fg_colour,
+                                themeKey,
+                              )
+                            : undefined;
+                        const derivedMealShellIsPark = Boolean(park);
                         return (
                           <div
                             key={slot}
-                            className={`group planner-slot relative flex min-h-0 flex-1 flex-col overflow-hidden rounded ${area} border border-tt-gold/35 bg-tt-gold-soft/25 transition hover:brightness-[1.04] ${
-                              canOpenDerived || !readOnly
-                                ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-gold/50 focus-visible:ring-inset"
-                                : ""
-                            }`}
+                            className={
+                              derivedMealShellIsPark
+                                ? `group planner-slot relative flex min-h-0 flex-1 flex-col overflow-hidden rounded ${area} transition hover:brightness-[1.06] ${
+                                    canOpenDerived || !readOnly
+                                      ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--tt-ring)]/50 focus-visible:ring-inset"
+                                      : ""
+                                  }`
+                                : `group planner-slot relative flex min-h-0 flex-1 flex-col overflow-hidden rounded ${area} border border-tt-gold/35 bg-tt-gold-soft/25 transition hover:brightness-[1.04] ${
+                                    canOpenDerived || !readOnly
+                                      ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-gold/50 focus-visible:ring-inset"
+                                      : ""
+                                  }`
+                            }
+                            style={derivedMealParkChroma}
                             data-day-interactive
                             role="button"
                             tabIndex={0}
@@ -866,7 +884,11 @@ export function Calendar({
                                   ×
                                 </button>
                               ) : null}
-                              <span className="line-clamp-3 min-w-0 flex-1 self-center font-sans text-[0.6rem] font-medium leading-tight text-tt-royal sm:text-[0.65rem] md:self-center md:py-0.5">
+                              <span
+                                className={`line-clamp-3 min-w-0 flex-1 self-center font-sans text-[0.6rem] font-medium leading-tight sm:text-[0.65rem] md:self-center md:py-0.5${
+                                  derivedMealShellIsPark ? "" : " text-tt-royal"
+                                }`}
+                              >
                                 {mealPrefix}✨ {derivedMeal.label}
                                 {derivedMeal.sublabel ? (
                                   <span className="block truncate text-[0.52rem] font-normal opacity-80 sm:text-[0.54rem]">

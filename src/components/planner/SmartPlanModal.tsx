@@ -372,7 +372,7 @@ export function SmartPlanModal({
         entitlements: {
           has_lightning_lane_multi_pass: entMultiLl,
           has_lightning_lane_single_pass: entSingleLl,
-          has_universal_express: entUx,
+          has_express_pass: entUx,
           has_early_entry: entEarly,
         },
         pace: touringPace,
