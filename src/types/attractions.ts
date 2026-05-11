@@ -4,6 +4,19 @@ export type AttractionCategory =
   | "character_meet"
   | "experience";
 
+/** Row-level catalogue verification (see `attractions.verification_status`). */
+export type AttractionVerificationStatus =
+  | "verified"
+  | "partial"
+  | "unverified"
+  | "retired";
+
+/** Who verified the row (see `attractions.verified_by`). */
+export type AttractionVerifiedBy =
+  | "official_site"
+  | "manual_review"
+  | "community_crowdsource";
+
 export type ThrillLevel = "gentle" | "moderate" | "thrilling" | "intense";
 
 export type SkipLineSystem =
@@ -27,6 +40,8 @@ export interface Attraction {
   name: string;
   category: AttractionCategory;
   height_requirement_cm: number | null;
+  height_requirement_accompanied_cm: number | null;
+  min_age_years: number | null;
   thrill_level: ThrillLevel;
   is_indoor: boolean;
   duration_minutes: number | null;
@@ -42,6 +57,14 @@ export interface Attraction {
   closure_note: string | null;
   tags: string[];
   official_url: string | null;
+  /** Virtual queue / boarding group requirement; null = unknown. */
+  virtual_queue: boolean | null;
+  typical_closure_weeks: string | null;
+  verification_status: AttractionVerificationStatus;
+  verified_at: string | null;
+  verified_by: AttractionVerifiedBy | null;
+  /** Page URL where row data was sourced (may match `official_url`). */
+  source_url: string | null;
 }
 
 export interface TripRidePriority {
