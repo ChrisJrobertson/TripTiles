@@ -139,6 +139,9 @@ function mixHexTowardWhite(hex: string, amount: number): string {
 /** How much to lighten catalogue tile fills (on top of theme transforms). */
 const TILE_PASTEL_WHITEN = 0.46;
 
+/** Week grid / day slot tiles: less whitening than palette pills so parks stay distinguishable. */
+const CALENDAR_TILE_PASTEL_WHITEN = 0.22;
+
 const PASTEL_L_MIN = 0.68;
 const PASTEL_L_MAX = 0.9;
 const PASTEL_S_FLOOR = 0.07;
@@ -207,6 +210,28 @@ export function parkChromaTileStyle(
   const bg = applyThemeToColour(raw, getThemeTransform(themeKey));
   const displayBg = mixHexTowardWhite(bg, TILE_PASTEL_WHITEN);
   /** Lightened tiles need contrast based on the actual fill, not legacy white-on-dark assumptions. */
+  const color = getContrastText(displayBg);
+  return {
+    backgroundColor: displayBg,
+    color,
+    border: `1px solid ${uiAccentBorder(themeKey)}`,
+  } as CSSProperties;
+}
+
+/**
+ * Planner week grid and mobile day slot tiles: same treatment as
+ * `parkChromaTileStyle`, but less mix toward white so brand hues read clearly
+ * in small cells. Palette / modals keep `parkChromaTileStyle`.
+ */
+export function parkChromaCalendarSlotStyle(
+  bgColour: string | undefined,
+  _fgColour: string | undefined,
+  themeKey: ThemeKey,
+): CSSProperties {
+  const raw =
+    typeof bgColour === "string" && /^#/.test(bgColour) ? bgColour : "#2455ac";
+  const bg = applyThemeToColour(raw, getThemeTransform(themeKey));
+  const displayBg = mixHexTowardWhite(bg, CALENDAR_TILE_PASTEL_WHITEN);
   const color = getContrastText(displayBg);
   return {
     backgroundColor: displayBg,

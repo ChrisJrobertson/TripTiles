@@ -49,6 +49,14 @@ function lookupPark(
   return parkById.get(id) ?? fallbackPark(id);
 }
 
+/** Resolve a slot’s park for calendar UI (includes stub when id is not in `parkById`). */
+export function lookupPlannerPark(
+  id: string | undefined,
+  parkById: ReadonlyMap<string, Park>,
+): Park | undefined {
+  return lookupPark(id, parkById);
+}
+
 /**
  * Decide unified vs split AM/PM rendering for a day's assignments.
  */
@@ -120,6 +128,6 @@ export function halfDayDisplayForPlannerSlot(
   }
   const id = getParkIdFromSlotValue(slot === "am" ? ass.am : ass.pm);
   if (!id) return { state: "flexible" };
-  const park = parkById.get(id);
+  const park = lookupPark(id, parkById);
   return park ? { state: "park", park } : { state: "flexible" };
 }

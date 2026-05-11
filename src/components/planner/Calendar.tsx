@@ -16,13 +16,14 @@ import {
   deriveDayPlanFromTimeline,
 } from "@/lib/planner/derive-slots-from-timeline";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
+import { lookupPlannerPark } from "@/lib/planner-am-pm-display";
 import { PlannerAmPmCalendarCells } from "@/components/planner/PlannerAmPmCalendarCells";
 import { truncateForPreview } from "@/lib/truncate-text";
 import { DayTimelinePanel } from "@/components/planner/DayTimelinePanel";
 import { ExpandedDayPanel } from "@/components/planner/ExpandedDayPanel";
 import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
-import { parkChromaTileStyle } from "@/lib/theme-colours";
+import { parkChromaCalendarSlotStyle } from "@/lib/theme-colours";
 import { normaliseThemeKey, themedEmptySlotSurfaceStyle } from "@/lib/themes";
 import { dayConditionRow } from "@/lib/planner-day-conditions";
 import { showToast } from "@/lib/toast";
@@ -760,8 +761,10 @@ export function Calendar({
                         ? deriveDayPlanFromTimeline(aiRich)
                         : null;
                       return MEAL_SLOTS.map(({ key: slot, label, area }) => {
-                      const pid = getParkIdFromSlotValue(ass[slot]);
-                      const park = pid ? parkById.get(pid) : undefined;
+                      const park = lookupPlannerPark(
+                        getParkIdFromSlotValue(ass[slot]),
+                        parkById,
+                      );
                       const derivedMeal =
                         slot === "lunch"
                           ? mealDerivedPlan?.lunch
@@ -780,7 +783,7 @@ export function Calendar({
                         const ariaDerived = `${label} planned: ${derivedMeal.label}`;
                         const derivedMealParkChroma: CSSProperties | undefined =
                           park
-                            ? parkChromaTileStyle(
+                            ? parkChromaCalendarSlotStyle(
                                 park.bg_colour,
                                 park.fg_colour,
                                 themeKey,
@@ -907,7 +910,7 @@ export function Calendar({
                         ? undefined
                         : themedEmptySlotSurfaceStyle();
                       const filledSlotStyle: CSSProperties | undefined = park
-                        ? parkChromaTileStyle(
+                        ? parkChromaCalendarSlotStyle(
                             park.bg_colour,
                             park.fg_colour,
                             themeKey,

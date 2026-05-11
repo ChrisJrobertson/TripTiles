@@ -14,6 +14,7 @@ import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import {
   buildAmPmPresentation,
   halfDayDisplayForPlannerSlot,
+  lookupPlannerPark,
   type HalfDayDisplay,
 } from "@/lib/planner-am-pm-display";
 import {
@@ -24,7 +25,7 @@ import {
 import { MobileRidesSheet } from "@/components/planner/MobileRidesSheet";
 import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
-import { parkChromaTileStyle } from "@/lib/theme-colours";
+import { parkChromaCalendarSlotStyle } from "@/lib/theme-colours";
 import { isThemePark } from "@/lib/park-categories";
 import {
   formatWindowLabel,
@@ -368,6 +369,8 @@ function MobileAmPmHalfRow({
   halfPrefix,
   slot,
   display,
+  assignment,
+  parkById,
   dateKey,
   colourTheme,
   readOnly,
@@ -382,6 +385,8 @@ function MobileAmPmHalfRow({
   halfPrefix: "AM" | "PM";
   slot: "am" | "pm";
   display: HalfDayDisplay;
+  assignment: Assignment;
+  parkById: Map<string, Park>;
   dateKey: string;
   colourTheme: ThemeKey;
   readOnly: boolean;
@@ -394,7 +399,11 @@ function MobileAmPmHalfRow({
   /** Opens ✨ Plan this day / day detail when tapping a timeline-derived summary. */
   onOpenDerivedPlan?: (dateKey: string) => void;
 }) {
-  const park = display.state === "park" ? display.park : undefined;
+  const slotPid = getParkIdFromSlotValue(assignment[slot]);
+  const park =
+    display.state === "park"
+      ? display.park
+      : lookupPlannerPark(slotPid, parkById);
 
   if (derivedOverride) {
     const aria = `${halfPrefix} planned: ${derivedOverride.label}`;
@@ -403,7 +412,7 @@ function MobileAmPmHalfRow({
     );
     const derivedParkChroma =
       park != null
-        ? parkChromaTileStyle(park.bg_colour, park.fg_colour, colourTheme)
+        ? parkChromaCalendarSlotStyle(park.bg_colour, park.fg_colour, colourTheme)
         : undefined;
     const derivedShellIsPark = Boolean(park);
     return (
@@ -493,7 +502,7 @@ function MobileAmPmHalfRow({
   }
 
   const shellStyle = park
-    ? parkChromaTileStyle(park.bg_colour, park.fg_colour, colourTheme)
+    ? parkChromaCalendarSlotStyle(park.bg_colour, park.fg_colour, colourTheme)
     : themedEmptySlotSurfaceStyle();
 
   return (
@@ -611,6 +620,8 @@ function MobileAmPmSection({
           halfPrefix="AM"
           slot="am"
           display={amDisp}
+          assignment={assignment}
+          parkById={parkById}
           dateKey={dateKey}
           colourTheme={colourTheme}
           readOnly={readOnly}
@@ -626,6 +637,8 @@ function MobileAmPmSection({
           halfPrefix="PM"
           slot="pm"
           display={pmDisp}
+          assignment={assignment}
+          parkById={parkById}
           dateKey={dateKey}
           colourTheme={colourTheme}
           readOnly={readOnly}
@@ -648,6 +661,8 @@ function MobileAmPmSection({
           halfPrefix="AM"
           slot="am"
           display={p.morning}
+          assignment={assignment}
+          parkById={parkById}
           dateKey={dateKey}
           colourTheme={colourTheme}
           readOnly={readOnly}
@@ -660,6 +675,8 @@ function MobileAmPmSection({
           halfPrefix="PM"
           slot="pm"
           display={p.afternoon}
+          assignment={assignment}
+          parkById={parkById}
           dateKey={dateKey}
           colourTheme={colourTheme}
           readOnly={readOnly}
@@ -674,12 +691,12 @@ function MobileAmPmSection({
 
   const shellStyle =
     p.mode === "unified_rest_day"
-      ? parkChromaTileStyle(
+      ? parkChromaCalendarSlotStyle(
           p.stylePark.bg_colour,
           p.stylePark.fg_colour,
           colourTheme,
         )
-      : parkChromaTileStyle(
+      : parkChromaCalendarSlotStyle(
           p.park.bg_colour,
           p.park.fg_colour,
           colourTheme,
@@ -783,7 +800,7 @@ function MobileSlotCard({
     );
     const derivedMealParkChroma =
       park != null
-        ? parkChromaTileStyle(park.bg_colour, park.fg_colour, colourTheme)
+        ? parkChromaCalendarSlotStyle(park.bg_colour, park.fg_colour, colourTheme)
         : undefined;
     const derivedMealShellIsPark = Boolean(park);
     return (
@@ -881,7 +898,7 @@ function MobileSlotCard({
   }
 
   const shellStyle = park
-    ? parkChromaTileStyle(park.bg_colour, park.fg_colour, colourTheme)
+    ? parkChromaCalendarSlotStyle(park.bg_colour, park.fg_colour, colourTheme)
     : themedEmptySlotSurfaceStyle();
 
   return (

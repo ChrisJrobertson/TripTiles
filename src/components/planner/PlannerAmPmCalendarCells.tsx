@@ -5,13 +5,15 @@ import {
   deriveDayPlanFromTimeline,
   type DerivedSlot,
 } from "@/lib/planner/derive-slots-from-timeline";
+import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import {
   buildAmPmPresentation,
   halfDayDisplayForPlannerSlot,
+  lookupPlannerPark,
   type AmPmCalendarPresentation,
   type HalfDayDisplay,
 } from "@/lib/planner-am-pm-display";
-import { parkChromaTileStyle } from "@/lib/theme-colours";
+import { parkChromaCalendarSlotStyle } from "@/lib/theme-colours";
 import { themedEmptySlotSurfaceStyle, type ThemeKey } from "@/lib/themes";
 import type { AiDayTimeline, Assignment, Park, SlotType } from "@/lib/types";
 import type { CSSProperties } from "react";
@@ -50,13 +52,17 @@ function unifiedShellStyle(
   themeKey: ThemeKey,
 ): CSSProperties {
   if (mode.mode === "unified_rest_day") {
-    return parkChromaTileStyle(
+    return parkChromaCalendarSlotStyle(
       mode.stylePark.bg_colour,
       mode.stylePark.fg_colour,
       themeKey,
     );
   }
-  return parkChromaTileStyle(mode.park.bg_colour, mode.park.fg_colour, themeKey);
+  return parkChromaCalendarSlotStyle(
+    mode.park.bg_colour,
+    mode.park.fg_colour,
+    themeKey,
+  );
 }
 
 function SplitHalfSlot({
@@ -64,6 +70,8 @@ function SplitHalfSlot({
   slot,
   halfPrefix,
   display,
+  assignment,
+  parkById,
   areaClass,
   themeKey,
   readOnly,
@@ -81,6 +89,8 @@ function SplitHalfSlot({
   slot: "am" | "pm";
   halfPrefix: "AM" | "PM";
   display: HalfDayDisplay;
+  assignment: Assignment;
+  parkById: Map<string, Park>;
   areaClass: string;
   themeKey: ThemeKey;
   readOnly: boolean;
@@ -94,7 +104,13 @@ function SplitHalfSlot({
   derivedOverride?: DerivedSlot | null;
   derivedTooltip?: string;
 }) {
-  const park = display.state === "park" ? display.park : undefined;
+  const slotPid = getParkIdFromSlotValue(
+    slot === "am" ? assignment.am : assignment.pm,
+  );
+  const park =
+    display.state === "park"
+      ? display.park
+      : lookupPlannerPark(slotPid, parkById);
 
   if (derivedOverride) {
     const canOpen =
@@ -106,7 +122,7 @@ function SplitHalfSlot({
     const useParkChromaShell = Boolean(park);
     const parkChromaShellStyle: CSSProperties | undefined =
       park != null
-        ? parkChromaTileStyle(park.bg_colour, park.fg_colour, themeKey)
+        ? parkChromaCalendarSlotStyle(park.bg_colour, park.fg_colour, themeKey)
         : undefined;
     return (
       <div
@@ -213,7 +229,7 @@ function SplitHalfSlot({
     ? undefined
     : themedEmptySlotSurfaceStyle();
   const filledSlotStyle: CSSProperties | undefined = park
-    ? parkChromaTileStyle(park.bg_colour, park.fg_colour, themeKey)
+    ? parkChromaCalendarSlotStyle(park.bg_colour, park.fg_colour, themeKey)
     : undefined;
   const canOpenDayPanel = Boolean(
     !readOnly &&
@@ -515,6 +531,8 @@ export function PlannerAmPmCalendarCells(props: Props) {
           slot="am"
           halfPrefix="AM"
           display={amDisp}
+          assignment={props.assignment}
+          parkById={props.parkById}
           derivedOverride={derivedPlan.am}
           derivedTooltip={amTip}
           areaClass="planner-slot-am"
@@ -533,6 +551,8 @@ export function PlannerAmPmCalendarCells(props: Props) {
           slot="pm"
           halfPrefix="PM"
           display={pmDisp}
+          assignment={props.assignment}
+          parkById={props.parkById}
           derivedOverride={derivedPlan.pm}
           derivedTooltip={pmTip}
           areaClass="planner-slot-pm"
@@ -558,6 +578,8 @@ export function PlannerAmPmCalendarCells(props: Props) {
           slot="am"
           halfPrefix="AM"
           display={presentation.morning}
+          assignment={props.assignment}
+          parkById={props.parkById}
           areaClass="planner-slot-am"
           themeKey={props.themeKey}
           readOnly={props.readOnly}
@@ -574,6 +596,8 @@ export function PlannerAmPmCalendarCells(props: Props) {
           slot="pm"
           halfPrefix="PM"
           display={presentation.afternoon}
+          assignment={props.assignment}
+          parkById={props.parkById}
           areaClass="planner-slot-pm"
           themeKey={props.themeKey}
           readOnly={props.readOnly}
