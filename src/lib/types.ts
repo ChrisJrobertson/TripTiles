@@ -542,6 +542,7 @@ export type TripPreferences = {
   key_dates?: KeyDate[];
 };
 
+/** Park / region data-quality tier (see `regions.data_quality_tier`). */
 export type RegionDataQualityTier = "deep" | "standard" | "light";
 
 export interface Region {
@@ -556,9 +557,12 @@ export interface Region {
   is_active: boolean;
   is_featured: boolean;
   sort_order: number;
-  has_disney: boolean;
-  has_universal: boolean;
-  data_quality_tier: RegionDataQualityTier;
+  /** DB: show Disney LL / Genie+ style skip-line UX when true. */
+  has_disney?: boolean | null;
+  /** DB: show Universal Express–style skip-line UX when true. */
+  has_universal?: boolean | null;
+  /** DB: `deep` | `standard` | `light` — guides AI narrative density. */
+  data_quality_tier?: RegionDataQualityTier | null;
 }
 
 export interface Park {
@@ -905,4 +909,99 @@ export interface EmailQueueRow {
   sent_at: string | null;
   error: string | null;
   created_at: string;
+}
+
+/** Computed readiness from `park_alignment_completeness.readiness`. */
+export type ParkAlignmentReadiness = "complete" | "launch_ready" | "fallback_ready" | "blocked";
+
+/** `import_batches` — CSV alignment import run log. */
+export interface ImportBatch {
+  id: string;
+  script_name: string;
+  file_path: string | null;
+  file_sha256: string | null;
+  dry_run: boolean;
+  applied_by: string | null;
+  git_sha: string | null;
+  started_at: string;
+  finished_at: string | null;
+  rows_ok: number;
+  rows_err: number;
+  meta: Json;
+}
+
+/** `park_areas` — sourced land/area labels per park. */
+export interface ParkArea {
+  id: string;
+  park_id: string;
+  name: string;
+  sort_order: number;
+  source_url: string;
+  source_date: string;
+  created_at: string;
+}
+
+/** `region_briefings` — sourced region prose. */
+export interface RegionBriefing {
+  id: string;
+  region_id: string;
+  locale: string;
+  body: string;
+  source_url: string;
+  source_date: string;
+  supersedes_id: string | null;
+  created_at: string;
+}
+
+/** `park_briefings` — sourced park prose. */
+export interface ParkBriefing {
+  id: string;
+  park_id: string;
+  locale: string;
+  body: string;
+  source_url: string;
+  source_date: string;
+  supersedes_id: string | null;
+  created_at: string;
+}
+
+/** View `park_alignment_completeness` (per region × built-in park). */
+export interface ParkAlignmentCompleteness {
+  region_id: string;
+  park_id: string;
+  region_name: string;
+  park_name: string;
+  data_quality_tier: RegionDataQualityTier;
+  has_park_country: boolean;
+  has_coordinates: boolean;
+  has_official_url: boolean;
+  has_opening_hours: boolean;
+  has_park_areas: boolean;
+  has_attractions: boolean;
+  skip_line_catalogue_ok: boolean;
+  has_region_briefing: boolean;
+  has_park_briefing: boolean;
+  attraction_count: number;
+  completeness_score: number;
+  is_launch_blocker: boolean;
+  readiness: ParkAlignmentReadiness;
+  next_action_hint: string;
+}
+
+/** View `region_alignment_rollup`. */
+export interface RegionAlignmentRollup {
+  region_id: string;
+  region_name: string;
+  data_quality_tier: RegionDataQualityTier;
+  park_rows: number;
+  parks_complete: number;
+  parks_blocked: number;
+  avg_completeness_score: number;
+  parks_missing_attractions: number;
+  parks_missing_url: number;
+  parks_missing_hours: number;
+  parks_missing_coordinates: number;
+  parks_missing_areas: number;
+  region_without_briefing: number;
+  parks_missing_park_briefing: number;
 }

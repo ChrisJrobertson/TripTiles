@@ -1,0 +1,2 @@
+park_id,opens_at,closes_at,hours_known,source_url,source_date
+EXAMPLE_DELETE_BEFORE_IMPORT_park,09:00,21:00,true,https://www.example.com/hours-source,2026-01-15

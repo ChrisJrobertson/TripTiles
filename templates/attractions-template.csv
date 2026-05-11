@@ -1,0 +1,2 @@
+id,park_id,name,category,thrill_level,skip_line_system,height_requirement_cm,sort_order,source_url,source_date
+EXAMPLE_DELETE_BEFORE_IMPORT_attr,EXAMPLE_DELETE_BEFORE_IMPORT_park,Example Coaster,ride,moderate,none,,0,https://www.example.com/attractions-source,2026-01-15
