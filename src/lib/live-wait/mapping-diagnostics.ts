@@ -2,6 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { LiveWaitOperatingStatus } from "@/types/live-wait";
 
+export type LiveWaitMappingParkOption = {
+  id: string;
+  name: string;
+  parkGroup: string;
+};
+
 export type LiveWaitUnmappedDiagnosticRow = {
   provider: string;
   externalParkId: string;
@@ -20,6 +26,7 @@ export type AttractionCandidate = {
   attractionId: string;
   name: string;
   score: number;
+  parkId?: string;
 };
 
 export type LiveWaitUnmappedGroup = {
@@ -27,6 +34,52 @@ export type LiveWaitUnmappedGroup = {
   internalParkId: string | null;
   internalParkName: string | null;
   rows: LiveWaitUnmappedDiagnosticRow[];
+};
+
+export type LiveWaitMappingConsoleRow = {
+  provider: string;
+  externalParkId: string;
+  externalAttractionId: string;
+  externalName: string | null;
+  waitMinutes: number | null;
+  operatingStatus: LiveWaitOperatingStatus;
+  isOpen: boolean;
+  observedAt: string;
+  fetchedAt: string;
+  staleAfter: string | null;
+  mappedParkId: string | null;
+  mappedParkName: string | null;
+  mappedAttractionId: string | null;
+  mappedAttractionName: string | null;
+  mappingConfidence: number | null;
+  suggestedParkId: string | null;
+  suggestedParkName: string | null;
+  suggestions: AttractionCandidate[];
+  bestScore: number;
+  category: "mapped" | "high_confidence" | "ambiguous" | "no_candidate";
+};
+
+export type LiveWaitMappingConsoleDiagnostics = {
+  provider: string;
+  rows: LiveWaitMappingConsoleRow[];
+  parkOptions: LiveWaitMappingParkOption[];
+  externalParkIds: string[];
+  stats: {
+    currentRows: number;
+    mappedRows: number;
+    unmappedRows: number;
+    highConfidenceSuggestions: number;
+    ambiguousSuggestions: number;
+    noCandidateRows: number;
+  };
+  filters: {
+    provider: string;
+    externalParkId: string | null;
+    internalParkId: string | null;
+    query: string;
+    mode: "unmapped" | "mapped" | "all";
+  };
+  truncated: boolean;
 };
 
 function tokenize(name: string): Set<string> {
@@ -55,6 +108,46 @@ export function scoreNameSimilarity(a: string, b: string): number {
   }
   const union = ta.size + tb.size - inter;
   return union > 0 ? inter / union : 0;
+}
+
+function cleanText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function cleanOptionalText(value: unknown): string | null {
+  const clean = cleanText(value);
+  return clean ? clean : null;
+}
+
+function numericOrNull(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function isOperatingStatus(value: unknown): LiveWaitOperatingStatus {
+  return value === "open" ||
+    value === "closed" ||
+    value === "temporarily_closed" ||
+    value === "refurb" ||
+    value === "down" ||
+    value === "unknown"
+    ? value
+    : "unknown";
+}
+
+function rowKey(provider: string, externalParkId: string, externalAttractionId: string): string {
+  return `${provider}\u0000${externalParkId}\u0000${externalAttractionId}`;
+}
+
+function candidateCategory(
+  mapped: boolean,
+  bestScore: number,
+): LiveWaitMappingConsoleRow["category"] {
+  if (mapped) return "mapped";
+  if (bestScore >= 0.72) return "high_confidence";
+  if (bestScore > 0) return "ambiguous";
+  return "no_candidate";
 }
 
 async function resolveInternalParkIdForExternal(
@@ -223,4 +316,226 @@ export async function buildLiveWaitMappingDiagnostics(
   }
 
   return { groups, truncated };
+}
+
+export async function buildLiveWaitMappingConsoleDiagnostics(
+  supabase: SupabaseClient,
+  options?: {
+    provider?: string;
+    externalParkId?: string | null;
+    internalParkId?: string | null;
+    query?: string | null;
+    mode?: "unmapped" | "mapped" | "all";
+    maxRows?: number;
+  },
+): Promise<LiveWaitMappingConsoleDiagnostics> {
+  const provider = options?.provider?.trim() || "queue_times";
+  const externalParkId = cleanOptionalText(options?.externalParkId);
+  const internalParkId = cleanOptionalText(options?.internalParkId);
+  const query = cleanText(options?.query).toLowerCase();
+  const mode = options?.mode ?? "unmapped";
+  const maxRows = options?.maxRows ?? 500;
+
+  let currentQuery = supabase
+    .from("live_wait_current")
+    .select(
+      "provider, external_park_id, external_attraction_id, external_name, wait_minutes, operating_status, is_open, observed_at, fetched_at, stale_after, park_id, attraction_id",
+    )
+    .eq("provider", provider)
+    .order("external_park_id", { ascending: true })
+    .order("external_name", { ascending: true })
+    .limit(maxRows + 1);
+
+  if (externalParkId) currentQuery = currentQuery.eq("external_park_id", externalParkId);
+
+  const [
+    { data: currentRowsRaw, error: currentError },
+    { data: mappingsRaw, error: mappingError },
+    { data: parksRaw, error: parksError },
+  ] = await Promise.all([
+    currentQuery,
+    supabase
+      .from("live_wait_provider_mappings")
+      .select(
+        "provider, external_park_id, external_attraction_id, park_id, attraction_id, external_name, mapping_confidence",
+      )
+      .eq("provider", provider)
+      .limit(5000),
+    supabase
+      .from("parks")
+      .select("id, name, park_group, sort_order")
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true })
+      .limit(1000),
+  ]);
+
+  if (currentError) throw new Error(currentError.message);
+  if (mappingError) throw new Error(mappingError.message);
+  if (parksError) throw new Error(parksError.message);
+
+  const currentRows = (currentRowsRaw ?? []) as Record<string, unknown>[];
+  const truncated = currentRows.length > maxRows;
+  const currentSlice = truncated ? currentRows.slice(0, maxRows) : currentRows;
+  const mappings = (mappingsRaw ?? []) as Record<string, unknown>[];
+
+  const parkOptions: LiveWaitMappingParkOption[] = ((parksRaw ?? []) as Record<string, unknown>[]).map(
+    (park) => ({
+      id: String(park.id),
+      name: String(park.name ?? park.id),
+      parkGroup: String(park.park_group ?? ""),
+    }),
+  );
+  const parkNameById = new Map(parkOptions.map((park) => [park.id, park.name]));
+
+  const mappingsByExternalKey = new Map<string, Record<string, unknown>>();
+  const parkIdByExternalPark = new Map<string, string>();
+  for (const mapping of mappings) {
+    const mappingProvider = String(mapping.provider ?? provider);
+    const mappingExternalParkId = String(mapping.external_park_id ?? "");
+    const mappingExternalAttractionId = String(mapping.external_attraction_id ?? "");
+    mappingsByExternalKey.set(
+      rowKey(mappingProvider, mappingExternalParkId, mappingExternalAttractionId),
+      mapping,
+    );
+    const mappedParkId = cleanOptionalText(mapping.park_id);
+    if (mappedParkId && !parkIdByExternalPark.has(mappingExternalParkId)) {
+      parkIdByExternalPark.set(mappingExternalParkId, mappedParkId);
+    }
+  }
+
+  const attractionParkIds = new Set<string>();
+  for (const row of currentSlice) {
+    const rowParkId = cleanOptionalText(row.park_id);
+    const extParkId = String(row.external_park_id ?? "");
+    const mappedParkId = cleanOptionalText(
+      mappingsByExternalKey.get(
+        rowKey(String(row.provider ?? provider), extParkId, String(row.external_attraction_id ?? "")),
+      )?.park_id,
+    );
+    const suggestionParkId = internalParkId ?? mappedParkId ?? parkIdByExternalPark.get(extParkId) ?? rowParkId;
+    if (suggestionParkId) attractionParkIds.add(suggestionParkId);
+  }
+  if (internalParkId) attractionParkIds.add(internalParkId);
+
+  const attractionRows: { id: string; name: string; park_id: string }[] = [];
+  if (attractionParkIds.size > 0) {
+    const { data: attractions, error: attractionError } = await supabase
+      .from("attractions")
+      .select("id, name, park_id")
+      .in("park_id", [...attractionParkIds])
+      .limit(5000);
+    if (attractionError) throw new Error(attractionError.message);
+    attractionRows.push(
+      ...((attractions ?? []) as { id: string; name: string; park_id: string }[]),
+    );
+  }
+
+  const attractionById = new Map(attractionRows.map((attraction) => [attraction.id, attraction]));
+  const attractionsByPark = new Map<string, typeof attractionRows>();
+  for (const attraction of attractionRows) {
+    const list = attractionsByPark.get(attraction.park_id) ?? [];
+    list.push(attraction);
+    attractionsByPark.set(attraction.park_id, list);
+  }
+
+  const externalParkIds = [
+    ...new Set(currentSlice.map((row) => String(row.external_park_id ?? "")).filter(Boolean)),
+  ].sort();
+
+  const allRows = currentSlice.map((current): LiveWaitMappingConsoleRow => {
+    const rowProvider = String(current.provider ?? provider);
+    const extParkId = String(current.external_park_id ?? "");
+    const extAttractionId = String(current.external_attraction_id ?? "");
+    const mapping = mappingsByExternalKey.get(rowKey(rowProvider, extParkId, extAttractionId));
+    const mappedParkId =
+      cleanOptionalText(mapping?.park_id) ?? cleanOptionalText(current.park_id);
+    const mappedAttractionId =
+      cleanOptionalText(mapping?.attraction_id) ?? cleanOptionalText(current.attraction_id);
+    const mappedAttraction = mappedAttractionId ? attractionById.get(mappedAttractionId) : null;
+    const suggestedParkId =
+      internalParkId ?? mappedParkId ?? parkIdByExternalPark.get(extParkId) ?? null;
+    const externalName = cleanOptionalText(current.external_name);
+    const candidateAttractions = suggestedParkId
+      ? attractionsByPark.get(suggestedParkId) ?? []
+      : [];
+    const suggestions = externalName
+      ? candidateAttractions
+          .map((attraction) => ({
+            attractionId: attraction.id,
+            name: attraction.name,
+            parkId: attraction.park_id,
+            score: scoreNameSimilarity(externalName, attraction.name),
+          }))
+          .filter((candidate) => candidate.score > 0.08)
+          .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+          .slice(0, 5)
+      : [];
+    const bestScore = suggestions[0]?.score ?? 0;
+    const mapped = Boolean(mappedParkId && mappedAttractionId);
+
+    return {
+      provider: rowProvider,
+      externalParkId: extParkId,
+      externalAttractionId: extAttractionId,
+      externalName,
+      waitMinutes: numericOrNull(current.wait_minutes),
+      operatingStatus: isOperatingStatus(current.operating_status),
+      isOpen: Boolean(current.is_open),
+      observedAt: String(current.observed_at ?? ""),
+      fetchedAt: String(current.fetched_at ?? ""),
+      staleAfter: cleanOptionalText(current.stale_after),
+      mappedParkId,
+      mappedParkName: mappedParkId ? parkNameById.get(mappedParkId) ?? mappedParkId : null,
+      mappedAttractionId,
+      mappedAttractionName: mappedAttraction?.name ?? null,
+      mappingConfidence: numericOrNull(mapping?.mapping_confidence),
+      suggestedParkId,
+      suggestedParkName: suggestedParkId ? parkNameById.get(suggestedParkId) ?? suggestedParkId : null,
+      suggestions,
+      bestScore,
+      category: candidateCategory(mapped, bestScore),
+    };
+  });
+
+  const stats = {
+    currentRows: allRows.length,
+    mappedRows: allRows.filter((row) => row.category === "mapped").length,
+    unmappedRows: allRows.filter((row) => row.category !== "mapped").length,
+    highConfidenceSuggestions: allRows.filter((row) => row.category === "high_confidence").length,
+    ambiguousSuggestions: allRows.filter((row) => row.category === "ambiguous").length,
+    noCandidateRows: allRows.filter((row) => row.category === "no_candidate").length,
+  };
+
+  const filteredRows = allRows.filter((row) => {
+    if (mode === "unmapped" && row.category === "mapped") return false;
+    if (mode === "mapped" && row.category !== "mapped") return false;
+    if (!query) return true;
+    const haystack = [
+      row.externalName,
+      row.mappedAttractionName,
+      row.mappedParkName,
+      row.suggestedParkName,
+      ...row.suggestions.map((suggestion) => suggestion.name),
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(query);
+  });
+
+  return {
+    provider,
+    rows: filteredRows,
+    parkOptions,
+    externalParkIds,
+    stats,
+    filters: {
+      provider,
+      externalParkId,
+      internalParkId,
+      query,
+      mode,
+    },
+    truncated,
+  };
 }

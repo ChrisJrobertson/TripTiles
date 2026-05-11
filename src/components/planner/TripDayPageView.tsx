@@ -16,6 +16,7 @@ import { DuplicateDayModal } from "@/components/planner/DuplicateDayModal";
 import { UnsavedChangesModal } from "@/components/app/UnsavedChangesModal";
 import { TierLimitModal } from "@/components/paywall/TierLimitModal";
 import { Button } from "@/components/ui/Button";
+import Link from "next/link";
 import { updateTripPlanningPreferencesAction } from "@/actions/trips";
 import {
   eachDateKeyInRange,
@@ -336,6 +337,10 @@ export function TripDayPageView({
   );
 
   const liveWaitDay = useLiveWaitByAttractionForParks(amPmThemeIdsForRides);
+  const todayAtParkHref = useMemo(() => {
+    if (amPmThemeIdsForRides.length !== 1) return null;
+    return `/today-at-park?parkId=${encodeURIComponent(amPmThemeIdsForRides[0]!)}`;
+  }, [amPmThemeIdsForRides]);
 
   const dayStrategyRow = useMemo((): AIDayStrategy | null => {
     const raw = trip.preferences?.ai_day_strategy;
@@ -1016,6 +1021,19 @@ export function TripDayPageView({
             showQueueTimesAttribution={liveWaitDay.showAttribution}
             loading={liveWaitDay.status === "loading"}
           />
+
+          {todayAtParkHref ? (
+            <div className="mt-3 rounded-lg border border-royal/12 bg-white/85 px-3 py-2 font-sans text-[11px] leading-relaxed text-royal/80">
+              <span className="font-semibold text-royal">At the park today?</span>{" "}
+              <Link
+                href={todayAtParkHref}
+                className="font-semibold text-royal underline decoration-gold/50 underline-offset-2"
+              >
+                View live waits
+              </Link>
+              .
+            </div>
+          ) : null}
 
           <DayParkMustDosSection
             trip={trip}
