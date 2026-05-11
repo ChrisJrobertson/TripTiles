@@ -1,9 +1,11 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { getSlotTimeFromValue, getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import type { SkipLineDayTimelineRow } from "@/lib/skip-line-day-timeline";
+import { parkChromaTileStyle } from "@/lib/theme-colours";
+import { normaliseThemeKey, type ThemeKey } from "@/lib/themes";
 import type {
   AiDayTimeline,
   AiDayTimelineBlock,
@@ -73,6 +75,33 @@ const RICH_BLOCK_SECTIONS: {
   { key: "evening", label: "Evening", edge: "royal" },
 ];
 
+/** Map each AI timeline bucket to the planner slot that supplies brand colour. */
+function parkForAiTimelineBlock(
+  block: AiDayTimelineBlock,
+  ass: Assignment,
+  parks: Record<string, Park | undefined>,
+): Park | undefined {
+  if (block === "evening") {
+    const dinnerId = getParkIdFromSlotValue(ass.dinner);
+    if (dinnerId) return parks[dinnerId];
+    const pmId = getParkIdFromSlotValue(ass.pm);
+    return pmId ? parks[pmId] : undefined;
+  }
+  const slot: SlotType | null =
+    block === "morning"
+      ? "am"
+      : block === "lunch"
+        ? "lunch"
+        : block === "afternoon"
+          ? "pm"
+          : block === "dinner"
+            ? "dinner"
+            : null;
+  if (!slot) return undefined;
+  const id = getParkIdFromSlotValue(ass[slot]);
+  return id ? parks[id] : undefined;
+}
+
 function tagPillClass(tag: AiDayTimelineRowTag): string {
   switch (tag) {
     case "priority":
@@ -111,6 +140,8 @@ export type DayTimelineProps = {
   richTimeline?: AiDayTimeline | null;
   /** Guest skip-line return rows (from ride priorities) with optional clash hints. */
   skipLineReturnRows?: SkipLineDayTimelineRow[] | null;
+  /** Trip theme — drives `parkChromaTileStyle` on rich-timeline rows when a slot park exists. */
+  colourTheme?: ThemeKey;
 };
 
 function SkipLineReturnSection({
@@ -165,15 +196,21 @@ export function DayTimeline({
   parkHoursClose = "22:00",
   richTimeline,
   skipLineReturnRows = null,
+  colourTheme,
 }: DayTimelineProps) {
   if (richTimeline && richTimeline.timeline.length > 0) {
+    const themeKey = normaliseThemeKey(colourTheme ?? "classic");
     const border = { royal: "border-royal", gold: "border-gold" } as const;
     function Row({
       time,
       children,
+      contentShellStyle,
+      useUnparkedAiShell,
     }: {
       time: string;
       children: ReactNode;
+      contentShellStyle?: CSSProperties;
+      useUnparkedAiShell: boolean;
     }) {
       return (
         <div className="grid grid-cols-[54px_1fr] items-start gap-3">
@@ -183,7 +220,14 @@ export function DayTimeline({
           >
             {time}
           </time>
-          <div className="min-w-0 text-sm leading-snug text-royal dark:text-neutral-100">
+          <div
+            className={
+              useUnparkedAiShell
+                ? "min-w-0 rounded-r-md border-l-[3px] border-tt-gold/40 bg-tt-gold-soft/25 py-2 pl-2 pr-2 text-sm leading-snug text-tt-royal dark:border-amber-400/50 dark:bg-amber-950/25 dark:text-neutral-100"
+                : "min-w-0 rounded-r-md py-2 pl-2 pr-2 text-sm leading-snug"
+            }
+            style={contentShellStyle}
+          >
             {children}
           </div>
         </div>
@@ -206,6 +250,14 @@ export function DayTimeline({
                 (a, b) => parseHhmmToMin(a.time) - parseHhmmToMin(b.time),
               );
             if (rows.length === 0) return null;
+            const sectionPark = parkForAiTimelineBlock(sec.key, ass, parks);
+            const parkShellStyle: CSSProperties | undefined = sectionPark
+              ? parkChromaTileStyle(
+                  sectionPark.bg_colour,
+                  sectionPark.fg_colour,
+                  themeKey,
+                )
+              : undefined;
             return (
               <div
                 key={sec.key}
@@ -217,13 +269,28 @@ export function DayTimeline({
                 </h3>
                 <div className="mt-2 space-y-3">
                   {rows.map((r, i) => (
-                    <Row key={`${r.time}-${i}`} time={r.time}>
-                      <p className="font-sans font-medium">
+                    <Row
+                      key={`${r.time}-${i}`}
+                      time={r.time}
+                      contentShellStyle={parkShellStyle}
+                      useUnparkedAiShell={!sectionPark}
+                    >
+                      <p
+                        className="font-sans font-medium"
+                        style={sectionPark ? { color: "inherit" } : undefined}
+                      >
                         {sanitizeAiPlannerDisplayText(r.title)}
                         {r.tag ? <TagPill tag={r.tag} /> : null}
                       </p>
                       {r.subtitle ? (
-                        <p className="mt-0.5 font-sans text-xs text-royal/60 dark:text-neutral-300/80">
+                        <p
+                          className={`mt-0.5 font-sans text-xs ${
+                            sectionPark
+                              ? "opacity-80"
+                              : "text-royal/60 dark:text-neutral-300/80"
+                          }`}
+                          style={sectionPark ? { color: "inherit" } : undefined}
+                        >
                           {sanitizeAiPlannerDisplayText(r.subtitle)}
                         </p>
                       ) : null}

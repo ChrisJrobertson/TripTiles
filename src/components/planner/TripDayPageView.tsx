@@ -35,6 +35,7 @@ import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { truncateForPreview } from "@/lib/truncate-text";
 import { plannerUserDayNotes } from "@/lib/planner-note-maps";
 import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
+import { normaliseThemeKey } from "@/lib/themes";
 import { buildSkipLineDayTimelineRows } from "@/lib/skip-line-day-timeline";
 import { isThemePark } from "@/lib/park-categories";
 import {
@@ -879,6 +880,7 @@ export function TripDayPageView({
                 skipLineReturnRows={
                   skipLineReturnRows.length > 0 ? skipLineReturnRows : null
                 }
+                colourTheme={normaliseThemeKey(trip.colour_theme)}
               />
               {smartPlanReturnEcho && smartPlanReturnEcho.length > 0 ? (
                 <p className="mb-2 mt-2 font-sans text-xs leading-relaxed text-royal/60 dark:text-neutral-300/90">
