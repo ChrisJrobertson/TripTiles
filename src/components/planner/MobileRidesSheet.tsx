@@ -8,6 +8,9 @@ import {
   toggleRidePriority,
   updateRidePriorityMeta,
 } from "@/actions/ride-priorities";
+import { LiveWaitAttributionFooter } from "@/components/live-wait/LiveWaitAttributionFooter";
+import { LiveWaitInline } from "@/components/live-wait/LiveWaitInline";
+import { useLiveWaitByAttractionForParks } from "@/components/live-wait/useLiveWaitByAttractionForParks";
 import { SkipLineLegend } from "@/components/planner/SkipLineLegend";
 import { RidePriorityGuestStack } from "@/components/planner/RidePriorityGuestStack";
 import {
@@ -83,6 +86,7 @@ export function MobileRidesSheet({
   const [pending, setPending] = useState(false);
 
   const parkById = useMemo(() => new Map(parks.map((p) => [p.id, p])), [parks]);
+  const liveWait = useLiveWaitByAttractionForParks(parkIds);
 
   const showSkipLineLegend = useMemo(
     () =>
@@ -360,6 +364,11 @@ export function MobileRidesSheet({
                           <p className="font-sans text-sm font-semibold text-royal">
                             {a.name}
                           </p>
+                          {liveWait.map.get(a.id) ? (
+                            <div className="mt-0.5">
+                              <LiveWaitInline row={liveWait.map.get(a.id)!} compact />
+                            </div>
+                          ) : null}
                           <p className="mt-0.5 flex flex-wrap items-center gap-2 font-sans text-xs text-royal/70">
                             {badge ? (
                               <span
@@ -471,6 +480,11 @@ export function MobileRidesSheet({
                           <p className="font-sans text-sm font-semibold text-royal">
                             {a.name}
                           </p>
+                          {liveWait.map.get(a.id) ? (
+                            <div className="mt-0.5">
+                              <LiveWaitInline row={liveWait.map.get(a.id)!} compact />
+                            </div>
+                          ) : null}
                           <p className="mt-0.5 flex flex-wrap items-center gap-2 font-sans text-xs text-royal/70">
                             {badge ? (
                               <span
@@ -583,6 +597,10 @@ export function MobileRidesSheet({
                     </li>
                   ))}
                 </ul>
+
+                <LiveWaitAttributionFooter
+                  visible={liveWait.showAttribution && liveWait.map.size > 0}
+                />
 
                 {heightLines.length ? (
                   <div className="mt-4 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 font-sans text-xs text-royal">

@@ -26,6 +26,9 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { LiveWaitAttributionFooter } from "@/components/live-wait/LiveWaitAttributionFooter";
+import { LiveWaitInline } from "@/components/live-wait/LiveWaitInline";
+import { useLiveWaitByAttractionForParks } from "@/components/live-wait/useLiveWaitByAttractionForParks";
 import { SkipLineLegend } from "@/components/planner/SkipLineLegend";
 import {
   regionHasDisneyQueueParks,
@@ -43,6 +46,7 @@ import {
   thrillEmoji,
   waitMinutesColourClass,
 } from "@/lib/ride-plan-display";
+import type { LiveWaitPublicItem } from "@/lib/live-wait/public-types";
 import type { Attraction, TripRidePriority } from "@/types/attractions";
 import { buildBookFirstSkipNudges } from "@/lib/book-first-skip-nudges";
 import { showToast } from "@/lib/toast";
@@ -125,6 +129,7 @@ function RideRow({
   onSavePasted,
   pending,
   clashMessage,
+  liveWaitByAttractionId,
 }: {
   row: TripRidePriority;
   canUp: boolean;
@@ -137,6 +142,7 @@ function RideRow({
   onSavePasted: (next: number | null) => void;
   pending: boolean;
   clashMessage?: string | null;
+  liveWaitByAttractionId?: Map<string, LiveWaitPublicItem> | null;
 }) {
   const a = row.attraction;
   if (!a) return null;
@@ -160,6 +166,11 @@ function RideRow({
       </button>
       <div className="min-w-0 flex-1">
         <p className="font-medium leading-snug">{a.name}</p>
+        {liveWaitByAttractionId?.get(a.id) ? (
+          <div className="mt-0.5">
+            <LiveWaitInline row={liveWaitByAttractionId.get(a.id)!} compact />
+          </div>
+        ) : null}
         <RidePriorityGuestStack
           compact
           row={row}
@@ -226,6 +237,7 @@ function SortableRideRow({
   onSavePasted,
   pending,
   clashMessage,
+  liveWaitByAttractionId,
 }: {
   row: TripRidePriority;
   onToggleIcon: () => void;
@@ -234,6 +246,7 @@ function SortableRideRow({
   onSavePasted: (next: number | null) => void;
   pending: boolean;
   clashMessage?: string | null;
+  liveWaitByAttractionId?: Map<string, LiveWaitPublicItem> | null;
 }) {
   const {
     attributes,
@@ -288,6 +301,11 @@ function SortableRideRow({
       </button>
       <div className="min-w-0 flex-1">
         <p className="font-medium leading-snug">{a.name}</p>
+        {liveWaitByAttractionId?.get(a.id) ? (
+          <div className="mt-0.5">
+            <LiveWaitInline row={liveWaitByAttractionId.get(a.id)!} compact />
+          </div>
+        ) : null}
         <RidePriorityGuestStack
           compact
           row={row}
@@ -346,6 +364,7 @@ export function ExpandedDayPanel({
   const [pending, setPending] = useState(false);
 
   const parkById = useMemo(() => new Map(parks.map((p) => [p.id, p])), [parks]);
+  const liveWait = useLiveWaitByAttractionForParks(parkIds);
 
   const sorted = useMemo(
     () => sortPrioritiesForDay(ridePriorities),
@@ -751,6 +770,7 @@ export function ExpandedDayPanel({
                   <SortableRideRow
                     key={row.id}
                     row={row}
+                    liveWaitByAttractionId={liveWait.map}
                     onToggleIcon={() => handleTogglePriorityIcon(row)}
                     onSaveReturn={(next) =>
                       runMutation(() =>
@@ -806,6 +826,7 @@ export function ExpandedDayPanel({
                   <SortableRideRow
                     key={row.id}
                     row={row}
+                    liveWaitByAttractionId={liveWait.map}
                     onToggleIcon={() => handleTogglePriorityIcon(row)}
                     onSaveReturn={(next) =>
                       runMutation(() =>
@@ -861,6 +882,7 @@ export function ExpandedDayPanel({
                 <RideRow
                   key={row.id}
                   row={row}
+                  liveWaitByAttractionId={liveWait.map}
                   canUp={i > 0}
                   canDown={i < mustRows.length - 1}
                   onMoveUp={() => moveWithinSection("must_do", i, -1)}
@@ -915,6 +937,7 @@ export function ExpandedDayPanel({
                 <RideRow
                   key={row.id}
                   row={row}
+                  liveWaitByAttractionId={liveWait.map}
                   canUp={i > 0}
                   canDown={i < ifRows.length - 1}
                   onMoveUp={() => moveWithinSection("if_time", i, -1)}
@@ -976,6 +999,10 @@ export function ExpandedDayPanel({
           ))}
         </div>
       </div>
+
+      <LiveWaitAttributionFooter
+        visible={liveWait.showAttribution && liveWait.map.size > 0}
+      />
 
       {heightLines.length ? (
         <div className="mt-2 rounded-md border border-amber-200/80 bg-amber-50/80 px-3 py-2 font-sans text-[11px] leading-relaxed text-royal">

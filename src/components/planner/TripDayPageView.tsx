@@ -50,6 +50,8 @@ import {
 } from "@/lib/planner/day-times";
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import type { Tier } from "@/lib/tier";
+import { LiveWaitDayStrip } from "@/components/live-wait/LiveWaitDayStrip";
+import { useLiveWaitByAttractionForParks } from "@/components/live-wait/useLiveWaitByAttractionForParks";
 import { AIDayStrategyPanel } from "@/components/planner/AIDayStrategyPanel";
 import type {
   Assignment,
@@ -332,6 +334,8 @@ export function TripDayPageView({
       amPmThemeIdsForRides.length === 0 || expandedPanelParkIds.length > 0,
     [amPmThemeIdsForRides.length, expandedPanelParkIds.length],
   );
+
+  const liveWaitDay = useLiveWaitByAttractionForParks(amPmThemeIdsForRides);
 
   const dayStrategyRow = useMemo((): AIDayStrategy | null => {
     const raw = trip.preferences?.ai_day_strategy;
@@ -1006,6 +1010,12 @@ export function TripDayPageView({
               }
             />
           ) : null}
+
+          <LiveWaitDayStrip
+            hasLiveRows={liveWaitDay.map.size > 0}
+            showQueueTimesAttribution={liveWaitDay.showAttribution}
+            loading={liveWaitDay.status === "loading"}
+          />
 
           <DayParkMustDosSection
             trip={trip}

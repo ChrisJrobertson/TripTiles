@@ -1,9 +1,9 @@
-import { createClient } from "@supabase/supabase-js";
 import { getSupabaseUrl } from "@/lib/supabase/env";
+import { createClient } from "@supabase/supabase-js";
 
 /**
- * Server-only Supabase client with the service role key (bypasses RLS).
- * Use only in trusted server contexts (e.g. Stripe webhooks, cron).
+ * Server-only Supabase client with the service role (bypasses RLS).
+ * Used by server actions, webhooks, cron, and internal diagnostics.
  */
 export function createServiceRoleClient() {
   const url = getSupabaseUrl();
@@ -14,9 +14,6 @@ export function createServiceRoleClient() {
     );
   }
   return createClient(url, key, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
+    auth: { persistSession: false, autoRefreshToken: false },
   });
 }

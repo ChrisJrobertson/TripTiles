@@ -6,6 +6,9 @@ import type { LiveWaitProviderMapping } from "@/types/live-wait";
 export type LiveWaitIngestLog = {
   provider: string;
   dryRun: boolean;
+  /** Set when `LIVE_WAIT_INGEST_DISABLED=1` — no provider fetch or DB writes. */
+  skipped?: boolean;
+  skipReason?: string | null;
   parksRequested: string[];
   parksFetchedOk: number;
   parksFailed: number;
@@ -48,6 +51,25 @@ function addStaleAfter(isoObserved: string, minutes: number): string {
 export async function runLiveWaitIngest(
   options: LiveWaitIngestOptions,
 ): Promise<LiveWaitIngestLog> {
+  if (process.env.LIVE_WAIT_INGEST_DISABLED?.trim() === "1") {
+    return {
+      provider: options.adapter.providerId,
+      dryRun: options.dryRun,
+      skipped: true,
+      skipReason: "LIVE_WAIT_INGEST_DISABLED=1",
+      parksRequested: [...options.externalParkIds],
+      parksFetchedOk: 0,
+      parksFailed: 0,
+      ridesFetched: 0,
+      rowsMapped: 0,
+      rowsUnmapped: 0,
+      snapshotsWritten: 0,
+      currentUpserted: 0,
+      parkErrors: [],
+      unmappedSamples: [],
+    };
+  }
+
   const log: LiveWaitIngestLog = {
     provider: options.adapter.providerId,
     dryRun: options.dryRun,

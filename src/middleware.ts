@@ -12,6 +12,7 @@ const PROTECTED_PREFIXES = [
   "/achievements",
   "/passport",
   "/settings",
+  "/internal",
 ] as const;
 
 let loggedMissingSupabaseEnv = false;
@@ -111,5 +112,7 @@ export const config = {
     "/admin/:path*",
     "/agency",
     "/agency/:path*",
+    "/internal",
+    "/internal/:path*",
   ],
 };
