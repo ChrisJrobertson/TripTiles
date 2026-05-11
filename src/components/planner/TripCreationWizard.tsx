@@ -179,6 +179,8 @@ export function TripCreationWizard({
     "undecided",
   );
   const [expectedFullParkDays, setExpectedFullParkDays] = useState(1);
+  const [bufferRestAtTripStart, setBufferRestAtTripStart] = useState(false);
+  const [bufferRestAtTripEnd, setBufferRestAtTripEnd] = useState(false);
   const [additionalNotes, setAdditionalNotes] = useState("");
   const [planPath, setPlanPath] = useState<"manual" | "ai" | null>(null);
   const [colourTheme, setColourTheme] = useState<ThemeKey>("classic");
@@ -329,6 +331,8 @@ export function TripCreationWizard({
       ...(showUniversalBlock ? { universalExpress: { ...univEx } } : {}),
       ...(parkHopping !== "undecided" ? { parkHopping } : {}),
       ...(expectedFullParkDays > 0 ? { expectedFullParkDays } : {}),
+      ...(bufferRestAtTripStart ? { bufferRestAtTripStart: true } : {}),
+      ...(bufferRestAtTripEnd ? { bufferRestAtTripEnd: true } : {}),
     };
 
     return base;
@@ -348,6 +352,8 @@ export function TripCreationWizard({
     univEx,
     parkHopping,
     expectedFullParkDays,
+    bufferRestAtTripStart,
+    bufferRestAtTripEnd,
     showDisneyBlock,
     showUniversalBlock,
   ]);
@@ -1099,6 +1105,34 @@ export function TripCreationWizard({
                   {label}
                 </button>
               ))}
+            </div>
+            <div className="rounded-xl border border-tt-royal/15 bg-white/80 p-4">
+              <p className="font-sans text-sm font-semibold text-tt-royal">
+                Travel buffers (optional)
+              </p>
+              <p className="mt-1 font-sans text-xs text-tt-royal/70">
+                Keep the first and/or last day free of headline parks — useful for
+                arrival, packing, or a pool day. Smart Plan will use your Rest / pool
+                tile (you can edit later).
+              </p>
+              <label className="mt-3 flex cursor-pointer items-start gap-3 font-sans text-sm text-tt-royal">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border-tt-royal/30 accent-tt-gold"
+                  checked={bufferRestAtTripStart}
+                  onChange={(e) => setBufferRestAtTripStart(e.target.checked)}
+                />
+                <span>Rest / buffer day on the first day of the trip</span>
+              </label>
+              <label className="mt-2 flex cursor-pointer items-start gap-3 font-sans text-sm text-tt-royal">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 rounded border-tt-royal/30 accent-tt-gold"
+                  checked={bufferRestAtTripEnd}
+                  onChange={(e) => setBufferRestAtTripEnd(e.target.checked)}
+                />
+                <span>Rest / buffer day on the last day of the trip</span>
+              </label>
             </div>
             <div>
               <label className="font-sans text-sm font-semibold text-tt-royal">

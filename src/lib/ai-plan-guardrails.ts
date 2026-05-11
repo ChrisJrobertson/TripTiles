@@ -10,11 +10,14 @@ import type {
   Park,
   Trip,
   TripIntelligenceMealPreference,
+  TripPlanningPreferences,
 } from "@/lib/types";
 
 const DINING_IDS = new Set(["owl", "tsr", "char", "specd", "villa"]);
 const FLYOUT_IDS = new Set(["flyout"]);
 const FLYHOME_IDS = new Set(["flyhome"]);
+/** Built-in palette id — matches `parks` seed `('rest', 'Rest / Pool', ...)`. */
+const REST_POOL_TILE_ID = "rest";
 
 const MAIN_PARK_GROUPS = THEME_PARK_GROUP_SET;
 
@@ -234,6 +237,45 @@ export function applyArrivalDayNoThemeParks(
 
   if (Object.keys(day).length === 0) delete out[first];
   else out[first] = day;
+
+  return out;
+}
+
+/**
+ * Wizard "buffer" days: force first/last trip days off headline parks using the
+ * Rest / pool tile, while preserving fly-out (first morning) / fly-home (last evening).
+ */
+export function applyWizardEdgeRestBuffers(
+  assignments: Assignments,
+  sortedDateKeys: string[],
+  prefs: TripPlanningPreferences | null | undefined,
+): Assignments {
+  if (!prefs || sortedDateKeys.length === 0) return cloneAssignments(assignments);
+  const startOn = prefs.bufferRestAtTripStart === true;
+  const endOn = prefs.bufferRestAtTripEnd === true;
+  if (!startOn && !endOn) return cloneAssignments(assignments);
+
+  const out = cloneAssignments(assignments);
+  const first = sortedDateKeys[0]!;
+  const last = sortedDateKeys[sortedDateKeys.length - 1]!;
+
+  function applyBufferDay(dayKey: string, edge: "start" | "end"): void {
+    const day = out[dayKey] ? cloneDaySlots(out[dayKey]!) : {};
+    for (const slot of ["am", "pm"] as const) {
+      const id = getParkIdFromSlotValue(day[slot]);
+      if (edge === "start" && slot === "am" && id && FLYOUT_IDS.has(id)) {
+        continue;
+      }
+      if (edge === "end" && slot === "pm" && id && FLYHOME_IDS.has(id)) {
+        continue;
+      }
+      day[slot] = REST_POOL_TILE_ID;
+    }
+    out[dayKey] = day;
+  }
+
+  if (startOn) applyBufferDay(first, "start");
+  if (endOn) applyBufferDay(last, "end");
 
   return out;
 }
@@ -629,5 +671,10 @@ export function enforceAiPlanGuardrails(
   a = applyConsecutiveParkRules(a, ctx.sortedDateKeys, ctx.parksById);
   a = applyRestDayConsistency(a, ctx.parksById);
   a = applyArrivalDayNoThemeParks(a, ctx.sortedDateKeys, ctx.parksById);
+  a = applyWizardEdgeRestBuffers(
+    a,
+    ctx.sortedDateKeys,
+    ctx.trip.planning_preferences,
+  );
   return pruneEmptyDays(a);
 }

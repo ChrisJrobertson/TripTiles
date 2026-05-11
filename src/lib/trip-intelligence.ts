@@ -610,7 +610,7 @@ export function buildTripPlanningContextForAI(
 
   if (wizard) {
     lines.push(
-      `- planning_wizard: pace ${wizard.pace}; park_hopping ${wizard.parkHopping ?? "—"}; expected_full_park_days ${wizard.expectedFullParkDays ?? "—"}; include_disney_skip_tips ${String(wizard.includeDisneySkipTips !== false)}; include_universal_skip_tips ${String(wizard.includeUniversalSkipTips !== false)}`,
+      `- planning_wizard: pace ${wizard.pace}; park_hopping ${wizard.parkHopping ?? "—"}; expected_full_park_days ${wizard.expectedFullParkDays ?? "—"}; buffer_rest_first_day ${String(wizard.bufferRestAtTripStart === true)}; buffer_rest_last_day ${String(wizard.bufferRestAtTripEnd === true)}; include_disney_skip_tips ${String(wizard.includeDisneySkipTips !== false)}; include_universal_skip_tips ${String(wizard.includeUniversalSkipTips !== false)}`,
     );
   } else {
     lines.push("- planning_wizard: (none)");

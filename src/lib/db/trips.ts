@@ -301,6 +301,13 @@ function parsePlanningPreferences(
   const expectedFullParkDays =
     Number.isFinite(efpd) && efpd >= 1 && efpd <= 366 ? Math.floor(efpd) : undefined;
 
+  const bufferRestAtTripStart =
+    typeof o.bufferRestAtTripStart === "boolean"
+      ? o.bufferRestAtTripStart
+      : undefined;
+  const bufferRestAtTripEnd =
+    typeof o.bufferRestAtTripEnd === "boolean" ? o.bufferRestAtTripEnd : undefined;
+
   return {
     pace,
     mustDoParks,
@@ -325,6 +332,10 @@ function parsePlanningPreferences(
     ...(universalExpress ? { universalExpress } : {}),
     ...(parkHopping ? { parkHopping } : {}),
     ...(expectedFullParkDays != null ? { expectedFullParkDays } : {}),
+    ...(bufferRestAtTripStart !== undefined
+      ? { bufferRestAtTripStart }
+      : {}),
+    ...(bufferRestAtTripEnd !== undefined ? { bufferRestAtTripEnd } : {}),
   };
 }
 

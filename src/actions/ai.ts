@@ -1568,7 +1568,7 @@ The user has explicitly asked you to replace ANY existing assignments with a fre
 
 Generate a complete fresh itinerary that:
 - Honours the user's family priorities above (e.g. if "Thrill rides" is listed, prioritise theme parks with thrill attractions across the trip)
-- Distributes rest days sensibly (typically 1 rest day per 4-5 park days, NOT consecutive blocks of rest)
+- Distributes rest days sensibly (typically 1 rest day per 4-5 park days). Exception: when USER PRIORITIES or TRIP WIZARD PREFERENCES explicitly require a buffer on the first and/or last trip day, you MUST leave those edge days off headline parks (Rest / pool or travel tiles) even if that creates back-to-back rest-adjacent days at the trip boundary.
 - Uses crowd patterns to choose which park on which day
 - Respects mandatory anchors only: arrival day (fly in), departure day (fly out), and any cruise embark/disembark dates${
         overwriteAnchors ? `\n\n${overwriteAnchors}` : ""

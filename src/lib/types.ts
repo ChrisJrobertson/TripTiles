@@ -461,6 +461,12 @@ export interface TripPlanningPreferences {
   /** Wizard Step 7. */
   parkHopping?: "yes" | "no" | "undecided";
   expectedFullParkDays?: number;
+  /**
+   * Wizard — trip edge buffers: first/last calendar days stay off headline parks
+   * (Rest / pool tile); fly-out / fly-home tiles preserved when present.
+   */
+  bufferRestAtTripStart?: boolean;
+  bufferRestAtTripEnd?: boolean;
 }
 
 /** Per-day AI hour-by-hour plan (stored under `trips.preferences.ai_day_timeline[dateKey]`). */

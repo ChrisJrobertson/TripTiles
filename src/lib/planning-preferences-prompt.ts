@@ -51,6 +51,34 @@ export function formatPlanningPreferencesForPrompt(
       ? `Additional family notes:\n${prefs.additionalNotes.trim()}`
       : "";
 
+  const hop = prefs.parkHopping;
+  const hopLine =
+    hop === "yes"
+      ? "Park hopping: yes — guest may use multiple headline parks in a day where tickets allow."
+      : hop === "no"
+        ? "Park hopping: no — at most one headline park per day."
+        : hop === "undecided"
+          ? "Park hopping: undecided — default to one park per day unless notes say otherwise."
+          : "";
+
+  const efpd = prefs.expectedFullParkDays;
+  const efpdLine =
+    typeof efpd === "number" && efpd >= 1
+      ? `Rough target: about ${efpd} full headline-park day(s) across the trip (rest/travel days can fill the remainder).`
+      : "";
+
+  const edgeRest: string[] = [];
+  if (prefs.bufferRestAtTripStart) {
+    edgeRest.push(
+      "FIRST calendar day must be a buffer/off-park day (Rest / pool or travel tiles only — no headline theme parks in AM/PM).",
+    );
+  }
+  if (prefs.bufferRestAtTripEnd) {
+    edgeRest.push(
+      "LAST calendar day must be a buffer/off-park day (Rest / pool or travel tiles only — no headline theme parks in AM/PM).",
+    );
+  }
+
   const disneyTips = prefs.includeDisneySkipTips !== false;
   const universalTips = prefs.includeUniversalSkipTips !== false;
   const skipLineBlock =
@@ -75,6 +103,11 @@ export function formatPlanningPreferencesForPrompt(
       : "- Must-include venues: no specific list — use crowd logic.",
     priLabels.length
       ? `- Family priorities (weight these): ${priLabels.join("; ")}.`
+      : "",
+    hopLine,
+    efpdLine,
+    edgeRest.length
+      ? `- Trip edge buffers (hard requirements):\n${edgeRest.map((l) => `  • ${l}`).join("\n")}`
       : "",
     notes,
     skipLineBlock,
@@ -127,6 +160,17 @@ export function formatUserPrioritiesBlock(
   ];
   if (additional) {
     lines.push(`- Additional notes: ${additional}`);
+  }
+  if (prefs.bufferRestAtTripStart) {
+    lines.push("- First day: buffer / rest — no headline parks on day 1 (AM/PM).");
+  }
+  if (prefs.bufferRestAtTripEnd) {
+    lines.push("- Last day: buffer / rest — no headline parks on final day (AM/PM).");
+  }
+  if (typeof prefs.expectedFullParkDays === "number" && prefs.expectedFullParkDays >= 1) {
+    lines.push(
+      `- Target ~${prefs.expectedFullParkDays} full park day(s) across the trip`,
+    );
   }
   return lines.join("\n");
 }
