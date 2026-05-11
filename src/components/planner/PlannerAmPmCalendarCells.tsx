@@ -13,7 +13,7 @@ import {
   type AmPmCalendarPresentation,
   type HalfDayDisplay,
 } from "@/lib/planner-am-pm-display";
-import { parkChromaCalendarSlotStyle } from "@/lib/theme-colours";
+import { plannerCalendarParkSlotStyle } from "@/lib/theme-colours";
 import { themedEmptySlotSurfaceStyle, type ThemeKey } from "@/lib/themes";
 import type { AiDayTimeline, Assignment, Park, SlotType } from "@/lib/types";
 import type { CSSProperties } from "react";
@@ -50,19 +50,12 @@ function clearBothAmPm(
 function unifiedShellStyle(
   mode: Exclude<AmPmCalendarPresentation, { mode: "split" }>,
   themeKey: ThemeKey,
+  readOnly: boolean,
 ): CSSProperties {
   if (mode.mode === "unified_rest_day") {
-    return parkChromaCalendarSlotStyle(
-      mode.stylePark.bg_colour,
-      mode.stylePark.fg_colour,
-      themeKey,
-    );
+    return plannerCalendarParkSlotStyle(mode.stylePark, themeKey, readOnly);
   }
-  return parkChromaCalendarSlotStyle(
-    mode.park.bg_colour,
-    mode.park.fg_colour,
-    themeKey,
-  );
+  return plannerCalendarParkSlotStyle(mode.park, themeKey, readOnly);
 }
 
 function SplitHalfSlot({
@@ -122,7 +115,7 @@ function SplitHalfSlot({
     const useParkChromaShell = Boolean(park);
     const parkChromaShellStyle: CSSProperties | undefined =
       park != null
-        ? parkChromaCalendarSlotStyle(park.bg_colour, park.fg_colour, themeKey)
+        ? plannerCalendarParkSlotStyle(park, themeKey, readOnly)
         : undefined;
     return (
       <div
@@ -229,7 +222,7 @@ function SplitHalfSlot({
     ? undefined
     : themedEmptySlotSurfaceStyle();
   const filledSlotStyle: CSSProperties | undefined = park
-    ? parkChromaCalendarSlotStyle(park.bg_colour, park.fg_colour, themeKey)
+    ? plannerCalendarParkSlotStyle(park, themeKey, readOnly)
     : undefined;
   const canOpenDayPanel = Boolean(
     !readOnly &&
@@ -382,7 +375,7 @@ function UnifiedSpanSlot({
   selectedParkId: string | null;
   onAssign: Props["onAssign"];
 }) {
-  const style = unifiedShellStyle(presentation, themeKey);
+  const style = unifiedShellStyle(presentation, themeKey, readOnly);
   const canOpenDayPanel = Boolean(
     !readOnly &&
       useDayDetailShell &&

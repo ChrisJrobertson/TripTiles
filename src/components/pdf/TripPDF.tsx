@@ -34,6 +34,7 @@ import type {
   TripBudgetItem,
   TripChecklistItem,
 } from "@/lib/types";
+import { pdfItineraryStripColours } from "@/lib/pdf-itinerary-legacy-colours";
 import type { TripPayment } from "@/types/payments";
 import {
   Document,
@@ -607,8 +608,9 @@ export function TripPDF({
   const fgById = new Map<string, string>();
   for (const p of parks) {
     itemsById.set(p.id, { name: p.name, icon: p.icon });
-    colourById.set(p.id, p.bg_colour);
-    fgById.set(p.id, p.fg_colour);
+    const strip = pdfItineraryStripColours(p);
+    colourById.set(p.id, strip.bg);
+    fgById.set(p.id, strip.fg);
   }
   for (const t of customTiles) {
     itemsById.set(t.id, { name: t.name, icon: t.icon });

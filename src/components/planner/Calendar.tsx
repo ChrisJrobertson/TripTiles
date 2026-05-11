@@ -23,7 +23,7 @@ import { DayTimelinePanel } from "@/components/planner/DayTimelinePanel";
 import { ExpandedDayPanel } from "@/components/planner/ExpandedDayPanel";
 import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
-import { parkChromaCalendarSlotStyle } from "@/lib/theme-colours";
+import { plannerCalendarParkSlotStyle } from "@/lib/theme-colours";
 import { normaliseThemeKey, themedEmptySlotSurfaceStyle } from "@/lib/themes";
 import { dayConditionRow } from "@/lib/planner-day-conditions";
 import { showToast } from "@/lib/toast";
@@ -478,11 +478,8 @@ export function Calendar({
                   getParkIdFromSlotValue(ass.pm);
                 const p = lookupPlannerPark(pid, parkById);
                 if (!p) return undefined;
-                return parkChromaCalendarSlotStyle(
-                  p.bg_colour,
-                  p.fg_colour,
-                  themeKey,
-                ).backgroundColor as string;
+                return plannerCalendarParkSlotStyle(p, themeKey, readOnly)
+                  .backgroundColor as string;
               })();
 
               const dayNum = day.getDate();
@@ -805,10 +802,10 @@ export function Calendar({
                         const ariaDerived = `${label} planned: ${derivedMeal.label}`;
                         const derivedMealParkChroma: CSSProperties | undefined =
                           park
-                            ? parkChromaCalendarSlotStyle(
-                                park.bg_colour,
-                                park.fg_colour,
+                            ? plannerCalendarParkSlotStyle(
+                                park,
                                 themeKey,
+                                readOnly,
                               )
                             : undefined;
                         const derivedMealShellIsPark = Boolean(park);
@@ -932,10 +929,10 @@ export function Calendar({
                         ? undefined
                         : themedEmptySlotSurfaceStyle();
                       const filledSlotStyle: CSSProperties | undefined = park
-                        ? parkChromaCalendarSlotStyle(
-                            park.bg_colour,
-                            park.fg_colour,
+                        ? plannerCalendarParkSlotStyle(
+                            park,
                             themeKey,
+                            readOnly,
                           )
                         : undefined;
                       const canOpenDayPanel =
@@ -1434,6 +1431,7 @@ export function Calendar({
                 }
                 parks={parks}
                 colourTheme={themeKey}
+                readOnly={readOnly}
                 unlocked={timelineUnlocked}
                 onTimeChange={(slot, time) =>
                   onSlotTimeChange(notePopover.dateKey, slot, time)

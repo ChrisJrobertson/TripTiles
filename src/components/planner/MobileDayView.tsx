@@ -25,7 +25,7 @@ import {
 import { MobileRidesSheet } from "@/components/planner/MobileRidesSheet";
 import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
-import { parkChromaCalendarSlotStyle } from "@/lib/theme-colours";
+import { plannerCalendarParkSlotStyle } from "@/lib/theme-colours";
 import { isThemePark } from "@/lib/park-categories";
 import {
   formatWindowLabel,
@@ -412,7 +412,7 @@ function MobileAmPmHalfRow({
     );
     const derivedParkChroma =
       park != null
-        ? parkChromaCalendarSlotStyle(park.bg_colour, park.fg_colour, colourTheme)
+        ? plannerCalendarParkSlotStyle(park, colourTheme, readOnly)
         : undefined;
     const derivedShellIsPark = Boolean(park);
     return (
@@ -502,7 +502,7 @@ function MobileAmPmHalfRow({
   }
 
   const shellStyle = park
-    ? parkChromaCalendarSlotStyle(park.bg_colour, park.fg_colour, colourTheme)
+    ? plannerCalendarParkSlotStyle(park, colourTheme, readOnly)
     : themedEmptySlotSurfaceStyle();
 
   return (
@@ -691,16 +691,8 @@ function MobileAmPmSection({
 
   const shellStyle =
     p.mode === "unified_rest_day"
-      ? parkChromaCalendarSlotStyle(
-          p.stylePark.bg_colour,
-          p.stylePark.fg_colour,
-          colourTheme,
-        )
-      : parkChromaCalendarSlotStyle(
-          p.park.bg_colour,
-          p.park.fg_colour,
-          colourTheme,
-        );
+      ? plannerCalendarParkSlotStyle(p.stylePark, colourTheme, readOnly)
+      : plannerCalendarParkSlotStyle(p.park, colourTheme, readOnly);
 
   let primaryLine: string;
   let secondaryLine: string;
@@ -800,7 +792,7 @@ function MobileSlotCard({
     );
     const derivedMealParkChroma =
       park != null
-        ? parkChromaCalendarSlotStyle(park.bg_colour, park.fg_colour, colourTheme)
+        ? plannerCalendarParkSlotStyle(park, colourTheme, readOnly)
         : undefined;
     const derivedMealShellIsPark = Boolean(park);
     return (
@@ -898,7 +890,7 @@ function MobileSlotCard({
   }
 
   const shellStyle = park
-    ? parkChromaCalendarSlotStyle(park.bg_colour, park.fg_colour, colourTheme)
+    ? plannerCalendarParkSlotStyle(park, colourTheme, readOnly)
     : themedEmptySlotSurfaceStyle();
 
   return (
@@ -1571,6 +1563,7 @@ export function MobileDayView({
               day={mobileDayForTimelinePanel}
               parks={parks}
               colourTheme={colourTheme}
+              readOnly={readOnly}
               unlocked={timelineUnlocked}
               onTimeChange={(slot, time) =>
                 onSlotTimeChange(activeDay.dateKey, slot, time)

@@ -1,5 +1,9 @@
 import type { CSSProperties } from "react";
 
+import { isThemePark } from "@/lib/park-categories";
+import type { Park } from "@/lib/types";
+import { pdfItineraryStripColours } from "@/lib/pdf-itinerary-legacy-colours";
+
 import { THEMES, type ThemeKey } from "./themes";
 
 /** Per-theme HSL adjustments for catalogue tile backgrounds (not Classic). */
@@ -262,6 +266,41 @@ export function parkChromaCalendarSlotStyle(
   return {
     backgroundColor: displayBg,
     color,
+    border: `1px solid ${uiAccentBorder(themeKey)}`,
+  } as CSSProperties;
+}
+
+const PLANNER_CALENDAR_FALLBACK_BG = "#FAF8F3";
+const PLANNER_CALENDAR_FALLBACK_FG = "#0B1E5C";
+
+/**
+ * Planner week grid / mobile day cards: theme parks use DB soft pastels with
+ * explicit fg (royal). Non–theme-park slots and custom tiles keep chroma styling.
+ * `readOnly` public preview uses legacy saturated hues + chroma (matches pre-pastel share pages).
+ */
+export function plannerCalendarParkSlotStyle(
+  park: Park,
+  themeKey: ThemeKey,
+  readOnly = false,
+): CSSProperties {
+  if (park.is_custom || !isThemePark(park.park_group)) {
+    return parkChromaCalendarSlotStyle(park.bg_colour, park.fg_colour, themeKey);
+  }
+  if (readOnly) {
+    const { bg, fg } = pdfItineraryStripColours(park);
+    return parkChromaCalendarSlotStyle(bg, fg, themeKey);
+  }
+  const bgRaw = park.bg_colour?.trim() ?? "";
+  const fgRaw = park.fg_colour?.trim() ?? "";
+  const bg = /^#[0-9A-Fa-f]{6}$/.test(bgRaw)
+    ? bgRaw
+    : PLANNER_CALENDAR_FALLBACK_BG;
+  const fg = /^#[0-9A-Fa-f]{6}$/.test(fgRaw)
+    ? fgRaw
+    : PLANNER_CALENDAR_FALLBACK_FG;
+  return {
+    backgroundColor: bg,
+    color: fg,
     border: `1px solid ${uiAccentBorder(themeKey)}`,
   } as CSSProperties;
 }

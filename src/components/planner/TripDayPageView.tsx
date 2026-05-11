@@ -36,7 +36,7 @@ import { truncateForPreview } from "@/lib/truncate-text";
 import { plannerUserDayNotes } from "@/lib/planner-note-maps";
 import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
 import { normaliseThemeKey } from "@/lib/themes";
-import { parkChromaCalendarSlotStyle } from "@/lib/theme-colours";
+import { plannerCalendarParkSlotStyle } from "@/lib/theme-colours";
 import { buildSkipLineDayTimelineRows } from "@/lib/skip-line-day-timeline";
 import { isThemePark } from "@/lib/park-categories";
 import {
@@ -538,10 +538,10 @@ export function TripDayPageView({
     if (!pid) return null;
     const p = parkById.get(pid);
     if (!p) return null;
-    return parkChromaCalendarSlotStyle(
-      p.bg_colour,
-      p.fg_colour,
+    return plannerCalendarParkSlotStyle(
+      p,
       normaliseThemeKey(trip.colour_theme),
+      false,
     );
   }, [trip, dayDate, parkById]);
 

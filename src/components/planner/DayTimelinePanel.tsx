@@ -8,7 +8,7 @@ import {
   timeToMinutes,
   SLOT_DEFAULT_DURATION_MIN,
 } from "@/lib/assignment-slots";
-import { parkChromaCalendarSlotStyle } from "@/lib/theme-colours";
+import { plannerCalendarParkSlotStyle } from "@/lib/theme-colours";
 import { normaliseThemeKey, type ThemeKey } from "@/lib/themes";
 import type { Assignment, Park, SlotType } from "@/lib/types";
 import Link from "next/link";
@@ -22,6 +22,8 @@ type Props = {
   day: Assignment;
   parks: Park[];
   colourTheme: ThemeKey;
+  /** Public/read-only planner uses legacy strip hues (matches share preview). */
+  readOnly?: boolean;
   /** Pro+ can edit times (drag / picker). */
   unlocked: boolean;
   onTimeChange: (slot: SlotType, timeHHmm: string) => void;
@@ -33,6 +35,7 @@ export function DayTimelinePanel({
   day,
   parks,
   colourTheme,
+  readOnly = false,
   unlocked,
   onTimeChange,
 }: Props) {
@@ -145,7 +148,7 @@ export function DayTimelinePanel({
               style={{
                 top: `${top}%`,
                 height: `${Math.max(height, 6)}%`,
-                ...parkChromaCalendarSlotStyle(park.bg_colour, park.fg_colour, themeKey),
+                ...plannerCalendarParkSlotStyle(park, themeKey, readOnly),
               }}
               onPointerDown={(e) => {
                 e.preventDefault();
