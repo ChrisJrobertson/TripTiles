@@ -146,6 +146,32 @@ const PASTEL_L_MIN = 0.68;
 const PASTEL_L_MAX = 0.9;
 const PASTEL_S_FLOOR = 0.07;
 
+/** Week grid: keep catalogue hues farther apart than palette pills (see `applyThemeToColour`). */
+const CALENDAR_THEME_STRENGTH = 0.42;
+const CALENDAR_L_MIN = 0.4;
+const CALENDAR_L_MAX = 0.93;
+const CALENDAR_S_FLOOR = 0.12;
+
+function applyThemeToColourForCalendarSlots(
+  hex: string,
+  theme: ThemeTransform,
+): string {
+  if (theme.lighten === 0 && theme.desaturate === 0 && theme.hueShift === 0) {
+    return hex;
+  }
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  const k = CALENDAR_THEME_STRENGTH;
+  let { h, s, l } = rgbToHsl(rgb.r, rgb.g, rgb.b);
+  l = clamp(l + (1 - l) * theme.lighten * k, 0, 1);
+  s = clamp(s * (1 - theme.desaturate * k), 0, 1);
+  s = Math.max(CALENDAR_S_FLOOR, s);
+  h = (h + theme.hueShift * k + 360) % 360;
+  l = clamp(l, CALENDAR_L_MIN, CALENDAR_L_MAX);
+  const out = hslToRgb(h, s, l);
+  return rgbToHex(out.r, out.g, out.b);
+}
+
 /**
  * Softens a hex catalogue colour for the active theme. Classic returns the
  * original hex unchanged.
@@ -230,7 +256,7 @@ export function parkChromaCalendarSlotStyle(
 ): CSSProperties {
   const raw =
     typeof bgColour === "string" && /^#/.test(bgColour) ? bgColour : "#2455ac";
-  const bg = applyThemeToColour(raw, getThemeTransform(themeKey));
+  const bg = applyThemeToColourForCalendarSlots(raw, getThemeTransform(themeKey));
   const displayBg = mixHexTowardWhite(bg, CALENDAR_TILE_PASTEL_WHITEN);
   const color = getContrastText(displayBg);
   return {

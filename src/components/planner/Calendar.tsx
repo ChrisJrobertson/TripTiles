@@ -472,6 +472,19 @@ export function Calendar({
                 );
               }
 
+              const dayAccentColor = (() => {
+                const pid =
+                  getParkIdFromSlotValue(ass.am) ??
+                  getParkIdFromSlotValue(ass.pm);
+                const p = lookupPlannerPark(pid, parkById);
+                if (!p) return undefined;
+                return parkChromaCalendarSlotStyle(
+                  p.bg_colour,
+                  p.fg_colour,
+                  themeKey,
+                ).backgroundColor as string;
+              })();
+
               const dayNum = day.getDate();
               const mon = MONTHS_SHORT[day.getMonth()];
               const crowdLine = dayCrowdNote(trip, key);
@@ -535,6 +548,15 @@ export function Calendar({
                       ? " cursor-pointer"
                       : ""
                   }`}
+                  style={
+                    !aiRich && dayAccentColor
+                      ? ({
+                          borderLeftWidth: 4,
+                          borderLeftStyle: "solid",
+                          borderLeftColor: dayAccentColor,
+                        } satisfies CSSProperties)
+                      : undefined
+                  }
                   onClick={
                     useDayDetailShell && onOpenDayDetail && !readOnly
                       ? (e) => {

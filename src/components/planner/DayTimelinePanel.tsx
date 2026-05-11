@@ -8,7 +8,7 @@ import {
   timeToMinutes,
   SLOT_DEFAULT_DURATION_MIN,
 } from "@/lib/assignment-slots";
-import { parkChromaTileStyle } from "@/lib/theme-colours";
+import { parkChromaCalendarSlotStyle } from "@/lib/theme-colours";
 import { normaliseThemeKey, type ThemeKey } from "@/lib/themes";
 import type { Assignment, Park, SlotType } from "@/lib/types";
 import Link from "next/link";
@@ -145,7 +145,7 @@ export function DayTimelinePanel({
               style={{
                 top: `${top}%`,
                 height: `${Math.max(height, 6)}%`,
-                ...parkChromaTileStyle(park.bg_colour, park.fg_colour, themeKey),
+                ...parkChromaCalendarSlotStyle(park.bg_colour, park.fg_colour, themeKey),
               }}
               onPointerDown={(e) => {
                 e.preventDefault();

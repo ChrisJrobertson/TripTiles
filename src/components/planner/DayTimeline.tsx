@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { getSlotTimeFromValue, getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import type { SkipLineDayTimelineRow } from "@/lib/skip-line-day-timeline";
-import { parkChromaTileStyle } from "@/lib/theme-colours";
+import { parkChromaCalendarSlotStyle } from "@/lib/theme-colours";
 import { normaliseThemeKey, type ThemeKey } from "@/lib/themes";
 import type {
   AiDayTimeline,
@@ -140,7 +140,7 @@ export type DayTimelineProps = {
   richTimeline?: AiDayTimeline | null;
   /** Guest skip-line return rows (from ride priorities) with optional clash hints. */
   skipLineReturnRows?: SkipLineDayTimelineRow[] | null;
-  /** Trip theme — drives `parkChromaTileStyle` on rich-timeline rows when a slot park exists. */
+  /** Trip theme — drives `parkChromaCalendarSlotStyle` on rich-timeline rows when a slot park exists. */
   colourTheme?: ThemeKey;
 };
 
@@ -252,7 +252,7 @@ export function DayTimeline({
             if (rows.length === 0) return null;
             const sectionPark = parkForAiTimelineBlock(sec.key, ass, parks);
             const parkShellStyle: CSSProperties | undefined = sectionPark
-              ? parkChromaTileStyle(
+              ? parkChromaCalendarSlotStyle(
                   sectionPark.bg_colour,
                   sectionPark.fg_colour,
                   themeKey,

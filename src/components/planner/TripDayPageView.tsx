@@ -36,6 +36,7 @@ import { truncateForPreview } from "@/lib/truncate-text";
 import { plannerUserDayNotes } from "@/lib/planner-note-maps";
 import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
 import { normaliseThemeKey } from "@/lib/themes";
+import { parkChromaCalendarSlotStyle } from "@/lib/theme-colours";
 import { buildSkipLineDayTimelineRows } from "@/lib/skip-line-day-timeline";
 import { isThemePark } from "@/lib/park-categories";
 import {
@@ -527,6 +528,19 @@ export function TripDayPageView({
     return names.join(" · ");
   }, [trip, dayDate, parkById]);
 
+  const dayHeaderChroma = useMemo(() => {
+    const ids = parkIdsAmPmForDay(trip, dayDate);
+    const pid = ids[0];
+    if (!pid) return null;
+    const p = parkById.get(pid);
+    if (!p) return null;
+    return parkChromaCalendarSlotStyle(
+      p.bg_colour,
+      p.fg_colour,
+      normaliseThemeKey(trip.colour_theme),
+    );
+  }, [trip, dayDate, parkById]);
+
   const handlePlanMyDay = () => {
     onOpenSmartPlan();
   };
@@ -676,7 +690,19 @@ export function TripDayPageView({
         className="hidden min-h-0 w-full min-w-0 flex-col rounded-tt-xl border border-tt-line bg-tt-surface-warm shadow-tt-md md:flex"
         aria-labelledby={titleId}
       >
-        <header className="flex shrink-0 flex-col gap-2 border-b border-tt-line bg-tt-bg-soft px-3 py-3">
+        <header
+          className={`flex shrink-0 flex-col gap-2 border-b border-tt-line px-3 py-3${
+            dayHeaderChroma ? "" : " bg-tt-bg-soft"
+          }`}
+          style={
+            dayHeaderChroma
+              ? {
+                  backgroundColor: dayHeaderChroma.backgroundColor,
+                  color: dayHeaderChroma.color,
+                }
+              : undefined
+          }
+        >
           <div className="flex items-start justify-between gap-2">
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <button
@@ -690,11 +716,17 @@ export function TripDayPageView({
               <div className="min-w-0">
                 <h1
                   id={titleId}
-                  className="font-heading text-lg font-semibold leading-tight text-tt-royal"
+                  className={`font-heading text-lg font-semibold leading-tight${
+                    dayHeaderChroma ? "" : " text-tt-royal"
+                  }`}
                 >
                   {formatHeaderShort(dayDate)}
                 </h1>
-                <p className="mt-0.5 font-sans text-xs text-tt-ink-muted">
+                <p
+                  className={`mt-0.5 font-sans text-xs${
+                    dayHeaderChroma ? " opacity-90" : " text-tt-ink-muted"
+                  }`}
+                >
                   {parkLabels}
                 </p>
               </div>
