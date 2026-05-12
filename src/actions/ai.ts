@@ -1651,6 +1651,16 @@ Generate a complete fresh itinerary that:
   const cruiseTilePolicy = trip.has_cruise
     ? "CRUISE TILES: This trip includes a cruise segment. Include cruise embark/disembark and ship activities where appropriate when they fit the dates."
     : "CRUISE TILES: This trip does not include a cruise. Do not suggest or assign cruise-only, ship-only, or port-excursion tiles (for example at sea, ship pool, shore excursion) unless the traveller has explicitly asked for them in their notes.";
+  const fullTripPlannerDayNoteParkBinding = isFullTrip
+    ? `\nFULL-TRIP PLANNER DAY NOTE PARK MATCHING — HARD VALIDATION RULE:
+- For each planner_day_notes[date], the first sentence MUST reference only the park(s) or activity tile(s) assigned in assignments[date], using the exact display name(s) from the allowed tile list.
+- If AM and PM are different assigned parks, the note may mention both assigned parks, but MUST NOT mention any third park.
+- If the assigned tile is Rest / Pool, travel, dining-only, shopping, or another non-park activity, do NOT name a theme park unless that exact park is also assigned for that date.
+- If assignments[date] has no park/activity tile, do not name any park.
+- Do not use nearby-area suggestions such as Disney Springs, CityWalk, hotel areas, or restaurant names as if they were the assigned park unless that exact tile is assigned.
+- If you cannot satisfy this rule for a date, omit planner_day_notes for that date rather than writing a mismatched note.
+`
+    : "";
 
   if (mode === "smart") {
     const smartIntro = dateKey
@@ -1671,6 +1681,7 @@ Your job is to annotate and complete the guest's calendar tile choices:
 
 ${calendarAuthority}${tripCtx}${mealPolicy}${crowdSection}
 ${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}${dayPacingAndRidesBlock}
+${fullTripPlannerDayNoteParkBinding}
 
 ${smartIntro}
 ${dateKey ? `For this date only (${dateKey}), add planner_day_notes with 1–2 high-level tips (no ride name lists; no paid-queue tactics) for the parks in CALENDAR / assignments.` : "For each trip day, add planner_day_notes with 1–2 high-level tips tied to that date and the parks in assignments (timing bands, rest breaks, dining rhythm). Skip generic advice that applies to every day. No rope-drop or paid-line product assumptions unless the TRIP PLANNING CONTEXT clearly confirms them."}
@@ -1682,6 +1693,7 @@ Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and p
 
 ${calendarAuthority}${tripCtx}${mealPolicy}${crowdSection}
 ${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${calendarAlreadyBlock}${dayPacingAndRidesBlock}
+${fullTripPlannerDayNoteParkBinding}
 
 CUSTOM PROMPT MODE — apply USER CONSTRAINTS and TRIP WIZARD PREFERENCES first, then crowd patterns. Respect the system prompt: assignments + notes only; omit must_dos; no ride sequencing JSON; no invented heights; no paid-queue assumptions unless explicitly confirmed in context.
 ${!userConstraintsBlock.trim() ? `\n(The guest did not add a freeform brief — use structured preferences above and trip defaults.)\n` : ""}
