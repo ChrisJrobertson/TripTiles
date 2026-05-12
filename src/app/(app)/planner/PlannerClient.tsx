@@ -724,6 +724,9 @@ function PlannerClientInner({
   const [blankTripBusy, setBlankTripBusy] = useState(false);
   const [wizardEditId, setWizardEditId] = useState<string | null>(null);
   const [smartOpen, setSmartOpen] = useState(false);
+  const [smartScopeOverride, setSmartScopeOverride] = useState<"trip" | null>(
+    null,
+  );
   const [smartError, setSmartError] = useState<string | null>(null);
   const [smartPlanUndoOpen, setSmartPlanUndoOpen] = useState(false);
   const [dayPlannerDate, setDayPlannerDate] = useState<string | null>(null);
@@ -1203,6 +1206,7 @@ function PlannerClientInner({
     if (smartPlanOpenedFromQueryRef.current) return;
     if (!activeTripId) return;
     smartPlanOpenedFromQueryRef.current = true;
+    setSmartScopeOverride("trip");
     setSmartOpen(true);
     startTransition(() => {
       router.replace(overviewHref, { scroll: false });
@@ -3095,6 +3099,7 @@ function PlannerClientInner({
               size="md"
               onClick={() => {
                 setSmartError(null);
+                setSmartScopeOverride("trip");
                 setSmartOpen(true);
               }}
             >
@@ -3437,6 +3442,7 @@ function PlannerClientInner({
               dayDetailOpen={dayDetailOpen}
               onEmptyCalendarGenerateAi={() => {
                 setSmartError(null);
+                setSmartScopeOverride("trip");
                 setSmartOpen(true);
               }}
               onEmptyCalendarAddManually={() =>
@@ -3467,7 +3473,10 @@ function PlannerClientInner({
               timelineWeatherCrowd={plannerTimelineWeatherCrowd}
               plannerDayUndoAvailable={plannerDayUndoAvailable}
               shiftPlannerTimelineDay={shiftPlannerTimelineDay}
-              onPlanThisDay={() => setSmartOpen(true)}
+              onPlanThisDay={() => {
+                setSmartScopeOverride(null);
+                setSmartOpen(true);
+              }}
               onUndoAiTimeline={() => {
                 if (plannerTimelineDateKey) {
                   handleUndoDayTweak(plannerTimelineDateKey);
@@ -3694,6 +3703,7 @@ function PlannerClientInner({
           setSmartError(null);
           setSmartCanRetryPartial(false);
           setSmartRetryPayload(null);
+          setSmartScopeOverride(null);
         }}
         trip={activeTrip}
         parks={smartPlanParks}
@@ -3703,8 +3713,14 @@ function PlannerClientInner({
         showFreeTierNote={isFreeTierForTripLimit(productTier)}
         isGenerating={isAiGenerating}
         submitError={smartError}
-        scope={smartPlanDayKey ? "day" : "trip"}
-        dayDateKey={smartPlanDayKey}
+        scope={
+          smartScopeOverride === "trip"
+            ? "trip"
+            : smartPlanDayKey
+              ? "day"
+              : "trip"
+        }
+        dayDateKey={smartScopeOverride === "trip" ? null : smartPlanDayKey}
         dayHasAiTimeline={Boolean(
           smartPlanDayKey &&
             activeTrip &&

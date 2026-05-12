@@ -271,6 +271,12 @@ export function SmartPlanModal({
 
   const isDayScope = scope === "day" && Boolean(dayDateKey);
 
+  useEffect(() => {
+    if (isDayScope && mode === "custom") {
+      setMode("smart");
+    }
+  }, [isDayScope, mode]);
+
   const persistDayScopeTimes = useCallback(async (): Promise<boolean> => {
     if (!isDayScope || !dayDateKey || !trip) return true;
     const a = dayArrival.trim();
@@ -982,19 +988,21 @@ export function SmartPlanModal({
                 >
                   Smart suggestions
                 </button>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={mode === "custom"}
-                  onClick={() => setMode("custom")}
-                  className={`flex-1 rounded-md px-3 py-2 text-center font-sans text-sm font-medium transition ${
-                    mode === "custom"
-                      ? "bg-tt-royal text-white"
-                      : "text-tt-ink-muted hover:bg-tt-bg-soft"
-                  }`}
-                >
-                  Tell TripTiles
-                </button>
+                {!isDayScope ? (
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={mode === "custom"}
+                    onClick={() => setMode("custom")}
+                    className={`flex-1 rounded-md px-3 py-2 text-center font-sans text-sm font-medium transition ${
+                      mode === "custom"
+                        ? "bg-tt-royal text-white"
+                        : "text-tt-ink-muted hover:bg-tt-bg-soft"
+                    }`}
+                  >
+                    Tell TripTiles
+                  </button>
+                ) : null}
               </div>
 
               {mode === "smart" ? (
