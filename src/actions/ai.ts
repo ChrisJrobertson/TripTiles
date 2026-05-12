@@ -3364,6 +3364,14 @@ export type GenerateDayTimelineResult =
       ok: false;
       error: string;
       code: "rate_limit" | "tier_limit" | "invalid_day" | "ai_failure";
+      errorCode?:
+        | "validation_failed"
+        | "ai_error"
+        | "rate_limited"
+        | "tier_limited"
+        | "invalid_day"
+        | "unknown";
+      userMessage?: string;
     };
 
 export async function generateDayTimeline(
@@ -3670,6 +3678,9 @@ END USER CONSTRAINTS`
         error:
           "The day plan was cut off before it finished. Please try again — if it keeps happening, use shorter guest notes for this day.",
         code: "ai_failure",
+        errorCode: "ai_error",
+        userMessage:
+          "The day plan was cut off before it finished. Please try again — if it keeps happening, use shorter guest notes for this day.",
       };
     }
     const block0 = msg.content[0];
@@ -3701,6 +3712,8 @@ END USER CONSTRAINTS`
         ok: false,
         error: "The plan could not be read. Try again.",
         code: "ai_failure",
+        errorCode: "ai_error",
+        userMessage: "The plan could not be read. Try again.",
       };
     }
 
@@ -3729,6 +3742,9 @@ END USER CONSTRAINTS`
         ok: false,
         error: "The plan was incomplete. Try again.",
         code: "ai_failure",
+        errorCode: "validation_failed",
+        userMessage:
+          "We couldn't put together a plan that fits all your constraints. Try generating again, or adjust your custom prompt.",
       };
     }
 

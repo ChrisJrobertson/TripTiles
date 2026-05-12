@@ -14,6 +14,7 @@ import {
   popDaySnapshot,
   type GenerateAIPlanInput,
   type GenerateAIPlanResult,
+  type GenerateDayTimelineResult,
 } from "@/actions/ai";
 import {
   createBlankTripAction,
@@ -342,6 +343,45 @@ async function runSmartPlanWithTimeoutAndRetry(
       error: "AI_ERROR",
       message:
         "Smart Plan couldn't generate your plan — try again from the planner, or build it yourself.",
+    };
+  }
+}
+
+function dayTimelineFailureMessage(res: GenerateDayTimelineResult): string {
+  if (res.ok) return "";
+  if (res.userMessage) return res.userMessage;
+  if (res.errorCode === "validation_failed") {
+    return "We couldn't put together a plan that fits all your constraints. Try generating again, or adjust your custom prompt.";
+  }
+  switch (res.code) {
+    case "rate_limit":
+      return "Too many generations in a row. Try again in a minute.";
+    case "invalid_day":
+      return "This date is outside your trip dates.";
+    case "tier_limit":
+      return res.error || "Smart Plan is not available on your current plan.";
+    default:
+      return "We couldn't put together a plan that fits all your constraints. Try generating again, or adjust your custom prompt.";
+  }
+}
+
+async function runDayTimelineWithTimeout(
+  tripId: string,
+  dateKey: string,
+): Promise<GenerateDayTimelineResult> {
+  try {
+    return await withTimeout(
+      generateDayTimeline(tripId, dateKey),
+      SMART_PLAN_CLIENT_TIMEOUT_MS,
+    );
+  } catch {
+    return {
+      ok: false,
+      error: "TIMEOUT",
+      code: "ai_failure",
+      errorCode: "unknown",
+      userMessage:
+        "Smart Plan is taking longer than expected. Please try again in a moment.",
     };
   }
 }
@@ -1744,7 +1784,7 @@ function PlannerClientInner({
         }
         const tripBefore = trips.find((x) => x.id === activeTripId);
         if (payload.dateKey) {
-          const dayRes = await generateDayTimeline(
+          const dayRes = await runDayTimelineWithTimeout(
             activeTripId,
             payload.dateKey,
           );
@@ -1755,15 +1795,17 @@ function PlannerClientInner({
               setTierLimitReason(dayRes.error);
               setTierLimitOpen(true);
             } else if (dayRes.code === "rate_limit") {
-              showToast(
-                "Too many generations in a row. Try again in a minute.",
-              );
+              const message = dayTimelineFailureMessage(dayRes);
+              setSmartError(message);
+              showToast(message);
             } else if (dayRes.code === "invalid_day") {
-              showToast("This date is outside your trip dates.");
+              const message = dayTimelineFailureMessage(dayRes);
+              setSmartError(message);
+              showToast(message);
             } else {
-              showToast(
-                "Couldn't build the plan. Give it another go in a moment.",
-              );
+              const message = dayTimelineFailureMessage(dayRes);
+              setSmartError(message);
+              showToast(message);
             }
             return;
           }
