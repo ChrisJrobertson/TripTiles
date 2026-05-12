@@ -170,6 +170,11 @@ function AppNavHeaderFallback({
                   </Link>
                 </li>
                 <li>
+                  <Link href="/today-at-park" className={mobileMenuLink()}>
+                    Live waits
+                  </Link>
+                </li>
+                <li>
                   <Link
                     href="/planner?tab=planning"
                     className={mobileMenuLink()}
@@ -207,6 +212,9 @@ function AppNavHeaderFallback({
           >
             <Link href="/planner" className={pillNavInactive()}>
               Planner
+            </Link>
+            <Link href="/today-at-park" className={pillNavInactive()}>
+              Live waits
             </Link>
             <Link href="/planner?tab=planning" className={pillNavInactive()}>
               Organise
@@ -323,6 +331,7 @@ function AppNavHeaderInner({
 
   const plannerHomeActive = onPlanner && tab === "planner";
   const planningActive = onPlanner && tab === "planning";
+  const liveWaitsActive = pathname === "/today-at-park";
   const passportAreaActive =
     pathname === "/passport" ||
     pathname?.startsWith("/passport/") ||
@@ -370,6 +379,15 @@ function AppNavHeaderInner({
                     aria-current={plannerHomeActive ? "page" : undefined}
                   >
                     Planner
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/today-at-park"
+                    className={mobileNavLinkClass(liveWaitsActive)}
+                    aria-current={liveWaitsActive ? "page" : undefined}
+                  >
+                    Live waits
                   </Link>
                 </li>
                 <li>
@@ -425,6 +443,7 @@ function AppNavHeaderInner({
             aria-label="Main navigation"
           >
             {linkPrimary("planner", plannerHomeHref, "Planner", plannerHomeActive)}
+            {linkPrimary("live-waits", "/today-at-park", "Live waits", liveWaitsActive)}
             {linkPrimary("planning", planningHref, "Organise", planningActive)}
             {passportAreaActive ? (
               <span className={pillNavActive()} aria-current="page">

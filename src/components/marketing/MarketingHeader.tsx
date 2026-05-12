@@ -18,6 +18,12 @@ export function MarketingHeader() {
             Browse plans
           </Link>
           <Link
+            href="/today-at-park"
+            className="text-tt-ink-muted/90 transition hover:text-tt-royal"
+          >
+            Live waits
+          </Link>
+          <Link
             href="/pricing"
             className="text-tt-ink-muted/90 transition hover:text-tt-royal"
           >
