@@ -24,6 +24,13 @@ export const metadata: Metadata = {
     "See current posted ride waits and operating status for same-day park visits.",
 };
 
+const LIVE_WAITS_EXCLUDED_REGIONS = new Set([
+  "florida_combo",
+  "uk_combo",
+  "cruise",
+  "custom",
+]);
+
 function firstParam(value: string | string[] | undefined): string | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value ?? null;
@@ -122,7 +129,9 @@ export default async function TodayAtParkPage({
   const regionIdsWithCoverage = new Set<string>();
   for (const park of parks) {
     for (const regionId of park.region_ids) {
-      if (regionNameById.has(regionId)) regionIdsWithCoverage.add(regionId);
+      if (regionNameById.has(regionId) && !LIVE_WAITS_EXCLUDED_REGIONS.has(regionId)) {
+        regionIdsWithCoverage.add(regionId);
+      }
     }
   }
 
