@@ -23,6 +23,7 @@
     "verify:smart-plan-cruise": "npx tsx scripts/verify-smart-plan-cruise-filter.ts",
     "live-wait:ingest": "node --import tsx scripts/live-wait-ingest.ts",
     "live-wait:ingest:dry": "node --import tsx scripts/live-wait-ingest.ts --dry-run",
+    "seed-live-wait-mappings": "node --env-file=.env.local --import tsx scripts/seed-live-wait-mappings.ts",
     "test": "npx tsx src/lib/skip-line-clashes.test.ts && npx tsx src/lib/ai-sanitize-notes.test.ts && npx tsx src/lib/region-skip-line-ui.test.ts && npx tsx src/lib/ai/region-briefing.test.ts && npx tsx src/lib/data-import/import-validation.test.ts",
     "test:skip-line-clashes": "npx tsx src/lib/skip-line-clashes.test.ts",
     "deploy:vercel": "vercel --prod --yes"

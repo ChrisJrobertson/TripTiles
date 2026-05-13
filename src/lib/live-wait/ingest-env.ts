@@ -6,6 +6,7 @@ export function liveWaitExternalParkIdsFromEnv(): string[] {
   const raw =
     process.env.LIVE_WAIT_QUEUE_TIMES_PARK_IDS?.trim() ||
     process.env.LIVE_WAIT_EXTERNAL_PARK_IDS?.trim();
+  // Production should include all mapped Queue-Times parks, e.g. 6,5,7,8,65,64,334,16,17,4,28,31.
   if (!raw) return ["6", "5"];
   return raw
     .split(/[,;\s]+/)

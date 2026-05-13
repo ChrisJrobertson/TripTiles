@@ -13,6 +13,12 @@ export type TodayAtParkOption = {
   id: string;
   name: string;
   park_group: string;
+  region_ids: string[];
+};
+
+export type TodayAtParkRegionOption = {
+  id: string;
+  name: string;
 };
 
 export type TodayAtParkRide = {
@@ -29,6 +35,9 @@ export type TodayAtParkRide = {
 
 type Props = {
   parks: TodayAtParkOption[];
+  allParks: TodayAtParkOption[];
+  regions: TodayAtParkRegionOption[];
+  selectedRegionId: string | null;
   selectedParkId: string | null;
   selectedParkName: string | null;
   rides: TodayAtParkRide[];
@@ -185,6 +194,9 @@ function RideSection({
 
 export function TodayAtParkClient({
   parks,
+  allParks,
+  regions,
+  selectedRegionId,
   selectedParkId,
   selectedParkName,
   rides,
@@ -209,12 +221,25 @@ export function TodayAtParkClient({
   const staleCount = rides.filter((row) => isRowStale(row, generatedAtIso)).length;
   const latest = latestObservedAt(rides);
 
+  function buildUrl(params: { regionId?: string | null; parkId?: string | null }) {
+    const next = new URLSearchParams();
+    if (params.regionId) next.set("regionId", params.regionId);
+    if (params.parkId) next.set("parkId", params.parkId);
+    if (sort !== "shortest") next.set("sort", sort);
+    const qs = next.toString();
+    return qs ? `/today-at-park?${qs}` : "/today-at-park";
+  }
+
+  function changeRegion(nextRegionId: string) {
+    const regionId = nextRegionId && nextRegionId !== "all" ? nextRegionId : null;
+    const firstParkInRegion = regionId
+      ? allParks.find((park) => park.region_ids.includes(regionId))?.id ?? null
+      : null;
+    router.push(buildUrl({ regionId, parkId: firstParkInRegion }));
+  }
+
   function changePark(nextParkId: string) {
-    if (!nextParkId) {
-      router.push("/today-at-park");
-      return;
-    }
-    router.push(`/today-at-park?parkId=${encodeURIComponent(nextParkId)}`);
+    router.push(buildUrl({ regionId: selectedRegionId, parkId: nextParkId || null }));
   }
 
   return (
@@ -239,7 +264,23 @@ export function TodayAtParkClient({
         </div>
       </header>
 
-      <Card className="grid gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_220px]">
+      <Card className="grid gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px]">
+        <label className="flex flex-col gap-2 font-sans text-sm font-semibold text-tt-ink">
+          Region
+          <select
+            value={selectedRegionId ?? "all"}
+            onChange={(event) => changeRegion(event.target.value)}
+            className="min-h-11 rounded-tt-md border border-tt-line bg-white px-3 font-sans text-sm font-medium text-tt-ink shadow-tt-sm"
+          >
+            <option value="all">All regions</option>
+            {regions.map((region) => (
+              <option key={region.id} value={region.id}>
+                {region.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
         <label className="flex flex-col gap-2 font-sans text-sm font-semibold text-tt-ink">
           Park
           <select

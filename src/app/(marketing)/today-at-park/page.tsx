@@ -6,6 +6,7 @@ import {
 } from "@/components/live-wait/TodayAtParkClient";
 import { getAttractionsForParksPublic } from "@/lib/db/attractions";
 import { getParksByIds } from "@/lib/db/parks";
+import { getAllRegions } from "@/lib/db/regions";
 import {
   getCurrentLiveWaitsForParks,
   getLiveWaitCoverageParkIds,
@@ -49,6 +50,7 @@ function optionFromPark(park: Park): TodayAtParkOption {
     id: park.id,
     name: park.name,
     park_group: park.park_group,
+    region_ids: park.region_ids,
   };
 }
 
@@ -84,7 +86,8 @@ export default async function TodayAtParkPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const sp = await searchParams;
-  const selectedParkId = firstParam(sp.parkId);
+  const requestedParkId = firstParam(sp.parkId);
+  const requestedRegionId = firstParam(sp.regionId);
   const initialSort = parseSort(firstParam(sp.sort));
 
   let loadError: string | null = null;
@@ -96,15 +99,51 @@ export default async function TodayAtParkPage({
   }
 
   const parkIdsToLoad = [
-    ...new Set([...(selectedParkId ? [selectedParkId] : []), ...coverageParkIds]),
+    ...new Set([...(requestedParkId ? [requestedParkId] : []), ...coverageParkIds]),
   ];
 
   let parks: Park[] = [];
+  let regions: { id: string; name: string }[] = [];
   try {
-    parks = await getParksByIds(parkIdsToLoad);
+    const [parkRows, regionRows] = await Promise.all([
+      getParksByIds(parkIdsToLoad),
+      getAllRegions(),
+    ]);
+    parks = parkRows;
+    regions = regionRows.map((region) => ({
+      id: region.id,
+      name: region.name || region.short_name || region.id,
+    }));
   } catch (error) {
     loadError = loadError ?? errorMessage(error);
   }
+
+  const regionNameById = new Map(regions.map((region) => [region.id, region.name]));
+  const regionIdsWithCoverage = new Set<string>();
+  for (const park of parks) {
+    for (const regionId of park.region_ids) {
+      if (regionNameById.has(regionId)) regionIdsWithCoverage.add(regionId);
+    }
+  }
+
+  const regionOptions = [...regionIdsWithCoverage]
+    .map((regionId) => ({
+      id: regionId,
+      name: regionNameById.get(regionId) ?? regionId,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const selectedRegionId =
+    requestedRegionId && requestedRegionId !== "all" && regionIdsWithCoverage.has(requestedRegionId)
+      ? requestedRegionId
+      : null;
+  const parksForSelectedRegion = selectedRegionId
+    ? parks.filter((park) => park.region_ids.includes(selectedRegionId))
+    : parks;
+  const selectedParkId =
+    requestedParkId && parksForSelectedRegion.some((park) => park.id === requestedParkId)
+      ? requestedParkId
+      : null;
 
   let liveData: LiveWaitCurrentApiResponse = {
     items: [],
@@ -125,14 +164,7 @@ export default async function TodayAtParkPage({
     }
   }
 
-  const parkOptions = parks.map(optionFromPark);
-  if (selectedParkId && !parkOptions.some((park) => park.id === selectedParkId)) {
-    parkOptions.push({
-      id: selectedParkId,
-      name: "Selected park",
-      park_group: "",
-    });
-  }
+  const parkOptions = parksForSelectedRegion.map(optionFromPark);
 
   const selectedParkName =
     parks.find((park) => park.id === selectedParkId)?.name ??
@@ -142,6 +174,9 @@ export default async function TodayAtParkPage({
     <main className="flex-1">
       <TodayAtParkClient
         parks={parkOptions}
+        allParks={parks.map(optionFromPark)}
+        regions={regionOptions}
+        selectedRegionId={selectedRegionId}
         selectedParkId={selectedParkId}
         selectedParkName={selectedParkName}
         rides={buildRideRows(liveData, attractions)}
