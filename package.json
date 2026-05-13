@@ -24,6 +24,8 @@
     "live-wait:ingest": "node --import tsx scripts/live-wait-ingest.ts",
     "live-wait:ingest:dry": "node --import tsx scripts/live-wait-ingest.ts --dry-run",
     "seed-live-wait-mappings": "node --env-file=.env.local --import tsx scripts/seed-live-wait-mappings.ts",
+    "build:live-wait-mapping-workbook": "npx tsx scripts/build-live-wait-mapping-workbook.ts",
+    "generate:live-wait-park-mappings-seed": "npx tsx scripts/generate-live-wait-park-mappings-seed.ts",
     "test": "npx tsx src/lib/skip-line-clashes.test.ts && npx tsx src/lib/ai-sanitize-notes.test.ts && npx tsx src/lib/region-skip-line-ui.test.ts && npx tsx src/lib/ai/region-briefing.test.ts && npx tsx src/lib/data-import/import-validation.test.ts",
     "test:skip-line-clashes": "npx tsx src/lib/skip-line-clashes.test.ts",
     "deploy:vercel": "vercel --prod --yes"
@@ -53,6 +55,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.15",
+    "exceljs": "^4.4.0",
     "tailwindcss": "^4",
     "tsx": "^4.19.3",
     "typescript": "^5",
