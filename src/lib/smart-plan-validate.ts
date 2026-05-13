@@ -9,20 +9,24 @@ const SLOT_ROLL: ("am" | "pm" | "lunch" | "dinner")[] = [
 ];
 
 /**
- * Heuristic: if planner_day_notes for a date name-checks a catalogue park the guest did not assign
- * for that day, log a warning (does not block save).
+ * Heuristic: if day-level notes for a date name-check a catalogue park the guest did not assign
+ * for that day, log a warning (does not block save). Used for `planner_day_notes` and
+ * `day_crowd_notes`.
  */
 export function validateDayNotesAgainstAssignments(
-  plannerDayNotes: Record<string, string> | undefined,
+  dayNotes: Record<string, string> | undefined,
   userAssignments: Assignments,
   parks: Park[],
   allowedDates: Set<string>,
+  options?: { mismatchLabel?: string },
 ): {
   ok: boolean;
   mismatches: Array<{ date: string; assigned: string[]; mentioned: string[] }>;
   warningText: string | null;
 } {
-  if (!plannerDayNotes || Object.keys(plannerDayNotes).length === 0) {
+  const mismatchLabel = options?.mismatchLabel ?? "day_notes";
+
+  if (!dayNotes || Object.keys(dayNotes).length === 0) {
     return { ok: true, mismatches: [], warningText: null };
   }
 
@@ -32,7 +36,7 @@ export function validateDayNotesAgainstAssignments(
     mentioned: string[];
   }> = [];
 
-  for (const [dateKey, noteRaw] of Object.entries(plannerDayNotes)) {
+  for (const [dateKey, noteRaw] of Object.entries(dayNotes)) {
     if (!allowedDates.has(dateKey)) continue;
     const day = userAssignments[dateKey];
     if (!day || typeof day !== "object") continue;
@@ -71,8 +75,30 @@ export function validateDayNotesAgainstAssignments(
   return {
     ok: false,
     mismatches: mismatchList,
-    warningText: `planner_day_notes_park_mismatch: ${JSON.stringify(
+    warningText: `${mismatchLabel}_park_mismatch: ${JSON.stringify(
       mismatchList.slice(0, 8),
     )}`,
   };
+}
+
+/**
+ * For single-park AI paths: if the blob mentions another catalogue park by display name
+ * (length ≥ 4), the output may be misaligned with the guest's chosen park.
+ */
+export function inferSingleParkOutputMatch(
+  textBlob: string,
+  primaryParkId: string | null,
+  parks: Park[],
+): boolean | null {
+  const t = textBlob.trim();
+  if (!t || !primaryParkId) return null;
+  const expected = new Set<string>([primaryParkId]);
+  const lower = t.toLowerCase();
+  for (const p of parks) {
+    if (expected.has(p.id)) continue;
+    const nm = p.name.trim();
+    if (nm.length < 4) continue;
+    if (lower.includes(nm.toLowerCase())) return false;
+  }
+  return true;
 }

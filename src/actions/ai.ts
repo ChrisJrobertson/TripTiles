@@ -115,8 +115,12 @@ import {
   collectUserBrief,
   formatCurrentTripAssignmentsBlock,
   formatMandatoryAnchorsBlock,
+  type PromptDataQualitySummary,
 } from "@/lib/smart-plan-user-brief";
-import { validateDayNotesAgainstAssignments } from "@/lib/smart-plan-validate";
+import {
+  inferSingleParkOutputMatch,
+  validateDayNotesAgainstAssignments,
+} from "@/lib/smart-plan-validate";
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY ?? "",
 });
@@ -124,6 +128,48 @@ const anthropic = new Anthropic({
 const SMART_PLAN_MODEL = "claude-haiku-4-5-20251001";
 const AI_GENERATIONS_TOTAL_COLUMN =
   `ai_generations_${"life"}${"time"}` as const;
+
+type ResponseCompletionStatus = "complete" | "truncated" | "error";
+
+function responseCompletionFromStopReason(
+  stopReason: string | null | undefined,
+  failed: boolean,
+): ResponseCompletionStatus {
+  if (failed) return "error";
+  if (stopReason === "max_tokens") return "truncated";
+  return "complete";
+}
+
+/** Below Claude Haiku 4.5's documented high output ceiling (see Anthropic model overview). */
+const SMART_PLAN_OUTPUT_CAP = 32_000;
+
+function smartPlanMaxTokens(tripDays: number, retry: boolean): number {
+  const base = retry ? 20_000 : 16_384;
+  const extra = Math.max(0, tripDays - 7) * 800;
+  return Math.min(base + extra, SMART_PLAN_OUTPUT_CAP);
+}
+
+function promptQualityRecord(q: PromptDataQualitySummary): Record<string, unknown> {
+  return {
+    custom_text_provided: q.custom_text_provided,
+    custom_text_length: q.custom_text_length,
+    custom_text_reached_prompt: q.custom_text_reached_prompt,
+    custom_text_deduped_against: q.custom_text_deduped_against,
+    user_brief_sources: q.user_brief_sources,
+  };
+}
+
+function computeOutputParkRegionMatchForSmartPlan(
+  plannerNotes: Record<string, string> | undefined,
+  crowdNotes: Record<string, string> | undefined,
+  plannerOk: boolean,
+  crowdOk: boolean,
+): boolean | null {
+  const hasPlanner = plannerNotes && Object.keys(plannerNotes).length > 0;
+  const hasCrowd = crowdNotes && Object.keys(crowdNotes).length > 0;
+  if (!hasPlanner && !hasCrowd) return null;
+  return plannerOk && crowdOk;
+}
 
 function smartPlanModelForProfileTier(
   tier: string | null | undefined,
@@ -1048,10 +1094,13 @@ async function recordAiGeneration(params: {
   success?: boolean;
   status: AiGenerationStatus;
   error: string | null;
+  prompt_data_quality_summary?: Record<string, unknown> | null;
+  response_completion_status?: ResponseCompletionStatus | null;
+  output_park_region_match?: boolean | null;
 }): Promise<AiGenerationInsertResult> {
   try {
     const admin = createServiceRoleClient();
-    const { error } = await admin.from("ai_generations").insert({
+    const row: Record<string, unknown> = {
       user_id: params.userId,
       trip_id: params.tripId,
       prompt: params.prompt,
@@ -1062,7 +1111,17 @@ async function recordAiGeneration(params: {
       success: params.success ?? params.status === "success",
       status: params.status,
       error: params.error,
-    });
+    };
+    if (params.prompt_data_quality_summary != null) {
+      row.prompt_data_quality_summary = params.prompt_data_quality_summary;
+    }
+    if (params.response_completion_status != null) {
+      row.response_completion_status = params.response_completion_status;
+    }
+    if (params.output_park_region_match !== undefined) {
+      row.output_park_region_match = params.output_park_region_match;
+    }
+    const { error } = await admin.from("ai_generations").insert(row);
     if (!error) return { error: null };
     console.error("[ai] ai_generations insert failed", {
       tripId: params.tripId,
@@ -1231,6 +1290,7 @@ ${input.mode === "freetext" ? `\nUSER REQUEST: ${input.freetext?.trim()}` : ""}`
   let outputTokens = 0;
   let aiGenStatus: AiGenerationStatus = "pending";
   let aiGenError: string | null = null;
+  let tweakDayStopReason: string | null = null;
   try {
     const msg = await anthropic.messages.create({
       model,
@@ -1245,6 +1305,7 @@ ${input.mode === "freetext" ? `\nUSER REQUEST: ${input.freetext?.trim()}` : ""}`
       ],
       messages: [{ role: "user", content: userPrompt }],
     });
+    tweakDayStopReason = msg.stop_reason ?? null;
     const usage = msg.usage as AnthropicMessageUsage | undefined;
     inputTokens = inputTokensFromUsage(usage);
     outputTokens = usage?.output_tokens ?? 0;
@@ -1287,6 +1348,7 @@ ${input.mode === "freetext" ? `\nUSER REQUEST: ${input.freetext?.trim()}` : ""}`
     return { status: "error", error: msg, code: "ai_failure" };
   } finally {
     if (aiGenStatus !== "pending") {
+      const ft = input.freetext?.trim();
       await recordAiGeneration({
         userId: user.id,
         tripId: input.tripId,
@@ -1296,6 +1358,19 @@ ${input.mode === "freetext" ? `\nUSER REQUEST: ${input.freetext?.trim()}` : ""}`
         outputTokens,
         status: aiGenStatus,
         error: aiGenError,
+        prompt_data_quality_summary: {
+          path: "tweakDay",
+          custom_text_provided: Boolean(ft),
+          custom_text_length: ft?.length ?? 0,
+          custom_text_reached_prompt: Boolean(ft),
+          custom_text_deduped_against: null,
+          user_brief_sources: ft ? ["tweakDay.freetext"] : [],
+        },
+        response_completion_status: responseCompletionFromStopReason(
+          tweakDayStopReason,
+          aiGenStatus === "failed",
+        ),
+        output_park_region_match: null,
       });
     }
   }
@@ -1473,7 +1548,6 @@ ${cruiseLine}`;
 
 function buildPlannerUserMessage(params: {
   mode: "smart" | "custom";
-  userPrompt: string;
   dateKey?: string;
   regionName: string;
   trip: Trip;
@@ -1969,9 +2043,11 @@ export async function runGenerateAIPlan(
   );
 
   const parkIdToName = new Map(parksForPrompt.map((p) => [p.id, p.name]));
-  const userBrief = collectUserBrief(trip, {
+  const smartPlanTripDays = allowedDateKeys(trip.start_date, trip.end_date).size;
+  const { brief: userBrief, quality: userBriefQuality } = collectUserBrief(trip, {
     inlineUserPrompt: input.userPrompt,
   });
+  const smartPlanPromptQualityRecord = promptQualityRecord(userBriefQuality);
   // PART 1 + PART 2: build USER PRIORITIES block(s).
   //
   // `userPrioritiesBlock` is the version inlined into the assignments block
@@ -2084,7 +2160,6 @@ export async function runGenerateAIPlan(
     buildAiRegionBriefingBlock(region, parksForPrompt),
     buildPlannerUserMessage({
       mode: input.mode,
-      userPrompt: input.userPrompt,
       userBrief,
       fullTripAssignmentsBlock,
       mandatoryAnchorsBlock,
@@ -2145,6 +2220,7 @@ export async function runGenerateAIPlan(
     let lastMeta: MetaShape = {};
     let finalSanitized: Assignments | null = null;
     let lastRawText = "";
+    let lastSmartPlanStop: string | null = null;
 
     planAttempts: for (let planAttempt = 0; planAttempt < 2; planAttempt++) {
       const t0 = Date.now();
@@ -2154,8 +2230,8 @@ export async function runGenerateAIPlan(
       let streamStoppedEarly = false;
 
       try {
-        const SMART_MAIN_MAX = 16_384;
-        const SMART_RETRY_MAX = 20_000;
+        const SMART_MAIN_MAX = smartPlanMaxTokens(smartPlanTripDays, false);
+        const SMART_RETRY_MAX = smartPlanMaxTokens(smartPlanTripDays, true);
         let lastStopReason: string | null = null;
         tokenTries: for (let tPass = 0; tPass < 2; tPass++) {
           const maxTok = tPass === 0 ? SMART_MAIN_MAX : SMART_RETRY_MAX;
@@ -2229,6 +2305,7 @@ export async function runGenerateAIPlan(
               }
             }
           }
+          lastSmartPlanStop = lastStopReason;
           if (lastStopReason === "max_tokens" && tPass < 1) {
             logAiGen({
               step: "anthropic_max_tokens_retry",
@@ -2243,6 +2320,10 @@ export async function runGenerateAIPlan(
         if (lastStopReason === "max_tokens") {
           inputTokens = localInputTokens;
           outputTokens = localOutputTokens;
+          console.warn("[ai] smart_plan truncated_after_retry", {
+            tripId: input.tripId,
+            maxTokens: SMART_RETRY_MAX,
+          });
           await recordAiGeneration({
             userId: user.id,
             tripId: input.tripId,
@@ -2253,6 +2334,9 @@ export async function runGenerateAIPlan(
             success: false,
             status: "failed",
             error: "truncated: stop_reason: max_tokens (after output budget increase)",
+            prompt_data_quality_summary: smartPlanPromptQualityRecord,
+            response_completion_status: "truncated",
+            output_park_region_match: null,
           });
           return {
             ok: false,
@@ -2323,6 +2407,12 @@ export async function runGenerateAIPlan(
           success: false,
           status: "failed",
           error: "AI stream stopped early",
+          prompt_data_quality_summary: smartPlanPromptQualityRecord,
+          response_completion_status: responseCompletionFromStopReason(
+            lastSmartPlanStop,
+            true,
+          ),
+          output_park_region_match: null,
         });
 
         return {
@@ -2360,6 +2450,12 @@ export async function runGenerateAIPlan(
             success: false,
             status: "failed",
             error: "AI stream incomplete (invalid JSON)",
+            prompt_data_quality_summary: smartPlanPromptQualityRecord,
+            response_completion_status: responseCompletionFromStopReason(
+              lastSmartPlanStop,
+              true,
+            ),
+            output_park_region_match: null,
           });
           return {
             ok: false,
@@ -2379,6 +2475,12 @@ export async function runGenerateAIPlan(
           success: false,
           status: "failed",
           error: "Invalid JSON from model",
+          prompt_data_quality_summary: smartPlanPromptQualityRecord,
+          response_completion_status: responseCompletionFromStopReason(
+            lastSmartPlanStop,
+            true,
+          ),
+          output_park_region_match: null,
         });
 
         return {
@@ -2441,6 +2543,12 @@ export async function runGenerateAIPlan(
           success: false,
           status: "failed",
           error: errDetail,
+          prompt_data_quality_summary: smartPlanPromptQualityRecord,
+          response_completion_status: responseCompletionFromStopReason(
+            lastSmartPlanStop,
+            true,
+          ),
+          output_park_region_match: null,
         });
         currentUserMessage =
           composedUserMessage +
@@ -2484,6 +2592,12 @@ export async function runGenerateAIPlan(
         success: false,
         status: "failed",
         error: errDetail,
+        prompt_data_quality_summary: smartPlanPromptQualityRecord,
+        response_completion_status: responseCompletionFromStopReason(
+          lastSmartPlanStop,
+          true,
+        ),
+        output_park_region_match: null,
       });
 
       return {
@@ -2530,6 +2644,12 @@ export async function runGenerateAIPlan(
         success: false,
         status: "failed",
         error: "Plan failed guardrail validation (empty after cleanup)",
+        prompt_data_quality_summary: smartPlanPromptQualityRecord,
+        response_completion_status: responseCompletionFromStopReason(
+          lastSmartPlanStop,
+          true,
+        ),
+        output_park_region_match: null,
       });
 
       return {
@@ -2572,20 +2692,39 @@ export async function runGenerateAIPlan(
     // Validate day notes against the post-generation, post-merge, post-sanitise
     // assignments — `merged` — not `trip.assignments` (the pre-generation state).
     // The previous comparison produced false-positive mismatch warnings on every run.
-    const dayNoteAssignmentCheck = validateDayNotesAgainstAssignments(
+    const plannerDayNoteCheck = validateDayNotesAgainstAssignments(
       meta.planner_day_notes,
       merged,
       parksForPrompt,
       fullDateAllow,
+      { mismatchLabel: "planner_day_notes" },
     );
-    if (dayNoteAssignmentCheck.warningText) {
+    const dayCrowdNoteCheck = validateDayNotesAgainstAssignments(
+      meta.day_crowd_notes,
+      merged,
+      parksForPrompt,
+      fullDateAllow,
+      { mismatchLabel: "day_crowd_notes" },
+    );
+    const dayNoteWarningText =
+      [plannerDayNoteCheck.warningText, dayCrowdNoteCheck.warningText]
+        .filter(Boolean)
+        .join(" | ") || null;
+    if (dayNoteWarningText) {
       logAiGen({
-        step: "planner_day_notes_park_mismatch",
+        step: "day_notes_park_mismatch",
         tripId: input.tripId,
         userId: user.id,
-        details: { warning: dayNoteAssignmentCheck.warningText },
+        details: { warning: dayNoteWarningText },
       });
     }
+
+    const outputParkRegionMatch = computeOutputParkRegionMatchForSmartPlan(
+      meta.planner_day_notes,
+      meta.day_crowd_notes,
+      plannerDayNoteCheck.ok,
+      dayCrowdNoteCheck.ok,
+    );
 
     // PART 3: post-merge sanity check. Logs and surfaces a warning in
     // `ai_generations.error` (prefixed `low_park_density:`) when a park-heavy
@@ -2706,13 +2845,17 @@ export async function runGenerateAIPlan(
         success: false,
         status: "failed",
         error: upErr.message,
+        prompt_data_quality_summary: smartPlanPromptQualityRecord,
+        response_completion_status: "error",
+        output_park_region_match: null,
       });
 
       return { ok: false, error: "AI_ERROR", message: upErr.message };
     }
 
     const successWarnings = [
-      dayNoteAssignmentCheck.warningText,
+      plannerDayNoteCheck.warningText,
+      dayCrowdNoteCheck.warningText,
       lowParkDensityWarning,
     ]
       .filter((s): s is string => !!s && s.trim().length > 0)
@@ -2727,6 +2870,12 @@ export async function runGenerateAIPlan(
       success: true,
       status: "success",
       error: successWarnings.length > 0 ? successWarnings : null,
+      prompt_data_quality_summary: smartPlanPromptQualityRecord,
+      response_completion_status: responseCompletionFromStopReason(
+        lastSmartPlanStop,
+        false,
+      ),
+      output_park_region_match: outputParkRegionMatch,
     });
 
     if (genInsertErr) {
@@ -2794,6 +2943,9 @@ export async function runGenerateAIPlan(
         success: false,
         status: "cancelled",
         error: null,
+        prompt_data_quality_summary: smartPlanPromptQualityRecord,
+        response_completion_status: null,
+        output_park_region_match: null,
       });
       return {
         ok: false,
@@ -2829,6 +2981,9 @@ export async function runGenerateAIPlan(
       success: false,
       status: "failed",
       error: msg,
+      prompt_data_quality_summary: smartPlanPromptQualityRecord,
+      response_completion_status: "error",
+      output_park_region_match: null,
     });
 
     return { ok: false, error: "AI_ERROR", message: msg };
@@ -3004,6 +3159,10 @@ Produce 4–6 specific named attractions in rough chronological order for a full
   // paths set this flag so the `finally` block doesn't double-write.
   let aiGenAlreadyLogged = false;
   const aiGenPrompt = `must_dos:${input.parkId}\n${userBlock}`;
+  const mustDosPromptQualityRecord = promptQualityRecord(
+    collectUserBrief(trip, {}).quality,
+  );
+  let mustDosStopReason: string | null = null;
   try {
     const msg = await anthropic.messages.create({
       model,
@@ -3022,6 +3181,7 @@ Produce 4–6 specific named attractions in rough chronological order for a full
       ],
       messages: [{ role: "user", content: userBlock }],
     });
+    mustDosStopReason = msg.stop_reason ?? null;
     const block = msg.content[0];
     if (block?.type === "text") {
       rawText = block.text;
@@ -3046,6 +3206,12 @@ Produce 4–6 specific named attractions in rough chronological order for a full
         success: false,
         status: aiGenStatus,
         error: aiGenError,
+        prompt_data_quality_summary: mustDosPromptQualityRecord,
+        response_completion_status: responseCompletionFromStopReason(
+          mustDosStopReason,
+          false,
+        ),
+        output_park_region_match: null,
       });
       aiGenAlreadyLogged = true;
       return {
@@ -3069,6 +3235,12 @@ Produce 4–6 specific named attractions in rough chronological order for a full
         success: false,
         status: aiGenStatus,
         error: aiGenError,
+        prompt_data_quality_summary: mustDosPromptQualityRecord,
+        response_completion_status: responseCompletionFromStopReason(
+          mustDosStopReason,
+          false,
+        ),
+        output_park_region_match: null,
       });
       aiGenAlreadyLogged = true;
       return {
@@ -3107,6 +3279,11 @@ Produce 4–6 specific named attractions in rough chronological order for a full
     }
 
     aiGenStatus = "success";
+    const mustDosOutputMatch = inferSingleParkOutputMatch(
+      `${rawText}\n${JSON.stringify(items)}`,
+      input.parkId,
+      parksForPrompt,
+    );
     const { error: genInsertErr } = await recordAiGeneration({
       userId: user.id,
       tripId: input.tripId,
@@ -3117,6 +3294,12 @@ Produce 4–6 specific named attractions in rough chronological order for a full
       success: true,
       status: aiGenStatus,
       error: null,
+      prompt_data_quality_summary: mustDosPromptQualityRecord,
+      response_completion_status: responseCompletionFromStopReason(
+        mustDosStopReason,
+        false,
+      ),
+      output_park_region_match: mustDosOutputMatch,
     });
     aiGenAlreadyLogged = true;
     if (genInsertErr) {
@@ -3152,6 +3335,14 @@ Produce 4–6 specific named attractions in rough chronological order for a full
     if (!aiGenAlreadyLogged && aiGenStatus !== "pending") {
       // Always-write guarantee: if we reached the Anthropic call site we must record
       // the outcome (success/failed/cancelled) — never let an outer catch swallow logging.
+      const completionStatus: ResponseCompletionStatus | null =
+        aiGenStatus === "cancelled"
+          ? null
+          : aiGenStatus === "failed"
+            ? mustDosStopReason === "max_tokens"
+              ? "truncated"
+              : "error"
+            : responseCompletionFromStopReason(mustDosStopReason, false);
       await recordAiGeneration({
         userId: user.id,
         tripId: input.tripId,
@@ -3161,6 +3352,11 @@ Produce 4–6 specific named attractions in rough chronological order for a full
         outputTokens,
         status: aiGenStatus,
         error: aiGenError,
+        prompt_data_quality_summary: mustDosPromptQualityRecord,
+        ...(completionStatus != null
+          ? { response_completion_status: completionStatus }
+          : {}),
+        output_park_region_match: null,
       });
     }
   }
@@ -3554,7 +3750,8 @@ export async function generateDayTimeline(
     trip.planning_preferences?.includeUniversalSkipTips !== false;
   const skipLineOn = skipDisney || skipUniversal;
 
-  const brief = collectUserBrief(trip, {});
+  const { brief, quality: timelineBriefQuality } = collectUserBrief(trip, {});
+  const timelinePromptQualityRecord = promptQualityRecord(timelineBriefQuality);
   const userConstraintsBlock = brief
     ? `USER CONSTRAINTS (verbatim — treat as immovable)
 
@@ -3617,6 +3814,8 @@ END USER CONSTRAINTS`
   let aiGenAlreadyLogged = false;
   const aiGenPrompt = `day_timeline:${dateKey}\n${userBlock}`;
 
+  let timelineStopReason: string | null = null;
+
   try {
     const DAY_TL_MAX = 8192;
     const DAY_TL_MAX_RETRY = 12_000;
@@ -3667,12 +3866,14 @@ END USER CONSTRAINTS`
         messages: [{ role: "user", content: userBlock }],
       });
     }
+    timelineStopReason = msg.stop_reason ?? null;
     if (msg.stop_reason === "max_tokens") {
       const uFail = msg.usage as AnthropicMessageUsage | undefined;
       inputTokens = inputTokensFromUsage(uFail);
       outputTokens = uFail?.output_tokens ?? 0;
       aiGenStatus = "failed";
       aiGenError = "truncated: stop_reason: max_tokens (day_timeline, after budget increase)";
+      console.warn("[ai] day_timeline truncated", { tripId, dateKey });
       await recordAiGeneration({
         userId: user.id,
         tripId,
@@ -3683,6 +3884,9 @@ END USER CONSTRAINTS`
         success: false,
         status: aiGenStatus,
         error: aiGenError,
+        prompt_data_quality_summary: timelinePromptQualityRecord,
+        response_completion_status: "truncated",
+        output_park_region_match: null,
       });
       aiGenAlreadyLogged = true;
       return {
@@ -3718,6 +3922,12 @@ END USER CONSTRAINTS`
         success: false,
         status: aiGenStatus,
         error: aiGenError,
+        prompt_data_quality_summary: timelinePromptQualityRecord,
+        response_completion_status: responseCompletionFromStopReason(
+          timelineStopReason,
+          false,
+        ),
+        output_park_region_match: null,
       });
       aiGenAlreadyLogged = true;
       return {
@@ -3748,6 +3958,12 @@ END USER CONSTRAINTS`
         success: false,
         status: aiGenStatus,
         error: aiGenError,
+        prompt_data_quality_summary: timelinePromptQualityRecord,
+        response_completion_status: responseCompletionFromStopReason(
+          timelineStopReason,
+          false,
+        ),
+        output_park_region_match: null,
       });
       aiGenAlreadyLogged = true;
       return {
@@ -3806,6 +4022,18 @@ END USER CONSTRAINTS`
       return { ok: false, error: upErr.message, code: "ai_failure" };
     }
 
+    const primaryForDay =
+      getParkIdFromSlotValue(ass.am) ??
+      getParkIdFromSlotValue(ass.pm) ??
+      getParkIdFromSlotValue(ass.lunch) ??
+      getParkIdFromSlotValue(ass.dinner) ??
+      null;
+    const outputParkRegionMatch = inferSingleParkOutputMatch(
+      JSON.stringify(value),
+      primaryForDay,
+      parksForPrompt,
+    );
+
     aiGenStatus = "success";
     const { error: genInsertErr } = await recordAiGeneration({
       userId: user.id,
@@ -3817,6 +4045,12 @@ END USER CONSTRAINTS`
       success: true,
       status: aiGenStatus,
       error: null,
+      prompt_data_quality_summary: timelinePromptQualityRecord,
+      response_completion_status: responseCompletionFromStopReason(
+        timelineStopReason,
+        false,
+      ),
+      output_park_region_match: outputParkRegionMatch,
     });
     aiGenAlreadyLogged = true;
     if (genInsertErr) {
@@ -3858,6 +4092,14 @@ END USER CONSTRAINTS`
     if (!aiGenAlreadyLogged && aiGenStatus !== "pending") {
       // Always-write guarantee: if we reached the Anthropic call site we must record
       // the outcome (success/failed/cancelled) — never let an outer catch swallow logging.
+      const completionStatus: ResponseCompletionStatus | null =
+        aiGenStatus === "cancelled"
+          ? null
+          : aiGenStatus === "failed"
+            ? timelineStopReason === "max_tokens"
+              ? "truncated"
+              : "error"
+            : responseCompletionFromStopReason(timelineStopReason, false);
       await recordAiGeneration({
         userId: user.id,
         tripId,
@@ -3867,6 +4109,11 @@ END USER CONSTRAINTS`
         outputTokens,
         status: aiGenStatus,
         error: aiGenError,
+        prompt_data_quality_summary: timelinePromptQualityRecord,
+        ...(completionStatus != null
+          ? { response_completion_status: completionStatus }
+          : {}),
+        output_park_region_match: null,
       });
     }
   }
@@ -4911,7 +5158,8 @@ export async function generateDayStrategy(input: {
     "Generate an optimal day strategy.",
   ].join("\n");
 
-  const brief = collectUserBrief(trip, {});
+  const { brief, quality: strategyBriefQuality } = collectUserBrief(trip, {});
+  const strategyPromptQualityRecord = promptQualityRecord(strategyBriefQuality);
   const userBlock = brief
     ? [
         buildAiRegionBriefingBlock(region, parksForPrompt),
@@ -4929,9 +5177,10 @@ export async function generateDayStrategy(input: {
   let aiGenStatus: AiSt = "pending";
   let aiGenError: string | null = null;
   let aiGenLogged = false;
+  let strategyStopReason: string | null = null;
 
   try {
-    const msg = await anthropic.messages.create({
+    let msg = await anthropic.messages.create({
       model,
       max_tokens: 3000,
       system: [
@@ -4948,6 +5197,36 @@ export async function generateDayStrategy(input: {
       ],
       messages: [{ role: "user", content: userBlock }],
     });
+    if (msg.stop_reason === "max_tokens") {
+      console.warn("[ai] day_strategy max_tokens_retry", {
+        tripId: input.tripId,
+        dateKey,
+      });
+      msg = await anthropic.messages.create({
+        model,
+        max_tokens: 6000,
+        system: [
+          {
+            type: "text",
+            text: DAY_STRATEGY_SYSTEM,
+            cache_control: { type: "ephemeral" },
+          },
+          {
+            type: "text",
+            text: ridesBlock,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages: [{ role: "user", content: userBlock }],
+      });
+    }
+    strategyStopReason = msg.stop_reason ?? null;
+    if (strategyStopReason === "max_tokens") {
+      console.warn("[ai] day_strategy truncated_after_retry", {
+        tripId: input.tripId,
+        dateKey,
+      });
+    }
 
     const block0 = msg.content[0];
     const rawText = block0?.type === "text" ? block0.text : "";
@@ -4971,6 +5250,12 @@ export async function generateDayStrategy(input: {
         success: false,
         status: "failed",
         error: aiGenError,
+        prompt_data_quality_summary: strategyPromptQualityRecord,
+        response_completion_status: responseCompletionFromStopReason(
+          strategyStopReason,
+          false,
+        ),
+        output_park_region_match: null,
       });
       aiGenLogged = true;
       return { status: "error", error: "Could not read AI response." };
@@ -5017,6 +5302,12 @@ export async function generateDayStrategy(input: {
         : null;
 
     const strategy = strategyPaid;
+
+    const outputParkRegionMatch = inferSingleParkOutputMatch(
+      JSON.stringify(strategy),
+      primaryParkId,
+      parksForPrompt,
+    );
 
     const prevPrefs =
       trip.preferences && typeof trip.preferences === "object"
@@ -5078,6 +5369,9 @@ export async function generateDayStrategy(input: {
         success: false,
         status: "failed",
         error: aiGenError,
+        prompt_data_quality_summary: strategyPromptQualityRecord,
+        response_completion_status: "error",
+        output_park_region_match: null,
       });
       aiGenLogged = true;
       return { status: "error", error: upErr.message };
@@ -5095,6 +5389,12 @@ export async function generateDayStrategy(input: {
         success: true,
         status: "success",
         error: recordDetail,
+        prompt_data_quality_summary: strategyPromptQualityRecord,
+        response_completion_status: responseCompletionFromStopReason(
+          strategyStopReason,
+          false,
+        ),
+        output_park_region_match: outputParkRegionMatch,
       });
     } catch {
       /* non-fatal */
@@ -5129,6 +5429,10 @@ export async function generateDayStrategy(input: {
           success: false,
           status: "failed",
           error: aiGenError,
+          prompt_data_quality_summary: strategyPromptQualityRecord,
+          response_completion_status:
+            strategyStopReason === "max_tokens" ? "truncated" : "error",
+          output_park_region_match: null,
         });
       } catch {
         /* ignore */
@@ -5139,6 +5443,12 @@ export async function generateDayStrategy(input: {
   } finally {
     if (!aiGenLogged && aiGenStatus !== "pending") {
       try {
+        const completionStatus: ResponseCompletionStatus | null =
+          aiGenStatus === "failed"
+            ? strategyStopReason === "max_tokens"
+              ? "truncated"
+              : "error"
+            : responseCompletionFromStopReason(strategyStopReason, false);
         await recordAiGeneration({
           userId: user.id,
           tripId: input.tripId,
@@ -5148,6 +5458,11 @@ export async function generateDayStrategy(input: {
           outputTokens,
           status: aiGenStatus,
           error: aiGenError,
+          prompt_data_quality_summary: strategyPromptQualityRecord,
+          ...(completionStatus != null
+            ? { response_completion_status: completionStatus }
+            : {}),
+          output_park_region_match: null,
         });
       } catch {
         /* ignore */

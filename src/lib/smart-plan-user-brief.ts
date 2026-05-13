@@ -2,37 +2,83 @@ import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { addDays, formatDateKey, parseDate } from "@/lib/date-helpers";
 import type { Park, SlotAssignmentValue, Trip } from "@/lib/types";
 
+/** Telemetry for `ai_generations.prompt_data_quality_summary` (Smart Plan paths). */
+export type PromptDataQualitySummary = {
+  custom_text_provided: boolean;
+  custom_text_length: number;
+  custom_text_reached_prompt: boolean;
+  custom_text_deduped_against: string | null;
+  user_brief_sources: string[];
+};
+
+export type CollectUserBriefResult = {
+  brief: string;
+  quality: PromptDataQualitySummary;
+};
+
 /**
  * Gathers all freeform text the guest may have entered, for the USER CONSTRAINTS block.
  * No length gating here — the model receives the full string.
+ *
+ * Duplicate text (case-insensitive) is merged once; when the Smart Plan inline
+ * prompt duplicates an earlier field, `quality.custom_text_deduped_against` records
+ * which source already contained that text.
  */
 export function collectUserBrief(
   trip: Trip,
   opts?: { inlineUserPrompt?: string },
-): string {
+): CollectUserBriefResult {
   const parts: string[] = [];
   const seen = new Set<string>();
+  const sourceByKey = new Map<string, string>();
+  const sourcesInBrief: string[] = [];
 
-  const add = (s: string | null | undefined) => {
+  const inlineRaw = opts?.inlineUserPrompt?.trim() ?? "";
+  const inlineLen = inlineRaw.length;
+
+  const add = (s: string | null | undefined, sourceLabel: string) => {
     const t = s?.trim();
     if (!t) return;
     const key = t.toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
+    sourceByKey.set(key, sourceLabel);
     parts.push(t);
+    sourcesInBrief.push(sourceLabel);
   };
 
-  add(trip.notes);
-  add(trip.planning_preferences?.additionalNotes ?? null);
-  add(opts?.inlineUserPrompt);
+  add(trip.notes, "trip.notes");
+  add(trip.planning_preferences?.additionalNotes ?? null, "planning_preferences.additionalNotes");
+
+  let dedupedAgainst: string | null = null;
+  if (inlineLen > 0) {
+    const key = inlineRaw.toLowerCase();
+    if (seen.has(key)) {
+      dedupedAgainst = sourceByKey.get(key) ?? "existing_brief";
+    } else {
+      seen.add(key);
+      sourceByKey.set(key, "inlineUserPrompt");
+      parts.push(inlineRaw);
+      sourcesInBrief.push("inlineUserPrompt");
+    }
+  }
 
   const rawPrefs = trip.preferences;
   if (rawPrefs && typeof rawPrefs === "object" && !Array.isArray(rawPrefs)) {
     const ub = (rawPrefs as Record<string, unknown>).user_brief;
-    if (typeof ub === "string") add(ub);
+    if (typeof ub === "string") add(ub, "preferences.user_brief");
   }
 
-  return parts.join("\n\n").trim();
+  const brief = parts.join("\n\n").trim();
+  const quality: PromptDataQualitySummary = {
+    custom_text_provided: inlineLen > 0,
+    custom_text_length: inlineLen,
+    custom_text_reached_prompt: inlineLen > 0,
+    custom_text_deduped_against: dedupedAgainst,
+    user_brief_sources: sourcesInBrief,
+  };
+
+  return { brief, quality };
 }
 
 function sortedTripDateKeys(startIso: string, endIso: string): string[] {
