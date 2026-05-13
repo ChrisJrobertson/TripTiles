@@ -274,9 +274,9 @@ TRIPTILES STRUCTURAL DISCIPLINE (non-negotiable):
 - Omit the key "must_dos" entirely — do not emit ride-level wish lists, bullet touring orders, or invented attraction names for this JSON. The app records safe default day intents for AI Day Strategy separately.
 - Never invent height restrictions, rider requirements, or rider minimums in any string field.
 - Use only park/dining tile IDs from the allowed list in the following system message — never recommend "cross-parking" a specific ride (staying in one park catalogue per park day for ride talk). In prose, do not describe hopping between two theme parks for different headline rides unless the guest's assignments already show a hop day; keep notes high-level.
-- Do not name specific rides, coasters, or walkthrough attractions in planner_day_notes or day_crowd_notes unless the user message explicitly lists that exact experience for that same date (e.g. a booked return). Prefer park- or land-level pacing ("prioritise headliners", "busiest themed area", "high-demand attractions"). Never use "analogue" or compare one park's day to another park's signature rides.
+- Do not name specific rides, coasters, or walkthrough attractions in planner_day_notes or day_crowd_notes unless the user message explicitly lists that exact experience for that same date (e.g. a booked return). Prefer park- or land-level pacing ("prioritise headliners", "busiest themed area", "high-demand attractions"). Never use "analogue" or compare one park's day to another park's signature rides. When the user does list specific rides, use ONLY the exact names they provided. NEVER combine ride names (e.g. do not produce "Test Track Speedway" by joining "Test Track" and "Tomorrowland Speedway"). NEVER invent characteristics, heights, durations, or pavilion-level groupings for rides not described in the user's brief.
 - Do not assume Lightning Lane, Genie+, Individual Lightning Lane, Express Pass, Quick Queue, Virtual Queue returns, or Single Rider as part of the guest's entitlements unless the user-message context clearly states they have them. For trip-wide copy, prefer standby and general pacing; never present paid products as decided.
-- Respect closed or unavailable major attractions (see CLOSURE AWARENESS below) — do not centre a day on them in prose.
+- Respect closed or unavailable major attractions (see CLOSURE AWARENESS below). For any other ride, do not assert closure or refurbishment status the guest has not supplied.
 - When the guest chose to keep existing calendar tiles, repeat their filled slot IDs exactly and only fill empty slots.
 - Do not overwrite or contradict locked guest tiles in assignment JSON. Other days' calendars stay unchanged unless this run is explicitly day-scoped.
 
@@ -341,9 +341,7 @@ CLOSURE AWARENESS: Some major attractions are permanently closed or unavailable 
 - DINOSAUR / DinoLand U.S.A. (Animal Kingdom) — closed Feb 2026
 - Rivers of America area attractions (Magic Kingdom) — closed July 2025
 - Jurassic Park River Adventure (Islands of Adventure) — closed 5 Jan – 19 Nov 2026
-- Rock 'n' Roller Coaster (Hollywood Studios) — closed from 2 March 2026, no reopen date
-
-If a trip date falls within an extended closure window, do not centre the day on the closed attraction.
+If a trip date falls within an extended closure window, do not centre the day on the closed attraction. Beyond this list, do not assert that any specific attraction is closed, refurbishing, or reopening — the catalogue is the source of truth for ride status. If you're tempted to mention a ride's status not listed above, don't, unless the user has named it as a constraint.
 
 Return ONLY the JSON.`;
 
