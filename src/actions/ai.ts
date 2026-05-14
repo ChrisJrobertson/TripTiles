@@ -58,6 +58,8 @@ import type {
   Park,
   SlotType,
   Trip,
+  TripPlanningPreferences,
+  TripPlanningProfile,
 } from "@/lib/types";
 import { customTileToPark } from "@/lib/types";
 import { revalidatePath } from "next/cache";
@@ -115,6 +117,7 @@ import {
   collectUserBrief,
   formatCurrentTripAssignmentsBlock,
   formatMandatoryAnchorsBlock,
+  isMandatoryAnchorTileId,
   type PromptDataQualitySummary,
 } from "@/lib/smart-plan-user-brief";
 import {
@@ -204,6 +207,135 @@ function logAiGen(meta: AiGenLogMeta): void {
     ...meta,
     at: new Date().toISOString(),
   });
+}
+
+/** Matches guardrail rest/pool detection — `rest` is canonical; some tiles resolve via `parks`. */
+function isSmartPlanRestOrPoolTileId(
+  pid: string,
+  parksById: Map<string, Park>,
+): boolean {
+  const id = pid.trim().toLowerCase();
+  if (id === "rest" || id === "pool") return true;
+  const p = parksById.get(pid);
+  if (!p) return false;
+  const n = p.name.toLowerCase();
+  if (/\brest\s*[/&]\s*pool\b|\brest\s*day\b|\blazy\s*day\b/i.test(n)) return true;
+  if (/\bpool\b|\bspa\b|shopping|outlet|resort\s*grounds|hotel\s*day/i.test(n)) {
+    return true;
+  }
+  if (p.park_group === "activities") {
+    if (/\brest\b|\bpool\b|spa|shopping|outlet/i.test(n)) return true;
+  }
+  return false;
+}
+
+function buildSmartPlanStructuralEdgeDateKeys(
+  trip: Trip,
+  sortedAllTripDateKeys: string[],
+  fullDateAllow: Set<string>,
+): Set<string> {
+  const edge = new Set<string>();
+  if (sortedAllTripDateKeys.length > 0) {
+    edge.add(sortedAllTripDateKeys[0]!);
+    edge.add(sortedAllTripDateKeys[sortedAllTripDateKeys.length - 1]!);
+  }
+  if (trip.has_cruise) {
+    const emb = trip.cruise_embark?.trim();
+    const dis = trip.cruise_disembark?.trim();
+    if (emb && fullDateAllow.has(emb)) edge.add(emb);
+    if (dis && fullDateAllow.has(dis)) edge.add(dis);
+  }
+  return edge;
+}
+
+function shouldStripMidTripRestForPackedEdgeBuffers(params: {
+  planningPrefs: TripPlanningPreferences | null | undefined;
+  planningProfile: TripPlanningProfile | null;
+}): boolean {
+  const { planningPrefs, planningProfile } = params;
+  if (!planningPrefs) return false;
+  const highEnergy =
+    planningPrefs.pace === "go_go_go" || planningPrefs.pace === "intense";
+  const edgeBuffers =
+    planningPrefs.bufferRestAtTripStart === true ||
+    planningPrefs.bufferRestAtTripEnd === true;
+  const holidayFirstLastLight =
+    planningProfile?.restRhythm === "first_and_last_day_light";
+  return highEnergy && (edgeBuffers || holidayFirstLastLight);
+}
+
+/**
+ * Overwrite full-trip only: removes model-placed rest/pool tiles on mid-trip
+ * dates when the guest asked for packed pace plus light first/last edges.
+ * Edge calendar days and cruise embark/disembark anchor dates are untouched.
+ */
+function stripMidTripRestPoolSlotsForPackedEdgeBuffers(params: {
+  assignments: Assignments;
+  trip: Trip;
+  sortedAllTripDateKeys: string[];
+  fullDateAllow: Set<string>;
+  parksById: Map<string, Park>;
+  planningPrefs: TripPlanningPreferences | null | undefined;
+  planningProfile: TripPlanningProfile | null;
+  overwriteFullTrip: boolean;
+}): { out: Assignments; strippedSlotCount: number } {
+  const {
+    assignments,
+    trip,
+    sortedAllTripDateKeys,
+    fullDateAllow,
+    parksById,
+    planningPrefs,
+    planningProfile,
+    overwriteFullTrip,
+  } = params;
+  if (!overwriteFullTrip) {
+    return { out: assignments, strippedSlotCount: 0 };
+  }
+  if (
+    !shouldStripMidTripRestForPackedEdgeBuffers({
+      planningPrefs,
+      planningProfile,
+    })
+  ) {
+    return { out: assignments, strippedSlotCount: 0 };
+  }
+
+  const edgeDates = buildSmartPlanStructuralEdgeDateKeys(
+    trip,
+    sortedAllTripDateKeys,
+    fullDateAllow,
+  );
+
+  const out: Assignments = {};
+  for (const [dk, slots] of Object.entries(assignments)) {
+    if (!slots || typeof slots !== "object") continue;
+    out[dk] = { ...slots };
+  }
+
+  let strippedSlotCount = 0;
+  const slotOrder: SlotType[] = ["am", "pm", "lunch", "dinner"];
+
+  for (const dateKey of Object.keys(out)) {
+    if (!fullDateAllow.has(dateKey)) continue;
+    if (edgeDates.has(dateKey)) continue;
+
+    const day = out[dateKey];
+    if (!day) continue;
+
+    for (const slot of slotOrder) {
+      const id = getParkIdFromSlotValue(day[slot]);
+      if (!id) continue;
+      if (isMandatoryAnchorTileId(id)) continue;
+      if (!isSmartPlanRestOrPoolTileId(id, parksById)) continue;
+      delete day[slot];
+      strippedSlotCount += 1;
+    }
+
+    if (Object.keys(day).length === 0) delete out[dateKey];
+  }
+
+  return { out, strippedSlotCount };
 }
 
 async function reportDaySmartPlanParseError(params: {
@@ -312,11 +444,10 @@ Each planner_day_notes value ≤${SMART_PLAN_PLANNER_DAY_NOTES_MAX_CHARS} chars:
 
 PLANNER_DAY_NOTES — OUTPUT QUALITY (stay within the character cap and the ride-naming rules above):
 - Use the space only when the day needs it — no filler, no repeated truisms, no padding to hit the limit.
-- Headline picks need reasons: wherever you give a major pacing suggestion (opening-window focus, first land or neighbourhood to hit, when to pause, dining or rest rhythm, evening band), add one short clause explaining why — grounded in crowds, demand, walking distance, heat, or pace. Never hollow praise ("it's a great choice").
+- Mandatory assumption-flagging: on any headline park day, if the user message gives **no** must-dos (rides/experiences) for that park or date, **no** dining reservations or meal-plan detail for that day, **or** no stated pace for the trip, you **must** say so plainly in that day's planner_day_notes — e.g. "No must-dos are set for this park yet, so routing stays general until you add them." / "No dining is entered, so this shape does not wrap around bookings." / "Pace was not stated — a balanced day is assumed here." Helpful assumptions only, never blame.
+- Headline picks need reasons: **obey the ride-naming rule in TRIPTILES STRUCTURAL DISCIPLINE by default — do not name specific rides, coasters, shows, or walkthrough attractions at all.** Give reasons at **park or land level only** — "the busiest headliner land", "high-demand attractions", "the park's quietest mid-week window", "a morning-recommended neighbourhood". Ground reasons in crowds, demand, heat, walking distance, and pace. **If (and only if) the user message already lists a named experience for that exact date, you may reference that name — never pull names from training data.** Never invent attraction names, never name a ride that belongs to another park, and never paste static per-park ride lists from memory — the catalogue in the system message is the only source of truth for what exists where.
 - Realistic days: do not stack major attractions back-to-back with no breathing room. Allow walking, queues, heat, meals, and children's stamina. Include at least one natural break on a full park day; avoid needless criss-crossing. If the shape is ambitious, say so plainly and offer a fallback (e.g. secure the first few priorities and keep the afternoon flexible). Add a brief heat or rain contingency when it matters.
-- Whole-trip context: weave in where this day sits in the trip (e.g. "Day 4 of 14 — two park days and a rest day already, so moderate intensity fits"). Vary tone for early-, mid-, and late-trip; notice rest days, travel days, and consecutive park stretches — avoid treating every park day as standalone, maximum-effort block.
-- Assumption-flagging: when missing detail would sharpen the plan, state the assumption (no must-dos yet for this park — the route stays general until you add them; no dining supplied — not routing around bookings; pace unstated — balanced pace assumed). Frame as helpful assumptions and nudges, never as blame.
-- Closing "next": finish planner_day_notes with one or two concrete, park-specific next steps when useful (e.g. confirm official opening time before locking rope-drop; add must-dos for a tighter route; add dining reservations so structure can wrap around them). If nothing is genuinely needed, say briefly that the day shape is already fine — do not invent busywork.
+- Whole-trip context: weave in where this day sits in the trip (e.g. "Day 5 of 14 — after two busy park days, so keep breaks intentional"). When you refer to the rhythm around this day, speak only in **day types** — park day, rest day, travel day — and use phrasing like *"after several park days"* or *"before another park day"*. **Never** name a different park for context (e.g. "reset before Hollywood Studios opens the second half") — naming any park not assigned to the current date will be flagged by validation. "Day 5 of 14 — after two busy park days, so moderate intensity fits" is good; naming an adjacent headline park is an error. Vary tone for early-, mid-, and late-trip; notice rest days, travel days, and consecutive park stretches — avoid treating every park day as standalone, maximum-effort block.
 
 DAY NOTES RULES (CRITICAL):
 - Sound like a knowledgeable friend. NEVER raw crowd scores, arithmetic, formulas, bracketed maths, "score N", "crowd index N", or how you calculated anything.
@@ -2238,6 +2369,7 @@ export async function runGenerateAIPlan(
     let finalSanitized: Assignments | null = null;
     let lastRawText = "";
     let lastSmartPlanStop: string | null = null;
+    let midTripRestGuardSummary: { stripped_slots: number } | null = null;
 
     planAttempts: for (let planAttempt = 0; planAttempt < 2; planAttempt++) {
       const t0 = Date.now();
@@ -2677,9 +2809,41 @@ export async function runGenerateAIPlan(
       };
     }
 
+    const isOverwriteFullTrip =
+      !normalizedDateKey && input.preserveExistingSlots === false;
+    const restStripResult = stripMidTripRestPoolSlotsForPackedEdgeBuffers({
+      assignments: guarded,
+      trip,
+      sortedAllTripDateKeys,
+      fullDateAllow,
+      parksById,
+      planningPrefs: trip.planning_preferences,
+      planningProfile: tripProfileForStructuralMeals,
+      overwriteFullTrip: isOverwriteFullTrip,
+    });
+    const assignmentsForMerge =
+      restStripResult.strippedSlotCount > 0 ? restStripResult.out : guarded;
+    if (restStripResult.strippedSlotCount > 0) {
+      midTripRestGuardSummary = {
+        stripped_slots: restStripResult.strippedSlotCount,
+      };
+      logAiGen({
+        step: "smart_plan_mid_trip_rest_strip",
+        tripId: input.tripId,
+        userId: user.id,
+        details: {
+          strippedSlots: restStripResult.strippedSlotCount,
+        },
+      });
+    }
+
     const preserve =
       input.preserveExistingSlots !== false;
-    const mergedRaw = mergeAiIntoTrip(trip.assignments, guarded, preserve);
+    const mergedRaw = mergeAiIntoTrip(
+      trip.assignments,
+      assignmentsForMerge,
+      preserve,
+    );
     /** After overwrite mode, strip headline parks from day 1 AM/PM. In preserve
      * mode, do not run this on the merged calendar — it would remove the guest's
      * manual day-1 picks even when they asked not to overwrite. */
@@ -2877,6 +3041,13 @@ export async function runGenerateAIPlan(
     ]
       .filter((s): s is string => !!s && s.trim().length > 0)
       .join(" | ");
+    const smartPlanPromptQualityForInsert =
+      midTripRestGuardSummary != null
+        ? {
+            ...smartPlanPromptQualityRecord,
+            mid_trip_rest_guard: midTripRestGuardSummary,
+          }
+        : smartPlanPromptQualityRecord;
     const { error: genInsertErr } = await recordAiGeneration({
       userId: user.id,
       tripId: input.tripId,
@@ -2887,7 +3058,7 @@ export async function runGenerateAIPlan(
       success: true,
       status: "success",
       error: successWarnings.length > 0 ? successWarnings : null,
-      prompt_data_quality_summary: smartPlanPromptQualityRecord,
+      prompt_data_quality_summary: smartPlanPromptQualityForInsert,
       response_completion_status: responseCompletionFromStopReason(
         lastSmartPlanStop,
         false,
