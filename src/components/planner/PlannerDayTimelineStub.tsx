@@ -293,7 +293,7 @@ export function PlannerDayTimelineStub({
                 <span className="w-14 shrink-0 font-mono text-xs font-semibold text-tt-ink-muted">
                   {stubTime}
                 </span>
-                <span className="text-lg" aria-hidden>
+                <span className="tt-planner-tile-icon text-lg" aria-hidden>
                   {icon}
                 </span>
                 <div className="min-w-0">
