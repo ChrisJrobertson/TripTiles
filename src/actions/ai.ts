@@ -467,7 +467,17 @@ CROWD_PATTERNS (when in user message): 0–10 heuristics per park/weekday/month 
 
 Rules:
 - Date keys in assignments, day_crowd_notes, and planner_day_notes MUST be YYYY-MM-DD with zero-padded month and day (e.g. 2026-07-19), matching the trip dates in the user message. Park IDs must be the exact "id" strings in the second system message (numbered list). Do not use display names, natural language, or invent IDs. Do not use IDs for other regions.
-- Slots: am, pm, lunch, dinner optional; rest days OK. Rest every 3–4 park days with young children.
+- Slots: am, pm, lunch, dinner optional; rest days OK when they align with REST DAY DISTRIBUTION below.
+
+REST DAY DISTRIBUTION — driven by the guest's stated pace and rest inclination, not a fixed ratio:
+- The guest's TRIP WIZARD PREFERENCES for pace and rest inclination are authoritative. Read "Pace", "Pace rhythm", and "Balance / rest inclination" from the USER CONSTRAINTS / USER PRIORITIES blocks and follow them over any default.
+- Packed or high-energy pace with light first and/or last days requested (e.g. "first and last day light"): place rest or travel tiles on those edge days only. Do not add any mid-trip rest days — the guest wants full park days between the lighter edges.
+- Packed or high-energy pace without an edge-day preference: add at most one mid-trip rest day, and only if the trip has 10 or more park days; otherwise none.
+- Moderate or balanced pace: distribute roughly one rest day per 4–5 park days.
+- Relaxed or slow pace: be more generous — roughly one rest day per 3–4 park days.
+- No pace or rest preference stated at all: fall back to roughly one rest day per 4–5 park days as a sensible default.
+- Always still leave mandatory anchors (arrival, departure, cruise embark/disembark) as travel or rest tiles regardless of pace.
+- Never let the fallback ratio override an explicit guest preference — explicit input always wins.
 - Day 1 arrival: no theme/water parks in AM/PM (resort/flyout/dining only; slots may be empty). day_crowd_notes must not contradict day-1 assignments.
 - flyout: day 1 only, one AM or PM. flyhome: last day only, one slot — not both same calendar day unless trip is one day.
 - Cruise tiles only between embark/disembark when cruise=yes.
@@ -1784,13 +1794,7 @@ The user has explicitly asked you to replace ANY existing assignments with a fre
 
 Generate a complete fresh itinerary that:
 - Honours the user's family priorities above (e.g. if "Thrill rides" is listed, prioritise theme parks with thrill attractions across the trip)
-- Rest day placement follows the guest's pace and rest inclination from USER CONSTRAINTS, USER PRIORITIES, and TRIP WIZARD PREFERENCES — read "Pace", "Pace rhythm", and "Balance / rest inclination" there; those signals override any default ratio.
-- Packed or high-energy pace with light first and/or last days requested (e.g. "first and last day light"): put rest or travel tiles on those edge days only; do not add mid-trip rest days — the guest wants full park days between the lighter edges.
-- Packed or high-energy pace without an edge-day preference: add at most one mid-trip rest day, and only when the itinerary has ten or more park days; otherwise add none.
-- Moderate or balanced pace: distribute roughly one rest day per 4–5 park days.
-- Relaxed or slow pace: be more generous — roughly one rest day per 3–4 park days.
-- No pace or rest preference stated at all: fall back to roughly one rest day per 4–5 park days as a sensible default.
-- Never let that fallback override an explicit guest preference — explicit input always wins.
+- Distributes rest days only per the REST DAY DISTRIBUTION rules in the system instructions — driven by the guest's stated pace and rest inclination (including "Pace", "Pace rhythm", and "Balance / rest inclination" from USER CONSTRAINTS / USER PRIORITIES / TRIP WIZARD PREFERENCES). Do not apply a fixed rest-day ratio from this user message; the system prompt is the single source of truth for rest cadence.
 - Uses crowd patterns to choose which park on which day
 - Respects mandatory anchors only: arrival day (fly in), departure day (fly out), and any cruise embark/disembark dates — keep these as the required travel or rest tiles regardless of pace${
         overwriteAnchors ? `\n\n${overwriteAnchors}` : ""
