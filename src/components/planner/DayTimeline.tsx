@@ -1,6 +1,7 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
+import { PlannerTileIcon } from "@/components/planner/PlannerTileIcon";
 import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { getSlotTimeFromValue, getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import type { SkipLineDayTimelineRow } from "@/lib/skip-line-day-timeline";
@@ -410,7 +411,7 @@ export function DayTimeline({
                     return (
                       <Row time={amTime}>
                         <p className="font-sans font-medium">
-                          {park.icon ? `${park.icon} ` : null}
+                          <PlannerTileIcon park={park} />
                           {park.name}
                           {adr ? (
                             <span
@@ -472,7 +473,7 @@ export function DayTimeline({
               <div className="mt-2">
                 <Row time={t}>
                   <p className="font-sans font-medium">
-                    {park.icon ? `${park.icon} ` : null}
+                    <PlannerTileIcon park={park} />
                     {park.name}
                     {adr ? (
                       <span

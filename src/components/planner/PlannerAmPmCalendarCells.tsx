@@ -13,6 +13,10 @@ import {
   type AmPmCalendarPresentation,
   type HalfDayDisplay,
 } from "@/lib/planner-am-pm-display";
+import {
+  pickPlannerTileDisplayIcon,
+  PlannerTileIcon,
+} from "@/components/planner/PlannerTileIcon";
 import { plannerCalendarParkSlotStyle } from "@/lib/theme-colours";
 import { themedEmptySlotSurfaceStyle, type ThemeKey } from "@/lib/themes";
 import type { AiDayTimeline, Assignment, Park, SlotType } from "@/lib/types";
@@ -336,7 +340,7 @@ function SplitHalfSlot({
           ) : null}
           <span className="line-clamp-3 min-w-0 flex-1 font-sans text-[0.6rem] font-medium leading-snug sm:text-[0.62rem] md:leading-tight">
             <span className="font-semibold opacity-80">{halfPrefix}</span>{" "}
-            {park.icon ? `${park.icon} ` : ""}
+            <PlannerTileIcon park={park} />
             {park.name}
           </span>
         </div>
@@ -384,25 +388,21 @@ function UnifiedSpanSlot({
   );
   const canPlaceFullDaySelection = Boolean(!readOnly && selectedParkId);
 
-  let primaryLine: string;
   let secondaryLine: string;
+  let ariaPrimary: string;
 
   if (presentation.mode === "unified_rest_day") {
-    primaryLine = REST_UNIFIED_PRIMARY;
+    ariaPrimary = REST_UNIFIED_PRIMARY;
     secondaryLine = LABEL_FULL_DAY;
   } else if (presentation.mode === "unified_travel_day") {
-    primaryLine = `${
-      presentation.park.icon ? `${presentation.park.icon} ` : ""
-    }${presentation.park.name}`;
+    ariaPrimary = `${pickPlannerTileDisplayIcon(presentation.park)} ${presentation.park.name}`;
     secondaryLine = LABEL_TRAVEL_DAY;
   } else {
-    primaryLine = `${
-      presentation.park.icon ? `${presentation.park.icon} ` : ""
-    }${presentation.park.name}`;
+    ariaPrimary = `${pickPlannerTileDisplayIcon(presentation.park)} ${presentation.park.name}`;
     secondaryLine = LABEL_FULL_DAY;
   }
 
-  const ariaUnified = `${primaryLine}. ${secondaryLine}.`;
+  const ariaUnified = `${ariaPrimary}. ${secondaryLine}.`;
 
   return (
     <div
@@ -482,7 +482,14 @@ function UnifiedSpanSlot({
         ) : null}
         <div className="min-w-0 flex-1 text-left">
           <div className="line-clamp-3 font-sans text-[0.64rem] font-medium leading-snug sm:text-[0.66rem] md:leading-tight">
-            {primaryLine}
+            {presentation.mode === "unified_rest_day" ? (
+              REST_UNIFIED_PRIMARY
+            ) : (
+              <>
+                <PlannerTileIcon park={presentation.park} />
+                {presentation.park.name}
+              </>
+            )}
           </div>
           <div className="planner-slot-am-pm-banner mt-0.5 font-sans text-[0.5rem] font-semibold uppercase leading-none tracking-wide opacity-75 sm:text-[0.52rem]">
             {secondaryLine}

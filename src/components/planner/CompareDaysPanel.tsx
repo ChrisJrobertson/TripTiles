@@ -3,6 +3,7 @@
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { addDays, formatDateKey, parseDate } from "@/lib/date-helpers";
 import { dayConditionRow } from "@/lib/planner-day-conditions";
+import { PlannerTileIcon } from "@/components/planner/PlannerTileIcon";
 import { parkChromaTileStyle } from "@/lib/theme-colours";
 import { normaliseThemeKey, type ThemeKey } from "@/lib/themes";
 import type { Assignment, Park, SlotType, TemperatureUnit, Trip } from "@/lib/types";
@@ -230,9 +231,14 @@ export function CompareDaysPanel({
                   {label}
                 </div>
                 <div className="truncate font-sans text-xs font-medium">
-                  {park
-                    ? `${park.icon ? `${park.icon} ` : ""}${park.name}`
-                    : "Drop a tile here"}
+                  {park ? (
+                    <>
+                      <PlannerTileIcon park={park} />
+                      {park.name}
+                    </>
+                  ) : (
+                    "Drop a tile here"
+                  )}
                 </div>
               </div>
             );

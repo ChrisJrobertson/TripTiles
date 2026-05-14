@@ -18,6 +18,7 @@ import {
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import { lookupPlannerPark } from "@/lib/planner-am-pm-display";
 import { PlannerAmPmCalendarCells } from "@/components/planner/PlannerAmPmCalendarCells";
+import { PlannerTileIcon } from "@/components/planner/PlannerTileIcon";
 import { truncateForPreview } from "@/lib/truncate-text";
 import { DayTimelinePanel } from "@/components/planner/DayTimelinePanel";
 import { ExpandedDayPanel } from "@/components/planner/ExpandedDayPanel";
@@ -1075,7 +1076,7 @@ export function Calendar({
                               ) : null}
                               <span className="line-clamp-3 min-w-0 flex-1 self-center font-sans text-[0.6rem] font-medium leading-tight sm:text-[0.65rem] md:self-center md:py-0.5">
                                 {mealPrefix}
-                                {park.icon ? `${park.icon} ` : ""}
+                                <PlannerTileIcon park={park} />
                                 {park.name}
                               </span>
                               {isMeal &&

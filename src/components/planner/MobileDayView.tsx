@@ -23,6 +23,7 @@ import {
   type DerivedSlot,
 } from "@/lib/planner/derive-slots-from-timeline";
 import { MobileRidesSheet } from "@/components/planner/MobileRidesSheet";
+import { PlannerTileIcon } from "@/components/planner/PlannerTileIcon";
 import { BookingAnchorDayClashBanner } from "@/components/planner/BookingAnchorDayClashBanner";
 import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
@@ -522,7 +523,7 @@ function MobileAmPmHalfRow({
           <div style={{ color: "inherit" }}>
             <div className="truncate font-sans text-base font-medium leading-snug">
               <span className="text-[11px] font-bold opacity-80">{halfPrefix}</span>{" "}
-              {park.icon ? `${park.icon} ` : ""}
+              <PlannerTileIcon park={park} />
               {park.name}
             </div>
           </div>
@@ -695,17 +696,13 @@ function MobileAmPmSection({
       ? plannerCalendarParkSlotStyle(p.stylePark, colourTheme, readOnly)
       : plannerCalendarParkSlotStyle(p.park, colourTheme, readOnly);
 
-  let primaryLine: string;
   let secondaryLine: string;
 
   if (p.mode === "unified_rest_day") {
-    primaryLine = MOBILE_AMPM_REST_PRIMARY;
     secondaryLine = MOBILE_AMPM_LABEL_FULL_DAY;
   } else if (p.mode === "unified_travel_day") {
-    primaryLine = `${p.park.icon ? `${p.park.icon} ` : ""}${p.park.name}`;
     secondaryLine = MOBILE_AMPM_LABEL_TRAVEL_DAY;
   } else {
-    primaryLine = `${p.park.icon ? `${p.park.icon} ` : ""}${p.park.name}`;
     secondaryLine = MOBILE_AMPM_LABEL_FULL_DAY;
   }
 
@@ -726,7 +723,14 @@ function MobileAmPmSection({
           className="truncate font-sans text-lg font-medium leading-snug"
           style={{ color: "inherit" }}
         >
-          {primaryLine}
+          {p.mode === "unified_rest_day" ? (
+            MOBILE_AMPM_REST_PRIMARY
+          ) : (
+            <>
+              <PlannerTileIcon park={p.park} className="text-lg" />
+              {p.park.name}
+            </>
+          )}
         </div>
         <div
           className="mt-0.5 text-[11px] font-semibold uppercase tracking-wider opacity-75"
@@ -918,7 +922,7 @@ function MobileSlotCard({
           <div style={{ color: "inherit" }}>
             <div className="truncate font-sans text-lg font-medium">
               {mealPrefix(slot)}
-              {park.icon ? `${park.icon} ` : ""}
+              <PlannerTileIcon park={park} className="text-lg" />
               {park.name}
             </div>
             {(slot === "lunch" || slot === "dinner") &&

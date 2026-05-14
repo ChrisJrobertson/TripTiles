@@ -7,6 +7,7 @@ import { GROUP_META, GROUP_ORDER } from "@/lib/group-meta";
 import { isCruisePaletteTileName } from "@/lib/cruise-tiles";
 import { isNamedRestaurantPark } from "@/lib/named-restaurant-tiles";
 import { parkMatchesPlannerRegion } from "@/lib/park-matches-planner-region";
+import { PlannerTileIcon } from "@/components/planner/PlannerTileIcon";
 import { parkChromaTileStyle } from "@/lib/theme-colours";
 import type { ThemeKey } from "@/lib/themes";
 import type { CustomTile, Park } from "@/lib/types";
@@ -171,11 +172,11 @@ export function Palette({
                               colourTheme,
                             )}
                           >
-                            {park.icon ? (
-                              <span className="shrink-0" aria-hidden>
-                                {park.icon}
-                              </span>
-                            ) : null}
+                            <PlannerTileIcon
+                              park={park}
+                              className="shrink-0 text-sm"
+                              trailingSpace={false}
+                            />
                             <span className="truncate">{park.name}</span>
                           </button>
                         );
@@ -204,11 +205,11 @@ export function Palette({
                             colourTheme,
                           )}
                         >
-                          {park.icon ? (
-                            <span className="shrink-0" aria-hidden>
-                              {park.icon}
-                            </span>
-                          ) : null}
+                          <PlannerTileIcon
+                            park={park}
+                            className="shrink-0 text-sm"
+                            trailingSpace={false}
+                          />
                           <span className="truncate">{park.name}</span>
                         </button>
                       );
@@ -246,11 +247,11 @@ export function Palette({
                               colourTheme,
                             )}
                           >
-                            {park.icon ? (
-                              <span className="shrink-0" aria-hidden>
-                                {park.icon}
-                              </span>
-                            ) : null}
+                            <PlannerTileIcon
+                              park={park}
+                              className="shrink-0 text-sm"
+                              trailingSpace={false}
+                            />
                             <span className="truncate">{park.name}</span>
                           </button>
                         );
@@ -291,11 +292,11 @@ export function Palette({
                         >
                           ★
                         </span>
-                        {tile.icon ? (
-                          <span className="shrink-0" aria-hidden>
-                            {tile.icon}
-                          </span>
-                        ) : null}
+                        <PlannerTileIcon
+                          park={tile}
+                          className="shrink-0 text-sm"
+                          trailingSpace={false}
+                        />
                         <span className="truncate">{tile.name}</span>
                       </button>
                       <button

@@ -1,5 +1,6 @@
 "use client";
 
+import { PlannerTileIcon } from "@/components/planner/PlannerTileIcon";
 import { parkChromaTileStyle } from "@/lib/theme-colours";
 import type { ThemeKey } from "@/lib/themes";
 import type { Park, SlotType } from "@/lib/types";
@@ -190,7 +191,7 @@ export function MobileParksDrawer({
                         colourTheme,
                       )}
                     >
-                      {park.icon ? `${park.icon} ` : ""}
+                      <PlannerTileIcon park={park} className="text-base" />
                       {park.name}
                     </button>
                   ))}

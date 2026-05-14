@@ -102,6 +102,24 @@ html {
 }
 
 /**
+ * Planner park / dining / custom tile emoji icons must not inherit Latin-subset
+ * Inter — without an emoji-capable font, production can show tofu, `.notdef`,
+ * or placeholder text for valid emoji codepoints.
+ */
+.tt-planner-tile-icon {
+  font-family:
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol",
+    "Noto Color Emoji",
+    "Android Emoji",
+    emoji,
+    sans-serif;
+  font-style: normal;
+  font-weight: normal;
+}
+
+/**
  * Magical full-page background — only on marketing shell (see `.tt-marketing-bg`).
  * App routes use solid `--tt-bg` on `body` so /planner and other tools stay calm.
  */

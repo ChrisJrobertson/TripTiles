@@ -5,6 +5,7 @@ import { Logo } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { InlineLoadingOverlay } from "@/components/ui/InlineLoadingOverlay";
+import { PlannerTileIcon } from "@/components/planner/PlannerTileIcon";
 import { WizardProgress } from "@/components/ui/WizardProgress";
 import { eachDateKeyInRange } from "@/lib/date-helpers";
 import { parkMatchesPlannerRegion } from "@/lib/park-matches-planner-region";
@@ -865,7 +866,7 @@ export function TripCreationWizard({
                         : "border-tt-royal/25 bg-white"
                     }`}
                   >
-                    {pk.icon ? `${pk.icon} ` : ""}
+                    <PlannerTileIcon park={pk} className="text-sm" />
                     {pk.name}
                   </button>
                 ))}

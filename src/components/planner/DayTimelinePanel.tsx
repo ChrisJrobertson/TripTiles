@@ -1,5 +1,6 @@
 "use client";
 
+import { PlannerTileIcon } from "@/components/planner/PlannerTileIcon";
 import {
   getParkIdFromSlotValue,
   getSlotTimeFromValue,
@@ -156,7 +157,7 @@ export function DayTimelinePanel({
               }}
             >
               <span className="truncate px-1.5 pt-1 font-sans text-[0.65rem] font-semibold leading-tight">
-                {park.icon ? `${park.icon} ` : ""}
+                <PlannerTileIcon park={park} />
                 {park.name}
               </span>
               <span className="mt-auto px-1.5 pb-1 font-mono text-[0.55rem] opacity-80">

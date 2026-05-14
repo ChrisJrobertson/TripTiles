@@ -8,6 +8,7 @@ import { BookingAnchorDayClashBanner } from "@/components/planner/BookingAnchorD
 import { DayHeatSidecar } from "@/components/planner/DayHeatSidecar";
 import { DayMustDoChecklist } from "@/components/planner/DayMustDoChecklist";
 import { DayTimeline } from "@/components/planner/DayTimeline";
+import { PlannerTileIcon } from "@/components/planner/PlannerTileIcon";
 import { DayParkMustDosSection } from "@/components/planner/DayParkMustDosSection";
 import {
   ApplyTemplateDialog,
@@ -1069,7 +1070,7 @@ export function TripDayPageView({
                     ? [
                         <li key={slot}>
                           <span className="font-semibold capitalize">{slot}:</span>{" "}
-                          {park.icon ? `${park.icon} ` : ""}
+                          <PlannerTileIcon park={park} />
                           {park.name}
                         </li>,
                       ]
