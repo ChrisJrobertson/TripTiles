@@ -338,6 +338,67 @@ function stripMidTripRestPoolSlotsForPackedEdgeBuffers(params: {
   return { out, strippedSlotCount };
 }
 
+/** Mid-trip dates where a rest/pool slot present before the strip is gone or changed after. */
+function collectMidTripDatesWhereRestSlotsWereStripped(
+  pre: Assignments,
+  post: Assignments,
+  fullDateAllow: Set<string>,
+  edgeDates: Set<string>,
+  parksById: Map<string, Park>,
+): string[] {
+  const slotOrder: SlotType[] = ["am", "pm", "lunch", "dinner"];
+  const affected = new Set<string>();
+  for (const dk of Object.keys(pre)) {
+    if (!fullDateAllow.has(dk)) continue;
+    if (edgeDates.has(dk)) continue;
+    const preDay = pre[dk];
+    if (!preDay || typeof preDay !== "object") continue;
+    for (const slot of slotOrder) {
+      const bid = getParkIdFromSlotValue(preDay[slot]);
+      if (!bid || !isSmartPlanRestOrPoolTileId(bid, parksById)) continue;
+      const postDay = post[dk];
+      const afterId = postDay
+        ? getParkIdFromSlotValue(postDay[slot])
+        : undefined;
+      if (afterId === undefined || afterId !== bid) {
+        affected.add(dk);
+        break;
+      }
+    }
+  }
+  return [...affected];
+}
+
+/** After mid-trip rest strip: remove overlay leftovers and crowd copy for those days. */
+function applyCoherentEmptyAfterMidTripRestStrip(params: {
+  assignments: Assignments;
+  meta: {
+    planner_day_notes?: Record<string, string>;
+    day_crowd_notes?: Record<string, string>;
+  };
+  clearedDateKeys: string[];
+}): void {
+  const { assignments, meta, clearedDateKeys } = params;
+  for (const dk of clearedDateKeys) {
+    delete assignments[dk];
+    if (meta.planner_day_notes && dk in meta.planner_day_notes) {
+      delete meta.planner_day_notes[dk];
+    }
+    if (meta.day_crowd_notes && dk in meta.day_crowd_notes) {
+      delete meta.day_crowd_notes[dk];
+    }
+  }
+  if (
+    meta.planner_day_notes &&
+    Object.keys(meta.planner_day_notes).length === 0
+  ) {
+    meta.planner_day_notes = undefined;
+  }
+  if (meta.day_crowd_notes && Object.keys(meta.day_crowd_notes).length === 0) {
+    meta.day_crowd_notes = undefined;
+  }
+}
+
 async function reportDaySmartPlanParseError(params: {
   message: string;
   context: Record<string, unknown>;
@@ -2819,6 +2880,7 @@ export async function runGenerateAIPlan(
 
     const isOverwriteFullTrip =
       !normalizedDateKey && input.preserveExistingSlots === false;
+    const preRestStripMerged = mergedRaw;
     const restStripResult = stripMidTripRestPoolSlotsForPackedEdgeBuffers({
       assignments: mergedRaw,
       trip,
@@ -2842,6 +2904,31 @@ export async function runGenerateAIPlan(
           strippedSlots: restStripResult.strippedSlotCount,
         },
       });
+      const edgeDatesForCleanup = buildSmartPlanStructuralEdgeDateKeys(
+        trip,
+        sortedAllTripDateKeys,
+        fullDateAllow,
+      );
+      const coherentEmptyDates = collectMidTripDatesWhereRestSlotsWereStripped(
+        preRestStripMerged,
+        mergedRaw,
+        fullDateAllow,
+        edgeDatesForCleanup,
+        parksById,
+      );
+      if (coherentEmptyDates.length > 0) {
+        applyCoherentEmptyAfterMidTripRestStrip({
+          assignments: mergedRaw,
+          meta,
+          clearedDateKeys: coherentEmptyDates,
+        });
+        logAiGen({
+          step: "smart_plan_mid_trip_rest_coherent_empty",
+          tripId: input.tripId,
+          userId: user.id,
+          details: { dates: coherentEmptyDates },
+        });
+      }
     }
     /** After overwrite mode, strip headline parks from day 1 AM/PM. In preserve
      * mode, do not run this on the merged calendar — it would remove the guest's
