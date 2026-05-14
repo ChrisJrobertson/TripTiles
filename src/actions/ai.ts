@@ -2813,10 +2813,14 @@ export async function runGenerateAIPlan(
       };
     }
 
+    const preserve =
+      input.preserveExistingSlots !== false;
+    let mergedRaw = mergeAiIntoTrip(trip.assignments, guarded, preserve);
+
     const isOverwriteFullTrip =
       !normalizedDateKey && input.preserveExistingSlots === false;
     const restStripResult = stripMidTripRestPoolSlotsForPackedEdgeBuffers({
-      assignments: guarded,
+      assignments: mergedRaw,
       trip,
       sortedAllTripDateKeys,
       fullDateAllow,
@@ -2825,9 +2829,8 @@ export async function runGenerateAIPlan(
       planningProfile: tripProfileForStructuralMeals,
       overwriteFullTrip: isOverwriteFullTrip,
     });
-    const assignmentsForMerge =
-      restStripResult.strippedSlotCount > 0 ? restStripResult.out : guarded;
     if (restStripResult.strippedSlotCount > 0) {
+      mergedRaw = restStripResult.out;
       midTripRestGuardSummary = {
         stripped_slots: restStripResult.strippedSlotCount,
       };
@@ -2840,14 +2843,6 @@ export async function runGenerateAIPlan(
         },
       });
     }
-
-    const preserve =
-      input.preserveExistingSlots !== false;
-    const mergedRaw = mergeAiIntoTrip(
-      trip.assignments,
-      assignmentsForMerge,
-      preserve,
-    );
     /** After overwrite mode, strip headline parks from day 1 AM/PM. In preserve
      * mode, do not run this on the merged calendar — it would remove the guest's
      * manual day-1 picks even when they asked not to overwrite. */
