@@ -1,8 +1,19 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 
 type CloseFn = () => void;
+
+const DESKTOP_MENU_ID = "planner-actions-more-desktop-menu";
+const DESKTOP_TRIGGER_ID = "planner-actions-more-desktop-trigger";
 
 type Props = {
   onResetCruise: () => void;
@@ -124,11 +135,71 @@ export function PlannerActionsMenu({
   remindersSection,
   adminSection,
 }: Props) {
-  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const desktopTriggerRef = useRef<HTMLButtonElement>(null);
+  const desktopMenuPanelRef = useRef<HTMLDivElement>(null);
+  const [desktopMenuOpen, setDesktopMenuOpen] = useState(false);
+  const [desktopMenuPos, setDesktopMenuPos] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  function closeMenu() {
-    detailsRef.current?.removeAttribute("open");
+  const updateDesktopMenuPosition = useCallback(() => {
+    const el = desktopTriggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setDesktopMenuPos({ top: r.bottom + 4, left: r.left });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!desktopMenuOpen) {
+      setDesktopMenuPos(null);
+      return;
+    }
+    updateDesktopMenuPosition();
+  }, [desktopMenuOpen, updateDesktopMenuPosition]);
+
+  useEffect(() => {
+    if (!desktopMenuOpen) return;
+
+    const onPointerDownCapture = (e: PointerEvent) => {
+      const t = e.target as Node | null;
+      if (!t) return;
+      if (
+        desktopTriggerRef.current?.contains(t) ||
+        desktopMenuPanelRef.current?.contains(t)
+      ) {
+        return;
+      }
+      setDesktopMenuOpen(false);
+    };
+
+    const onKeyDownCapture = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setDesktopMenuOpen(false);
+      }
+    };
+
+    const onScrollOrResize = () => {
+      updateDesktopMenuPosition();
+    };
+
+    document.addEventListener("pointerdown", onPointerDownCapture, true);
+    document.addEventListener("keydown", onKeyDownCapture, true);
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDownCapture, true);
+      document.removeEventListener("keydown", onKeyDownCapture, true);
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [desktopMenuOpen, updateDesktopMenuPosition]);
+
+  function closeDesktopMenu() {
+    setDesktopMenuOpen(false);
   }
 
   const closeSheet = () => setSheetOpen(false);
@@ -145,20 +216,51 @@ export function PlannerActionsMenu({
     adminSection,
   };
 
+  const desktopPortal =
+    desktopMenuOpen &&
+    desktopMenuPos &&
+    typeof document !== "undefined" ? (
+      createPortal(
+        <div
+          ref={desktopMenuPanelRef}
+          id={DESKTOP_MENU_ID}
+          role="menu"
+          aria-labelledby={DESKTOP_TRIGGER_ID}
+          className="fixed z-[88] min-w-[12rem] max-h-[min(70vh,32rem)] overflow-y-auto rounded-tt-lg border border-tt-line bg-tt-surface py-1 shadow-tt-lg"
+          style={{
+            top: desktopMenuPos.top,
+            left: desktopMenuPos.left,
+          }}
+        >
+          <MenuBlock {...menuProps} close={closeDesktopMenu} />
+        </div>,
+        document.body,
+      )
+    ) : null;
+
   return (
     <>
-      <details ref={detailsRef} className="group relative hidden md:block">
-        <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 font-sans text-sm font-medium text-tt-royal shadow-tt-sm transition hover:bg-tt-bg-soft [&::-webkit-details-marker]:hidden">
-          More
-          <span className="text-tt-royal/40 transition group-open:rotate-180">▾</span>
-        </summary>
-        <div
-          className="absolute left-0 top-full z-30 mt-1 min-w-[12rem] max-h-[min(70vh,32rem)] overflow-y-auto rounded-tt-lg border border-tt-line bg-tt-surface py-1 shadow-tt-lg"
-          role="menu"
+      <div className="relative hidden md:block">
+        <button
+          ref={desktopTriggerRef}
+          type="button"
+          id={DESKTOP_TRIGGER_ID}
+          aria-expanded={desktopMenuOpen}
+          aria-haspopup="menu"
+          aria-controls={desktopMenuOpen ? DESKTOP_MENU_ID : undefined}
+          className="flex cursor-pointer items-center gap-1.5 rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 font-sans text-sm font-medium text-tt-royal shadow-tt-sm transition hover:bg-tt-bg-soft"
+          onClick={() => setDesktopMenuOpen((o) => !o)}
         >
-          <MenuBlock {...menuProps} close={closeMenu} />
-        </div>
-      </details>
+          More
+          <span
+            className={`text-tt-royal/40 transition ${desktopMenuOpen ? "rotate-180" : ""}`}
+            aria-hidden
+          >
+            ▾
+          </span>
+        </button>
+      </div>
+      {desktopPortal}
 
       <button
         type="button"
