@@ -1310,6 +1310,8 @@ async function recordAiGeneration(params: {
   prompt_data_quality_summary?: Record<string, unknown> | null;
   response_completion_status?: ResponseCompletionStatus | null;
   output_park_region_match?: boolean | null;
+  /** Post-guardrail parsed assignments (pre-merge). Diagnostic column on ai_generations. */
+  response_assignments?: Assignments | null;
 }): Promise<AiGenerationInsertResult> {
   try {
     const admin = createServiceRoleClient();
@@ -1333,6 +1335,9 @@ async function recordAiGeneration(params: {
     }
     if (params.output_park_region_match !== undefined) {
       row.output_park_region_match = params.output_park_region_match;
+    }
+    if (params.response_assignments != null) {
+      row.response_assignments = params.response_assignments;
     }
     const { error } = await admin.from("ai_generations").insert(row);
     if (!error) return { error: null };
@@ -3150,6 +3155,7 @@ export async function runGenerateAIPlan(
         false,
       ),
       output_park_region_match: outputParkRegionMatch,
+      response_assignments: structuredClone(guarded),
     });
 
     if (genInsertErr) {
