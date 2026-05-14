@@ -54,6 +54,7 @@ import {
   anchorForRideRemoval,
   type BookingAnchor,
 } from "@/lib/booking-anchor-risk";
+import { BookingAnchorDayClashBanner } from "@/components/planner/BookingAnchorDayClashBanner";
 import {
   BookingConflictModal,
 } from "@/components/planner/BookingConflictModal";
@@ -744,6 +745,17 @@ export function ExpandedDayPanel({
           </div>
         ) : null}
       </div>
+
+      {!embedded ? (
+        <BookingAnchorDayClashBanner
+          className="mb-3"
+          plannerPreferences={plannerPreferences}
+          dateKey={dayDate}
+          dayAssignment={dayAssignment}
+          parkById={parkById}
+          ridePriorities={sorted}
+        />
+      ) : null}
 
       {embedded ? (
         <div data-no-swipe>

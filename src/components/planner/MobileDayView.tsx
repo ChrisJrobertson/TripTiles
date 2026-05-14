@@ -23,6 +23,7 @@ import {
   type DerivedSlot,
 } from "@/lib/planner/derive-slots-from-timeline";
 import { MobileRidesSheet } from "@/components/planner/MobileRidesSheet";
+import { BookingAnchorDayClashBanner } from "@/components/planner/BookingAnchorDayClashBanner";
 import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
 import { plannerCalendarParkSlotStyle } from "@/lib/theme-colours";
@@ -1493,6 +1494,15 @@ export function MobileDayView({
 
           {activeDayStrategy || mobileDayLayout === "grid" ? (
             <div className="space-y-3">
+              <BookingAnchorDayClashBanner
+                plannerPreferences={
+                  trip.preferences as Record<string, unknown> | null | undefined
+                }
+                dateKey={activeDay.dateKey}
+                dayAssignment={assignments[activeDay.dateKey]}
+                parkById={parkById}
+                ridePriorities={ridePrioritiesForActiveDay}
+              />
               {(() => {
                 const ass = assignments[activeDay.dateKey] ?? {};
                 const aiRich = getAiDayTimelineForDate(
@@ -1559,16 +1569,28 @@ export function MobileDayView({
               })()}
             </div>
           ) : onSlotTimeChange ? (
-            <DayTimelinePanel
-              day={mobileDayForTimelinePanel}
-              parks={parks}
-              colourTheme={colourTheme}
-              readOnly={readOnly}
-              unlocked={timelineUnlocked}
-              onTimeChange={(slot, time) =>
-                onSlotTimeChange(activeDay.dateKey, slot, time)
-              }
-            />
+            <>
+              <BookingAnchorDayClashBanner
+                className="mb-3"
+                plannerPreferences={
+                  trip.preferences as Record<string, unknown> | null | undefined
+                }
+                dateKey={activeDay.dateKey}
+                dayAssignment={assignments[activeDay.dateKey]}
+                parkById={parkById}
+                ridePriorities={ridePrioritiesForActiveDay}
+              />
+              <DayTimelinePanel
+                day={mobileDayForTimelinePanel}
+                parks={parks}
+                colourTheme={colourTheme}
+                readOnly={readOnly}
+                unlocked={timelineUnlocked}
+                onTimeChange={(slot, time) =>
+                  onSlotTimeChange(activeDay.dateKey, slot, time)
+                }
+              />
+            </>
           ) : null}
 
           {activeDayStrategy ? (

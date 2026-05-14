@@ -45,6 +45,7 @@ import {
 import {
   anchorsAtRiskOnSlotClear,
   anchorsAtRiskOnSlotParkChange,
+  collectBookingAnchors,
   type BookingAnchor,
 } from "@/lib/booking-anchor-risk";
 import {
@@ -806,6 +807,9 @@ function PlannerClientInner({
     dateKeys: string[];
     pending: () => void;
   } | null>(null);
+  const [dayTimelineAnchorGuard, setDayTimelineAnchorGuard] =
+    useState<SmartPlanGeneratePayload | null>(null);
+  const dayTimelineAnchorGuardBypassRef = useRef(false);
   const [dayStrategyUpgradeOpen, setDayStrategyUpgradeOpen] = useState(false);
   const [undoDayTweakPrompt, setUndoDayTweakPrompt] = useState<{
     dateKey: string;
@@ -1754,7 +1758,6 @@ function PlannerClientInner({
       setSmartError(null);
       setSmartCanRetryPartial(false);
       setSmartRetryPayload(payload);
-      setIsAiGenerating(true);
       let sawFirstToken = false;
       // `spinnerClearReason` records why the spinner came down — surfaced via
       // `[smart-plan-client] spinner-cleared` so a hung-spinner reproduction
@@ -1787,6 +1790,19 @@ function PlannerClientInner({
           });
         }
         const tripBefore = trips.find((x) => x.id === activeTripId);
+        if (payload.dateKey && !dayTimelineAnchorGuardBypassRef.current) {
+          const dayRows =
+            ridePrioritiesByDayForActiveTrip[payload.dateKey] ?? [];
+          if (collectBookingAnchors(dayRows, parkByIdPlanner).length > 0) {
+            setSmartRetryPayload(payload);
+            setDayTimelineAnchorGuard(payload);
+            return;
+          }
+        }
+        if (payload.dateKey && dayTimelineAnchorGuardBypassRef.current) {
+          dayTimelineAnchorGuardBypassRef.current = false;
+        }
+        setIsAiGenerating(true);
         if (payload.dateKey) {
           const dayRes = await runDayTimelineWithTimeout(
             activeTripId,
@@ -2013,6 +2029,8 @@ function PlannerClientInner({
       applyLocalPatch,
       applyStrategyPatchForDate,
       enqueueAchievementKeys,
+      parkByIdPlanner,
+      ridePrioritiesByDayForActiveTrip,
       router,
       trips,
     ],
@@ -3953,6 +3971,53 @@ function PlannerClientInner({
                 const run = timelineEditGuard.pending;
                 setTimelineEditGuard(null);
                 run();
+              }}
+            >
+              Continue
+            </Button>
+          </div>
+        </ModalShell>
+      ) : null}
+
+      {dayTimelineAnchorGuard ? (
+        <ModalShell
+          zClassName="z-[132]"
+          overlayClassName="bg-tt-royal/55 backdrop-blur-[1px]"
+          maxWidthClass="max-w-md"
+          panelClassName="p-6"
+          role="dialog"
+          aria-modal={true}
+          aria-labelledby="day-timeline-anchor-guard-title"
+        >
+          <h2
+            id="day-timeline-anchor-guard-title"
+            className="font-heading text-lg font-semibold text-tt-royal"
+          >
+            Regenerate will rebuild this day
+          </h2>
+          <p className="mt-3 font-sans text-sm leading-relaxed text-tt-royal/85">
+            This day has booked skip-the-line return times (Lightning Lane /
+            Express style). Regenerating replaces the hour-by-hour timeline —
+            afterwards, re-check that those return times still line up with the
+            new plan.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-end gap-2 border-t border-tt-line-soft pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setDayTimelineAnchorGuard(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => {
+                const p = dayTimelineAnchorGuard;
+                setDayTimelineAnchorGuard(null);
+                if (!p) return;
+                dayTimelineAnchorGuardBypassRef.current = true;
+                void handleSmartPlanGenerate(p);
               }}
             >
               Continue

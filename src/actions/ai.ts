@@ -3430,6 +3430,8 @@ function buildDayTimelineUserMessage(params: {
   tempC: number;
   weatherSummary: string;
   skipLineOn: boolean;
+  /** Booked skip-the-line return times — immovable anchors for timeline JSON. */
+  bookingAnchorsBlock?: string | null;
   /** Hard at-park window for timeline JSON. */
   dayConstraintBlock?: string;
 }): string {
@@ -3445,7 +3447,7 @@ Date: ${params.dateKey} (${w}).
 Weather: ${params.tempC}°C, ${params.weatherSummary}.
 Crowd level for this day: ${params.crowdLevel}.
 Skip-the-line passes: ${params.skipLineOn ? "on" : "off"}.
-
+${params.bookingAnchorsBlock?.trim() ? `\n\n${params.bookingAnchorsBlock.trim()}\n` : ""}
 Parks assigned to slots today (user may have set these):
 - AM: ${params.amName || ""}
 - Lunch: ${params.lunchName || ""}
@@ -3748,8 +3750,38 @@ export async function generateDayTimeline(
     trip.planning_preferences?.includeUniversalSkipTips !== false;
   const skipLineOn = skipDisney || skipUniversal;
 
+  const ridePrioritiesForDay = await getRidePrioritiesForDay(tripId, dateKey);
+  const anchoredRideRows = ridePrioritiesForDay.filter((r) =>
+    Boolean(r.skip_line_return_hhmm?.trim()),
+  );
+  const bookingAnchorsCount = anchoredRideRows.length;
+  let bookingAnchorsBlock: string | null = null;
+  if (bookingAnchorsCount > 0) {
+    const picks = formatDayRidePicksForPrompt(anchoredRideRows);
+    const anchorLines =
+      picks ??
+      anchoredRideRows
+        .map((r) => {
+          const book = r.skip_line_return_hhmm?.trim() ?? "";
+          const n =
+            r.attraction?.name?.trim() || "Booked skip-the-line return";
+          return `  - 🔒 BOOKED RETURN ${book} — ${n}`;
+        })
+        .join("\n");
+    bookingAnchorsBlock = `BOOKED SKIP-THE-LINE RETURN TIMES (${dateKey}) — immovable clock anchors:
+${anchorLines}
+
+ANCHOR RULES (hard):
+- Each listed attraction MUST appear in timeline[] at its booked return time within ±10 minutes, tagged "priority", with the catalogue attraction name in title or subtitle.
+- Do NOT schedule other priority, adr, or show entries whose scheduled time falls within ±15 minutes of any booked return above.
+- Honour every listed return; these times are guest commitments and cannot be moved.`;
+  }
+
   const { brief, quality: timelineBriefQuality } = collectUserBrief(trip, {});
-  const timelinePromptQualityRecord = promptQualityRecord(timelineBriefQuality);
+  const timelinePromptQualityRecord = {
+    ...promptQualityRecord(timelineBriefQuality),
+    booking_anchors_count: bookingAnchorsCount,
+  };
   const userConstraintsBlock = brief
     ? `USER CONSTRAINTS (verbatim — treat as immovable)
 
@@ -3777,6 +3809,7 @@ END USER CONSTRAINTS`
       tempC,
       weatherSummary,
       skipLineOn,
+      bookingAnchorsBlock,
       dayConstraintBlock,
     }),
   ].join("\n\n");

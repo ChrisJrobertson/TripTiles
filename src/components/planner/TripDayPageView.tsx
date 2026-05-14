@@ -4,6 +4,7 @@ import { ExpandedDayPanel } from "@/components/planner/ExpandedDayPanel";
 import { SkipLineLegend } from "@/components/planner/SkipLineLegend";
 import { CrowdLevelIndicator } from "@/components/planner/CrowdLevelIndicator";
 import { DayConflictBanners } from "@/components/planner/DayConflictBanners";
+import { BookingAnchorDayClashBanner } from "@/components/planner/BookingAnchorDayClashBanner";
 import { DayHeatSidecar } from "@/components/planner/DayHeatSidecar";
 import { DayMustDoChecklist } from "@/components/planner/DayMustDoChecklist";
 import { DayTimeline } from "@/components/planner/DayTimeline";
@@ -907,6 +908,16 @@ export function TripDayPageView({
             onOpenSmartPlan={onOpenSmartPlan}
             onGenerateMustDosForPark={onGenerateMustDosForPark}
             generatingMustDosParkId={generatingMustDosParkId}
+          />
+          <BookingAnchorDayClashBanner
+            className="mb-3"
+            plannerPreferences={
+              trip.preferences as Record<string, unknown> | null | undefined
+            }
+            dateKey={dayDate}
+            dayAssignment={ass as Partial<Assignment>}
+            parkById={parkById}
+            ridePriorities={ridePriorities}
           />
           {showLegacyPlannerChrome ? (
             <>
