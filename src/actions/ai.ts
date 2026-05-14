@@ -143,6 +143,9 @@ function responseCompletionFromStopReason(
 /** Below Claude Haiku 4.5's documented high output ceiling (see Anthropic model overview). */
 const SMART_PLAN_OUTPUT_CAP = 32_000;
 
+/** Must match SYSTEM_PROMPT planner_day_notes cap and parse-time soft truncate. */
+const SMART_PLAN_PLANNER_DAY_NOTES_MAX_CHARS = 700;
+
 function smartPlanMaxTokens(tripDays: number, retry: boolean): number {
   const base = retry ? 20_000 : 16_384;
   const extra = Math.max(0, tripDays - 7) * 800;
@@ -305,7 +308,15 @@ USER CONSTRAINTS RULES
 - You may echo honoured constraints in "skip_line_return_echo" (only for real supplied returns) and/or a short "user_constraints_echo" string (UK English) listing what you respected.
 
 Limits: crowd_reasoning ≤400 chars, one paragraph. Each day_crowd_notes value ≤150 chars, one sentence.
-Each planner_day_notes value ≤350 chars: THAT day only — park-hours-level pacing, neighbourhood flow, rest-day ideas, generic dining rhythm. No numbered ride checklists, no land-by-land ride name sequences, no invented show times. Omit keys with no specific tip.
+Each planner_day_notes value ≤${SMART_PLAN_PLANNER_DAY_NOTES_MAX_CHARS} chars: THAT day only — practical pacing for assigned parks or activity tiles, neighbourhood flow, rest-day rhythm, generic dining shape. No numbered ride checklists, no land-by-land ride name sequences, no invented show times. Omit keys with no specific tip.
+
+PLANNER_DAY_NOTES — OUTPUT QUALITY (stay within the character cap and the ride-naming rules above):
+- Use the space only when the day needs it — no filler, no repeated truisms, no padding to hit the limit.
+- Headline picks need reasons: wherever you give a major pacing suggestion (opening-window focus, first land or neighbourhood to hit, when to pause, dining or rest rhythm, evening band), add one short clause explaining why — grounded in crowds, demand, walking distance, heat, or pace. Never hollow praise ("it's a great choice").
+- Realistic days: do not stack major attractions back-to-back with no breathing room. Allow walking, queues, heat, meals, and children's stamina. Include at least one natural break on a full park day; avoid needless criss-crossing. If the shape is ambitious, say so plainly and offer a fallback (e.g. secure the first few priorities and keep the afternoon flexible). Add a brief heat or rain contingency when it matters.
+- Whole-trip context: weave in where this day sits in the trip (e.g. "Day 4 of 14 — two park days and a rest day already, so moderate intensity fits"). Vary tone for early-, mid-, and late-trip; notice rest days, travel days, and consecutive park stretches — avoid treating every park day as standalone, maximum-effort block.
+- Assumption-flagging: when missing detail would sharpen the plan, state the assumption (no must-dos yet for this park — the route stays general until you add them; no dining supplied — not routing around bookings; pace unstated — balanced pace assumed). Frame as helpful assumptions and nudges, never as blame.
+- Closing "next": finish planner_day_notes with one or two concrete, park-specific next steps when useful (e.g. confirm official opening time before locking rope-drop; add must-dos for a tighter route; add dining reservations so structure can wrap around them). If nothing is genuinely needed, say briefly that the day shape is already fine — do not invent busywork.
 
 DAY NOTES RULES (CRITICAL):
 - Sound like a knowledgeable friend. NEVER raw crowd scores, arithmetic, formulas, bracketed maths, "score N", "crowd index N", or how you calculated anything.
@@ -333,7 +344,7 @@ Rules:
 - True rest = restful tiles in AM and PM both; no half-rest + full park split.
 - Dining: owl, tsr, char, specd, villa as documented — only when the guest profile allows meal tiles (see user message); otherwise leave meal slots empty.
 - Honour family notes (young children / teens / queue patience).
-- When the user message includes slot **block start times** (~HH:mm) and/or a **ride pick list** for a single date: infer which park IDs belong in which half of the day only. Do not transcribe ride picks into ordered touring JSON. Mention at most one or two *general* pacing ideas in planner_day_notes (e.g. favour morning for the busiest land) without listing individual ride names or assuming paid return products.
+- When the user message includes slot **block start times** (~HH:mm) and/or a **ride pick list** for a single date: infer which park IDs belong in which half of the day only. Do not transcribe ride picks into ordered touring JSON. In planner_day_notes, give practical pacing without listing individual ride names or assuming paid return products — follow PLANNER_DAY_NOTES — OUTPUT QUALITY.
 
 CLOSURE AWARENESS: Some major attractions are permanently closed or unavailable for the foreseeable future. Do not build plans around these as headline experiences:
 - Hollywood Rip Ride Rockit (USF) — closed Aug 2025
@@ -536,7 +547,9 @@ function parseCrowdMetadata(
       const s = v.trim();
       if (s) {
         const cleaned = sanitizeStructuralSmartPlanPlannerNote(
-          sanitizeAiPlannerDisplayText(softTruncateToMax(s, 350)),
+          sanitizeAiPlannerDisplayText(
+            softTruncateToMax(s, SMART_PLAN_PLANNER_DAY_NOTES_MAX_CHARS),
+          ),
         ).trimEnd();
         if (cleaned) planner_day_notes[k] = cleaned;
       }
@@ -1640,9 +1653,15 @@ The user has explicitly asked you to replace ANY existing assignments with a fre
 
 Generate a complete fresh itinerary that:
 - Honours the user's family priorities above (e.g. if "Thrill rides" is listed, prioritise theme parks with thrill attractions across the trip)
-- Distributes rest days sensibly (typically 1 rest day per 4-5 park days). Exception: when USER PRIORITIES or TRIP WIZARD PREFERENCES explicitly require a buffer on the first and/or last trip day, you MUST leave those edge days off headline parks (Rest / pool or travel tiles) even if that creates back-to-back rest-adjacent days at the trip boundary.
+- Rest day placement follows the guest's pace and rest inclination from USER CONSTRAINTS, USER PRIORITIES, and TRIP WIZARD PREFERENCES — read "Pace", "Pace rhythm", and "Balance / rest inclination" there; those signals override any default ratio.
+- Packed or high-energy pace with light first and/or last days requested (e.g. "first and last day light"): put rest or travel tiles on those edge days only; do not add mid-trip rest days — the guest wants full park days between the lighter edges.
+- Packed or high-energy pace without an edge-day preference: add at most one mid-trip rest day, and only when the itinerary has ten or more park days; otherwise add none.
+- Moderate or balanced pace: distribute roughly one rest day per 4–5 park days.
+- Relaxed or slow pace: be more generous — roughly one rest day per 3–4 park days.
+- No pace or rest preference stated at all: fall back to roughly one rest day per 4–5 park days as a sensible default.
+- Never let that fallback override an explicit guest preference — explicit input always wins.
 - Uses crowd patterns to choose which park on which day
-- Respects mandatory anchors only: arrival day (fly in), departure day (fly out), and any cruise embark/disembark dates${
+- Respects mandatory anchors only: arrival day (fly in), departure day (fly out), and any cruise embark/disembark dates — keep these as the required travel or rest tiles regardless of pace${
         overwriteAnchors ? `\n\n${overwriteAnchors}` : ""
       }\n\n`
     : "";
@@ -1718,7 +1737,7 @@ Generate a complete fresh itinerary that:
           hasDaySlots
             ? `The ~HH:mm times are in "CALENDAR ALREADY SET" above. They are *block* start times (AM / lunch / PM / dinner) for pacing and which park tile when — never exact ride or show times.\n`
             : "Park slot tiles for this day are not filled (or all empty) — you may place parks in empty slots using the ride pick *regions* only to infer which catalogue park ids fit; do not output ride names or order.\n"
-        }- In planner_day_notes for ${dateKey}, give at most 1–2 **general** pacing sentences (e.g. favour morning for the busiest themed area). No bullet lists of attraction names, no height talk, no Lightning Lane / Express / Single Rider assumptions.\n`
+        }- In planner_day_notes for ${dateKey}, follow PLANNER_DAY_NOTES — OUTPUT QUALITY in the system prompt (≤${SMART_PLAN_PLANNER_DAY_NOTES_MAX_CHARS} chars for this day). Stay park-level — no bullet lists of attraction names, no height talk, no Lightning Lane / Express / Single Rider assumptions unless confirmed in context.\n`
       : "";
   const cruiseTilePolicy = trip.has_cruise
     ? "CRUISE TILES: This trip includes a cruise segment. Include cruise embark/disembark and ship activities where appropriate when they fit the dates."
@@ -1736,7 +1755,7 @@ Generate a complete fresh itinerary that:
 
   if (mode === "smart") {
     const smartIntro = dateKey
-      ? "DAY-SCOPED SMART PLAN — assign the correct park/dining tile IDs for this calendar day, keep locked slots, and add short structural notes only. Guest ride picks are context for which park matters — not JSON sequencing."
+      ? "DAY-SCOPED SMART PLAN — assign the correct park/dining tile IDs for this calendar day, keep locked slots, and add planner_day_notes per the system prompt. Guest ride picks are context for which park matters — not JSON sequencing."
       : overwriteMode
       ? `SMART PLAN MODE — FRESH GENERATION
 
@@ -1744,7 +1763,7 @@ Your job is fresh DAY STRUCTURE from the USER PRIORITIES above — park/rest/din
       : `SMART PLAN MODE — DAY STRUCTURE ONLY
 
 Your job is to annotate and complete the guest's calendar tile choices:
-- For dates with assigned parks: add day_crowd_notes and concise planner_day_notes for THOSE parks (no ride-level lists).
+- For dates with assigned parks: add day_crowd_notes and planner_day_notes for THOSE parks per the system prompt (no ride-level lists).
 - For dates with empty slots: recommend park/dining IDs from the catalogue, then add matching notes.
 - Generate a trip-wide crowd_reasoning summary that matches the assignments you output.
 - Omit "must_dos" entirely — sequenced attractions are handled later by AI Day Strategy from safe day intents.`;
@@ -1756,7 +1775,7 @@ ${wizBlock}${dineBlock}${namedRestBlock}${cruiseTilePolicy}${dayScopeBlock}${cal
 ${fullTripPlannerDayNoteParkBinding}
 
 ${smartIntro}
-${dateKey ? `For this date only (${dateKey}), add planner_day_notes with 1–2 high-level tips (no ride name lists; no paid-queue tactics) for the parks in CALENDAR / assignments.` : "For each trip day, add planner_day_notes with 1–2 high-level tips tied to that date and the parks in assignments (timing bands, rest breaks, dining rhythm). Skip generic advice that applies to every day. No rope-drop or paid-line product assumptions unless the TRIP PLANNING CONTEXT clearly confirms them."}
+${dateKey ? `For this date only (${dateKey}), add planner_day_notes following PLANNER_DAY_NOTES — OUTPUT QUALITY in the system prompt (≤${SMART_PLAN_PLANNER_DAY_NOTES_MAX_CHARS} chars; no ride name lists; no paid-queue tactics unless confirmed) for the parks in CALENDAR / assignments.` : `For each trip day, add planner_day_notes following PLANNER_DAY_NOTES — OUTPUT QUALITY in the system prompt (≤${SMART_PLAN_PLANNER_DAY_NOTES_MAX_CHARS} chars per day). Tie copy to that date and the parks in assignments; skip generic filler. No rope-drop or paid-line product assumptions unless the TRIP PLANNING CONTEXT clearly confirms them.`}
 
 Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and planner_day_notes when possible — no must_dos).`;
   }
@@ -1769,7 +1788,7 @@ ${fullTripPlannerDayNoteParkBinding}
 
 CUSTOM PROMPT MODE — apply USER CONSTRAINTS and TRIP WIZARD PREFERENCES first, then crowd patterns. Respect the system prompt: assignments + notes only; omit must_dos; no ride sequencing JSON; no invented heights; no paid-queue assumptions unless explicitly confirmed in context.
 ${!userConstraintsBlock.trim() ? `\n(The guest did not add a freeform brief — use structured preferences above and trip defaults.)\n` : ""}
-${dateKey ? `For this date only (${dateKey}), planner_day_notes stay high-level — no ride bullet lists.` : "For each trip day, planner_day_notes stay high-level (no ride bullet lists)."}
+${dateKey ? `For this date only (${dateKey}), planner_day_notes follow PLANNER_DAY_NOTES — OUTPUT QUALITY — no ride bullet lists.` : `For each trip day, planner_day_notes follow PLANNER_DAY_NOTES — OUTPUT QUALITY in the system prompt (≤${SMART_PLAN_PLANNER_DAY_NOTES_MAX_CHARS} chars per day; no ride bullet lists).`}
 
 Generate the itinerary JSON now (include crowd_reasoning, day_crowd_notes, and planner_day_notes when possible — no must_dos).`;
 }
