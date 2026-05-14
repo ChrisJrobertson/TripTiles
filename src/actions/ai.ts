@@ -2440,6 +2440,8 @@ export async function runGenerateAIPlan(
     let lastRawText = "";
     let lastSmartPlanStop: string | null = null;
     let midTripRestGuardSummary: { stripped_slots: number } | null = null;
+    /** Dates emptied by coherent-empty; used to strip stale keys from `preferences.day_notes`. */
+    let coherentEmptyDateKeysForDayNotes: string[] = [];
 
     planAttempts: for (let planAttempt = 0; planAttempt < 2; planAttempt++) {
       const t0 = Date.now();
@@ -2927,6 +2929,7 @@ export async function runGenerateAIPlan(
           meta,
           clearedDateKeys: coherentEmptyDates,
         });
+        coherentEmptyDateKeysForDayNotes = coherentEmptyDates;
         logAiGen({
           step: "smart_plan_mid_trip_rest_coherent_empty",
           tripId: input.tripId,
@@ -3067,6 +3070,22 @@ export async function runGenerateAIPlan(
           ? { ...(prevDn as Record<string, string>) }
           : {};
       nextPrefs.day_notes = { ...baseDn, ...meta.planner_day_notes };
+    }
+    if (coherentEmptyDateKeysForDayNotes.length > 0) {
+      const rawDn = nextPrefs.day_notes;
+      if (rawDn && typeof rawDn === "object" && !Array.isArray(rawDn)) {
+        const pruned: Record<string, string> = {
+          ...(rawDn as Record<string, string>),
+        };
+        for (const dk of coherentEmptyDateKeysForDayNotes) {
+          delete pruned[dk];
+        }
+        if (Object.keys(pruned).length > 0) {
+          nextPrefs.day_notes = pruned;
+        } else {
+          delete nextPrefs.day_notes;
+        }
+      }
     }
     if (meta.skip_line_return_echo) {
       (nextPrefs as Record<string, unknown>).ai_skip_line_return_echo =
