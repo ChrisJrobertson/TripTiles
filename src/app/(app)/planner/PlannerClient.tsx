@@ -168,6 +168,21 @@ import {
 } from "react";
 import "./planner.css";
 
+/** One post-wizard Smart Plan per trip — survives React Strict Mode remount without double-calling the server action. */
+const wizardAutogenLocks = new Set<string>();
+
+function tryAcquireWizardAutogenLock(tripId: string): boolean {
+  if (wizardAutogenLocks.has(tripId)) return false;
+  wizardAutogenLocks.add(tripId);
+  return true;
+}
+
+function releaseWizardAutogenLock(tripId: string) {
+  wizardAutogenLocks.delete(tripId);
+}
+
+const WIZARD_AUTO_PLAN_SAFETY_MS = 60_000;
+
 const PlannerPlanningTabDynamic = dynamic(
   () =>
     import("@/components/planner/sections/PlannerPlanningTabPanel").then(
@@ -773,7 +788,11 @@ function PlannerClientInner({
   const saveHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tileScrubToastShown = useRef(false);
   const smartPlanOpenedFromQueryRef = useRef(false);
-  const autoGenerateConsumedRef = useRef(false);
+  const wizardAutogenSafetyTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const [wizardAutoPlanInFlight, setWizardAutoPlanInFlight] =
+    useState(false);
   const [compareMode, setCompareMode] = useState(false);
   const [adminPanel, setAdminPanel] = useState<
     null | "share" | "family" | "notes"
@@ -2048,13 +2067,50 @@ function PlannerClientInner({
 
   useEffect(() => {
     if (!initialAutoGenerate || !activeTripId) return;
-    if (autoGenerateConsumedRef.current) return;
-    autoGenerateConsumedRef.current = true;
+    if (!tryAcquireWizardAutogenLock(activeTripId)) {
+      setWizardAutoPlanInFlight(true);
+      return;
+    }
+
+    const runTripId = activeTripId;
+
+    if (typeof window !== "undefined") {
+      const u = new URL(window.location.href);
+      if (u.searchParams.get("autoGenerate") === "true") {
+        u.searchParams.delete("autoGenerate");
+        const qs = u.searchParams.toString();
+        const next = qs ? `${u.pathname}?${qs}` : u.pathname;
+        startTransition(() => {
+          router.replace(next);
+        });
+      }
+    }
+
+    setWizardAutoPlanInFlight(true);
+
+    if (wizardAutogenSafetyTimerRef.current) {
+      clearTimeout(wizardAutogenSafetyTimerRef.current);
+    }
+    wizardAutogenSafetyTimerRef.current = setTimeout(() => {
+      wizardAutogenSafetyTimerRef.current = null;
+      setWizardAutoPlanInFlight((stillFlying) => {
+        if (!stillFlying) return stillFlying;
+        const trip = tripsRef.current.find((x) => x.id === runTripId);
+        if (trip && countFilledSlots(trip.assignments) > 0) {
+          return false;
+        }
+        startTransition(() => {
+          router.refresh();
+        });
+        return false;
+      });
+    }, WIZARD_AUTO_PLAN_SAFETY_MS);
+
     void (async () => {
       try {
         const tripBefore =
-          trips.find((x) => x.id === activeTripId) ??
-          initialTrips.find((x) => x.id === activeTripId);
+          tripsRef.current.find((x) => x.id === runTripId) ??
+          initialTrips.find((x) => x.id === runTripId);
         const snapAssignments = tripBefore?.assignments
           ? (JSON.parse(
               JSON.stringify(tripBefore.assignments),
@@ -2066,7 +2122,7 @@ function PlannerClientInner({
         const res = await runSmartPlanWithTimeoutAndRetry(
           () =>
             generateAIPlanAction({
-              tripId: activeTripId,
+              tripId: runTripId,
               mode: "smart",
               userPrompt: "",
               preserveExistingSlots: true,
@@ -2110,7 +2166,7 @@ function PlannerClientInner({
         if (res.mustDos != null && Object.keys(res.mustDos).length > 0) {
           prefPatch.must_dos = res.mustDos;
         }
-        applyLocalPatch(activeTripId, {
+        applyLocalPatch(runTripId, {
           assignments: res.assignments,
           preferences: prefPatch,
           previous_assignments_snapshot: snapAssignments,
@@ -2119,9 +2175,9 @@ function PlannerClientInner({
         });
         setAiGenByTrip((prev) => ({
           ...prev,
-          [activeTripId]: Math.max(
+          [runTripId]: Math.max(
             res.generationsUsedForTrip,
-            prev[activeTripId] ?? 0,
+            prev[runTripId] ?? 0,
           ),
         }));
         showToast("✨ Plan generated!");
@@ -2140,6 +2196,13 @@ function PlannerClientInner({
             : "Smart Plan couldn't generate your plan — you can try again from the planner, or build it yourself.",
         );
         startTransition(() => router.replace(overviewHref));
+      } finally {
+        if (wizardAutogenSafetyTimerRef.current) {
+          clearTimeout(wizardAutogenSafetyTimerRef.current);
+          wizardAutogenSafetyTimerRef.current = null;
+        }
+        setWizardAutoPlanInFlight(false);
+        releaseWizardAutogenLock(runTripId);
       }
     })();
   }, [
@@ -2150,7 +2213,6 @@ function PlannerClientInner({
     router,
     overviewHref,
     initialTrips,
-    trips,
   ]);
 
   const applySlotAssign = useCallback(
@@ -3457,6 +3519,7 @@ function PlannerClientInner({
               onNeedParkFirst={() => showHint("Pick a park first")}
               onAfterSlotClear={() => showToast("Slot cleared")}
               hasAnyAssignment={hasAnyAssignment}
+              autoGenerateInFlight={wizardAutoPlanInFlight}
               dayDetailOpen={dayDetailOpen}
               onEmptyCalendarGenerateAi={() => {
                 setSmartError(null);

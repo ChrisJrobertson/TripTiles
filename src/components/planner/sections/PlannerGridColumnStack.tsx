@@ -58,6 +58,8 @@ export type PlannerGridColumnStackProps = {
   onNeedParkFirst: () => void;
   onAfterSlotClear: () => void;
   hasAnyAssignment: boolean;
+  /** Post-wizard Smart Plan: hide empty-calendar CTA while generation is in flight. */
+  autoGenerateInFlight?: boolean;
   dayDetailOpen: boolean;
   onEmptyCalendarGenerateAi: () => void;
   onEmptyCalendarAddManually: () => void;
@@ -140,6 +142,7 @@ export function PlannerGridColumnStack({
   onNeedParkFirst,
   onAfterSlotClear,
   hasAnyAssignment,
+  autoGenerateInFlight = false,
   dayDetailOpen,
   onEmptyCalendarGenerateAi,
   onEmptyCalendarAddManually,
@@ -234,7 +237,25 @@ export function PlannerGridColumnStack({
           />
         ) : (
           <>
-            {!hasAnyAssignment && !dayDetailOpen ? (
+            {autoGenerateInFlight && !hasAnyAssignment && !dayDetailOpen ? (
+              <div
+                className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-3 sm:p-4"
+                role="status"
+                aria-live="polite"
+                aria-label="Generating your plan"
+              >
+                <div className="pointer-events-none w-full max-w-md space-y-4 rounded-tt-xl border border-tt-line bg-tt-surface/95 p-5 shadow-tt-lg backdrop-blur-sm">
+                  <div className="min-h-[min(38vh,24rem)] animate-pulse rounded-tt-lg bg-tt-bg-soft/95" />
+                  <div className="h-10 animate-pulse rounded-tt-md bg-tt-bg-soft/90" />
+                  <p className="text-center font-sans text-sm font-medium text-tt-ink-muted">
+                    Generating your plan…
+                  </p>
+                </div>
+              </div>
+            ) : null}
+            {!hasAnyAssignment &&
+            !dayDetailOpen &&
+            !autoGenerateInFlight ? (
               <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-3 sm:p-4">
                 <div className="pointer-events-auto w-full max-w-md">
                   <EmptyCalendarCta

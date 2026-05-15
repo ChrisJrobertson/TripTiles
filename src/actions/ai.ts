@@ -3211,6 +3211,7 @@ export async function runGenerateAIPlan(
     if (firstAi.ok && firstAi.justEarned) newAchievements.push("first_ai_plan");
 
     revalidatePath("/planner");
+    revalidatePath(`/trip/${input.tripId}`);
     logAiGen({
       step: "action_exit_result",
       tripId: input.tripId,
