@@ -181,7 +181,12 @@ function releaseWizardAutogenLock(tripId: string) {
   wizardAutogenLocks.delete(tripId);
 }
 
-const WIZARD_AUTO_PLAN_SAFETY_MS = 60_000;
+/** Fallback polling while the server action is still running (long trips can exceed 60s). */
+const WIZARD_AUTOGEN_POLL_FIRST_MS = 45_000;
+const WIZARD_AUTOGEN_POLL_EVERY_MS = 15_000;
+const WIZARD_AUTOGEN_HARD_STOP_MS = 180_000;
+/** Let refreshed RSC props reach `initialTrips` before dropping the loading overlay. */
+const WIZARD_AUTOGEN_POST_REFRESH_MS = 250;
 
 const PlannerPlanningTabDynamic = dynamic(
   () =>
@@ -788,9 +793,13 @@ function PlannerClientInner({
   const saveHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tileScrubToastShown = useRef(false);
   const smartPlanOpenedFromQueryRef = useRef(false);
-  const wizardAutogenSafetyTimerRef = useRef<ReturnType<
+  const wizardAutogenPollTimeoutRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
+  const wizardAutogenPollIntervalRef = useRef<ReturnType<
+    typeof setInterval
+  > | null>(null);
+  const wizardAutogenAsyncRunningRef = useRef(false);
   const [wizardAutoPlanInFlight, setWizardAutoPlanInFlight] =
     useState(false);
   const [compareMode, setCompareMode] = useState(false);
@@ -2088,25 +2097,60 @@ function PlannerClientInner({
 
     setWizardAutoPlanInFlight(true);
 
-    if (wizardAutogenSafetyTimerRef.current) {
-      clearTimeout(wizardAutogenSafetyTimerRef.current);
-    }
-    wizardAutogenSafetyTimerRef.current = setTimeout(() => {
-      wizardAutogenSafetyTimerRef.current = null;
-      setWizardAutoPlanInFlight((stillFlying) => {
-        if (!stillFlying) return stillFlying;
-        const trip = tripsRef.current.find((x) => x.id === runTripId);
-        if (trip && countFilledSlots(trip.assignments) > 0) {
-          return false;
+    const clearWizardAutogenPollers = () => {
+      if (wizardAutogenPollTimeoutRef.current) {
+        clearTimeout(wizardAutogenPollTimeoutRef.current);
+        wizardAutogenPollTimeoutRef.current = null;
+      }
+      if (wizardAutogenPollIntervalRef.current) {
+        clearInterval(wizardAutogenPollIntervalRef.current);
+        wizardAutogenPollIntervalRef.current = null;
+      }
+    };
+
+    clearWizardAutogenPollers();
+
+    const pollStartedAt = Date.now();
+    wizardAutogenPollTimeoutRef.current = setTimeout(() => {
+      wizardAutogenPollTimeoutRef.current = null;
+      const runPoll = () => {
+        const elapsed = Date.now() - pollStartedAt;
+        if (elapsed >= WIZARD_AUTOGEN_HARD_STOP_MS) {
+          if (wizardAutogenPollIntervalRef.current) {
+            clearInterval(wizardAutogenPollIntervalRef.current);
+            wizardAutogenPollIntervalRef.current = null;
+          }
+          if (wizardAutogenAsyncRunningRef.current) {
+            console.warn(
+              "[wizard-autogen] Smart Plan auto-run exceeded 3 minutes without completing; clearing loading state.",
+              { tripId: runTripId },
+            );
+            setWizardAutoPlanInFlight(false);
+            releaseWizardAutogenLock(runTripId);
+            wizardAutogenAsyncRunningRef.current = false;
+          }
+          return;
+        }
+        if (!wizardAutogenAsyncRunningRef.current) {
+          if (wizardAutogenPollIntervalRef.current) {
+            clearInterval(wizardAutogenPollIntervalRef.current);
+            wizardAutogenPollIntervalRef.current = null;
+          }
+          return;
         }
         startTransition(() => {
-          router.refresh();
+          void router.refresh();
         });
-        return false;
-      });
-    }, WIZARD_AUTO_PLAN_SAFETY_MS);
+      };
+      runPoll();
+      wizardAutogenPollIntervalRef.current = setInterval(
+        runPoll,
+        WIZARD_AUTOGEN_POLL_EVERY_MS,
+      );
+    }, WIZARD_AUTOGEN_POLL_FIRST_MS);
 
     void (async () => {
+      wizardAutogenAsyncRunningRef.current = true;
       try {
         const tripBefore =
           tripsRef.current.find((x) => x.id === runTripId) ??
@@ -2184,7 +2228,10 @@ function PlannerClientInner({
         trackEvent("smart_plan_success", { mode: "smart" });
         enqueueAchievementKeys(res.newAchievements);
         startTransition(() => router.replace(overviewHref));
-        startTransition(() => router.refresh());
+        await Promise.resolve(router.refresh());
+        await new Promise<void>((r) =>
+          setTimeout(r, WIZARD_AUTOGEN_POST_REFRESH_MS),
+        );
       } catch (e) {
         if (notifyStaleServerActionIfNeeded(e)) {
           startTransition(() => router.replace(overviewHref));
@@ -2197,10 +2244,8 @@ function PlannerClientInner({
         );
         startTransition(() => router.replace(overviewHref));
       } finally {
-        if (wizardAutogenSafetyTimerRef.current) {
-          clearTimeout(wizardAutogenSafetyTimerRef.current);
-          wizardAutogenSafetyTimerRef.current = null;
-        }
+        clearWizardAutogenPollers();
+        wizardAutogenAsyncRunningRef.current = false;
         setWizardAutoPlanInFlight(false);
         releaseWizardAutogenLock(runTripId);
       }
