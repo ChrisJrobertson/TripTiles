@@ -289,10 +289,15 @@ export async function resendSignupOtpAction(input: {
   }
 }
 
+export type SignUpWithPasswordResult =
+  | { ok: true }
+  | { ok: false; error: string }
+  | { ok: false; error: "already_registered" };
+
 export async function signUpWithPasswordAction(input: {
   email: string;
   password: string;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+}): Promise<SignUpWithPasswordResult> {
   const trimmedEmail = input.email.trim();
   if (!trimmedEmail || !input.password) {
     return { ok: false, error: "Email and password are required" };
@@ -310,6 +315,16 @@ export async function signUpWithPasswordAction(input: {
 
     if (error) {
       return { ok: false, error: mapSignUpError(error) };
+    }
+
+    // Supabase signUp can return a User with identities: [] when the email is
+    // already tied to a confirmed account (anti-enumeration). Do not treat as success.
+    if (
+      data?.user &&
+      Array.isArray(data.user.identities) &&
+      data.user.identities.length === 0
+    ) {
+      return { ok: false, error: "already_registered" };
     }
 
     if (data.session) {

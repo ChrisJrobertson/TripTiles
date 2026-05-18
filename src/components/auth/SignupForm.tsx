@@ -36,6 +36,7 @@ export function SignupForm({ next }: Props) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
@@ -52,6 +53,7 @@ export function SignupForm({ next }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setAlreadyRegistered(false);
     setEmailError(null);
     setPasswordError(null);
     setConfirmError(null);
@@ -77,9 +79,16 @@ export function SignupForm({ next }: Props) {
           password,
         });
         if (!r.ok) {
+          if (r.error === "already_registered") {
+            setAlreadyRegistered(true);
+            setError(null);
+            return;
+          }
+          setAlreadyRegistered(false);
           setError(r.error);
           return;
         }
+        setAlreadyRegistered(false);
 
         const { createClient } = await import("@/lib/supabase/client");
         const supabase = createClient();
@@ -114,6 +123,7 @@ export function SignupForm({ next }: Props) {
           onChange={(e) => {
             setEmail(e.target.value);
             setEmailError(null);
+            setAlreadyRegistered(false);
           }}
           className={AUTH_INPUT_CLASS}
           placeholder="you@example.com"
@@ -172,21 +182,40 @@ export function SignupForm({ next }: Props) {
         ) : null}
       </div>
 
-      {error ? (
+      {alreadyRegistered ? (
+        <div
+          className="rounded-tt-md border border-tt-line bg-tt-surface-warm px-4 py-4 font-sans text-sm text-tt-royal shadow-tt-sm"
+          role="status"
+        >
+          <p className="font-heading text-base font-semibold text-tt-royal">
+            Looks like you already have a TripTiles account.
+          </p>
+          <p className="mt-2 leading-relaxed text-tt-ink-muted">
+            Sign in below, or reset your password if you&apos;ve forgotten it.
+          </p>
+          <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 font-sans text-sm">
+            <Link
+              href={`/login?next=${safeNext}&email=${encodeURIComponent(email.trim())}`}
+              className="inline-flex min-h-10 items-center rounded-tt-md bg-tt-royal px-4 py-2 font-heading font-semibold text-white shadow-tt-sm transition hover:bg-tt-royal/90"
+            >
+              Sign in →
+            </Link>
+            <span className="text-tt-ink-muted" aria-hidden>
+              ·
+            </span>
+            <Link
+              href={`/forgot-password?email=${encodeURIComponent(email.trim())}`}
+              className="font-semibold text-tt-royal underline decoration-tt-gold/55 underline-offset-2 hover:text-tt-gold"
+            >
+              Reset password
+            </Link>
+          </p>
+        </div>
+      ) : null}
+
+      {error && !alreadyRegistered ? (
         <p className="rounded-tt-md border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-800">
-          {error.includes("already exists") ? (
-            <>
-              {error}{" "}
-              <Link
-                href={`/login?next=${safeNext}`}
-                className="font-semibold underline"
-              >
-                Sign in
-              </Link>
-            </>
-          ) : (
-            error
-          )}
+          {error}
         </p>
       ) : null}
 

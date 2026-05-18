@@ -48,11 +48,15 @@ type Props = {
 const logoFocus =
   "focus-visible:ring-0 focus-visible:ring-offset-0 inline-flex items-center rounded-sm focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-tt-royal";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default async function LoginPage({ searchParams }: Props) {
   const params = await searchParams;
   const next = safeNextPath(params.next);
   const hasError = Boolean(params.error && String(params.error).trim() !== "");
-  const initialEmail = typeof params.email === "string" ? params.email : "";
+  const rawEmail =
+    typeof params.email === "string" ? params.email.trim() : "";
+  const initialEmail = EMAIL_RE.test(rawEmail) ? rawEmail : "";
   const showCallbackNotice = params.notice === "old_callback";
 
   return (

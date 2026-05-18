@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function ForgotPasswordForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -14,8 +16,8 @@ export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
 
   useEffect(() => {
-    const q = searchParams.get("email");
-    if (q) setEmail(q);
+    const q = searchParams.get("email")?.trim() ?? "";
+    if (q && EMAIL_RE.test(q)) setEmail(q);
   }, [searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
