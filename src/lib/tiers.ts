@@ -1,3 +1,4 @@
+import { stripePriceIdFromEnv } from "@/lib/stripe/price-env";
 import type { UserTier } from "@/lib/types";
 
 /** Retail tiers shown in product UI (maps from legacy `profiles.tier` values). */
@@ -115,8 +116,8 @@ const proTier: ProTierConfig = {
   monthlyPrice: 699,
   annualPrice: 3900,
   stripePriceIds: {
-    monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY!,
-    annual: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL!,
+    monthly: stripePriceIdFromEnv("PRO", "MONTHLY"),
+    annual: stripePriceIdFromEnv("PRO", "ANNUAL"),
   },
   aiModel: "claude-haiku-4-5-20251001",
   price_gbp: 6.99,
@@ -156,8 +157,8 @@ const familyTier: FamilyTierConfig = {
   monthlyPrice: 1199,
   annualPrice: 9900,
   stripePriceIds: {
-    monthly: process.env.NEXT_PUBLIC_STRIPE_PRICE_FAMILY_MONTHLY!,
-    annual: process.env.NEXT_PUBLIC_STRIPE_PRICE_FAMILY_ANNUAL!,
+    monthly: stripePriceIdFromEnv("FAMILY", "MONTHLY"),
+    annual: stripePriceIdFromEnv("FAMILY", "ANNUAL"),
   },
   aiModel: "claude-haiku-4-5-20251001",
   price_gbp: 11.99,

@@ -4,6 +4,20 @@ import type Stripe from "stripe";
 const LOUD =
   "[stripe webhook] user resolution — cannot link Stripe customer to profile; acking 200 to Stripe";
 
+export async function resolveUserIdByStripeSubscriptionId(
+  admin: SupabaseClient,
+  subscriptionId: string | null | undefined,
+): Promise<string | null> {
+  if (!subscriptionId?.trim()) return null;
+  const { data, error } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("stripe_subscription_id", subscriptionId.trim())
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.id ? String(data.id) : null;
+}
+
 /**
  * 1) profiles.stripe_customer_id = customerId
  * 2) retrieve Stripe customer email, match profiles.email (case-insensitive)
@@ -95,8 +109,8 @@ export async function resolveUserIdByStripeCustomerId(
 
 /**
  * 1) subscription metadata (supabase_user_id or user_id)
- * 2) profiles by stripe customer id
- * 3) email + back-fill customer id
+ * 2) profiles.stripe_subscription_id
+ * 3) profiles by stripe customer id + email back-fill
  */
 export async function resolveUserIdForSubscription(
   admin: SupabaseClient,
@@ -107,6 +121,9 @@ export async function resolveUserIdForSubscription(
   const fromMeta =
     sub.metadata?.supabase_user_id?.trim() || sub.metadata?.user_id?.trim() || "";
   if (fromMeta) return fromMeta;
+
+  const bySubId = await resolveUserIdByStripeSubscriptionId(admin, sub.id);
+  if (bySubId) return bySubId;
 
   const cust =
     typeof sub.customer === "string"

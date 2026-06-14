@@ -1,7 +1,8 @@
-// Required env vars (set in Vercel Production + Preview) — map to live Stripe GBP prices:
-//   NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY (£6.99/mo), NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL (£39/yr)
-//   NEXT_PUBLIC_STRIPE_PRICE_FAMILY_MONTHLY (£11.99/mo), NEXT_PUBLIC_STRIPE_PRICE_FAMILY_ANNUAL (£99/yr)
+// Price IDs: set STRIPE_PRICE_* (server) or NEXT_PUBLIC_STRIPE_PRICE_* (client checkout).
+//   PRO_MONTHLY (£6.99/mo), PRO_ANNUAL (£39/yr)
+//   FAMILY_MONTHLY (£11.99/mo), FAMILY_ANNUAL (£99/yr)
 
+import { stripePriceIdFromEnv } from "@/lib/stripe/price-env";
 import type { UserTier } from "@/lib/types";
 
 /** Live Stripe product ids → `purchases.product` / profile tier. Price ids remain the primary checkout guard via `PRICE_IDS`. */
@@ -17,10 +18,10 @@ export type PaidTier = "pro" | "family";
 export type BillingInterval = "month" | "year";
 
 export const PRICE_IDS = {
-  pro_month: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY!,
-  pro_year: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL!,
-  family_month: process.env.NEXT_PUBLIC_STRIPE_PRICE_FAMILY_MONTHLY!,
-  family_year: process.env.NEXT_PUBLIC_STRIPE_PRICE_FAMILY_ANNUAL!,
+  pro_month: stripePriceIdFromEnv("PRO", "MONTHLY"),
+  pro_year: stripePriceIdFromEnv("PRO", "ANNUAL"),
+  family_month: stripePriceIdFromEnv("FAMILY", "MONTHLY"),
+  family_year: stripePriceIdFromEnv("FAMILY", "ANNUAL"),
 } as const;
 
 export function allowedCheckoutPriceIds(): string[] {

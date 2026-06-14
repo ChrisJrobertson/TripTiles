@@ -1,11 +1,15 @@
 import { enqueueSubscriptionPaymentFailedEmail } from "@/lib/stripe/enqueue-payment-failed-email";
 import { getStripeClient } from "@/lib/stripe/client";
 import {
+  handleSubscriptionDeleted,
+  periodEndFromInvoice,
   setPurchasePastDueBySubscriptionId,
+  updatePeriodEndFromInvoice,
   upsertPurchaseFromStripeSubscription,
 } from "@/lib/stripe/purchase-sync";
 import {
   resolveUserIdByStripeCustomerId,
+  resolveUserIdByStripeSubscriptionId,
   resolveUserIdForCheckoutSession,
   resolveUserIdForSubscription,
 } from "@/lib/stripe/resolve-stripe-user";
@@ -28,7 +32,10 @@ type HandledEvent =
       data: Stripe.Event.Data & { object: Stripe.Subscription };
     })
   | (Stripe.Event & {
-      type: "invoice.paid" | "invoice.payment_failed";
+      type:
+        | "invoice.paid"
+        | "invoice.payment_succeeded"
+        | "invoice.payment_failed";
       data: Stripe.Event.Data & { object: Stripe.Invoice };
     });
 
@@ -39,6 +46,7 @@ function isHandledEvent(event: Stripe.Event): event is HandledEvent {
     event.type === "customer.subscription.updated" ||
     event.type === "customer.subscription.deleted" ||
     event.type === "invoice.paid" ||
+    event.type === "invoice.payment_succeeded" ||
     event.type === "invoice.payment_failed"
   );
 }
@@ -49,6 +57,33 @@ function subscriptionIdFromInvoice(inv: Stripe.Invoice): string | null {
   };
   const subRaw = invoiceWithSubscription.subscription;
   return typeof subRaw === "string" ? subRaw : subRaw?.id ?? null;
+}
+
+async function handleInvoiceRenewal(
+  admin: ReturnType<typeof createServiceRoleClient>,
+  stripe: Stripe,
+  inv: Stripe.Invoice,
+  ctx: { eventId: string; eventType: string },
+): Promise<void> {
+  const subId = subscriptionIdFromInvoice(inv);
+  const periodEnd = periodEndFromInvoice(inv);
+  if (!subId || !periodEnd) return;
+
+  const custRaw = inv.customer;
+  const custId =
+    typeof custRaw === "string" ? custRaw : custRaw?.id ?? null;
+
+  let userId = await resolveUserIdByStripeSubscriptionId(admin, subId);
+  if (!userId) {
+    userId = await resolveUserIdByStripeCustomerId(admin, stripe, custId, ctx);
+  }
+  if (!userId) return;
+
+  await updatePeriodEndFromInvoice(admin, {
+    userId,
+    subscriptionId: subId,
+    periodEnd,
+  });
 }
 
 export async function POST(req: Request) {
@@ -121,33 +156,22 @@ export async function POST(req: Request) {
         const custRaw = sess.customer;
         const cust =
           typeof custRaw === "string" ? custRaw : custRaw?.id ?? null;
-        if (cust) {
-          const { error: pErr } = await supabaseAdmin
-            .from("profiles")
-            .update({
-              stripe_customer_id: cust,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", userId);
-          if (pErr) throw new Error(pErr.message);
-        }
-        if (cust) {
-          await upsertPurchaseFromStripeSubscription(supabaseAdmin, {
-            userId,
-            stripeCustomerId: cust,
-            subscription: sub,
-          });
-        } else {
+        if (!cust) {
           console.error(
             "[stripe webhook] checkout session missing customer id",
             ctx,
           );
+          break;
         }
+        await upsertPurchaseFromStripeSubscription(supabaseAdmin, {
+          userId,
+          stripeCustomerId: cust,
+          subscription: sub,
+        });
         break;
       }
       case "customer.subscription.created":
-      case "customer.subscription.updated":
-      case "customer.subscription.deleted": {
+      case "customer.subscription.updated": {
         const sub = event.data.object;
         const userId = await resolveUserIdForSubscription(
           supabaseAdmin,
@@ -163,32 +187,45 @@ export async function POST(req: Request) {
             ? sub.customer
             : sub.customer?.id ?? "";
         if (!cust) break;
+
+        const gracePeriod =
+          sub.status === "past_due" || sub.status === "unpaid";
+        if (gracePeriod) {
+          console.info(
+            "[stripe webhook] subscription payment issue — grace period, tier unchanged",
+            { userId, status: sub.status, ...ctx },
+          );
+        }
+
         await upsertPurchaseFromStripeSubscription(supabaseAdmin, {
           userId,
           stripeCustomerId: cust,
           subscription: sub,
+          profileGracePeriod: gracePeriod,
         });
         break;
       }
-      case "invoice.paid": {
-        const inv = event.data.object;
-        const subId = subscriptionIdFromInvoice(inv);
-        const custRaw = inv.customer;
-        const custId =
-          typeof custRaw === "string" ? custRaw : custRaw?.id ?? null;
-        const userId = await resolveUserIdByStripeCustomerId(
+      case "customer.subscription.deleted": {
+        const sub = event.data.object;
+        const userId = await resolveUserIdForSubscription(
           supabaseAdmin,
           stripe,
-          custId,
+          sub,
           ctx,
         );
-        if (!userId || !subId || !custId) break;
-        const sub = await stripe.subscriptions.retrieve(subId);
-        await upsertPurchaseFromStripeSubscription(supabaseAdmin, {
+        if (!userId) {
+          return NextResponse.json({ received: true });
+        }
+        await handleSubscriptionDeleted(supabaseAdmin, {
           userId,
-          stripeCustomerId: custId,
-          subscription: sub,
+          subscriptionId: sub.id,
         });
+        break;
+      }
+      case "invoice.paid":
+      case "invoice.payment_succeeded": {
+        const inv = event.data.object;
+        await handleInvoiceRenewal(supabaseAdmin, stripe, inv, ctx);
         break;
       }
       case "invoice.payment_failed": {

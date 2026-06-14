@@ -87,14 +87,14 @@ const FAQ = [
   },
 ];
 
+import { stripePriceIdFromEnv } from "@/lib/stripe/price-env";
+
 function checkoutPriceIdsFromEnv(): CheckoutPriceIds {
   return {
-    proMonth: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_MONTHLY?.trim() ?? "",
-    proYear: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO_ANNUAL?.trim() ?? "",
-    familyMonth:
-      process.env.NEXT_PUBLIC_STRIPE_PRICE_FAMILY_MONTHLY?.trim() ?? "",
-    familyYear:
-      process.env.NEXT_PUBLIC_STRIPE_PRICE_FAMILY_ANNUAL?.trim() ?? "",
+    proMonth: stripePriceIdFromEnv("PRO", "MONTHLY"),
+    proYear: stripePriceIdFromEnv("PRO", "ANNUAL"),
+    familyMonth: stripePriceIdFromEnv("FAMILY", "MONTHLY"),
+    familyYear: stripePriceIdFromEnv("FAMILY", "ANNUAL"),
   };
 }
 

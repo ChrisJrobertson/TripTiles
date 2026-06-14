@@ -30,6 +30,30 @@ function billingIntervalFromSub(
   return priceIdToTier(id)?.interval ?? null;
 }
 
+function periodEndFromSubscription(sub: Stripe.Subscription): string | null {
+  return sub.current_period_end
+    ? new Date(sub.current_period_end * 1000).toISOString()
+    : null;
+}
+
+function purchaseStatusFromStripe(subStatus: string): string {
+  if (
+    subStatus === "active" ||
+    subStatus === "trialing" ||
+    subStatus === "past_due"
+  ) {
+    return "active";
+  }
+  if (subStatus === "canceled") return "canceled";
+  return subStatus;
+}
+
+export function periodEndFromInvoice(inv: Stripe.Invoice): string | null {
+  const line = inv.lines?.data?.[0];
+  if (!line?.period?.end) return null;
+  return new Date(line.period.end * 1000).toISOString();
+}
+
 export async function downgradeProfileToFree(
   admin: SupabaseClient,
   userId: string,
@@ -45,6 +69,7 @@ export async function downgradeProfileToFree(
     .update({
       tier: "free",
       tier_expires_at: null,
+      stripe_subscription_id: null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", userId);
@@ -68,7 +93,7 @@ const purchaseRowFields = (input: {
   provider: "stripe" as const,
   provider_order_id: input.sub.id,
   provider_customer_id: input.stripeCustomerId,
-  status: input.sub.status,
+  status: purchaseStatusFromStripe(input.sub.status),
   subscription_status: input.sub.status,
   subscription_period_end: input.cpe,
   billing_interval: input.interval,
@@ -76,12 +101,39 @@ const purchaseRowFields = (input: {
   updated_at: new Date().toISOString(),
 });
 
+async function upsertPurchaseRow(
+  admin: SupabaseClient,
+  baseRow: ReturnType<typeof purchaseRowFields>,
+  subscriptionId: string,
+): Promise<void> {
+  const { data: existing, error: selErr } = await admin
+    .from("purchases")
+    .select("id")
+    .eq("provider", "stripe")
+    .eq("provider_order_id", subscriptionId)
+    .maybeSingle();
+  if (selErr) throw new Error(selErr.message);
+
+  if (existing?.id) {
+    const { error: upErr } = await admin
+      .from("purchases")
+      .update(baseRow)
+      .eq("id", existing.id);
+    if (upErr) throw new Error(upErr.message);
+  } else {
+    const { error: inErr } = await admin.from("purchases").insert(baseRow);
+    if (inErr) throw new Error(inErr.message);
+  }
+}
+
 export async function upsertPurchaseFromStripeSubscription(
   admin: SupabaseClient,
   input: {
     userId: string;
     stripeCustomerId: string;
     subscription: Stripe.Subscription;
+    /** When true, profile tier is not changed (e.g. past_due / unpaid grace). */
+    profileGracePeriod?: boolean;
   },
 ): Promise<void> {
   const sub = input.subscription;
@@ -103,9 +155,7 @@ export async function upsertPurchaseFromStripeSubscription(
     );
     return;
   }
-  const cpe = sub.current_period_end
-    ? new Date(sub.current_period_end * 1000).toISOString()
-    : null;
+  const cpe = periodEndFromSubscription(sub);
   const interval = billingIntervalFromSub(sub);
   const baseRow = purchaseRowFields({
     userId: input.userId,
@@ -117,24 +167,7 @@ export async function upsertPurchaseFromStripeSubscription(
     interval,
   });
 
-  const { data: existing, error: selErr } = await admin
-    .from("purchases")
-    .select("id")
-    .eq("provider", "stripe")
-    .eq("provider_order_id", sub.id)
-    .maybeSingle();
-  if (selErr) throw new Error(selErr.message);
-
-  if (existing?.id) {
-    const { error: upErr } = await admin
-      .from("purchases")
-      .update(baseRow)
-      .eq("id", existing.id);
-    if (upErr) throw new Error(upErr.message);
-  } else {
-    const { error: inErr } = await admin.from("purchases").insert(baseRow);
-    if (inErr) throw new Error(inErr.message);
-  }
+  await upsertPurchaseRow(admin, baseRow, sub.id);
 
   console.log("[stripe webhook] purchase recorded", {
     userId: input.userId,
@@ -142,12 +175,36 @@ export async function upsertPurchaseFromStripeSubscription(
     amount_gbp_pence: baseRow.amount_gbp_pence,
   });
 
+  if (input.profileGracePeriod) {
+    console.info(
+      "[stripe webhook] subscription in grace period — profile tier unchanged",
+      { userId: input.userId, status: sub.status },
+    );
+    return;
+  }
+
+  if (sub.status === "canceled") {
+    // customer.subscription.deleted handles profile cleanup; only mirror purchase row.
+    return;
+  }
+
+  if (
+    sub.status === "unpaid" ||
+    sub.status === "incomplete_expired" ||
+    sub.status === "incomplete"
+  ) {
+    console.info(
+      "[stripe webhook] subscription not entitled — profile tier unchanged (grace)",
+      { userId: input.userId, status: sub.status },
+    );
+    return;
+  }
+
   if (
     sub.status === "active" ||
     sub.status === "trialing" ||
     sub.status === "past_due"
   ) {
-    const atPeriodEnd = Boolean(sub.cancel_at_period_end) && cpe;
     const { data: beforeRow, error: beforeErr } = await admin
       .from("profiles")
       .select("tier")
@@ -159,8 +216,9 @@ export async function upsertPurchaseFromStripeSubscription(
       .from("profiles")
       .update({
         tier: newTier,
-        tier_expires_at: atPeriodEnd ? cpe : null,
+        tier_expires_at: cpe,
         stripe_customer_id: input.stripeCustomerId,
+        stripe_subscription_id: sub.id,
         updated_at: new Date().toISOString(),
       })
       .eq("id", input.userId);
@@ -169,33 +227,81 @@ export async function upsertPurchaseFromStripeSubscription(
       userId: input.userId,
       oldTier: beforeRow?.tier ?? null,
       newTier,
+      tier_expires_at: cpe,
     });
-  } else if (sub.status === "canceled") {
-    const end = cpe ?? new Date().toISOString();
-    const endMs = new Date(end).getTime();
-    if (!Number.isNaN(endMs) && endMs <= Date.now()) {
-      await downgradeProfileToFree(
-        admin,
-        input.userId,
-        "stripe_subscription_canceled",
-      );
-    } else {
-      const { error: pErr } = await admin
-        .from("profiles")
-        .update({
-          tier_expires_at: end,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", input.userId);
-      if (pErr) throw new Error(pErr.message);
-    }
-  } else if (sub.status === "unpaid" || sub.status === "incomplete_expired") {
-    await downgradeProfileToFree(
-      admin,
-      input.userId,
-      `stripe_subscription_${sub.status}`,
-    );
   }
+}
+
+/** Immediate cleanup when Stripe deletes a subscription. */
+export async function handleSubscriptionDeleted(
+  admin: SupabaseClient,
+  input: {
+    userId: string;
+    subscriptionId: string;
+  },
+): Promise<void> {
+  const { subscriptionId, userId } = input;
+  const { data: row, error: selErr } = await admin
+    .from("purchases")
+    .select("id")
+    .eq("provider", "stripe")
+    .eq("provider_order_id", subscriptionId)
+    .maybeSingle();
+  if (selErr) throw new Error(selErr.message);
+  if (row?.id) {
+    const { error: upErr } = await admin
+      .from("purchases")
+      .update({
+        status: "canceled",
+        subscription_status: "canceled",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", row.id);
+    if (upErr) throw new Error(upErr.message);
+  }
+  await downgradeProfileToFree(admin, userId, "stripe_subscription_deleted");
+}
+
+export async function updatePeriodEndFromInvoice(
+  admin: SupabaseClient,
+  input: {
+    userId: string;
+    subscriptionId: string;
+    periodEnd: string;
+  },
+): Promise<void> {
+  const { userId, subscriptionId, periodEnd } = input;
+  const { error: profileErr } = await admin
+    .from("profiles")
+    .update({
+      tier_expires_at: periodEnd,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", userId);
+  if (profileErr) throw new Error(profileErr.message);
+
+  const { data: row, error: selErr } = await admin
+    .from("purchases")
+    .select("id")
+    .eq("provider", "stripe")
+    .eq("provider_order_id", subscriptionId)
+    .maybeSingle();
+  if (selErr) throw new Error(selErr.message);
+  if (!row?.id) {
+    console.warn("[stripe webhook] no purchase row for invoice renewal", {
+      subscriptionId,
+      userId,
+    });
+    return;
+  }
+  const { error: upErr } = await admin
+    .from("purchases")
+    .update({
+      subscription_period_end: periodEnd,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", row.id);
+  if (upErr) throw new Error(upErr.message);
 }
 
 /** Marks the Stripe subscription purchase as past_due. Does not change profile tier. */
