@@ -1,6 +1,6 @@
 # TripTiles
 
-Next.js theme park trip planner. Copy [`.env.local.example`](.env.local.example) to `.env.local` and configure Supabase, Anthropic, and **Stripe** subscriptions (`STRIPE_SECRET_KEY`, the four `STRIPE_PRICE_PRO_*` / `STRIPE_PRICE_FAMILY_*` price IDs, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_SITE_URL` for checkout return URLs).
+Next.js theme park trip planner. Copy [`.env.local.example`](.env.local.example) to `.env.local` and configure Supabase, Anthropic, and **Stripe** subscriptions (`STRIPE_SECRET_KEY`, the four `STRIPE_PRICE_*` price IDs — mirrored to `NEXT_PUBLIC_STRIPE_PRICE_*` for the pricing page, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_SITE_URL` for checkout return URLs). Sync Vercel env: `VERCEL_TOKEN=… node scripts/vercel-sync-stripe-env.mjs`.
 
 ## Database migrations
 
