@@ -6,7 +6,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-function loadEnvFile(path) {
+function loadEnvFile(path, override = false) {
   if (!existsSync(path)) return;
   const text = readFileSync(path, "utf8");
   for (const line of text.split("\n")) {
@@ -22,13 +22,13 @@ function loadEnvFile(path) {
     ) {
       val = val.slice(1, -1);
     }
-    if (!process.env[key]) process.env[key] = val;
+    if (override || !process.env[key]) process.env[key] = val;
   }
 }
 
 const root = resolve(import.meta.dirname, "..");
 loadEnvFile(resolve(root, ".env"));
-loadEnvFile(resolve(root, ".env.local"));
+loadEnvFile(resolve(root, ".env.local"), true);
 
 const secret = process.env.STRIPE_SECRET_KEY?.trim();
 if (!secret || secret.includes("...")) {
