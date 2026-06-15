@@ -3813,10 +3813,11 @@ function parseAndValidateDayTimelineJson(
     }
     let tag: AiDayTimelineRowTag | undefined;
     if (r.tag != null) {
-      if (typeof r.tag !== "string" || !AI_DAY_TIMELINE_TAGS.has(r.tag)) {
-        return { ok: false, reason: "bad_tag" };
+      if (typeof r.tag === "string" && AI_DAY_TIMELINE_TAGS.has(r.tag)) {
+        tag = r.tag as AiDayTimelineRowTag;
       }
-      tag = r.tag as AiDayTimelineRowTag;
+      // Unrecognised tag value — silently drop it rather than failing the whole timeline.
+      // tag stays undefined, which is valid (the field is optional, drives badge colour only).
     }
     timeline.push({
       time: r.time,
@@ -3841,11 +3842,14 @@ function parseAndValidateDayTimelineJson(
   if (!Array.isArray(o.must_do)) {
     return { ok: false, reason: "must_do_not_array" };
   }
-  if (o.must_do.length < 3 || o.must_do.length > 5) {
-    return { ok: false, reason: "must_do_count" };
+  // Clamp to 5 max — model sometimes returns 6; truncating is invisible to the user.
+  // Keep fewer than 3 rather than failing (degraded but usable). Empty array still fails.
+  const mustDoRaw = o.must_do.length > 5 ? o.must_do.slice(0, 5) : o.must_do;
+  if (mustDoRaw.length === 0) {
+    return { ok: false, reason: "must_do_empty" };
   }
   const must_do: string[] = [];
-  for (const m of o.must_do) {
+  for (const m of mustDoRaw) {
     if (typeof m !== "string" || !m.trim()) {
       return { ok: false, reason: "bad_must_do" };
     }
@@ -5568,30 +5572,65 @@ export async function generateDayStrategy(input: {
     outputTokens = usage?.output_tokens ?? 0;
 
     let parsed: unknown;
-    try {
-      parsed = JSON.parse(stripCodeFences(rawText));
-    } catch {
-      aiGenStatus = "failed";
-      aiGenError = "Invalid JSON (day_strategy)";
-      await recordAiGeneration({
-        userId: user.id,
-        tripId: input.tripId,
-        prompt: promptKey,
-        model,
-        inputTokens,
-        outputTokens,
-        success: false,
-        status: "failed",
-        error: aiGenError,
-        prompt_data_quality_summary: strategyPromptQualityRecord,
-        response_completion_status: responseCompletionFromStopReason(
-          strategyStopReason,
-          false,
-        ),
-        output_park_region_match: null,
-      });
-      aiGenLogged = true;
-      return { status: "error", error: "Could not read AI response." };
+    let parseAttempt = 0;
+    let lastRawText = rawText;
+    while (parseAttempt < 2) {
+      try {
+        parsed = JSON.parse(stripCodeFences(lastRawText));
+        break;
+      } catch {
+        if (parseAttempt === 1) {
+          aiGenStatus = "failed";
+          aiGenError = "Invalid JSON (day_strategy)";
+          await recordAiGeneration({
+            userId: user.id,
+            tripId: input.tripId,
+            prompt: promptKey,
+            model,
+            inputTokens,
+            outputTokens,
+            success: false,
+            status: "failed",
+            error: aiGenError,
+            prompt_data_quality_summary: strategyPromptQualityRecord,
+            response_completion_status: responseCompletionFromStopReason(
+              strategyStopReason,
+              false,
+            ),
+            output_park_region_match: null,
+          });
+          aiGenLogged = true;
+          return { status: "error", error: "Could not read AI response." };
+        }
+        console.warn("[ai] day_strategy json_parse_failed_retrying", {
+          tripId: input.tripId,
+          dateKey,
+        });
+        const retryUserBlock = `${userBlock}\n\nRETRY INSTRUCTION: Your previous response was not valid JSON. Return ONLY a valid JSON object — no markdown code fences, no prose, no explanation. Start your response with { and end it with }.`;
+        const retryMsg = await anthropic.messages.create({
+          model,
+          max_tokens: 6000,
+          system: [
+            {
+              type: "text",
+              text: DAY_STRATEGY_SYSTEM,
+              cache_control: { type: "ephemeral" },
+            },
+            {
+              type: "text",
+              text: ridesBlock,
+              cache_control: { type: "ephemeral" },
+            },
+          ],
+          messages: [{ role: "user", content: retryUserBlock }],
+        });
+        const retryBlock0 = retryMsg.content[0];
+        lastRawText = retryBlock0?.type === "text" ? retryBlock0.text : "";
+        const retryUsage = retryMsg.usage as AnthropicMessageUsage | undefined;
+        inputTokens += inputTokensFromUsage(retryUsage);
+        outputTokens += retryUsage?.output_tokens ?? 0;
+        parseAttempt++;
+      }
     }
 
     const rideConstraints = buildParkRideConstraintsFromAttractions(attractions);
