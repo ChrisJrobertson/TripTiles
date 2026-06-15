@@ -1,5 +1,6 @@
 import { formatDateKey, parseDate } from "@/lib/date-helpers";
 import { sendTemplatedEmail, type EmailTemplate } from "@/lib/email/send";
+import { getEffectiveRetailTier } from "@/lib/tiers";
 import {
   reminderDefaultBullets,
   reminderExtraLines,
@@ -74,7 +75,7 @@ async function handleCronRequest(request: NextRequest) {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("email, display_name")
+      .select("email, display_name, tier, tier_expires_at")
       .eq("id", userId)
       .maybeSingle();
 
@@ -163,11 +164,25 @@ async function handleCronRequest(request: NextRequest) {
               86400000,
           ),
         );
+        const effectiveTier = getEffectiveRetailTier({
+          tier:
+            profile && typeof (profile as { tier?: unknown }).tier === "string"
+              ? (profile as { tier: string }).tier
+              : null,
+          tier_expires_at:
+            profile &&
+            typeof (profile as { tier_expires_at?: unknown })
+              .tier_expires_at === "string"
+              ? (profile as { tier_expires_at: string }).tier_expires_at
+              : null,
+        });
         data = {
           adventureName: t.adventure_name,
           destinationName,
           tripUrl,
           daysUntil: daysUntil > 0 ? daysUntil : 3,
+          pricingUrl: `${siteUrl}/pricing`,
+          showUpgrade: effectiveTier === "free",
         };
       } else {
         data = {

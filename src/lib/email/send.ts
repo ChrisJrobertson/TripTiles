@@ -28,6 +28,9 @@ function renderTemplate(
         destinationName: String(data.destinationName ?? "your destination"),
         tripUrl: String(data.tripUrl ?? ""),
         daysUntil: Number(data.daysUntil ?? 3),
+        pricingUrl:
+          typeof data.pricingUrl === "string" ? data.pricingUrl : undefined,
+        showUpgrade: data.showUpgrade === true,
       });
     case "followup_1d":
       return followupEmailHtml({
