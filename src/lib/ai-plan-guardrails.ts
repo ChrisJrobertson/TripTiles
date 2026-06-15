@@ -208,6 +208,56 @@ function isMainVenuePark(p: Park): boolean {
   return MAIN_PARK_GROUPS.has(p.park_group);
 }
 
+function isMirrorableMainVenueSlot(
+  slotId: string | undefined,
+  parksById: Map<string, Park>,
+): boolean {
+  if (!slotId) return false;
+  if (
+    DINING_IDS.has(slotId) ||
+    FLYOUT_IDS.has(slotId) ||
+    FLYHOME_IDS.has(slotId) ||
+    slotId === REST_POOL_TILE_ID
+  ) {
+    return false;
+  }
+  const p = parksById.get(slotId);
+  if (!p || isRestfulTile(p)) return false;
+  return isMainVenuePark(p);
+}
+
+/**
+ * When Smart Plan assigns a headline park to only AM or only PM, mirror the same
+ * id into the empty half-day slot so the calendar shows a unified full park day.
+ * Skips hop days (different main parks in AM vs PM) and non-park tiles.
+ */
+export function applyFullSingleParkDayMirroring(
+  assignments: Assignments,
+  parksById: Map<string, Park>,
+): Assignments {
+  const out = cloneAssignments(assignments);
+
+  for (const dayKey of Object.keys(out)) {
+    const day = out[dayKey];
+    if (!day) continue;
+
+    const amId = getParkIdFromSlotValue(day.am);
+    const pmId = getParkIdFromSlotValue(day.pm);
+
+    const amMain = isMirrorableMainVenueSlot(amId, parksById);
+    const pmMain = isMirrorableMainVenueSlot(pmId, parksById);
+    if (amMain && pmMain && amId !== pmId) continue;
+
+    if (amMain && !pmId) {
+      day.pm = amId!;
+    } else if (pmMain && !amId) {
+      day.am = pmId!;
+    }
+  }
+
+  return out;
+}
+
 /**
  * First calendar day is arrival: no full theme/water parks in AM/PM (only fly
  * tiles, dining codes, rest/shopping, etc.). Fixes model text vs slots mismatch
@@ -668,6 +718,7 @@ export function enforceAiPlanGuardrails(
   let a = assignments;
   a = applyFlyBookendRules(a, ctx.sortedDateKeys);
   a = stripCruiseOnlyTiles(a, ctx.trip, ctx.parksById);
+  a = applyFullSingleParkDayMirroring(a, ctx.parksById);
   a = applyConsecutiveParkRules(a, ctx.sortedDateKeys, ctx.parksById);
   a = applyRestDayConsistency(a, ctx.parksById);
   a = applyArrivalDayNoThemeParks(a, ctx.sortedDateKeys, ctx.parksById);

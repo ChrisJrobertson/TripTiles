@@ -529,6 +529,7 @@ CROWD_PATTERNS (when in user message): 0–10 heuristics per park/weekday/month 
 Rules:
 - Date keys in assignments, day_crowd_notes, and planner_day_notes MUST be YYYY-MM-DD with zero-padded month and day (e.g. 2026-07-19), matching the trip dates in the user message. Park IDs must be the exact "id" strings in the second system message (numbered list). Do not use display names, natural language, or invent IDs. Do not use IDs for other regions.
 - Slots: am, pm, lunch, dinner optional; rest days OK when they align with REST DAY DISTRIBUTION below.
+- Full single-park days: assign the SAME park id to both am and pm (e.g. "am": "mk", "pm": "mk"). One AM or PM slot alone means a deliberate half-day; both slots with the same id means a full park day. Park-hopping days use different park ids in am and pm.
 
 REST DAY DISTRIBUTION — driven by the guest's stated pace and rest inclination, not a fixed ratio:
 - The guest's TRIP WIZARD PREFERENCES for pace and rest inclination are authoritative. Read "Pace", "Pace rhythm", and "Balance / rest inclination" from the USER CONSTRAINTS / USER PRIORITIES blocks and follow them over any default.
