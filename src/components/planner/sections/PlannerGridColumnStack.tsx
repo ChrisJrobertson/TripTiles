@@ -397,6 +397,7 @@ export function PlannerGridColumnStack({
                       tripRouteBase={tripRouteBase}
                       dayNotes={mobilePlannerNoteMaps.ai}
                       userDayNotes={mobilePlannerNoteMaps.user}
+                      showCoachMark={false}
                     />
                   ) : null}
                   {activeTrip ? (

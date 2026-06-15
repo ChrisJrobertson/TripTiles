@@ -270,37 +270,44 @@ export function PlannerActionsMenu({
         More ▾
       </button>
 
-      <div
-        className={`fixed inset-0 z-[88] md:hidden ${sheetOpen ? "" : "pointer-events-none"}`}
-        aria-hidden={!sheetOpen}
-      >
-        <button
-          type="button"
-          aria-label="Close menu"
-          className={`absolute inset-0 bg-tt-royal/50 transition-opacity duration-200 ${
-            sheetOpen ? "opacity-100" : "opacity-0"
-          }`}
-          onClick={closeSheet}
-        />
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="More trip actions"
-          className={`absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-tt-xl border border-tt-line bg-tt-bg px-2 py-3 shadow-tt-lg transition-transform duration-200 ease-out safe-area-inset-bottom ${
-            sheetOpen ? "translate-y-0" : "translate-y-full"
-          }`}
-        >
-          <div className="mb-2 flex justify-center">
-            <div className="h-1 w-10 rounded-full bg-tt-line" aria-hidden />
-          </div>
-          <p className="mb-2 px-2 font-heading text-lg font-semibold text-tt-royal">
-            More
-          </p>
-          <div className="max-h-[70vh] overflow-y-auto pb-4">
-            <MenuBlock {...menuProps} close={closeSheet} />
-          </div>
-        </div>
-      </div>
+      {typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className={`fixed inset-0 z-[140] md:hidden ${
+                sheetOpen ? "" : "pointer-events-none"
+              }`}
+              aria-hidden={!sheetOpen}
+            >
+              <button
+                type="button"
+                aria-label="Close menu"
+                className={`fixed inset-0 z-40 bg-tt-royal/50 transition-opacity duration-200 ${
+                  sheetOpen ? "opacity-100" : "opacity-0"
+                }`}
+                onClick={closeSheet}
+              />
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="More trip actions"
+                className={`fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-tt-xl border border-tt-line bg-tt-bg px-2 py-3 shadow-tt-lg transition-transform duration-200 ease-out pb-[env(safe-area-inset-bottom)] ${
+                  sheetOpen ? "translate-y-0" : "translate-y-full"
+                }`}
+              >
+                <div className="mb-2 flex justify-center">
+                  <div className="h-1 w-10 rounded-full bg-tt-line" aria-hidden />
+                </div>
+                <p className="mb-2 px-2 font-heading text-lg font-semibold text-tt-royal">
+                  More
+                </p>
+                <div className="pb-4">
+                  <MenuBlock {...menuProps} close={closeSheet} />
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }

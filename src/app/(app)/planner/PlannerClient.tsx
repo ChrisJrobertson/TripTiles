@@ -3209,7 +3209,9 @@ function PlannerClientInner({
           ) : null}
 
           {hint ? (
-            <p className="mt-2 text-center font-sans text-sm font-medium text-royal sm:text-left">
+            <p
+              className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] left-4 right-4 z-[35] rounded-lg border border-gold/35 bg-cream/95 px-3 py-2 text-center font-sans text-sm font-medium text-royal shadow-sm backdrop-blur-sm md:static md:mt-2 md:rounded-none md:border-0 md:bg-transparent md:px-0 md:py-0 md:text-left md:shadow-none md:backdrop-blur-none"
+            >
               {hint}
             </p>
           ) : null}

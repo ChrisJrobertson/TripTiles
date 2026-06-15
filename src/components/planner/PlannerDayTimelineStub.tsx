@@ -279,7 +279,7 @@ export function PlannerDayTimelineStub({
         {filledRows.length === 0 ? (
           <div className="px-4 py-14 text-center">
             <p className="font-sans text-sm text-tt-ink-muted">
-              Nothing planned for this day yet — tap Plan this day ✨ or tap a slot
+              Nothing planned for this day yet — use Plan this day ✨ or tap any slot
               to add a park.
             </p>
           </div>

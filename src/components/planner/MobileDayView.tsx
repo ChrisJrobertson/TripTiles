@@ -57,6 +57,7 @@ import type {
 import type { TripRidePriority } from "@/types/attractions";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import {
   startTransition,
   useCallback,
@@ -278,8 +279,10 @@ function MobileDayStrip({
   }, [activeIndex]);
 
   return (
-    <div className="scrollbar-hide relative overflow-x-auto border-b border-gold/20 bg-white/50">
-      <div className="flex min-w-max gap-2 px-4 py-3">
+    <div
+      className="scrollbar-hide z-0 overflow-x-auto scroll-px-4 border-b border-gold/20 bg-white/50"
+    >
+      <div className="flex min-w-max gap-2 py-3">
         {days.map((day, i) =>
           dayLinkHref ? (
             <Link
@@ -1840,89 +1843,95 @@ export function MobileDayView({
         colourTheme={colourTheme}
       />
 
-      {/* Mobile menu sheet */}
-      <div
-        className={`fixed inset-0 z-[130] md:hidden ${menuOpen ? "" : "pointer-events-none"}`}
-        aria-hidden={!menuOpen}
-      >
-        <div
-          role="presentation"
-          style={{ touchAction: "none" }}
-          className={`absolute inset-0 bg-royal/70 transition-opacity duration-300 ${
-            menuOpen ? "opacity-100" : "opacity-0"
-          }`}
-          onClick={() => setMenuOpen(false)}
-        />
-        <div
-          className={`absolute inset-x-0 bottom-0 rounded-t-2xl border border-gold/20 bg-cream px-4 py-4 shadow-2xl transition-transform duration-300 ease-out safe-area-inset-bottom ${
-            menuOpen ? "translate-y-0" : "translate-y-full"
-          }`}
-        >
-          <div className="mb-3 flex justify-center">
-            <div className="h-1 w-10 rounded-full bg-royal/20" aria-hidden />
-          </div>
-          <p className="mb-3 font-serif text-lg font-bold text-royal">Menu</p>
-          <div className="flex flex-col gap-1 pb-2">
-            {onMenuExportPdf ? (
-              <button
-                type="button"
-                className="min-h-[48px] rounded-lg px-4 py-3 text-left font-sans text-sm font-medium text-royal active:bg-white"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onMenuExportPdf();
-                }}
-              >
-                Export PDF
-              </button>
-            ) : null}
-            {!readOnly &&
-            smartPlanUndoSnapshotAt &&
-            onMenuUndoSmartPlan ? (
-              <button
-                type="button"
-                className="min-h-[48px] rounded-lg px-4 py-3 text-left font-sans text-sm font-medium text-royal/80 active:bg-white"
-                title={`Undo Smart Plan from ${formatUndoSnapshotHint(smartPlanUndoSnapshotAt)}`}
-                aria-label="Undo last Smart Plan generation"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onMenuUndoSmartPlan();
-                }}
-              >
-                <span aria-hidden>↶ </span>
-                Undo Smart Plan
-              </button>
-            ) : null}
-            {onMenuShare ? (
-              <button
-                type="button"
-                className="min-h-[48px] rounded-lg px-4 py-3 text-left font-sans text-sm font-medium text-royal active:bg-white"
-                onClick={() => {
-                  setMenuOpen(false);
-                  onMenuShare();
-                }}
-              >
-                Share
-              </button>
-            ) : null}
-            {onMenuSettings ? (
-              <Link
-                href="/settings/profile"
-                className="min-h-[48px] rounded-lg px-4 py-3 font-sans text-sm font-medium text-royal active:bg-white"
-                onClick={() => setMenuOpen(false)}
-              >
-                Settings
-              </Link>
-            ) : null}
-            <button
-              type="button"
-              className="mt-2 min-h-[48px] rounded-lg border border-royal/15 px-4 py-3 text-center font-sans text-sm text-royal/70"
-              onClick={() => setMenuOpen(false)}
+      {typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className={`fixed inset-0 z-[140] md:hidden ${
+                menuOpen ? "" : "pointer-events-none"
+              }`}
+              aria-hidden={!menuOpen}
             >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
+              <div
+                role="presentation"
+                style={{ touchAction: "none" }}
+                className={`fixed inset-0 z-40 bg-royal/70 transition-opacity duration-300 ${
+                  menuOpen ? "opacity-100" : "opacity-0"
+                }`}
+                onClick={() => setMenuOpen(false)}
+              />
+              <div
+                className={`fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border border-gold/20 bg-cream px-4 py-4 shadow-2xl transition-transform duration-300 ease-out pb-[env(safe-area-inset-bottom)] ${
+                  menuOpen ? "translate-y-0" : "translate-y-full"
+                }`}
+              >
+                <div className="mb-3 flex justify-center">
+                  <div className="h-1 w-10 rounded-full bg-royal/20" aria-hidden />
+                </div>
+                <p className="mb-3 font-serif text-lg font-bold text-royal">Menu</p>
+                <div className="flex flex-col gap-1 pb-2">
+                  {onMenuExportPdf ? (
+                    <button
+                      type="button"
+                      className="min-h-[48px] rounded-lg px-4 py-3 text-left font-sans text-sm font-medium text-royal active:bg-white"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onMenuExportPdf();
+                      }}
+                    >
+                      Export PDF
+                    </button>
+                  ) : null}
+                  {!readOnly &&
+                  smartPlanUndoSnapshotAt &&
+                  onMenuUndoSmartPlan ? (
+                    <button
+                      type="button"
+                      className="min-h-[48px] rounded-lg px-4 py-3 text-left font-sans text-sm font-medium text-royal/80 active:bg-white"
+                      title={`Undo Smart Plan from ${formatUndoSnapshotHint(smartPlanUndoSnapshotAt)}`}
+                      aria-label="Undo last Smart Plan generation"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onMenuUndoSmartPlan();
+                      }}
+                    >
+                      <span aria-hidden>↶ </span>
+                      Undo Smart Plan
+                    </button>
+                  ) : null}
+                  {onMenuShare ? (
+                    <button
+                      type="button"
+                      className="min-h-[48px] rounded-lg px-4 py-3 text-left font-sans text-sm font-medium text-royal active:bg-white"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onMenuShare();
+                      }}
+                    >
+                      Share
+                    </button>
+                  ) : null}
+                  {onMenuSettings ? (
+                    <Link
+                      href="/settings/profile"
+                      className="min-h-[48px] rounded-lg px-4 py-3 font-sans text-sm font-medium text-royal active:bg-white"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      Settings
+                    </Link>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="mt-2 min-h-[48px] rounded-lg border border-royal/15 px-4 py-3 text-center font-sans text-sm text-royal/70"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {!readOnly &&
       onRideDayPrioritiesUpdated &&

@@ -14,6 +14,7 @@ import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
 import { crowdLevelFromHeuristicTone } from "./CrowdLevelIndicator";
 import type { Trip } from "@/lib/types";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 function stripTime(d: Date): number {
@@ -104,6 +105,8 @@ type Props = {
   dayNotes: Record<string, string>;
   /** preferences.day_notes (user) */
   userDayNotes?: Record<string, string>;
+  /** When false, omit the strip coach line (e.g. timeline stub shows slot guidance below). */
+  showCoachMark?: boolean;
 };
 
 /** Mobile-only horizontal day strip linking to `/trip/[id]/day/[date]` (calendar overview). */
@@ -112,6 +115,7 @@ export function MobileTripCalendarStripNav({
   tripRouteBase,
   dayNotes,
   userDayNotes = {},
+  showCoachMark = true,
 }: Props) {
   const days = useMemo(
     () => buildStripDays(trip, dayNotes, userDayNotes),
@@ -205,11 +209,12 @@ export function MobileTripCalendarStripNav({
   if (days.length === 0) return null;
 
   return (
+    <>
     <nav
-      className="scrollbar-hide md:hidden relative overflow-x-auto border-b border-gold/20 bg-white/50"
+      className="scrollbar-hide z-0 overflow-x-auto scroll-px-4 border-b border-gold/20 bg-white/50 md:hidden"
       aria-label="Jump to a trip day"
     >
-      <div className="flex min-w-max gap-2 px-4 py-3">
+      <div className="flex min-w-max gap-2 py-3">
         {days.map((day, i) => {
           const iso = formatDateISO(parseDate(day.dateKey));
           const isToday = iso === todayIso;
@@ -227,8 +232,8 @@ export function MobileTripCalendarStripNav({
           };
 
           const chipShell = isToday
-            ? "flex min-w-[56px] items-stretch overflow-hidden rounded-lg border-2 border-gold/55 bg-white font-bold text-royal shadow-sm ring-2 ring-gold/25 transition"
-            : "flex min-w-[56px] items-stretch overflow-hidden rounded-lg border border-gold/30 bg-white font-bold text-royal transition active:bg-cream";
+            ? "flex min-w-[56px] items-stretch rounded-lg border-2 border-gold/55 bg-white font-bold text-royal shadow-sm ring-2 ring-gold/25 transition"
+            : "flex min-w-[56px] items-stretch rounded-lg border border-gold/30 bg-white font-bold text-royal transition active:bg-cream";
 
           return (
             <div
@@ -290,58 +295,64 @@ export function MobileTripCalendarStripNav({
           );
         })}
       </div>
-      <p className="px-4 pb-3 font-sans text-xs leading-relaxed text-royal/65">
-        Tap a day to edit it. Tap any slot to add a park.
-      </p>
-
-      {noteSheet ? (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-royal/20"
-            aria-hidden
-            onClick={closeNoteSheet}
-          />
-          <div
-            ref={sheetRef}
-            id={`${sheetId}-panel`}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Day note"
-            className="fixed bottom-0 left-0 right-0 z-50 max-h-[50vh] overflow-y-auto rounded-t-xl border border-royal bg-white p-4 shadow-lg"
-          >
-            <div className="mb-2 flex items-start justify-between gap-2">
-              <h3 className="font-sans text-sm font-semibold text-royal">
-                Day {tripDayNumber(trip, noteSheet.dateKey)} · {noteSheet.headingDate}
-              </h3>
-              <button
-                type="button"
-                className="rounded px-1.5 text-lg leading-none text-royal/60 transition hover:bg-cream hover:text-royal focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
-                aria-label="Close"
-                onClick={closeNoteSheet}
-              >
-                ×
-              </button>
-            </div>
-            {noteSheet.crowdLine ? (
-              <p className="mb-2 font-sans text-xs leading-relaxed text-royal/85">
-                <span className="font-semibold text-royal">Why this day: </span>
-                {noteSheet.crowdLine}
-              </p>
-            ) : null}
-            {noteSheet.dayNote ? (
-              <p className="font-sans text-xs leading-relaxed text-royal/85">
-                <span className="font-semibold text-royal">Your note: </span>
-                {noteSheet.dayNote}
-              </p>
-            ) : null}
-            {!noteSheet.crowdLine && !noteSheet.dayNote ? (
-              <p className="font-sans text-xs leading-relaxed text-royal/70">
-                No tips or notes for this day.
-              </p>
-            ) : null}
-          </div>
-        </>
+      {showCoachMark ? (
+        <p className="px-4 pb-3 font-sans text-xs leading-relaxed text-royal/65">
+          Tap a day to open the planner.
+        </p>
       ) : null}
     </nav>
+
+      {noteSheet && typeof document !== "undefined"
+        ? createPortal(
+            <>
+              <div
+                className="fixed inset-0 z-[130] bg-royal/20 md:hidden"
+                aria-hidden
+                onClick={closeNoteSheet}
+              />
+              <div
+                ref={sheetRef}
+                id={`${sheetId}-panel`}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Day note"
+                className="fixed inset-x-0 bottom-0 z-[131] max-h-[50vh] overflow-y-auto rounded-t-xl border border-royal bg-white p-4 shadow-lg pb-[env(safe-area-inset-bottom)] md:hidden"
+              >
+                <div className="mb-2 flex items-start justify-between gap-2">
+                  <h3 className="font-sans text-sm font-semibold text-royal">
+                    Day {tripDayNumber(trip, noteSheet.dateKey)} · {noteSheet.headingDate}
+                  </h3>
+                  <button
+                    type="button"
+                    className="rounded px-1.5 text-lg leading-none text-royal/60 transition hover:bg-cream hover:text-royal focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                    aria-label="Close"
+                    onClick={closeNoteSheet}
+                  >
+                    ×
+                  </button>
+                </div>
+                {noteSheet.crowdLine ? (
+                  <p className="mb-2 font-sans text-xs leading-relaxed text-royal/85">
+                    <span className="font-semibold text-royal">Why this day: </span>
+                    {noteSheet.crowdLine}
+                  </p>
+                ) : null}
+                {noteSheet.dayNote ? (
+                  <p className="font-sans text-xs leading-relaxed text-royal/85">
+                    <span className="font-semibold text-royal">Your note: </span>
+                    {noteSheet.dayNote}
+                  </p>
+                ) : null}
+                {!noteSheet.crowdLine && !noteSheet.dayNote ? (
+                  <p className="font-sans text-xs leading-relaxed text-royal/70">
+                    No tips or notes for this day.
+                  </p>
+                ) : null}
+              </div>
+            </>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }
