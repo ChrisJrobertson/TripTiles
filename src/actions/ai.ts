@@ -5411,6 +5411,27 @@ export async function generateDayStrategy(input: {
     );
   }
 
+  // Slot-based timing constraints: if the primary park is only in the PM slot,
+  // the guest arrives in the afternoon — force the model to start from ~13:00.
+  // If only in the AM slot, the guest leaves by early afternoon.
+  const slotAmParkId = getParkIdFromSlotValue(existingDayAssignments.am);
+  const slotPmParkId = getParkIdFromSlotValue(existingDayAssignments.pm);
+  const primaryInAmOnly =
+    slotAmParkId === primaryParkId && slotPmParkId !== primaryParkId;
+  const primaryInPmOnly =
+    slotPmParkId === primaryParkId && slotAmParkId !== primaryParkId;
+  if (primaryInPmOnly) {
+    const pmParkName = parkById.get(primaryParkId)?.name ?? primaryParkId;
+    intentSpecificRules.push(
+      `TIMING RULE: ${pmParkName} is assigned to the PM slot only. Start the ride sequence from approximately 13:00–14:00. Do not plan from park opening or rope drop. Guests are arriving in the afternoon.`,
+    );
+  } else if (primaryInAmOnly) {
+    const amParkName = parkById.get(primaryParkId)?.name ?? primaryParkId;
+    intentSpecificRules.push(
+      `TIMING RULE: ${amParkName} is assigned to the AM slot only. Plan a morning visit (approximately 09:00–13:00). Guests are not expected to stay into the evening — do not build an open-to-close plan.`,
+    );
+  }
+
   const passInstructionTail: string[] = [];
   if (intentRestrictsPaidQueues && line === "disney") {
     passInstructionTail.push(

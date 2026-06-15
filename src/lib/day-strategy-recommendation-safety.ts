@@ -658,7 +658,7 @@ export function formatAllowedAttractionsSectionsForPrompt(
   for (const pid of allowedParkIds) {
     const p = parkById.get(pid);
     const subset = catalogue
-      .filter((a) => a.park_id === pid)
+      .filter((a) => a.park_id === pid && a.verification_status !== "retired")
       .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
 
     lines.push(`## ${p?.name ?? pid}`);
