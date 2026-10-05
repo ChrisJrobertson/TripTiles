@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/live-wait-ingest",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 8 * * *"
     }
   ]
 }
