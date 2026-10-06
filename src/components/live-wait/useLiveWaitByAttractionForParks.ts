@@ -4,11 +4,17 @@ import type { LiveWaitPublicItem } from "@/lib/live-wait/public-types";
 import { useEffect, useMemo, useState } from "react";
 
 type State =
-  | { status: "idle" | "loading"; map: Map<string, LiveWaitPublicItem>; showAttribution: boolean }
+  | {
+      status: "idle" | "loading";
+      map: Map<string, LiveWaitPublicItem>;
+      showAttribution: boolean;
+      showThemeParksWikiAttribution: boolean;
+    }
   | {
       status: "ready" | "error";
       map: Map<string, LiveWaitPublicItem>;
       showAttribution: boolean;
+      showThemeParksWikiAttribution: boolean;
     };
 
 export function useLiveWaitByAttractionForParks(parkIds: string[]) {
@@ -21,11 +27,17 @@ export function useLiveWaitByAttractionForParks(parkIds: string[]) {
     status: "idle",
     map: new Map(),
     showAttribution: false,
+    showThemeParksWikiAttribution: false,
   });
 
   useEffect(() => {
     if (!sortedKey) {
-      setState({ status: "ready", map: new Map(), showAttribution: false });
+      setState({
+        status: "ready",
+        map: new Map(),
+        showAttribution: false,
+        showThemeParksWikiAttribution: false,
+      });
       return;
     }
 
@@ -44,6 +56,7 @@ export function useLiveWaitByAttractionForParks(parkIds: string[]) {
         const json = (await res.json()) as {
           items?: LiveWaitPublicItem[];
           showQueueTimesAttribution?: boolean;
+          showThemeParksWikiAttribution?: boolean;
         };
         const m = new Map<string, LiveWaitPublicItem>();
         for (const it of json.items ?? []) {
@@ -54,6 +67,7 @@ export function useLiveWaitByAttractionForParks(parkIds: string[]) {
             status: res.ok ? "ready" : "error",
             map: m,
             showAttribution: Boolean(json.showQueueTimesAttribution),
+            showThemeParksWikiAttribution: Boolean(json.showThemeParksWikiAttribution),
           });
         }
       } catch {
@@ -62,6 +76,7 @@ export function useLiveWaitByAttractionForParks(parkIds: string[]) {
             status: "error",
             map: new Map(),
             showAttribution: false,
+            showThemeParksWikiAttribution: false,
           });
         }
       }

@@ -157,6 +157,7 @@ export default async function TodayAtParkPage({
   let liveData: LiveWaitCurrentApiResponse = {
     items: [],
     showQueueTimesAttribution: false,
+    showThemeParksWikiAttribution: false,
   };
   let attractions: Attraction[] = [];
 
@@ -190,6 +191,7 @@ export default async function TodayAtParkPage({
         selectedParkName={selectedParkName}
         rides={buildRideRows(liveData, attractions)}
         showAttribution={liveData.showQueueTimesAttribution}
+        showThemeParksWikiAttribution={liveData.showThemeParksWikiAttribution}
         loadError={loadError}
         initialSort={initialSort}
         generatedAtIso={new Date().toISOString()}

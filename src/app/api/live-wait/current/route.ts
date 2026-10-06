@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     const body: LiveWaitCurrentApiResponse = {
       items: [],
       showQueueTimesAttribution: false,
+      showThemeParksWikiAttribution: false,
     };
     return NextResponse.json(body, {
       headers: { "Cache-Control": LIVE_WAIT_CURRENT_CACHE_CONTROL },
@@ -38,6 +39,7 @@ export async function GET(request: NextRequest) {
         error: error instanceof Error ? error.message : "Live wait read failed",
         items: [],
         showQueueTimesAttribution: false,
+        showThemeParksWikiAttribution: false,
       },
       { status: 500, headers: { "Cache-Control": LIVE_WAIT_CURRENT_CACHE_CONTROL } },
     );

@@ -1031,6 +1031,7 @@ export function TripDayPageView({
           <LiveWaitDayStrip
             hasLiveRows={liveWaitDay.map.size > 0}
             showQueueTimesAttribution={liveWaitDay.showAttribution}
+            showThemeParksWikiAttribution={liveWaitDay.showThemeParksWikiAttribution}
             loading={liveWaitDay.status === "loading"}
           />
 
