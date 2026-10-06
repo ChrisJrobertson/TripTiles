@@ -27,7 +27,7 @@
     "seed-live-wait-mappings": "node --env-file=.env.local --import tsx scripts/seed-live-wait-mappings.ts",
     "build:live-wait-mapping-workbook": "npx tsx scripts/build-live-wait-mapping-workbook.ts",
     "generate:live-wait-park-mappings-seed": "npx tsx scripts/generate-live-wait-park-mappings-seed.ts",
-    "test": "npx tsx src/lib/skip-line-clashes.test.ts && npx tsx src/lib/ai-sanitize-notes.test.ts && npx tsx src/lib/region-skip-line-ui.test.ts && npx tsx src/lib/ai/region-briefing.test.ts && npx tsx src/lib/data-import/import-validation.test.ts",
+    "test": "npx tsx src/lib/skip-line-clashes.test.ts && npx tsx src/lib/ai-sanitize-notes.test.ts && npx tsx src/lib/region-skip-line-ui.test.ts && npx tsx src/lib/ai/region-briefing.test.ts && npx tsx src/lib/data-import/import-validation.test.ts && npx tsx src/lib/park-data/orlando-intelligence.test.ts",
     "test:skip-line-clashes": "npx tsx src/lib/skip-line-clashes.test.ts",
     "deploy:vercel": "vercel --prod --yes"
   },
