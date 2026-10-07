@@ -10,7 +10,12 @@ import { dedupeLiveStates } from "@/lib/park-data/dedupe-live";
 import { providerMayOverwrite } from "@/lib/park-data/field-ownership";
 import { classifyFreshness, freshnessAllowsLiveDescription } from "@/lib/park-data/freshness";
 import { chooseObservation, fetchWithFallback } from "@/lib/park-data/live-selection";
-import { resolveEntityMapping } from "@/lib/park-data/mapping";
+import {
+  mappingAllowsOperationalUse,
+  mappingIsVerified,
+  normaliseMatchStatus,
+  resolveEntityMapping,
+} from "@/lib/park-data/mapping";
 import {
   ORLANDO_HEADLINE_PARK_IDS,
   ORLANDO_PARK_IDENTITIES,
@@ -18,12 +23,14 @@ import {
 import { buildOrlandoCoverageReport } from "@/lib/park-data/orlando-report";
 import {
   hhmmToMinutes,
+  isValidExtendedParkTime,
   parkLocalHHmm,
   resolveOperatingWindow,
   sequencerMinutesFromResolution,
 } from "@/lib/park-data/schedule";
 import { operatingWindowForSequencer } from "@/lib/park-data/sequencer-hours";
 import {
+  clearThemeParksWikiDocumentCache,
   createThemeParksWikiProvider,
   normaliseThemeParksLive,
   normaliseThemeParksSchedule,
@@ -423,7 +430,7 @@ async function run() {
         closesAt: "18:00",
         scheduleKind: "operating",
         timezone: "America/New_York",
-        provenanceKind: "AUTHORITATIVE_FACT",
+        provenanceKind: "PROVIDER_OBSERVATION",
         observedAt: "2026-10-06T12:00:00.000Z",
         fetchedAt: "2026-10-06T12:00:00.000Z",
         staleAfter: "2026-10-07T00:00:00.000Z",
@@ -437,7 +444,7 @@ async function run() {
         closesAt: "09:00",
         scheduleKind: "early_entry",
         timezone: "America/New_York",
-        provenanceKind: "AUTHORITATIVE_FACT",
+        provenanceKind: "PROVIDER_OBSERVATION",
         observedAt: "2026-10-06T12:00:00.000Z",
         fetchedAt: "2026-10-06T12:00:00.000Z",
         staleAfter: "2026-10-07T00:00:00.000Z",
@@ -445,7 +452,8 @@ async function run() {
       },
     ],
   });
-  assert.equal(posted.source, "authoritative_schedule");
+  assert.equal(posted.source, "posted_schedule");
+  assert.equal(posted.provenanceKind, "PROVIDER_OBSERVATION");
   assert.equal(posted.open, "09:00");
   assert.equal(posted.close, "18:00");
   const withEarly = sequencerMinutesFromResolution(posted, { hasEarlyEntry: true });
@@ -489,7 +497,7 @@ async function run() {
         closesAt: "24:00",
         scheduleKind: "special",
         timezone: "America/New_York",
-        provenanceKind: "AUTHORITATIVE_FACT",
+        provenanceKind: "PROVIDER_OBSERVATION",
         observedAt: "2026-10-06T12:00:00.000Z",
         fetchedAt: "2026-10-06T12:00:00.000Z",
         staleAfter: "2026-10-07T00:00:00.000Z",
@@ -498,22 +506,43 @@ async function run() {
     ],
   });
   assert.equal(unpublished.source, "unknown");
+  assert.equal(unpublished.provenanceKind, "PROVIDER_OBSERVATION");
   assert.equal(unpublished.open, null);
   assert.equal(sequencerMinutesFromResolution(unpublished, { hasEarlyEntry: false }), null);
 
   const primaryLive = chooseObservation(
     [
-      { provider: "themeparks_wiki", freshness: "LIVE" as const, wait: 20 },
-      { provider: "queue_times", freshness: "LIVE" as const, wait: 50 },
+      {
+        provider: "themeparks_wiki",
+        freshness: "LIVE" as const,
+        waitMinutes: 20,
+        isOpen: true,
+        operatingStatus: "open",
+      },
+      {
+        provider: "queue_times",
+        freshness: "LIVE" as const,
+        waitMinutes: 50,
+        isOpen: true,
+        operatingStatus: "open",
+      },
     ],
     "themeparks_wiki",
     "queue_times",
   );
-  assert.equal(primaryLive.reason, "primary_live");
-  assert.equal(primaryLive.row?.wait, 20);
+  assert.match(primaryLive.reason, /^primary_live/);
+  assert.equal(primaryLive.row?.waitMinutes, 20);
+  assert.equal(primaryLive.conflicts.length, 1);
 
   const fallbackLive = chooseObservation(
-    [{ provider: "queue_times", freshness: "LIVE" as const, wait: 15 }],
+    [
+      {
+        provider: "queue_times",
+        freshness: "LIVE" as const,
+        waitMinutes: 15,
+        isOpen: true,
+      },
+    ],
     "themeparks_wiki",
     "queue_times",
   );
@@ -603,7 +632,7 @@ async function run() {
         closesAt: "19:00",
         scheduleKind: "operating",
         timezone: "America/New_York",
-        provenanceKind: "AUTHORITATIVE_FACT",
+        provenanceKind: "PROVIDER_OBSERVATION",
         observedAt: "2026-10-06T12:00:00.000Z",
         fetchedAt: "2026-10-06T12:00:00.000Z",
         staleAfter: "2026-10-07T00:00:00.000Z",
@@ -682,6 +711,343 @@ async function run() {
   assert.equal(magic?.fields.find((field) => field.field === "latitude")?.status, "missing");
   assert.equal(magic?.fields.find((field) => field.field === "land")?.status, "unsupported");
   assert.equal(coverage.parks.find((park) => park.parkId === "dc")?.queueTimes, "unsupported");
+
+  // --- Hardening: mapping provenance ---
+  assert.equal(normaliseMatchStatus(null), "legacy_unverified");
+  assert.equal(normaliseMatchStatus(""), "legacy_unverified");
+  assert.equal(mappingAllowsOperationalUse(null), true);
+  assert.equal(mappingAllowsOperationalUse("legacy_unverified"), true);
+  assert.equal(mappingIsVerified(null), false);
+  assert.equal(mappingIsVerified("legacy_unverified"), false);
+  assert.equal(mappingIsVerified("manually_approved"), true);
+  assert.equal(mappingIsVerified("confirmed_exact"), true);
+  assert.equal(mappingAllowsOperationalUse("candidate"), false);
+  assert.equal(mappingAllowsOperationalUse("ambiguous"), false);
+
+  const legacyMapped = resolveEntityMapping(
+    [
+      {
+        provider: "queue_times",
+        externalId: "6",
+        triptilesId: "mk",
+        matchStatus: null,
+      },
+    ],
+    "queue_times",
+    "6",
+  );
+  assert.equal(legacyMapped.outcome, "mapped");
+  if (legacyMapped.outcome === "mapped") {
+    assert.equal(legacyMapped.matchStatus, "legacy_unverified");
+    assert.equal(legacyMapped.verified, false);
+  }
+
+  const migrationSql = readFileSync(
+    new URL("../../../supabase/migrations/20261006140000_orlando_intelligence_foundation.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(migrationSql, /default 'legacy_unverified'/);
+  assert.equal(migrationSql.includes("default 'manually_approved'"), false);
+  assert.match(migrationSql, /legacy_unverified/);
+  assert.match(migrationSql, /PROVIDER_OBSERVATION/);
+  assert.match(migrationSql, /OFFICIAL_FACT/);
+  assert.equal(migrationSql.includes("AUTHORITATIVE_FACT"), false);
+  assert.match(migrationSql, /\(\?:0\\d\|1\\d\|2\\d\|30\):\[0-5]\\d/);
+
+  // --- Overnight / invalid times ---
+  for (const ok of ["09:00", "23:30", "24:30", "25:00", "26:00", "30:00"]) {
+    assert.equal(isValidExtendedParkTime(ok), true, ok);
+  }
+  for (const bad of ["9:00", "25:99", "abc", "", " 09:00", "09:00 ", "99:00"]) {
+    assert.equal(isValidExtendedParkTime(bad), false, bad);
+    assert.equal(hhmmToMinutes(bad), null, bad);
+  }
+
+  const lateClose = resolveOperatingWindow({
+    date: "2026-10-06",
+    preferredProvider: "themeparks_wiki",
+    now: NOW,
+    catalogue: null,
+    schedules: [
+      {
+        parkId: "mk",
+        provider: "themeparks_wiki",
+        operatingDate: "2026-10-06",
+        opensAt: "09:00",
+        closesAt: "25:00",
+        scheduleKind: "operating",
+        timezone: "America/New_York",
+        provenanceKind: "PROVIDER_OBSERVATION",
+        observedAt: "2026-10-06T12:00:00.000Z",
+        fetchedAt: "2026-10-06T12:00:00.000Z",
+        staleAfter: "2026-10-07T00:00:00.000Z",
+        description: null,
+      },
+    ],
+  });
+  assert.equal(lateClose.close, "25:00");
+  assert.equal(lateClose.closeMinutes, 25 * 60);
+
+  const closedDay = resolveOperatingWindow({
+    date: "2026-10-06",
+    preferredProvider: "themeparks_wiki",
+    now: NOW,
+    catalogue: { parkId: "mk", opensAt: "09:00", closesAt: "22:00", hoursKnown: true },
+    schedules: [
+      {
+        parkId: "mk",
+        provider: "themeparks_wiki",
+        operatingDate: "2026-10-06",
+        opensAt: null,
+        closesAt: null,
+        scheduleKind: "closed",
+        timezone: "America/New_York",
+        provenanceKind: "PROVIDER_OBSERVATION",
+        observedAt: "2026-10-06T12:00:00.000Z",
+        fetchedAt: "2026-10-06T12:00:00.000Z",
+        staleAfter: "2026-10-07T00:00:00.000Z",
+        description: "Closed",
+      },
+    ],
+  });
+  assert.equal(closedDay.source, "unknown");
+  assert.match(closedDay.label, /closed/i);
+  assert.equal(sequencerMinutesFromResolution(closedDay, { hasEarlyEntry: false }), null);
+
+  // --- Provider conflict matrix ---
+  const conflictOpenClosed = chooseObservation(
+    [
+      {
+        provider: "themeparks_wiki",
+        freshness: "LIVE" as const,
+        waitMinutes: 35,
+        isOpen: true,
+        operatingStatus: "open",
+        observedAt: "2026-10-06T17:50:00.000Z",
+      },
+      {
+        provider: "queue_times",
+        freshness: "LIVE" as const,
+        waitMinutes: 0,
+        isOpen: false,
+        operatingStatus: "closed",
+        observedAt: "2026-10-06T17:55:00.000Z",
+      },
+    ],
+    "themeparks_wiki",
+    "queue_times",
+  );
+  assert.equal(conflictOpenClosed.row?.provider, "themeparks_wiki");
+  assert.equal(conflictOpenClosed.row?.waitMinutes, 35);
+  assert.equal(conflictOpenClosed.row?.isOpen, true);
+  assert.ok(conflictOpenClosed.conflictKinds.includes("wait"));
+  assert.ok(conflictOpenClosed.conflictKinds.includes("open"));
+  assert.match(conflictOpenClosed.reason, /conflict/);
+
+  const stalePrimaryFreshFallback = chooseObservation(
+    [
+      {
+        provider: "themeparks_wiki",
+        freshness: "STALE" as const,
+        waitMinutes: 10,
+        isOpen: true,
+      },
+      {
+        provider: "queue_times",
+        freshness: "LIVE" as const,
+        waitMinutes: 40,
+        isOpen: true,
+      },
+    ],
+    "themeparks_wiki",
+    "queue_times",
+  );
+  assert.equal(stalePrimaryFreshFallback.row?.provider, "queue_times");
+  assert.match(stalePrimaryFreshFallback.reason, /^fallback_live/);
+
+  const preferredOlderStillLive = chooseObservation(
+    [
+      {
+        provider: "themeparks_wiki",
+        freshness: "LIVE" as const,
+        waitMinutes: 12,
+        observedAt: "2026-10-06T17:40:00.000Z",
+      },
+      {
+        provider: "queue_times",
+        freshness: "LIVE" as const,
+        waitMinutes: 99,
+        observedAt: "2026-10-06T17:55:00.000Z",
+      },
+    ],
+    "themeparks_wiki",
+    "queue_times",
+  );
+  assert.equal(preferredOlderStillLive.row?.provider, "themeparks_wiki");
+
+  const bothStale = chooseObservation(
+    [
+      { provider: "themeparks_wiki", freshness: "STALE" as const, waitMinutes: 1 },
+      { provider: "queue_times", freshness: "STALE" as const, waitMinutes: 2 },
+    ],
+    "themeparks_wiki",
+    "queue_times",
+  );
+  assert.equal(bothStale.row?.provider, "themeparks_wiki");
+  assert.match(bothStale.reason, /^primary_stale/);
+
+  const bothUnavailable = chooseObservation([], "themeparks_wiki", "queue_times");
+  assert.equal(bothUnavailable.row, null);
+
+  // --- Sequencer clock cases ---
+  const shortened = operatingWindowForSequencer({
+    parkIds: ["mk"],
+    date: "2026-10-06",
+    preferredProvider: "themeparks_wiki",
+    hasEarlyEntry: false,
+    now: NOW,
+    catalogues: [],
+    schedules: [
+      {
+        parkId: "mk",
+        provider: "themeparks_wiki",
+        operatingDate: "2026-10-06",
+        opensAt: "10:00",
+        closesAt: "16:00",
+        scheduleKind: "operating",
+        timezone: "America/New_York",
+        provenanceKind: "PROVIDER_OBSERVATION",
+        observedAt: "2026-10-06T12:00:00.000Z",
+        fetchedAt: "2026-10-06T12:00:00.000Z",
+        staleAfter: "2026-10-07T00:00:00.000Z",
+        description: null,
+      },
+    ],
+  });
+  assert.equal(shortened.openMinutes, 10 * 60);
+  assert.equal(shortened.closeMinutes, 16 * 60);
+
+  const blockedClosed = operatingWindowForSequencer({
+    parkIds: ["mk"],
+    date: "2026-10-06",
+    preferredProvider: "themeparks_wiki",
+    hasEarlyEntry: false,
+    now: NOW,
+    catalogues: [],
+    schedules: [
+      {
+        parkId: "mk",
+        provider: "themeparks_wiki",
+        operatingDate: "2026-10-06",
+        opensAt: null,
+        closesAt: null,
+        scheduleKind: "closed",
+        timezone: "America/New_York",
+        provenanceKind: "PROVIDER_OBSERVATION",
+        observedAt: "2026-10-06T12:00:00.000Z",
+        fetchedAt: "2026-10-06T12:00:00.000Z",
+        staleAfter: "2026-10-07T00:00:00.000Z",
+        description: null,
+      },
+    ],
+  });
+  assert.equal(blockedClosed.blocked, true);
+
+  const fallbackClock = operatingWindowForSequencer({
+    parkIds: ["mk"],
+    date: "2026-10-06",
+    preferredProvider: "themeparks_wiki",
+    hasEarlyEntry: false,
+    now: NOW,
+    catalogues: [{ parkId: "mk", opensAt: "08:00", closesAt: "23:00", hoursKnown: false }],
+    schedules: [],
+  });
+  assert.equal(fallbackClock.blocked, false);
+  assert.equal(fallbackClock.resolution.source, "fallback_assumption");
+  assert.equal(fallbackClock.resolution.provenanceKind, "FALLBACK_ASSUMPTION");
+  assert.ok(fallbackClock.warnings.some((w) => /Not a confirmed operating time/.test(w)));
+
+  const catalogueClock = operatingWindowForSequencer({
+    parkIds: ["mk"],
+    date: "2026-10-06",
+    preferredProvider: "themeparks_wiki",
+    hasEarlyEntry: false,
+    now: NOW,
+    catalogues: [{ parkId: "mk", opensAt: "08:00", closesAt: "23:00", hoursKnown: true }],
+    schedules: [],
+  });
+  assert.equal(catalogueClock.resolution.source, "catalogue_hours");
+  assert.equal(catalogueClock.resolution.provenanceKind, "TRIPTILES_RULE");
+
+  // --- Smart Plan labels stay honest ---
+  const aiSource = readFileSync(new URL("../../actions/ai.ts", import.meta.url), "utf8");
+  assert.match(aiSource, /fallback-assumption/);
+  assert.match(aiSource, /Do not invent a different open or close/);
+  assert.equal(aiSource.includes("assume 09:00 open and 22:00 close"), false);
+
+  const scheduleNorm = normaliseThemeParksSchedule({
+    fetchedAt: NOW.toISOString(),
+    staleAfter: "2026-10-07T00:00:00.000Z",
+    payload: {
+      id: "park",
+      timezone: "America/New_York",
+      schedule: [
+        {
+          date: "2026-10-06",
+          type: "OPERATING",
+          openingTime: "2026-10-06T09:00:00-04:00",
+          closingTime: "2026-10-06T22:00:00-04:00",
+        },
+      ],
+    },
+  });
+  assert.equal(scheduleNorm[0]?.meta.provenanceKind, "PROVIDER_OBSERVATION");
+
+  const oldObservation = normaliseThemeParksLive({
+    providerParkId: "park-1",
+    fetchedAt: NOW.toISOString(),
+    staleAfter: "2026-10-06T18:15:00.000Z",
+    staleAfterMinutes: 15,
+    payload: {
+      liveData: [
+        {
+          id: "old-ride",
+          name: "Old Ride",
+          entityType: "ATTRACTION",
+          status: "CLOSED",
+          lastUpdated: "2026-04-18T10:02:03.101Z",
+          queue: { STANDBY: { waitTime: null } },
+        },
+      ],
+    },
+  });
+  assert.equal(
+    classifyFreshness({
+      observedAt: oldObservation[0]!.meta.observedAt,
+      fetchedAt: oldObservation[0]!.meta.fetchedAt,
+      staleAfter: oldObservation[0]!.meta.staleAfter,
+      now: NOW,
+    }),
+    "STALE",
+  );
+
+  clearThemeParksWikiDocumentCache();
+  let etagCalls = 0;
+  const etagProvider = createThemeParksWikiProvider({
+    now: () => NOW,
+    fetchImpl: async (_url, init) => {
+      etagCalls += 1;
+      const headers = new Headers(init?.headers);
+      if (headers.get("If-None-Match") === 'W/"abc"') {
+        return new Response(null, { status: 304, headers: { ETag: 'W/"abc"' } });
+      }
+      return response(livePayload(), 200, { ETag: 'W/"abc"' });
+    },
+  });
+  const first = await etagProvider.fetchLiveAttractions("park-1");
+  const second = await etagProvider.fetchLiveAttractions("park-1");
+  assert.equal(first.length, second.length);
+  assert.equal(etagCalls, 2);
 
   console.log("orlando intelligence tests passed");
 }
