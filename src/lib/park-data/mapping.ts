@@ -11,7 +11,8 @@ export type MappingResolution =
   | {
       outcome: "mapped";
       triptilesId: string;
-      matchStatus: "confirmed_exact" | "manually_approved";
+      matchStatus: "confirmed_exact" | "manually_approved" | "legacy_unverified";
+      verified: boolean;
     }
   | { outcome: "unmapped" }
   | { outcome: "retired" }
@@ -19,15 +20,50 @@ export type MappingResolution =
   | { outcome: "candidate" }
   | { outcome: "missing" };
 
-const USABLE = new Set<MatchStatus>(["confirmed_exact", "manually_approved"]);
+const OPERATIONAL = new Set<MatchStatus>([
+  "confirmed_exact",
+  "manually_approved",
+  "legacy_unverified",
+]);
+
+const VERIFIED = new Set<MatchStatus>(["confirmed_exact", "manually_approved"]);
 
 /**
- * Legacy rows written before match_status existed are treated as manually
- * approved. They were explicit mapping rows, not runtime name matches.
+ * Operationally usable mapping: may attach a provider id to a TripTiles id
+ * during ingest. Includes legacy rows that predate match_status.
+ * Null/blank is treated as legacy_unverified, never as manually_approved.
  */
-export function mappingAllowsFactUse(status: string | null | undefined): boolean {
+export function mappingAllowsOperationalUse(
+  status: string | null | undefined,
+): boolean {
   if (status == null || status.trim() === "") return true;
-  return USABLE.has(status as MatchStatus);
+  return OPERATIONAL.has(status as MatchStatus);
+}
+
+/** @deprecated Prefer mappingAllowsOperationalUse — name kept for call sites. */
+export function mappingAllowsFactUse(
+  status: string | null | undefined,
+): boolean {
+  return mappingAllowsOperationalUse(status);
+}
+
+/**
+ * Verified mapping: a human confirmed exact match or manually approved it.
+ * legacy_unverified is operational but not verified.
+ */
+export function mappingIsVerified(status: string | null | undefined): boolean {
+  if (status == null || status.trim() === "") return false;
+  return VERIFIED.has(status as MatchStatus);
+}
+
+export function normaliseMatchStatus(
+  status: string | null | undefined,
+): MatchStatus {
+  if (status == null || status.trim() === "") return "legacy_unverified";
+  if (OPERATIONAL.has(status as MatchStatus) || status === "candidate" || status === "missing" || status === "retired" || status === "ambiguous") {
+    return status as MatchStatus;
+  }
+  return "legacy_unverified";
 }
 
 /**
@@ -51,8 +87,7 @@ export function resolveEntityMapping(
 
   const usableIds = new Set<string>();
   for (const row of matches) {
-    const status = row.matchStatus;
-    const usable = status == null || USABLE.has(status);
+    const usable = mappingAllowsOperationalUse(row.matchStatus);
     if (usable && row.triptilesId) usableIds.add(row.triptilesId);
   }
   if (usableIds.size > 1) return { outcome: "ambiguous" };
@@ -60,13 +95,18 @@ export function resolveEntityMapping(
     const row = matches.find(
       (item) =>
         item.triptilesId === [...usableIds][0] &&
-        (item.matchStatus == null || USABLE.has(item.matchStatus)),
+        mappingAllowsOperationalUse(item.matchStatus),
     );
-    const status = row?.matchStatus ?? "manually_approved";
+    const status = normaliseMatchStatus(row?.matchStatus);
+    const usableStatus =
+      status === "confirmed_exact" || status === "manually_approved"
+        ? status
+        : "legacy_unverified";
     return {
       outcome: "mapped",
       triptilesId: [...usableIds][0]!,
-      matchStatus: status === "confirmed_exact" ? "confirmed_exact" : "manually_approved",
+      matchStatus: usableStatus,
+      verified: mappingIsVerified(usableStatus),
     };
   }
 

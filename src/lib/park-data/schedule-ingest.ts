@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { mappingAllowsOperationalUse } from "@/lib/park-data/mapping";
 import { safeErrorMessage } from "@/lib/park-data/safe-log";
 import type { ParkScheduleWindow, ThemeParkDataProvider } from "@/lib/park-data/types";
 
@@ -42,9 +43,7 @@ export async function runScheduleIngest(options: {
     if (!error) {
       for (const row of data ?? []) {
         const status = (row as { match_status?: string | null }).match_status;
-        if (status === "candidate" || status === "ambiguous" || status === "missing" || status === "retired") {
-          continue;
-        }
+        if (!mappingAllowsOperationalUse(status)) continue;
         const external = String((row as { external_park_id?: string }).external_park_id ?? "");
         const parkId = (row as { park_id?: string | null }).park_id ?? null;
         if (external) parkIdByExternal.set(external, parkId);

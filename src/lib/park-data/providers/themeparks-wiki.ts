@@ -1,30 +1,31 @@
 /**
  * ThemeParks.wiki v1 adapter.
  *
- * Verified 2026-10-06 against:
+ * Re-verified 2026-10-07 against:
  * - https://www.themeparks.wiki/api
  * - https://www.themeparks.wiki/api/http
- * - GET https://api.themeparks.wiki/v1/destinations
- * - GET https://api.themeparks.wiki/v1/entity/{id}
- * - GET https://api.themeparks.wiki/v1/entity/{id}/live
- * - GET https://api.themeparks.wiki/v1/entity/{id}/schedule
+ * - https://www.themeparks.wiki/terms
+ * - Live GET https://api.themeparks.wiki/v1/entity/{id}/live
+ *   (Cache-Control: public, max-age=60, s-maxage=60; ETag present;
+ *    RateLimit-* IETF headers; no API key for live/schedule/tree)
  *
- * Terms observed that day: live data, schedules, and the entity tree need no
- * API key. Commercial use is allowed. Products that show the data must display
- * “Powered by ThemeParks.wiki” unless a paid plan removes that requirement.
- * Do not republish the feed as a data API for other software.
+ * Terms that day: free commercial use is allowed when the data is an input to
+ * a product, not redistributed as a feed. Visible “Powered by ThemeParks.wiki”
+ * credit is required on free tier. Do not imply the data is official park data.
+ * History beyond the free window needs a paid key; this adapter does not call
+ * history endpoints.
  *
- * Rate limits are per key, or per IP when no key is sent. Design for HTTP 429
- * and Retry-After. Live responses are cached by the provider for about 60
- * seconds; TripTiles cron stays at 5 minutes.
+ * Polling: live bodies are cached ~60s. Terms advise not polling faster than
+ * about once every five minutes. TripTiles cron is five minutes.
  *
  * Assumptions:
- * - Base path is /v1. Month schedules, when used later, need a two-digit month.
+ * - Base path is /v1. Month schedules need a two-digit month.
  * - Calendar dates and the offset inside openingTime/closingTime are park-local.
  * - Absent STANDBY.waitTime means no posted wait, not zero.
  * - An entity missing from liveData is no data, not a closed ride. This adapter
  *   only emits entityType ATTRACTION so shows and restaurants are not stored
  *   as ride waits.
+ * - Schedule provenance is PROVIDER_OBSERVATION, never OFFICIAL_FACT.
  * - Schedule `purchases` (ticket prices) are dropped and are not planning facts.
  */
 
@@ -54,6 +55,15 @@ type ThemeParksWikiOptions = {
 };
 
 const USER_AGENT = "TripTilesParkData/1.0 (+https://triptiles.app)";
+
+type CachedDocument = {
+  etag: string | null;
+  payload: unknown;
+  fetchedAtMs: number;
+};
+
+/** Process-local cache so If-None-Match can honour provider ETags. */
+const documentCache = new Map<string, CachedDocument>();
 
 function isAbortError(err: unknown): boolean {
   return (
@@ -88,6 +98,7 @@ async function fetchDocument(
   apiKey: string | null,
   timeoutMs: number,
 ): Promise<unknown> {
+  const cached = documentCache.get(url);
   const attempt = async (): Promise<Response> => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -99,6 +110,7 @@ async function fetchDocument(
         "User-Agent": USER_AGENT,
       };
       if (apiKey) headers["x-api-key"] = apiKey;
+      if (cached?.etag) headers["If-None-Match"] = cached.etag;
       return await fetchImpl(url, { method: "GET", headers, signal: controller.signal });
     } catch (err) {
       if (isAbortError(err) || (err instanceof Error && err.name === "AbortError")) {
@@ -121,10 +133,25 @@ async function fetchDocument(
       throw new ParkProviderError("rate_limited", "ThemeParks.wiki rate limited the request", 429);
     }
   }
+  if (res.status === 304 && cached) {
+    return cached.payload;
+  }
   if (!res.ok) {
     throw new ParkProviderError("http", `ThemeParks.wiki HTTP ${res.status}`, res.status);
   }
-  return readJson(res);
+  const payload = await readJson(res);
+  const etag = res.headers.get("etag");
+  documentCache.set(url, {
+    etag,
+    payload,
+    fetchedAtMs: Date.now(),
+  });
+  return payload;
+}
+
+/** Test helper: clear the process-local ETag document cache. */
+export function clearThemeParksWikiDocumentCache(): void {
+  documentCache.clear();
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -167,7 +194,10 @@ export function normaliseThemeParksLive(args: {
   payload: unknown;
   fetchedAt: string;
   staleAfter: string;
+  /** Minutes after observedAt before the row leaves LIVE. */
+  staleAfterMinutes?: number;
 }): AttractionLiveState[] {
+  const staleAfterMinutes = args.staleAfterMinutes ?? 15;
   const root = asRecord(args.payload);
   if (!root || !Array.isArray(root.liveData)) {
     throw new ParkProviderError("invalid_payload", "ThemeParks.wiki live payload has no liveData array");
@@ -181,6 +211,15 @@ export function normaliseThemeParksLive(args: {
     if (typeof row.name !== "string" || !row.name.trim()) continue;
     const status = operatingStatus(row.status);
     const observedAt = typeof row.lastUpdated === "string" ? row.lastUpdated : args.fetchedAt;
+    // Stale threshold is anchored to the provider observation time, not fetch time,
+    // so an old lastUpdated cannot be presented as LIVE merely because we just read it.
+    const observedMs = Date.parse(observedAt);
+    const staleMs = Number.isFinite(observedMs)
+      ? observedMs + staleAfterMinutes * 60_000
+      : Date.parse(args.staleAfter);
+    const staleAfter = Number.isFinite(staleMs)
+      ? new Date(staleMs).toISOString()
+      : args.staleAfter;
     rows.push({
       providerParkId: args.providerParkId,
       providerAttractionId: row.id,
@@ -193,7 +232,7 @@ export function normaliseThemeParksLive(args: {
         sourceId: row.id,
         fetchedAt: args.fetchedAt,
         observedAt,
-        staleAfter: args.staleAfter,
+        staleAfter,
         confidence: null,
         provenanceKind: "LIVE_OBSERVATION",
       },
@@ -249,7 +288,7 @@ export function normaliseThemeParksSchedule(args: {
         observedAt: args.fetchedAt,
         staleAfter: args.staleAfter,
         confidence: null,
-        provenanceKind: "AUTHORITATIVE_FACT",
+        provenanceKind: "PROVIDER_OBSERVATION",
       },
       rawPayload: {
         date: row.date,
@@ -321,6 +360,7 @@ export function createThemeParksWikiProvider(
         payload,
         fetchedAt,
         staleAfter: addMinutes(fetchedAt, staleMinutes),
+        staleAfterMinutes: staleMinutes,
       });
     },
 

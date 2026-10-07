@@ -21,7 +21,7 @@ export type NormalisedScheduleEntry = {
 };
 
 export type OperatingWindowSource =
-  | "authoritative_schedule"
+  | "posted_schedule"
   | "stored_schedule"
   | "catalogue_hours"
   | "fallback_assumption"
@@ -59,14 +59,21 @@ export type CatalogueHours = {
 const FALLBACK_OPEN = SYNTHETIC_THEME_PARK_HOURS.open;
 const FALLBACK_CLOSE = SYNTHETIC_THEME_PARK_HOURS.close;
 
+/** Strict HH:MM with hours 00–30 and minutes 00–59 (overnight closes). */
+const EXTENDED_HHMM = /^(?:0\d|1\d|2\d|30):[0-5]\d$/;
+
+export function isValidExtendedParkTime(value: string | null | undefined): boolean {
+  if (value == null) return false;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed !== value) return false;
+  return EXTENDED_HHMM.test(trimmed);
+}
+
 /** Minutes from midnight. Hours 00–30 cover a posted close after midnight. */
 export function hhmmToMinutes(hhmm: string): number | null {
-  const match = /^(\d{2}):(\d{2})$/.exec(hhmm.trim());
-  if (!match) return null;
-  const hour = Number(match[1]);
-  const minute = Number(match[2]);
-  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null;
-  if (hour < 0 || hour > 30 || minute < 0 || minute > 59) return null;
+  if (!isValidExtendedParkTime(hhmm)) return null;
+  const hour = Number(hhmm.slice(0, 2));
+  const minute = Number(hhmm.slice(3, 5));
   return hour * 60 + minute;
 }
 
@@ -74,6 +81,7 @@ export function minutesToHhmm(total: number): string | null {
   if (!Number.isFinite(total) || total < 0 || total > 30 * 60) return null;
   const hour = Math.floor(total / 60);
   const minute = total % 60;
+  if (minute < 0 || minute > 59 || hour > 30) return null;
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
@@ -97,11 +105,13 @@ export function parkLocalHHmm(iso: string, operatingDate: string): string | null
   const date = match[1]!;
   let hour = Number(match[2]);
   const minute = Number(match[3]);
+  if (minute < 0 || minute > 59) return null;
   const diff = dayDiff(operatingDate, date);
   if (diff == null || diff < 0 || diff > 1) return null;
   hour += diff * 24;
-  if (hour > 30 || minute > 59) return null;
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  if (hour > 30) return null;
+  const formatted = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  return isValidExtendedParkTime(formatted) ? formatted : null;
 }
 
 function emptyResolution(
@@ -133,6 +143,9 @@ function specialsFrom(
   for (const entry of entries) {
     if (entry.scheduleKind === "operating") continue;
     if (!entry.opensAt || !entry.closesAt) continue;
+    if (!isValidExtendedParkTime(entry.opensAt) || !isValidExtendedParkTime(entry.closesAt)) {
+      continue;
+    }
     specialHours.push({
       kind: entry.scheduleKind,
       open: entry.opensAt,
@@ -156,6 +169,8 @@ function chooseOperating(
       entry.scheduleKind === "operating" &&
       entry.opensAt &&
       entry.closesAt &&
+      isValidExtendedParkTime(entry.opensAt) &&
+      isValidExtendedParkTime(entry.closesAt) &&
       (hhmmToMinutes(entry.opensAt) ?? -1) < (hhmmToMinutes(entry.closesAt) ?? -1),
   );
   if (operating.length === 0) return null;
@@ -181,11 +196,14 @@ export function resolveOperatingWindow(input: {
   if (dated.length > 0) {
     const operating = chooseOperating(dated, input.preferredProvider);
     if (!operating || !operating.opensAt || !operating.closesAt) {
+      const closedOnly = dated.every((entry) => entry.scheduleKind === "closed");
       return {
         ...emptyResolution(
           "unknown",
-          "AUTHORITATIVE_FACT",
-          "This date was published without a regular operating window. No fallback hours were applied.",
+          "PROVIDER_OBSERVATION",
+          closedOnly
+            ? "Provider published this date as closed. No fallback hours were applied."
+            : "This date was published without a regular operating window. No fallback hours were applied.",
           specialHours,
         ),
         timezone: dated.find((entry) => entry.timezone)?.timezone ?? null,
@@ -203,11 +221,11 @@ export function resolveOperatingWindow(input: {
     });
     const fresh = freshness === "LIVE" || freshness === "RECENT";
     const label = fresh
-      ? `Posted hours ${operating.opensAt}–${operating.closesAt}.`
-      : `Stored schedule ${operating.opensAt}–${operating.closesAt} is past its freshness window. Not a live confirmation.`;
+      ? `Posted provider hours ${operating.opensAt}–${operating.closesAt} (${operating.provider}). Not a first-party park statement.`
+      : `Stored provider schedule ${operating.opensAt}–${operating.closesAt} is past its freshness window. Not a live confirmation.`;
     return {
-      source: fresh ? "authoritative_schedule" : "stored_schedule",
-      provenanceKind: fresh ? "AUTHORITATIVE_FACT" : "HISTORICAL_OBSERVATION",
+      source: fresh ? "posted_schedule" : "stored_schedule",
+      provenanceKind: fresh ? "PROVIDER_OBSERVATION" : "HISTORICAL_OBSERVATION",
       open: operating.opensAt,
       close: operating.closesAt,
       openMinutes,
@@ -235,7 +253,7 @@ export function resolveOperatingWindow(input: {
     ) {
       return {
         source: "catalogue_hours",
-        provenanceKind: "AUTHORITATIVE_FACT",
+        provenanceKind: "TRIPTILES_RULE",
         open: catalogue.opensAt,
         close: catalogue.closesAt,
         openMinutes,

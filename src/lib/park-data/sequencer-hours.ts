@@ -64,6 +64,9 @@ export function operatingWindowForSequencer(input: {
     resolution.source === "stored_schedule"
   ) {
     warnings.push(resolution.label);
+  } else if (resolution.source === "posted_schedule" && resolution.provider) {
+    // Usable provider hours — still labelled so UI never presents them as official.
+    warnings.push(resolution.label);
   }
   if (minutes.usedEarlyEntry) {
     warnings.push("Posted early entry is included in the touring start time.");

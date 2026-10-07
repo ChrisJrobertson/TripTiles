@@ -291,7 +291,7 @@ async function loadSequencerClock(
           timezone: typeof record.timezone === "string" ? record.timezone : null,
           provenanceKind:
             (record.provenance_kind as NormalisedScheduleEntry["provenanceKind"]) ??
-            "AUTHORITATIVE_FACT",
+            "PROVIDER_OBSERVATION",
           observedAt: typeof record.observed_at === "string" ? record.observed_at : null,
           fetchedAt: typeof record.fetched_at === "string" ? record.fetched_at : null,
           staleAfter: typeof record.stale_after === "string" ? record.stale_after : null,

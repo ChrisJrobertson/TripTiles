@@ -1,20 +1,22 @@
 -- Orlando intelligence foundation.
 --
--- Primary sources, fetched 2026-10-06:
+-- Primary sources, verified 2026-10-06 and re-checked 2026-10-07:
 --   ThemeParks.wiki HTTP API
 --     https://www.themeparks.wiki/api
 --     https://www.themeparks.wiki/api/http
+--     https://www.themeparks.wiki/terms
 --     GET https://api.themeparks.wiki/v1/destinations
 --     GET https://api.themeparks.wiki/v1/entity/{id} for each mapped park
---     Commercial use that day: live data and schedules need no API key.
---     Showing the data requires a visible “Powered by ThemeParks.wiki” credit.
+--     Free commercial use is allowed as a product input, not as a redistributed feed.
+--     Visible “Powered by ThemeParks.wiki” credit is required on the free tier.
+--     Do not imply ThemeParks.wiki data is official park/operator data.
+--     Live responses carry Cache-Control max-age=60 and ETag; cron stays at 5 minutes.
 --   Queue-Times parks.json (User-Agent TripTilesLiveWaitIngest/1.0)
 --     https://queue-times.com/parks.json
 --     Aquatica Orlando is id 94.
 --     Discovery Cove is not in that index. Seed id 308 is not attached.
 --
--- Pre-flight (not executed here: this change had no database connection).
--- Run before apply and confirm the 16 catalogue parks already exist:
+-- Pre-flight (run before apply; record the counts):
 --   select id from public.parks
 --   where id in (
 --     'mk','ep','hs','ak','us','ioa','eu','sw','aq','dc','vb','tl','bb','ll','bg','ds'
@@ -30,53 +32,74 @@
 -- CHECK proof after apply:
 --   select count(*) as bad_park_match from public.live_wait_park_mappings
 --   where match_status not in (
---     'confirmed_exact','manually_approved','candidate','missing','retired','ambiguous'
+--     'confirmed_exact','manually_approved','legacy_unverified',
+--     'candidate','missing','retired','ambiguous'
 --   );
 --   -- expect 0
---   select count(*) as bad_attraction_match from public.live_wait_provider_mappings
---   where match_status is not null
---     and match_status not in (
---       'confirmed_exact','manually_approved','candidate','missing','retired','ambiguous'
---     );
---   -- expect 0
---   select count(*) as bad_schedule_kind from public.park_operating_schedules
---   where schedule_kind not in ('operating','early_entry','extra_hours','special','closed');
---   -- expect 0
+--   select count(*) as invented_approvals from public.live_wait_park_mappings
+--   where match_status = 'manually_approved'
+--     and provider = 'queue_times'
+--     and coalesce(notes, '') not ilike '%manual%';
+--   -- expect 0 for rows that only gained match_status from this migration
 --   select count(*) as bad_provenance from public.park_operating_schedules
 --   where provenance_kind not in (
---     'AUTHORITATIVE_FACT','LIVE_OBSERVATION','HISTORICAL_OBSERVATION',
+--     'OFFICIAL_FACT','PROVIDER_OBSERVATION','LIVE_OBSERVATION','HISTORICAL_OBSERVATION',
 --     'DERIVED_CALCULATION','TRIPTILES_RULE','USER_INPUT','FALLBACK_ASSUMPTION'
 --   );
 --   -- expect 0
+--   select count(*) as bad_times from public.park_operating_schedules
+--   where (opens_at is not null and opens_at !~ '^(?:0\d|1\d|2\d|30):[0-5]\d$')
+--      or (closes_at is not null and closes_at !~ '^(?:0\d|1\d|2\d|30):[0-5]\d$');
+--   -- expect 0
 
 alter table public.live_wait_park_mappings
-  add column if not exists match_status text not null default 'manually_approved',
+  add column if not exists match_status text not null default 'legacy_unverified',
   add column if not exists notes text,
   add column if not exists timezone text,
   add column if not exists provider_latitude numeric,
   add column if not exists provider_longitude numeric;
 
 alter table public.live_wait_provider_mappings
-  add column if not exists match_status text not null default 'manually_approved',
+  add column if not exists match_status text not null default 'legacy_unverified',
   add column if not exists notes text;
 
-do $$
-begin
-  alter table public.live_wait_park_mappings
-    add constraint live_wait_park_mappings_match_status_check
-    check (
-      match_status in (
-        'confirmed_exact',
-        'manually_approved',
-        'candidate',
-        'missing',
-        'retired',
-        'ambiguous'
-      )
-    );
-exception
-  when duplicate_object then null;
-end $$;
+-- Existing rows must not inherit a false human-approval claim.
+alter table public.live_wait_park_mappings
+  alter column match_status set default 'legacy_unverified';
+alter table public.live_wait_provider_mappings
+  alter column match_status set default 'legacy_unverified';
+
+alter table public.live_wait_park_mappings
+  drop constraint if exists live_wait_park_mappings_match_status_check;
+alter table public.live_wait_park_mappings
+  add constraint live_wait_park_mappings_match_status_check
+  check (
+    match_status in (
+      'confirmed_exact',
+      'manually_approved',
+      'legacy_unverified',
+      'candidate',
+      'missing',
+      'retired',
+      'ambiguous'
+    )
+  );
+
+alter table public.live_wait_provider_mappings
+  drop constraint if exists live_wait_provider_mappings_match_status_check;
+alter table public.live_wait_provider_mappings
+  add constraint live_wait_provider_mappings_match_status_check
+  check (
+    match_status in (
+      'confirmed_exact',
+      'manually_approved',
+      'legacy_unverified',
+      'candidate',
+      'missing',
+      'retired',
+      'ambiguous'
+    )
+  );
 
 do $$
 begin
@@ -96,26 +119,10 @@ exception
   when duplicate_object then null;
 end $$;
 
-do $$
-begin
-  alter table public.live_wait_provider_mappings
-    add constraint live_wait_provider_mappings_match_status_check
-    check (
-      match_status in (
-        'confirmed_exact',
-        'manually_approved',
-        'candidate',
-        'missing',
-        'retired',
-        'ambiguous'
-      )
-    );
-exception
-  when duplicate_object then null;
-end $$;
-
 comment on column public.live_wait_park_mappings.match_status is
-  'confirmed_exact and manually_approved may be used as facts. candidate, missing, retired, and ambiguous must not be auto-applied.';
+  'confirmed_exact and manually_approved are verified. legacy_unverified is operationally usable without claiming human approval. candidate, missing, retired, and ambiguous must not be auto-applied.';
+comment on column public.live_wait_provider_mappings.match_status is
+  'Same semantics as live_wait_park_mappings.match_status.';
 comment on column public.live_wait_park_mappings.provider_latitude is
   'Provider-observed latitude. Do not copy onto parks.latitude.';
 comment on column public.live_wait_park_mappings.provider_longitude is
@@ -188,7 +195,7 @@ create table if not exists public.park_operating_schedules (
   schedule_kind text not null,
   schedule_key text not null,
   timezone text,
-  provenance_kind text not null default 'AUTHORITATIVE_FACT',
+  provenance_kind text not null default 'PROVIDER_OBSERVATION',
   observed_at timestamptz,
   fetched_at timestamptz not null default now(),
   stale_after timestamptz,
@@ -202,7 +209,8 @@ create table if not exists public.park_operating_schedules (
   constraint park_operating_schedules_provenance_check
     check (
       provenance_kind in (
-        'AUTHORITATIVE_FACT',
+        'OFFICIAL_FACT',
+        'PROVIDER_OBSERVATION',
         'LIVE_OBSERVATION',
         'HISTORICAL_OBSERVATION',
         'DERIVED_CALCULATION',
@@ -212,17 +220,47 @@ create table if not exists public.park_operating_schedules (
       )
     ),
   constraint park_operating_schedules_opens_at_check
-    check (opens_at is null or opens_at ~ '^\d{2}:\d{2}$'),
+    check (opens_at is null or opens_at ~ '^(?:0\d|1\d|2\d|30):[0-5]\d$'),
   constraint park_operating_schedules_closes_at_check
-    check (closes_at is null or closes_at ~ '^\d{2}:\d{2}$'),
+    check (closes_at is null or closes_at ~ '^(?:0\d|1\d|2\d|30):[0-5]\d$'),
   constraint park_operating_schedules_confidence_check
     check (confidence is null or (confidence >= 0 and confidence <= 1)),
   constraint park_operating_schedules_unique
     unique (provider, external_park_id, operating_date, schedule_key)
 );
 
+-- Idempotent repair if an earlier draft created the table with weaker checks.
+alter table public.park_operating_schedules
+  alter column provenance_kind set default 'PROVIDER_OBSERVATION';
+alter table public.park_operating_schedules
+  drop constraint if exists park_operating_schedules_provenance_check;
+alter table public.park_operating_schedules
+  add constraint park_operating_schedules_provenance_check
+  check (
+    provenance_kind in (
+      'OFFICIAL_FACT',
+      'PROVIDER_OBSERVATION',
+      'LIVE_OBSERVATION',
+      'HISTORICAL_OBSERVATION',
+      'DERIVED_CALCULATION',
+      'TRIPTILES_RULE',
+      'USER_INPUT',
+      'FALLBACK_ASSUMPTION'
+    )
+  );
+alter table public.park_operating_schedules
+  drop constraint if exists park_operating_schedules_opens_at_check;
+alter table public.park_operating_schedules
+  add constraint park_operating_schedules_opens_at_check
+  check (opens_at is null or opens_at ~ '^(?:0\d|1\d|2\d|30):[0-5]\d$');
+alter table public.park_operating_schedules
+  drop constraint if exists park_operating_schedules_closes_at_check;
+alter table public.park_operating_schedules
+  add constraint park_operating_schedules_closes_at_check
+  check (closes_at is null or closes_at ~ '^(?:0\d|1\d|2\d|30):[0-5]\d$');
+
 comment on table public.park_operating_schedules is
-  'Date-specific posted park hours. Does not overwrite parks.opens_at. Hours past midnight use 24:00–30:00.';
+  'Date-specific posted park hours from providers. Not first-party unless provenance_kind is OFFICIAL_FACT. Does not overwrite parks.opens_at. Hours past midnight use 24:00–30:00.';
 
 create index if not exists idx_park_operating_schedules_park_date
   on public.park_operating_schedules (park_id, operating_date);

@@ -173,6 +173,10 @@ export async function getCurrentLiveWaitsForParks(
         staleAfter: item.stale_after,
         now,
       }),
+      observedAt: item.observed_at,
+      waitMinutes: item.wait_minutes,
+      isOpen: item.is_open,
+      operatingStatus: item.operating_status,
     }));
     const chosen = chooseObservation(
       ranked,

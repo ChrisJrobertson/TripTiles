@@ -3,6 +3,11 @@
  *
  * Planner, sequencer, and forecast code should depend on these types.
  * Provider field names stay inside provider adapters.
+ *
+ * Authority and provider preference are separate:
+ * - Preference chooses which provider to ask first.
+ * - Provenance says how much trust the evidence supports.
+ * ThemeParks.wiki is a third-party provider, never a first-party park operator.
  */
 
 import type { LiveWaitOperatingStatus } from "@/types/live-wait";
@@ -10,9 +15,20 @@ import type { LiveWaitOperatingStatus } from "@/types/live-wait";
 export const PROVIDER_THEMEPARKS_WIKI = "themeparks_wiki";
 export const PROVIDER_QUEUE_TIMES = "queue_times";
 
-/** Planning-fact categories. Forecasts and LLM text are not fact sources. */
+/**
+ * Planning-fact categories. Forecasts and LLM text are not fact sources.
+ *
+ * OFFICIAL_FACT — first-party park/operator statement.
+ * PROVIDER_OBSERVATION — third-party operational provider (ThemeParks.wiki, Queue-Times).
+ * LIVE_OBSERVATION / HISTORICAL_OBSERVATION — timed operational reads.
+ * DERIVED_CALCULATION — deterministic TripTiles math.
+ * TRIPTILES_RULE — curated catalogue / product rules.
+ * USER_INPUT — explicit guest input.
+ * FALLBACK_ASSUMPTION — labelled synthetic stand-in, never confirmed hours.
+ */
 export type ProvenanceKind =
-  | "AUTHORITATIVE_FACT"
+  | "OFFICIAL_FACT"
+  | "PROVIDER_OBSERVATION"
   | "LIVE_OBSERVATION"
   | "HISTORICAL_OBSERVATION"
   | "DERIVED_CALCULATION"
@@ -22,9 +38,17 @@ export type ProvenanceKind =
 
 export type FreshnessState = "LIVE" | "RECENT" | "STALE" | "UNKNOWN";
 
+/**
+ * Mapping verification state.
+ *
+ * confirmed_exact / manually_approved — verified.
+ * legacy_unverified — pre-existing operational mapping without a recorded human review.
+ * candidate / ambiguous / missing / retired — not usable as facts.
+ */
 export type MatchStatus =
   | "confirmed_exact"
   | "manually_approved"
+  | "legacy_unverified"
   | "candidate"
   | "missing"
   | "retired"
