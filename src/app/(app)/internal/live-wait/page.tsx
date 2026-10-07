@@ -61,6 +61,11 @@ export default async function InternalLiveWaitDiagnosticsPage({
       <p className="mt-2 text-royal/70">
         Signed in as <span className="font-medium">{user.email}</span>. Provider
         identifiers stay inside this internal route and the protected mapping action.
+        Orlando park coverage is on{" "}
+        <a href="/internal/orlando" className="underline decoration-gold/50">
+          /internal/orlando
+        </a>
+        .
       </p>
 
       {configError ? (

@@ -4572,7 +4572,7 @@ When the user prompt states paidAccess is anything other than yes for that day, 
 ==== FORMATTING NOTES ====
 
 - Use 24h time format (HH:MM)
-- Park hours: assume 09:00 open and 22:00 close unless the user prompt says otherwise
+- Park hours: use DAY AT-PARK CONSTRAINTS in the user message when they are present. A line marked fallback-assumption is not a confirmed operating time. Do not invent a different open or close, and do not state 09:00–22:00 as fact.
 - Sequence times should advance reasonably (no backwards times)
 - Skip lightning_lane_strategy entirely if the family doesn't have Multi Pass access
 - Skip express_pass_strategy entirely if the family doesn't have Express Pass access

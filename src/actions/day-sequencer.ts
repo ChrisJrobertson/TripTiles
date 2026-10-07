@@ -17,11 +17,24 @@ import {
 } from "@/lib/day-sequencer";
 import { mapAttractionRow } from "@/lib/ride-priority-rows";
 import { sortPrioritiesForDay } from "@/lib/ride-plan-display";
+import { operatingWindowForSequencer } from "@/lib/park-data/sequencer-hours";
+import type { CatalogueHours, NormalisedScheduleEntry } from "@/lib/park-data/schedule";
+import { readProviderPolicy } from "@/lib/park-data/registry";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import type { PlanningPace, TripPlanningPreferences } from "@/lib/types";
 
 export type GenerateDaySequenceResult =
-  | { ok: true; sequence: ParkDaySequenceOutput }
+  | {
+      ok: true;
+      sequence: ParkDaySequenceOutput;
+      operating_window: {
+        source: string;
+        open: string | null;
+        close: string | null;
+        provenanceKind: string;
+        label: string;
+      };
+    }
   | { ok: false; code: string; message: string; details?: unknown };
 
 function logBaseUrl(): string {
@@ -200,6 +213,14 @@ export async function generateDaySequenceAction(input: {
     {};
 
   const pace = planningPrefsPaceToSequencer(input.pace, trip.planning_preferences);
+  const clock = await loadSequencerClock(supabase, park_ids, dk, input.entitlements.has_early_entry);
+  if (clock.blocked) {
+    return {
+      ok: false,
+      code: "PARK_HOURS_UNKNOWN",
+      message: clock.blockMessage ?? "Posted park hours are unknown for this date.",
+    };
+  }
 
   const engineInput: GenerateParkDaySequenceInput = {
     date: dk,
@@ -209,9 +230,8 @@ export async function generateDaySequenceAction(input: {
     young_child_party_v1: trip.children > 0,
     smallest_rider_height_cm: null,
     date_is_peak_season: dateIsPeakSeason(dk),
-    // TODO(V1.1): Per-park official open/close for this calendar date.
-    park_open_minutes: 540,
-    park_close_minutes: 1320,
+    park_open_minutes: clock.openMinutes,
+    park_close_minutes: clock.closeMinutes,
     anchors,
     priorities,
     attractions_by_id,
@@ -227,7 +247,10 @@ export async function generateDaySequenceAction(input: {
         message: result.message,
       };
     }
-    return { ok: true, sequence: result.output };
+    if (clock.warnings.length > 0) {
+      result.output.warnings.push(...clock.warnings);
+    }
+    return { ok: true, sequence: result.output, operating_window: clock.resolution };
   } catch (e) {
     await reportSequencerCrash(e, { tripId: input.tripId, dateKey: dk });
     return {
@@ -237,4 +260,75 @@ export async function generateDaySequenceAction(input: {
         "Something went wrong generating the plan. We've logged it — please try again in a moment.",
     };
   }
+}
+
+async function loadSequencerClock(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  parkIds: string[],
+  date: string,
+  hasEarlyEntry: boolean,
+) {
+  const schedules: NormalisedScheduleEntry[] = [];
+  const catalogues: CatalogueHours[] = [];
+  try {
+    const { data, error } = await supabase
+      .from("park_operating_schedules")
+      .select(
+        "park_id, provider, operating_date, opens_at, closes_at, schedule_kind, timezone, provenance_kind, observed_at, fetched_at, stale_after, description",
+      )
+      .in("park_id", parkIds)
+      .eq("operating_date", date);
+    if (!error) {
+      for (const row of data ?? []) {
+        const record = row as Record<string, unknown>;
+        schedules.push({
+          parkId: typeof record.park_id === "string" ? record.park_id : null,
+          provider: String(record.provider ?? ""),
+          operatingDate: String(record.operating_date ?? date),
+          opensAt: typeof record.opens_at === "string" ? record.opens_at : null,
+          closesAt: typeof record.closes_at === "string" ? record.closes_at : null,
+          scheduleKind: (record.schedule_kind as NormalisedScheduleEntry["scheduleKind"]) ?? "operating",
+          timezone: typeof record.timezone === "string" ? record.timezone : null,
+          provenanceKind:
+            (record.provenance_kind as NormalisedScheduleEntry["provenanceKind"]) ??
+            "PROVIDER_OBSERVATION",
+          observedAt: typeof record.observed_at === "string" ? record.observed_at : null,
+          fetchedAt: typeof record.fetched_at === "string" ? record.fetched_at : null,
+          staleAfter: typeof record.stale_after === "string" ? record.stale_after : null,
+          description: typeof record.description === "string" ? record.description : null,
+        });
+      }
+    }
+  } catch {
+    /* Missing schedule storage degrades to catalogue hours or the marked fallback. */
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("parks")
+      .select("id, opens_at, closes_at, hours_known")
+      .in("id", parkIds);
+    if (!error) {
+      for (const row of data ?? []) {
+        const record = row as Record<string, unknown>;
+        catalogues.push({
+          parkId: String(record.id ?? ""),
+          opensAt: typeof record.opens_at === "string" ? record.opens_at : null,
+          closesAt: typeof record.closes_at === "string" ? record.closes_at : null,
+          hoursKnown: record.hours_known === true,
+        });
+      }
+    }
+  } catch {
+    /* Catalogue hour columns are optional for this read. */
+  }
+
+  return operatingWindowForSequencer({
+    parkIds,
+    date,
+    schedules,
+    catalogues,
+    preferredProvider: readProviderPolicy().legacySingleProvider ?? readProviderPolicy().primary,
+    hasEarlyEntry,
+  });
 }

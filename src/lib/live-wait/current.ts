@@ -1,11 +1,13 @@
-import type { LiveWaitCurrentApiResponse } from "@/lib/live-wait/public-types";
+import type { LiveWaitCurrentApiResponse, LiveWaitPublicItem } from "@/lib/live-wait/public-types";
+import { classifyFreshness } from "@/lib/park-data/freshness";
+import { chooseObservation } from "@/lib/park-data/live-selection";
+import { readProviderPolicy } from "@/lib/park-data/registry";
+import { PROVIDER_QUEUE_TIMES, PROVIDER_THEMEPARKS_WIKI } from "@/lib/park-data/types";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { createClient } from "@supabase/supabase-js";
 
 export const LIVE_WAIT_CURRENT_CACHE_CONTROL = "private, max-age=0, s-maxage=45";
 export const MAX_LIVE_WAIT_PARKS = 12;
-
-const QUEUE_TIMES_PROVIDER = "queue_times";
 
 function createLiveWaitPublicClient() {
   const url = getSupabaseUrl();
@@ -26,17 +28,9 @@ export function normaliseLiveWaitParkIds(ids: string[]): string[] {
   );
 }
 
-/**
- * Queue-Times `external_park_id` values for the given TripTiles `park_id`s, plus
- * a map to backfill `park_id` on unmapped `live_wait_current` rows (those rows
- * have `park_id` null until ride-level mappings exist).
- *
- * Tries `live_wait_provider_mappings` park-link rows first (`attraction_id` null).
- * Falls back to distinct pairs from `live_wait_current` when that query is
- * empty or not permitted for the caller (e.g. anon has no SELECT on mappings).
- */
-async function resolveQueueTimesExternalParkIdsForTripTilesParks(
+async function resolveExternalParkIds(
   supabase: ReturnType<typeof createLiveWaitPublicClient>,
+  provider: string,
   scopedParkIds: string[],
 ): Promise<{ externalIds: string[]; externalToParkId: Map<string, string> }> {
   const externalToParkId = new Map<string, string>();
@@ -45,7 +39,7 @@ async function resolveQueueTimesExternalParkIdsForTripTilesParks(
   const { data: mappingRows, error: mappingError } = await supabase
     .from("live_wait_provider_mappings")
     .select("external_park_id, park_id")
-    .eq("provider", QUEUE_TIMES_PROVIDER)
+    .eq("provider", provider)
     .is("attraction_id", null)
     .in("park_id", scopedParkIds);
 
@@ -62,11 +56,26 @@ async function resolveQueueTimesExternalParkIdsForTripTilesParks(
     }
   }
 
+  const { data: parkRows, error: parkError } = await supabase
+    .from("live_wait_park_mappings")
+    .select("external_park_id, park_id")
+    .eq("provider", provider)
+    .in("park_id", scopedParkIds);
+  if (!parkError) {
+    for (const row of parkRows ?? []) {
+      const ext = String((row as { external_park_id?: string }).external_park_id ?? "").trim();
+      const pid = String((row as { park_id?: string }).park_id ?? "").trim();
+      if (!ext || !pid) continue;
+      externalIds.add(ext);
+      if (!externalToParkId.has(ext)) externalToParkId.set(ext, pid);
+    }
+  }
+
   if (externalIds.size === 0) {
     const { data: anchorRows, error: anchorError } = await supabase
       .from("live_wait_current")
       .select("external_park_id, park_id")
-      .eq("provider", QUEUE_TIMES_PROVIDER)
+      .eq("provider", provider)
       .in("park_id", scopedParkIds)
       .not("park_id", "is", null);
 
@@ -89,46 +98,99 @@ async function resolveQueueTimesExternalParkIdsForTripTilesParks(
   return { externalIds: externalIdsSorted, externalToParkId };
 }
 
+function emptyLiveResponse(): LiveWaitCurrentApiResponse {
+  return {
+    items: [],
+    showQueueTimesAttribution: false,
+    showThemeParksWikiAttribution: false,
+  };
+}
+
 export async function getCurrentLiveWaitsForParks(
   parkIds: string[],
 ): Promise<LiveWaitCurrentApiResponse> {
   const scopedParkIds = normaliseLiveWaitParkIds(parkIds);
-  if (scopedParkIds.length === 0) {
-    return { items: [], showQueueTimesAttribution: false };
-  }
+  if (scopedParkIds.length === 0) return emptyLiveResponse();
 
   const supabase = createLiveWaitPublicClient();
+  const policy = readProviderPolicy();
+  const providers = policy.legacySingleProvider
+    ? [policy.legacySingleProvider]
+    : [policy.primary, policy.fallback].filter((id): id is string => Boolean(id));
 
-  const { externalIds, externalToParkId } =
-    await resolveQueueTimesExternalParkIdsForTripTilesParks(supabase, scopedParkIds);
-
-  if (externalIds.length === 0) {
-    return { items: [], showQueueTimesAttribution: false };
+  const externalIds = new Set<string>();
+  const externalToParkId = new Map<string, string>();
+  for (const provider of providers) {
+    const resolved = await resolveExternalParkIds(supabase, provider, scopedParkIds);
+    for (const id of resolved.externalIds) externalIds.add(id);
+    for (const [ext, parkId] of resolved.externalToParkId) {
+      externalToParkId.set(`${provider}\t${ext}`, parkId);
+    }
   }
+
+  if (externalIds.size === 0) return emptyLiveResponse();
 
   const { data, error } = await supabase
     .from("live_wait_current")
     .select(
       "provider, park_id, attraction_id, external_park_id, external_attraction_id, external_name, wait_minutes, operating_status, is_open, observed_at, fetched_at, stale_after",
     )
-    .eq("provider", QUEUE_TIMES_PROVIDER)
-    .in("external_park_id", externalIds)
-    .limit(800);
+    .in("provider", providers)
+    .in("external_park_id", [...externalIds])
+    .limit(1600);
 
   if (error) {
     throw new Error(error.message);
   }
 
-  const items = (data ?? []).map((row) => {
-    const item = row as LiveWaitCurrentApiResponse["items"][number];
+  const now = new Date();
+  const hydrated = (data ?? []).map((row) => {
+    const item = row as LiveWaitPublicItem;
     if (item.park_id) return item;
-    const inferred = externalToParkId.get(String(item.external_park_id ?? "").trim());
-    if (!inferred) return item;
-    return { ...item, park_id: inferred };
+    const inferred = externalToParkId.get(
+      `${item.provider}\t${String(item.external_park_id ?? "").trim()}`,
+    );
+    return inferred ? { ...item, park_id: inferred } : item;
   });
+
+  const groups = new Map<string, LiveWaitPublicItem[]>();
+  for (const item of hydrated) {
+    const key = item.attraction_id
+      ? `attraction:${item.attraction_id}`
+      : `external:${item.provider}:${item.external_park_id}:${item.external_attraction_id}`;
+    const list = groups.get(key) ?? [];
+    list.push(item);
+    groups.set(key, list);
+  }
+
+  const items: LiveWaitPublicItem[] = [];
+  for (const group of groups.values()) {
+    const ranked = group.map((item) => ({
+      ...item,
+      freshness: classifyFreshness({
+        observedAt: item.observed_at,
+        fetchedAt: item.fetched_at,
+        staleAfter: item.stale_after,
+        now,
+      }),
+      observedAt: item.observed_at,
+      waitMinutes: item.wait_minutes,
+      isOpen: item.is_open,
+      operatingStatus: item.operating_status,
+    }));
+    const chosen = chooseObservation(
+      ranked,
+      policy.legacySingleProvider ?? policy.primary,
+      policy.legacySingleProvider ? null : policy.fallback,
+    );
+    if (!chosen.row) continue;
+    items.push({ ...chosen.row, selection_reason: chosen.reason });
+  }
+
   return {
     items,
-    showQueueTimesAttribution: items.some((row) => row.provider === "queue_times"),
+    showQueueTimesAttribution: items.some((row) => row.provider === PROVIDER_QUEUE_TIMES),
+    showThemeParksWikiAttribution: items.some((row) => row.provider === PROVIDER_THEMEPARKS_WIKI),
   };
 }
 

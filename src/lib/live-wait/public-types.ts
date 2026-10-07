@@ -14,10 +14,16 @@ export type LiveWaitPublicItem = {
   observed_at: string;
   fetched_at: string;
   stale_after: string;
+  /** Present on API responses. Older callers can ignore it. */
+  freshness?: "LIVE" | "RECENT" | "STALE" | "UNKNOWN";
+  /** Why this provider won when more than one observation existed. */
+  selection_reason?: string | null;
 };
 
 export type LiveWaitCurrentApiResponse = {
   items: LiveWaitPublicItem[];
-  /** True when any row uses Queue-Times — UI must show attribution. */
+  /** True when any returned row uses Queue-Times — UI must show attribution. */
   showQueueTimesAttribution: boolean;
+  /** True when any returned row uses ThemeParks.wiki — UI must show attribution. */
+  showThemeParksWikiAttribution: boolean;
 };

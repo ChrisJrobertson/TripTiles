@@ -7,7 +7,13 @@ export type DayTimes = { arrival?: string; departure?: string };
 
 export type DayTimesByDate = Record<string, DayTimes>;
 
-export type EffectiveDayWindowSource = "user" | "park" | "default";
+export type EffectiveDayWindowSource =
+  | "user"
+  | "posted_schedule"
+  | "catalogue"
+  | "ai_timeline"
+  | "fallback_assumption"
+  | "default";
 
 export type EffectiveDayWindow = {
   start: string;
@@ -177,7 +183,7 @@ export function buildDayTimesPreferencesPatch(
 
 /** Short hint under arrival/departure fields in planner UI. */
 export function defaultDayTimesFormHint(): string {
-  return "Leave blank to use typical theme-park hours (09:00–22:00), AI timeline hours when present, or a full-day window on non-park days.";
+  return "Leave blank to use a fallback assumption of 09:00–22:00 when posted hours are unavailable, prior AI timeline hours when present, or a full-day window on non-park days. A fallback is not a confirmed operating time.";
 }
 
 function timelineParkHoursForDate(
@@ -232,12 +238,12 @@ export function getEffectiveDayWindow(
 
   let baseOpen: string = syn.open;
   let baseClose: string = syn.close;
-  let baseSource: EffectiveDayWindowSource = nonPark ? "default" : "park";
+  let baseSource: EffectiveDayWindowSource = nonPark ? "default" : "fallback_assumption";
 
   if (tl && !nonPark) {
     baseOpen = tl.open;
     baseClose = tl.close;
-    baseSource = "park";
+    baseSource = "ai_timeline";
   }
 
   const ua = user?.arrival?.trim();
@@ -281,9 +287,15 @@ export function formatDayConstraintsBlockForSmartPlan(
     const src =
       w.source === "user"
         ? "user-set"
-        : w.source === "park"
-          ? "typical-park-day-fallback-or-prior-AI-timeline-hours"
-          : "full-day-fallback-non-theme-park-day";
+        : w.source === "posted_schedule"
+          ? "posted-park-schedule"
+          : w.source === "catalogue"
+            ? "catalogue-hours-not-this-date"
+            : w.source === "ai_timeline"
+              ? "prior-ai-timeline-hours"
+              : w.source === "fallback_assumption"
+                ? "fallback-assumption-not-confirmed-operating-time"
+                : "full-day-fallback-non-theme-park-day";
     lines.push(
       `- ${dk}: arrival at park ${w.start}, departure from park ${w.end} (source: ${src}).`,
     );
@@ -304,9 +316,15 @@ export function formatDayConstraintBlockForDate(
   const src =
     w.source === "user"
       ? "user-set"
-      : w.source === "park"
-        ? "typical-park-day-fallback-or-prior-AI-timeline-hours"
-        : "full-day-fallback-non-theme-park-day";
+      : w.source === "posted_schedule"
+        ? "posted-park-schedule"
+        : w.source === "catalogue"
+          ? "catalogue-hours-not-this-date"
+          : w.source === "ai_timeline"
+            ? "prior-ai-timeline-hours"
+            : w.source === "fallback_assumption"
+              ? "fallback-assumption-not-confirmed-operating-time"
+              : "full-day-fallback-non-theme-park-day";
   return [
     "DAY CONSTRAINTS — HARD RULES:",
     `Arrival at park: ${w.start}`,
