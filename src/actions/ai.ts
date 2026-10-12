@@ -96,6 +96,7 @@ import {
   tripProfileAllowsStructuralMealSlots,
   writeTripPlanningProfile,
 } from "@/lib/trip-intelligence";
+import { consumeRateLimit } from "@/lib/rate-limit";
 import { commitSmartPlan } from "@/lib/smart-plan-commit";
 import { formatRegionalDiningForPrompt } from "@/data/regional-dining";
 import {
@@ -137,6 +138,18 @@ const anthropic = new Anthropic({
 });
 
 const SMART_PLAN_MODEL = "claude-haiku-4-5-20251001";
+const SMART_PLAN_RATE_LIMIT = 12;
+const SMART_PLAN_RATE_WINDOW_MS = 60 * 60 * 1000;
+
+function smartPlanRateLimitMessage(userId: string): string | null {
+  const result = consumeRateLimit(
+    `ai:${userId}`,
+    SMART_PLAN_RATE_LIMIT,
+    SMART_PLAN_RATE_WINDOW_MS,
+  );
+  if (result.allowed) return null;
+  return `Too many Smart Plan requests. Try again in ${result.retryAfterSec} seconds.`;
+}
 const AI_GENERATIONS_TOTAL_COLUMN =
   `ai_generations_${"life"}${"time"}` as const;
 
@@ -1406,6 +1419,10 @@ export async function tweakDay(input: {
 }): Promise<DayTweakResult> {
   const user = await getCurrentUser();
   if (!user) return { status: "error", error: "Not signed in.", code: "ai_failure" };
+  const rateLimited = smartPlanRateLimitMessage(user.id);
+  if (rateLimited) {
+    return { status: "error", error: rateLimited, code: "ai_failure" };
+  }
   if (!process.env.ANTHROPIC_API_KEY) {
     return { status: "error", error: "AI is not configured.", code: "ai_failure" };
   }
@@ -2043,6 +2060,10 @@ export async function runGenerateAIPlan(
       details: { ok: false, error: "NOT_AUTHED" },
     });
     return { ok: false, error: "NOT_AUTHED", message: "Not signed in." };
+  }
+  const rateLimited = smartPlanRateLimitMessage(user.id);
+  if (rateLimited) {
+    return { ok: false, error: "AI_ERROR", message: rateLimited };
   }
 
   try {
@@ -3408,6 +3429,10 @@ export async function generateMustDosForPark(input: {
   if (!user) {
     return { ok: false, error: "Not signed in.", code: "NOT_AUTHED" };
   }
+  const rateLimited = smartPlanRateLimitMessage(user.id);
+  if (rateLimited) {
+    return { ok: false, error: rateLimited, code: "AI_ERROR" };
+  }
 
   try {
     await assertTierAllows(user.id, "ai");
@@ -3970,6 +3995,10 @@ export async function generateDayTimeline(
   const user = await getCurrentUser();
   if (!user) {
     return { ok: false, error: "Not signed in.", code: "ai_failure" };
+  }
+  const rateLimited = smartPlanRateLimitMessage(user.id);
+  if (rateLimited) {
+    return { ok: false, error: rateLimited, code: "ai_failure" };
   }
 
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -5262,6 +5291,8 @@ export async function generateDayStrategy(input: {
 > {
   const user = await getCurrentUser();
   if (!user) return { status: "error", error: "Not signed in." };
+  const rateLimited = smartPlanRateLimitMessage(user.id);
+  if (rateLimited) return { status: "error", error: rateLimited };
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return { status: "error", error: "AI is not configured." };

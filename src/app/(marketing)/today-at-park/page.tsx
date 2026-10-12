@@ -19,9 +19,9 @@ import type { Metadata } from "next";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Today at Park — Live wait times | TripTiles",
+  title: "Today at Park — posted wait times | TripTiles",
   description:
-    "See current posted ride waits and operating status for same-day park visits.",
+    "Posted ride waits and operating status. Each row is labelled live, recent, stale, or unknown.",
 };
 
 const LIVE_WAITS_EXCLUDED_REGIONS = new Set([

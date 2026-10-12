@@ -50,7 +50,7 @@ export function reminderDefaultBullets(daysBefore: number): string[] {
       ];
     case 14:
       return [
-        "Glance at the long-range forecast and tweak layers or rain gear.",
+        "Check a weather forecast and tweak layers or rain gear.",
         "Confirm airport transfers or hire-car pickup details.",
         "Download offline maps for the resort area.",
       ];

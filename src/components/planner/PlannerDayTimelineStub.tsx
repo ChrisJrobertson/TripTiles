@@ -261,7 +261,10 @@ export function PlannerDayTimelineStub({
             </span>
             )
           ) : null}
-          <span className="inline-flex rounded-full border border-tt-line bg-tt-surface px-2.5 py-1 font-meta text-[11px] font-semibold text-tt-ink">
+          <span
+            className="inline-flex rounded-full border border-tt-line bg-tt-surface px-2.5 py-1 font-meta text-[11px] font-semibold text-tt-ink"
+            title="Typical monthly average, not a live forecast"
+          >
             {weatherChip ?? "—"}
           </span>
           {crowdLevel ? (

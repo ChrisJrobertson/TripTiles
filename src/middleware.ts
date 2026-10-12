@@ -1,26 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { authUnavailableDecision } from "@/lib/auth/route-guard";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { updateSession } from "@/lib/supabase/update-session";
 
-const PROTECTED_PREFIXES = [
-  "/planner",
-  "/trip",
-  "/onboarding",
-  "/admin",
-  "/agency",
-  "/achievements",
-  "/passport",
-  "/settings",
-  "/internal",
-] as const;
-
 let loggedMissingSupabaseEnv = false;
 
-function isProtectedPath(pathname: string): boolean {
-  return PROTECTED_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
+function redirectToLogin(request: NextRequest): NextResponse {
+  const loginUrl = request.nextUrl.clone();
+  loginUrl.pathname = "/login";
+  loginUrl.searchParams.set("next", safeNextPath(request.nextUrl.pathname));
+  return NextResponse.redirect(loginUrl);
 }
 
 export async function middleware(request: NextRequest) {
@@ -40,6 +30,9 @@ export async function middleware(request: NextRequest) {
         "[TripTiles middleware] Set NEXT_PUBLIC_SUPABASE_URL and either NEXT_PUBLIC_SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY in .env.local (non-empty).",
       );
     }
+    if (authUnavailableDecision(pathname) === "redirect-login") {
+      return redirectToLogin(request);
+    }
     return NextResponse.next();
   }
 
@@ -47,11 +40,8 @@ export async function middleware(request: NextRequest) {
     const { response, user } = await updateSession(request);
     const { pathname } = request.nextUrl;
 
-    if (isProtectedPath(pathname) && !user) {
-      const loginUrl = request.nextUrl.clone();
-      loginUrl.pathname = "/login";
-      loginUrl.searchParams.set("next", safeNextPath(pathname));
-      const redirectResponse = NextResponse.redirect(loginUrl);
+    if (authUnavailableDecision(pathname) === "redirect-login" && !user) {
+      const redirectResponse = redirectToLogin(request);
       response.cookies.getAll().forEach((c) => {
         redirectResponse.cookies.set(c.name, c.value);
       });
@@ -61,6 +51,9 @@ export async function middleware(request: NextRequest) {
     return response;
   } catch (err) {
     console.warn("[TripTiles middleware] Unexpected error:", err);
+    if (authUnavailableDecision(pathname) === "redirect-login") {
+      return redirectToLogin(request);
+    }
     return NextResponse.next();
   }
 }

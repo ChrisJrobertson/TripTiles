@@ -35,7 +35,7 @@ export async function MarketingHeader() {
             href="/today-at-park"
             className="text-tt-ink-muted/90 transition hover:text-tt-royal"
           >
-            Live waits
+            Wait times
           </Link>
           <Link
             href="/pricing"
