@@ -978,7 +978,7 @@ export function TripDayPageView({
               </Button>
             ) : null}
             {dc ? (
-              <span className="inline-flex items-center gap-1">
+              <span className="inline-flex items-center gap-1" title={dc.tooltip}>
                 <span aria-hidden>{dc.conditions.weatherEmoji}</span>
                 <span>{dc.tempLabel}</span>
               </span>

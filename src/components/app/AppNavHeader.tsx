@@ -468,7 +468,7 @@ function fallbackNavLinks(): {
       {
         key: "live-waits",
         href: "/today-at-park",
-        label: "Live waits",
+        label: "Wait times",
         active: false,
       },
       {
@@ -557,7 +557,7 @@ function AppNavHeaderInner(props: NavProps) {
     {
       key: "live-waits",
       href: "/today-at-park",
-      label: "Live waits",
+      label: "Wait times",
       active: liveWaitsActive,
     },
     {
