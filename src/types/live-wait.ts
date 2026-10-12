@@ -21,6 +21,8 @@ export interface LiveWaitProviderMapping {
   attraction_id: string | null;
   external_name: string | null;
   mapping_confidence: number | null;
+  /** Null on rows written before match status existed. Those stay usable. */
+  match_status?: string | null;
   created_at: string;
   updated_at: string;
 }

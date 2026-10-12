@@ -9,6 +9,13 @@ import {
   parseDate,
 } from "@/lib/date-helpers";
 import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
+import {
+  classifyPlannerDay,
+  plannerDayNextStep,
+  plannerDayReadiness,
+  plannerDayReadinessLabel,
+  plannerDayReadinessShortLabel,
+} from "@/lib/trip-workspace-status";
 import { displayDayForTimelinePanel } from "@/lib/ai-timeline-to-slot-times";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import {
@@ -23,6 +30,7 @@ import {
   type DerivedSlot,
 } from "@/lib/planner/derive-slots-from-timeline";
 import { MobileRidesSheet } from "@/components/planner/MobileRidesSheet";
+import { ParkDayFacts } from "@/components/planner/ParkDayFacts";
 import { PlannerTileIcon } from "@/components/planner/PlannerTileIcon";
 import { BookingAnchorDayClashBanner } from "@/components/planner/BookingAnchorDayClashBanner";
 import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
@@ -198,6 +206,8 @@ export type MobileDayViewProps = {
     dateKey: string,
     options?: { focusNotes?: boolean; focusDayTimes?: boolean },
   ) => void;
+  /** Sets morning and afternoon to a rest day. */
+  onMakeRestDay?: (dateKey: string) => void;
   /** Opens the consolidated ✨ Plan this day modal (adjust + strategy). */
   onOpenDayPlanner?: (
     dateKey: string,
@@ -262,6 +272,7 @@ function MobileDayStrip({
   onJumpTo,
   dayLinkHref,
   detailedPlanDateKeys,
+  statusByDate,
 }: {
   days: MobilePlannerDay[];
   activeIndex: number;
@@ -270,6 +281,7 @@ function MobileDayStrip({
   dayLinkHref?: (dateKey: string) => string;
   /** Days with Plan-this-day ✨ timeline saved — subtle left accent on chip. */
   detailedPlanDateKeys: ReadonlySet<string>;
+  statusByDate?: Record<string, string>;
 }) {
   const chipRefs = useRef<(HTMLButtonElement | HTMLAnchorElement | null)[]>([]);
 
@@ -313,6 +325,15 @@ function MobileDayStrip({
                 {dayOfWeekShort(day.date)}
               </span>
               <span className="text-lg font-bold leading-none">{day.date.getDate()}</span>
+              {statusByDate?.[day.dateKey] ? (
+                <span
+                  className={`text-[9px] font-semibold uppercase tracking-wide ${
+                    activeIndex === i ? "text-cream/80" : "text-royal/55"
+                  }`}
+                >
+                  {statusByDate[day.dateKey]}
+                </span>
+              ) : null}
               {day.crowdDot ? (
                 <span className="mt-0.5 inline-flex">
                   <CrowdLevelIndicator
@@ -350,6 +371,15 @@ function MobileDayStrip({
                 {dayOfWeekShort(day.date)}
               </span>
               <span className="text-lg font-bold leading-none">{day.date.getDate()}</span>
+              {statusByDate?.[day.dateKey] ? (
+                <span
+                  className={`text-[9px] font-semibold uppercase tracking-wide ${
+                    activeIndex === i ? "text-cream/80" : "text-royal/55"
+                  }`}
+                >
+                  {statusByDate[day.dateKey]}
+                </span>
+              ) : null}
               {day.crowdDot ? (
                 <span className="mt-0.5 inline-flex">
                   <CrowdLevelIndicator
@@ -1006,6 +1036,7 @@ export function MobileDayView({
   onRideDayPrioritiesUpdated,
   onOpenDayDetail,
   onOpenDayPlanner,
+  onMakeRestDay,
   onUndoDayTweak,
   onGenerateMustDosForPark,
   mustDosGenLoading = null,
@@ -1130,6 +1161,64 @@ export function MobileDayView({
   const rideDisplayCount =
     rideCountsByDay?.[activeDay.dateKey]?.total ??
     ridePrioritiesForActiveDay.length;
+
+  const dayStatusByDate = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const day of days) {
+      const kind = classifyPlannerDay(trip.assignments[day.dateKey], parkById);
+      const rides =
+        rideCountsByDay?.[day.dateKey]?.total ??
+        (ridePrioritiesByDay[day.dateKey]?.length ?? 0);
+      const status = plannerDayReadiness({
+        kind,
+        hasRidePriorities: rides > 0,
+        hasDayPlan: Boolean(getAiDayTimelineForDate(trip.preferences, day.dateKey)),
+      });
+      out[day.dateKey] = plannerDayReadinessShortLabel(status);
+    }
+    return out;
+  }, [days, parkById, rideCountsByDay, ridePrioritiesByDay, trip.assignments, trip.preferences]);
+
+  const activeDaySummary = useMemo(() => {
+    const kind = classifyPlannerDay(trip.assignments[activeDay.dateKey], parkById);
+    const status = plannerDayReadiness({
+      kind,
+      hasRidePriorities: rideDisplayCount > 0,
+      hasDayPlan: Boolean(
+        getAiDayTimelineForDate(trip.preferences, activeDay.dateKey),
+      ),
+    });
+    const names = parkIdsAmPmForDay(assignments, activeDay.dateKey)
+      .map((id) => parkById.get(id)?.name)
+      .filter(Boolean) as string[];
+    const place =
+      status === "rest"
+        ? "Rest day"
+        : status === "open"
+          ? "Nothing assigned yet"
+          : names.join(" · ");
+    const mustDo = ridePrioritiesForActiveDay.filter(
+      (row) => row.priority === "must_do",
+    ).length;
+    const ifTime = ridePrioritiesForActiveDay.filter(
+      (row) => row.priority === "if_time",
+    ).length;
+    return {
+      status,
+      label: plannerDayReadinessLabel(status),
+      place,
+      next: plannerDayNextStep(status),
+      rides: mustDo + ifTime > 0 ? `${mustDo} must do · ${ifTime} if time` : null,
+    };
+  }, [
+    activeDay.dateKey,
+    assignments,
+    parkById,
+    rideDisplayCount,
+    ridePrioritiesForActiveDay,
+    trip.assignments,
+    trip.preferences,
+  ]);
 
   const themeParkIdsAmPm = useMemo(
     () =>
@@ -1366,6 +1455,7 @@ export function MobileDayView({
         onJumpTo={setActiveIndex}
         dayLinkHref={useUrlDayNav ? dayLinkHref : undefined}
         detailedPlanDateKeys={detailedPlanDateKeys}
+        statusByDate={dayStatusByDate}
       />
 
       <div
@@ -1388,6 +1478,15 @@ export function MobileDayView({
             <div className="font-sans text-sm text-royal/70">
               {formatDateLong(activeDay.date)}
             </div>
+            <p className="mt-2 font-sans text-sm font-semibold text-royal">
+              {activeDaySummary.place || activeDaySummary.label}
+              <span className="mx-1.5 font-normal text-royal/50">·</span>
+              <span className="font-normal">{activeDaySummary.label}</span>
+            </p>
+            <p className="mt-1 font-sans text-sm leading-relaxed text-royal/80">
+              {activeDaySummary.next}
+              {activeDaySummary.rides ? ` ${activeDaySummary.rides}.` : ""}
+            </p>
             {(() => {
               const dc = dayConditionRow(
                 regionForConditions,
@@ -1434,15 +1533,66 @@ export function MobileDayView({
                 </span>
               </div>
             ) : null}
-            {!readOnly && onOpenDayPlanner && themeParkIdsAmPm.length > 0 ? (
-              <button
-                type="button"
-                className="mt-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-royal px-4 py-3 font-sans text-sm font-semibold text-cream shadow-sm transition active:bg-royal/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
-                onClick={() => onOpenDayPlanner(activeDay.dateKey)}
-              >
-                <span aria-hidden>✨</span>
-                Plan this day
-              </button>
+            {!readOnly ? (
+              <div className="mt-3 flex flex-col gap-2">
+                {onOpenDayPlanner && themeParkIdsAmPm.length > 0 ? (
+                  <button
+                    type="button"
+                    className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-royal px-4 py-3 font-sans text-sm font-semibold text-cream shadow-sm transition active:bg-royal/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60"
+                    onClick={() => onOpenDayPlanner(activeDay.dateKey)}
+                  >
+                    <span aria-hidden>✨</span>
+                    Quick plan
+                  </button>
+                ) : activeDaySummary.status === "rest" ? null : (
+                  <button
+                    type="button"
+                    className="flex min-h-[48px] w-full items-center justify-center rounded-lg bg-royal px-4 py-3 font-sans text-sm font-semibold text-cream"
+                    onClick={() => openParksFromBar()}
+                  >
+                    Assign a park
+                  </button>
+                )}
+                {themeParkIdsAmPm.length > 0 ||
+                (onMakeRestDay && activeDaySummary.status !== "rest") ? (
+                <details>
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center justify-center rounded-lg border border-gold/40 bg-white px-4 font-sans text-sm font-semibold text-royal [&::-webkit-details-marker]:hidden">
+                    More for this day
+                  </summary>
+                  <div className="mt-2 flex flex-col gap-2">
+                    {themeParkIdsAmPm.length > 0 ? (
+                      <button
+                        type="button"
+                        className="flex min-h-[48px] w-full items-center justify-center rounded-lg border border-gold/40 bg-white px-4 font-sans text-sm font-semibold text-royal"
+                        onClick={() => openParksFromBar()}
+                      >
+                        Change park
+                      </button>
+                    ) : null}
+                    {onMakeRestDay && activeDaySummary.status !== "rest" ? (
+                      <button
+                        type="button"
+                        className="flex min-h-[48px] w-full items-center justify-center rounded-lg border border-gold/40 bg-white px-4 font-sans text-sm font-semibold text-royal"
+                        onClick={() => onMakeRestDay(activeDay.dateKey)}
+                      >
+                        Make this a rest day
+                      </button>
+                    ) : null}
+                    {onOpenDayPlanner && themeParkIdsAmPm.length > 0 ? (
+                      <button
+                        type="button"
+                        className="flex min-h-[48px] w-full items-center justify-center rounded-lg border border-gold/40 bg-white px-4 font-sans text-sm font-semibold text-royal"
+                        onClick={() =>
+                          onOpenDayPlanner(activeDay.dateKey, { tab: "strategy" })
+                        }
+                      >
+                        Build day strategy
+                      </button>
+                    ) : null}
+                  </div>
+                </details>
+                ) : null}
+              </div>
             ) : null}
             {!readOnly && onUndoDayTweak && activeDaySnapshotCount > 0 ? (
               <button
@@ -1598,6 +1748,10 @@ export function MobileDayView({
                 }
               />
             </>
+          ) : null}
+
+          {showAtParkForActiveDay && themeParkIdsAmPm.length > 0 ? (
+            <ParkDayFacts parkIds={themeParkIdsAmPm} date={activeDay.dateKey} />
           ) : null}
 
           {activeDayStrategy ? (

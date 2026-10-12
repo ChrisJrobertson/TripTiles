@@ -2,6 +2,7 @@
 
 import { LiveWaitAttributionFooter } from "@/components/live-wait/LiveWaitAttributionFooter";
 import { Badge, Button, Card, EmptyState } from "@/components/ui";
+import { classifyFreshness } from "@/lib/park-data/freshness";
 import { minutesBetween } from "@/lib/live-wait/display-format";
 import type { LiveWaitOperatingStatus } from "@/types/live-wait";
 import { useRouter } from "next/navigation";
@@ -42,6 +43,7 @@ type Props = {
   selectedParkName: string | null;
   rides: TodayAtParkRide[];
   showAttribution: boolean;
+  showThemeParksWikiAttribution?: boolean;
   loadError: string | null;
   initialSort: TodayAtParkSort;
   generatedAtIso: string;
@@ -62,11 +64,18 @@ function isRowStale(row: TodayAtParkRide, nowIso: string): boolean {
 }
 
 function freshnessLabel(row: TodayAtParkRide, nowIso: string): string {
+  const state = classifyFreshness({
+    observedAt: row.observed_at,
+    fetchedAt: row.fetched_at,
+    staleAfter: row.stale_after,
+    now: new Date(nowIso),
+  });
   const mins = minutesBetween(row.observed_at, nowIso);
   const unit = mins === 1 ? "min" : "mins";
-  return isRowStale(row, nowIso)
-    ? `Stale · updated ${mins} ${unit} ago`
-    : `Updated ${mins} ${unit} ago`;
+  if (state === "LIVE") return `Updated ${mins} ${unit} ago`;
+  if (state === "RECENT") return `Recent · last update ${mins} ${unit} ago`;
+  if (state === "STALE") return `Stale · last update ${mins} ${unit} ago`;
+  return "Freshness unknown";
 }
 
 function statusLabel(row: TodayAtParkRide): string {
@@ -201,6 +210,7 @@ export function TodayAtParkClient({
   selectedParkName,
   rides,
   showAttribution,
+  showThemeParksWikiAttribution = false,
   loadError,
   initialSort,
   generatedAtIso,
@@ -368,7 +378,10 @@ export function TodayAtParkClient({
         </div>
       )}
 
-      <LiveWaitAttributionFooter visible={showAttribution} />
+      <LiveWaitAttributionFooter
+        queueTimes={showAttribution}
+        themeParksWiki={showThemeParksWikiAttribution}
+      />
     </div>
   );
 }

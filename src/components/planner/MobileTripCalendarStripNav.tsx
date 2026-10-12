@@ -11,8 +11,15 @@ import {
   parseDate,
 } from "@/lib/date-helpers";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
+import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
+import {
+  classifyPlannerDay,
+  plannerDayReadiness,
+  plannerDayReadinessLabel,
+  plannerDayReadinessShortLabel,
+} from "@/lib/trip-workspace-status";
 import { crowdLevelFromHeuristicTone } from "./CrowdLevelIndicator";
-import type { Trip } from "@/lib/types";
+import type { Park, Trip } from "@/lib/types";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -100,6 +107,7 @@ type StripNoteState = {
 
 type Props = {
   trip: Trip;
+  parks: Park[];
   tripRouteBase: string;
   /** preferences.ai_day_crowd_notes */
   dayNotes: Record<string, string>;
@@ -107,20 +115,24 @@ type Props = {
   userDayNotes?: Record<string, string>;
   /** When false, omit the strip coach line (e.g. timeline stub shows slot guidance below). */
   showCoachMark?: boolean;
+  rideCountsByDay?: Record<string, { total: number; mustDo: number }>;
 };
 
 /** Mobile-only horizontal day strip linking to `/trip/[id]/day/[date]` (calendar overview). */
 export function MobileTripCalendarStripNav({
   trip,
+  parks,
   tripRouteBase,
   dayNotes,
   userDayNotes = {},
   showCoachMark = true,
+  rideCountsByDay,
 }: Props) {
   const days = useMemo(
     () => buildStripDays(trip, dayNotes, userDayNotes),
     [trip, dayNotes, userDayNotes],
   );
+  const parkById = useMemo(() => new Map(parks.map((p) => [p.id, p])), [parks]);
   const chipRefs = useRef<(HTMLDivElement | null)[]>([]);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   const sheetId = useId();
@@ -221,6 +233,16 @@ export function MobileTripCalendarStripNav({
           const href = `${tripRouteBase}/day/${iso}`;
           const hasInsight = Boolean(day.aiNote || day.userNote);
           const headingDate = formatDayHeading(day.date);
+          const dayKind = classifyPlannerDay(trip.assignments[day.dateKey], parkById);
+          const readiness = plannerDayReadiness({
+            kind: dayKind,
+            hasRidePriorities: (rideCountsByDay?.[day.dateKey]?.total ?? 0) > 0,
+            hasDayPlan: Boolean(
+              getAiDayTimelineForDate(trip.preferences, day.dateKey),
+            ),
+          });
+          const dayKindText = plannerDayReadinessShortLabel(readiness);
+          const dayStatusText = plannerDayReadinessLabel(readiness);
           const openStripNote = (anchor: HTMLButtonElement) => {
             noteToggleTriggerRef.current = anchor;
             setNoteSheet({
@@ -232,8 +254,12 @@ export function MobileTripCalendarStripNav({
           };
 
           const chipShell = isToday
-            ? "flex min-w-[56px] items-stretch rounded-lg border-2 border-gold/55 bg-white font-bold text-royal shadow-sm ring-2 ring-gold/25 transition"
-            : "flex min-w-[56px] items-stretch rounded-lg border border-gold/30 bg-white font-bold text-royal transition active:bg-cream";
+            ? "flex min-w-[4.5rem] items-stretch rounded-lg border-2 border-tt-royal/40 bg-tt-surface font-bold text-tt-royal shadow-none transition"
+            : readiness === "open"
+              ? "flex min-w-[4.5rem] items-stretch rounded-lg border border-dashed border-tt-ink/25 bg-tt-bg-soft font-bold text-tt-royal transition"
+              : readiness === "rest"
+                ? "flex min-w-[4.5rem] items-stretch rounded-lg border border-[#6B9080]/50 bg-[#eef5f1] font-bold text-tt-royal transition"
+                : "flex min-w-[4.5rem] items-stretch rounded-lg border border-tt-line bg-tt-surface font-bold text-tt-royal transition";
 
           return (
             <div
@@ -248,7 +274,7 @@ export function MobileTripCalendarStripNav({
                 scroll={false}
                 prefetch={false}
                 aria-current={isToday ? "date" : undefined}
-                aria-label={`Open day planner: ${formatDateLong(day.date)}`}
+                aria-label={`Open day planner: ${formatDateLong(day.date)}, ${dayStatusText}`}
                 className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-2 py-2 text-royal focus:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 focus-visible:ring-inset"
               >
                 <span
@@ -259,6 +285,9 @@ export function MobileTripCalendarStripNav({
                   {dayOfWeekShort(day.date)}
                 </span>
                 <span className="text-lg font-bold leading-none">{day.date.getDate()}</span>
+                <span className="text-[9px] font-semibold uppercase tracking-wide text-tt-ink-muted">
+                  {dayKindText}
+                </span>
                 {day.crowdDot ? (
                   <span className="mt-0.5 inline-flex">
                     <CrowdLevelIndicator

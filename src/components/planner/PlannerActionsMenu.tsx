@@ -138,12 +138,16 @@ export function PlannerActionsMenu({
   const desktopTriggerRef = useRef<HTMLButtonElement>(null);
   const desktopMenuPanelRef = useRef<HTMLDivElement>(null);
   const [desktopMenuOpen, setDesktopMenuOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetMounted, setSheetMounted] = useState(false);
   const [desktopMenuPos, setDesktopMenuPos] = useState<{
     top: number;
     left: number;
   } | null>(null);
 
-  const [sheetOpen, setSheetOpen] = useState(false);
+  useEffect(() => {
+    setSheetMounted(true);
+  }, []);
 
   const updateDesktopMenuPosition = useCallback(() => {
     const el = desktopTriggerRef.current;
@@ -270,7 +274,7 @@ export function PlannerActionsMenu({
         More ▾
       </button>
 
-      {typeof document !== "undefined"
+      {sheetMounted
         ? createPortal(
             <div
               className={`fixed inset-0 z-[140] md:hidden ${

@@ -427,6 +427,12 @@ export type DaySnapshot = {
   source: DaySnapshotSource;
 };
 
+/** Saved planning-preference fields kept when the stored pace is unsupported. */
+export type PlanningPreferencesIssue = {
+  unsupportedPace: string;
+  fields: Omit<TripPlanningPreferences, "pace">;
+};
+
 /** Stored on `trips.planning_preferences` for Smart Plan context and modal pre-fill. */
 export interface TripPlanningPreferences {
   pace: PlanningPace;
@@ -748,8 +754,13 @@ export interface Trip {
   previous_assignments_snapshot_at?: string | null;
   /** Last 3 day-scoped AI changes; powers per-day undo. */
   day_snapshots: DaySnapshot[];
-  /** Smart Plan wizard answers; null if user chose manual-only creation. */
+  /** Smart Plan wizard answers; null if user chose manual-only creation or the pace is unsupported. */
   planning_preferences: TripPlanningPreferences | null;
+  /**
+   * Set when the stored pace is outside the supported set.
+   * Other saved fields are kept here and are not rewritten until the user chooses a pace.
+   */
+  planning_preferences_issue?: PlanningPreferencesIssue | null;
   /** Planner UI palette (`src/lib/themes.ts`). */
   colour_theme: ThemeKey;
   /** When false, milestone reminder emails are skipped for this trip. */

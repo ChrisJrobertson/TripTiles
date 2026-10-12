@@ -360,12 +360,43 @@ function tripMealPrefToWizardChoice(
 /**
  * Initialise holiday Smart Plan wizard UI from demographics + persisted profile.
  */
+const PARK_ID_TO_PRIORITY_TOKEN: Record<string, SmartParkPriorityToken> = {
+  mk: "mk",
+  ep: "ep",
+  hs: "hs",
+  ak: "ak",
+  usf: "uf",
+  uf: "uf",
+  eu: "eu",
+};
+
+function planningPaceToPaceStyle(pace: PlanningPace): SmartPlanPaceStyle {
+  if (pace === "relaxed") return "relaxed";
+  if (pace === "go_go_go" || pace === "intense") return "packed";
+  return "balanced";
+}
+
+/** Keep a saved pace and must-do list visible in the wizard instead of the blank defaults. */
+function seedWizardFromSavedPlanningPreferences(
+  wizard: HolidaySmartWizardState,
+  trip: Trip,
+): void {
+  const prefs = trip.planning_preferences;
+  if (!prefs || trip.planning_preferences_issue?.unsupportedPace) return;
+  wizard.paceStyle = planningPaceToPaceStyle(prefs.pace);
+  const tokens = prefs.mustDoParks
+    .map((id) => PARK_ID_TO_PRIORITY_TOKEN[id])
+    .filter((token): token is SmartParkPriorityToken => Boolean(token));
+  if (tokens.length > 0) wizard.parkPriorities = [...new Set(tokens)];
+}
+
 export function hydrateHolidayWizardFromTripPreferences(params: {
   trip: Trip;
   profile: TripPlanningProfile | null;
 }): HolidaySmartWizardState {
   const { trip, profile } = params;
   const w = holidayWizardDefaults();
+  seedWizardFromSavedPlanningPreferences(w, trip);
   if (!profile) {
     w.wizardParty = inferDefaultWizardPartyFromTrip(trip);
     return w;
@@ -472,8 +503,12 @@ export function mapWizardToPlanningPreferences(params: {
   const { trip, wizard, tripParks } = params;
   const paid = wizard.paidAccessDefault ?? "not_sure";
   const skipLineHints = paid === "yes";
-  const mustDo = resolveParkPriorityIds(wizard.parkPriorities, tripParks);
   const base = trip.planning_preferences;
+  const resolvedMustDo = resolveParkPriorityIds(wizard.parkPriorities, tripParks);
+  const mustDo =
+    resolvedMustDo.length > 0
+      ? resolvedMustDo
+      : (base?.mustDoParks ?? []);
   const tripTypeGuess = holidayStyleToTripType(wizard.holidayStyle);
   const additional =
     wizard.freeText.trim() ||
@@ -535,7 +570,7 @@ export function buildHolidayWizardSupplementPrompt(
         : wizard.scope === "plan_this_day_only"
           ? " Apply to the focused day only; do not reshape other days."
           : wizard.scope === "improve_whole_trip"
-            ? " Guest requested a whole-trip refresh where the model outputs replacements — still no ride-by-ride sequencing here."
+            ? " Guest requested a whole-trip refresh of open and replaceable park days. Do not replace rest, pool, or travel days the guest already placed. Still no ride-by-ride sequencing here."
             : "";
   const scopeLine = wizard.scope
     ? `SMART PLAN SCOPE CHOICE (honour strictly): ${wizard.scope.replace(/_/g, " ")}.${scopeSuffix} `

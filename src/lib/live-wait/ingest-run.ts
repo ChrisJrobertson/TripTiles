@@ -1,6 +1,8 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-import type { LiveWaitProviderAdapter } from "@/lib/live-wait/providers/types";
+import { classifyFreshness } from "@/lib/park-data/freshness";
+import { mappingAllowsFactUse } from "@/lib/park-data/mapping";
+import type { LiveWaitProviderAdapter, LiveWaitProviderRideRow } from "@/lib/live-wait/providers/types";
 import type { LiveWaitProviderMapping } from "@/types/live-wait";
 
 export type LiveWaitIngestLog = {
@@ -17,6 +19,8 @@ export type LiveWaitIngestLog = {
   rowsUnmapped: number;
   snapshotsWritten: number;
   currentUpserted: number;
+  staleRecords: number;
+  duplicatesSkipped: number;
   parkErrors: { externalParkId: string; message: string }[];
   unmappedSamples: { externalParkId: string; externalAttractionId: string; name: string }[];
 };
@@ -65,6 +69,8 @@ export async function runLiveWaitIngest(
       rowsUnmapped: 0,
       snapshotsWritten: 0,
       currentUpserted: 0,
+      staleRecords: 0,
+      duplicatesSkipped: 0,
       parkErrors: [],
       unmappedSamples: [],
     };
@@ -81,6 +87,8 @@ export async function runLiveWaitIngest(
     rowsUnmapped: 0,
     snapshotsWritten: 0,
     currentUpserted: 0,
+    staleRecords: 0,
+    duplicatesSkipped: 0,
     parkErrors: [],
     unmappedSamples: [],
   };
@@ -104,18 +112,13 @@ export async function runLiveWaitIngest(
   }
 
   let mappingRows: LiveWaitProviderMapping[] = [];
+  const parkIdByExternal = new Map<string, string>();
   if (supabase) {
-    const { data, error } = await supabase
-      .from("live_wait_provider_mappings")
-      .select(
-        "id, provider, external_park_id, external_attraction_id, park_id, attraction_id, external_name, mapping_confidence, created_at, updated_at",
-      )
-      .eq("provider", provider);
-
-    if (error) {
-      throw new Error(`live_wait_provider_mappings: ${error.message}`);
+    mappingRows = await loadAttractionMappings(supabase, provider);
+    const parkLinks = await loadParkLinks(supabase, provider);
+    for (const [externalParkId, parkId] of parkLinks) {
+      parkIdByExternal.set(externalParkId, parkId);
     }
-    mappingRows = (data ?? []) as LiveWaitProviderMapping[];
   }
 
   const mapByKey = new Map<string, LiveWaitProviderMapping>();
@@ -149,24 +152,27 @@ export async function runLiveWaitIngest(
 
   for (const externalParkId of options.externalParkIds) {
     try {
-      const rides = await options.adapter.fetchWaitsForPark(
+      const fetchedRides = await options.adapter.fetchWaitsForPark(
         externalParkId,
         options.signal,
       );
+      const { rows: rides, duplicatesSkipped } = dedupeRideRows(fetchedRides);
+      log.duplicatesSkipped += duplicatesSkipped;
       log.parksFetchedOk += 1;
       log.ridesFetched += rides.length;
 
       for (const r of rides) {
         const mk = mappingKey(provider, r.externalParkId, r.externalAttractionId);
         const mapped = mapByKey.get(mk);
-        const parkId =
-          mapped && typeof mapped.park_id === "string"
-            ? mapped.park_id
-            : null;
+        const usable = mapped ? mappingAllowsFactUse(mapped.match_status) : false;
         const attractionId =
-          mapped && typeof mapped.attraction_id === "string"
+          usable && mapped && typeof mapped.attraction_id === "string"
             ? mapped.attraction_id
             : null;
+        const parkId =
+          usable && mapped && typeof mapped.park_id === "string"
+            ? mapped.park_id
+            : parkIdByExternal.get(r.externalParkId) ?? null;
 
         if (attractionId) log.rowsMapped += 1;
         else {
@@ -175,6 +181,13 @@ export async function runLiveWaitIngest(
         }
 
         const staleAfter = addStaleAfter(r.observedAt, staleMinutes);
+        const freshness = classifyFreshness({
+          observedAt: r.observedAt,
+          fetchedAt,
+          staleAfter,
+          now: new Date(fetchedAt),
+        });
+        if (freshness !== "LIVE") log.staleRecords += 1;
 
         const snapshotRow = {
           provider,
@@ -255,4 +268,91 @@ export async function runLiveWaitIngest(
   await flushCurrent(currentBatch);
 
   return log;
+}
+
+const MAPPING_COLUMNS =
+  "id, provider, external_park_id, external_attraction_id, park_id, attraction_id, external_name, mapping_confidence, created_at, updated_at";
+
+async function loadAttractionMappings(
+  supabase: SupabaseClient,
+  provider: string,
+): Promise<LiveWaitProviderMapping[]> {
+  const withStatus = await supabase
+    .from("live_wait_provider_mappings")
+    .select(`${MAPPING_COLUMNS}, match_status`)
+    .eq("provider", provider);
+  if (withStatus.error && /match_status/i.test(withStatus.error.message)) {
+    const again = await supabase
+      .from("live_wait_provider_mappings")
+      .select(MAPPING_COLUMNS)
+      .eq("provider", provider);
+    if (again.error) throw new Error(`live_wait_provider_mappings: ${again.error.message}`);
+    return (again.data ?? []) as LiveWaitProviderMapping[];
+  }
+  if (withStatus.error) {
+    throw new Error(`live_wait_provider_mappings: ${withStatus.error.message}`);
+  }
+  return (withStatus.data ?? []) as LiveWaitProviderMapping[];
+}
+
+async function loadParkLinks(
+  supabase: SupabaseClient,
+  provider: string,
+): Promise<Map<string, string>> {
+  const links = new Map<string, string>();
+  const withStatus = await supabase
+    .from("live_wait_park_mappings")
+    .select("external_park_id, park_id, match_status")
+    .eq("provider", provider);
+  const rows = withStatus.error && /match_status/i.test(withStatus.error.message)
+    ? (
+        await supabase
+          .from("live_wait_park_mappings")
+          .select("external_park_id, park_id")
+          .eq("provider", provider)
+      ).data
+    : withStatus.data;
+  for (const row of rows ?? []) {
+    const status = (row as { match_status?: string | null }).match_status;
+    if (!mappingAllowsFactUse(status)) continue;
+    const external = String((row as { external_park_id?: string }).external_park_id ?? "").trim();
+    const parkId = (row as { park_id?: string | null }).park_id;
+    if (external && parkId) links.set(external, parkId);
+  }
+  return links;
+}
+
+function dedupeRideRows(rows: readonly LiveWaitProviderRideRow[]): {
+  rows: LiveWaitProviderRideRow[];
+  duplicatesSkipped: number;
+} {
+  const groups = new Map<string, LiveWaitProviderRideRow[]>();
+  for (const row of rows) {
+    const key = `${row.externalParkId}\t${row.externalAttractionId}`;
+    const list = groups.get(key) ?? [];
+    list.push(row);
+    groups.set(key, list);
+  }
+  const kept: LiveWaitProviderRideRow[] = [];
+  let duplicatesSkipped = 0;
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      kept.push(group[0]!);
+      continue;
+    }
+    const first = group[0]!;
+    const conflict = group.some(
+      (row) =>
+        row.waitMinutes !== first.waitMinutes ||
+        row.operatingStatus !== first.operatingStatus ||
+        row.isOpen !== first.isOpen,
+    );
+    if (conflict) {
+      duplicatesSkipped += group.length;
+      continue;
+    }
+    kept.push(first);
+    duplicatesSkipped += group.length - 1;
+  }
+  return { rows: kept, duplicatesSkipped };
 }

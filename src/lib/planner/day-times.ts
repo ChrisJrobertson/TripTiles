@@ -7,7 +7,21 @@ export type DayTimes = { arrival?: string; departure?: string };
 
 export type DayTimesByDate = Record<string, DayTimes>;
 
-export type EffectiveDayWindowSource = "user" | "park" | "default";
+export type EffectiveDayWindowSource =
+  | "user"
+  | "posted_schedule"
+  | "stored_schedule"
+  | "catalogue"
+  | "ai_timeline"
+  | "fallback_assumption"
+  | "default";
+
+/** Posted, stored, or catalogue hours. Absent when the only option is a labelled fallback. */
+export type PostedHoursHint = {
+  open: string;
+  close: string;
+  source: "posted_schedule" | "stored_schedule" | "catalogue";
+};
 
 export type EffectiveDayWindow = {
   start: string;
@@ -177,7 +191,7 @@ export function buildDayTimesPreferencesPatch(
 
 /** Short hint under arrival/departure fields in planner UI. */
 export function defaultDayTimesFormHint(): string {
-  return "Leave blank to use typical theme-park hours (09:00–22:00), AI timeline hours when present, or a full-day window on non-park days.";
+  return "Leave blank to use a fallback assumption of 09:00–22:00 when posted hours are unavailable, prior AI timeline hours when present, or a full-day window on non-park days. A fallback is not a confirmed operating time.";
 }
 
 function timelineParkHoursForDate(
@@ -216,13 +230,15 @@ export function primaryParkForDayWindow(
 }
 
 /**
- * Effective in-park window: user overrides → optional last AI timeline hours →
- * synthetic theme-park 09–22 → non-park full day.
+ * Effective in-park window: user overrides, then posted or stored provider hours,
+ * then catalogue hours, then a prior AI timeline, then a labelled 09:00–22:00
+ * assumption. The assumption is not a confirmed operating time.
  */
 export function getEffectiveDayWindow(
   trip: Trip,
   isoDate: string,
   parkById: ReadonlyMap<string, Park>,
+  posted?: PostedHoursHint | null,
 ): EffectiveDayWindow {
   const user = getDayTimes(trip, isoDate);
   const tl = timelineParkHoursForDate(trip.preferences, isoDate);
@@ -232,12 +248,26 @@ export function getEffectiveDayWindow(
 
   let baseOpen: string = syn.open;
   let baseClose: string = syn.close;
-  let baseSource: EffectiveDayWindowSource = nonPark ? "default" : "park";
+  let baseSource: EffectiveDayWindowSource = nonPark ? "default" : "fallback_assumption";
 
-  if (tl && !nonPark) {
+  const postedOpen = posted?.open?.trim();
+  const postedClose = posted?.close?.trim();
+  const postedStart = postedOpen ? dayTimeToMinutes(postedOpen) : null;
+  const postedEnd = postedClose ? dayTimeToMinutes(postedClose) : null;
+  if (
+    posted &&
+    !nonPark &&
+    postedStart != null &&
+    postedEnd != null &&
+    postedStart < postedEnd
+  ) {
+    baseOpen = postedOpen!;
+    baseClose = postedClose!;
+    baseSource = posted.source;
+  } else if (tl && !nonPark) {
     baseOpen = tl.open;
     baseClose = tl.close;
-    baseSource = "park";
+    baseSource = "ai_timeline";
   }
 
   const ua = user?.arrival?.trim();
@@ -269,21 +299,29 @@ export function minutesBetweenHHmm(start: string, end: string): number | null {
 }
 
 /** Multi-line block for Smart Plan user message (full trip). */
+function dayWindowSourceLabel(source: EffectiveDayWindowSource): string {
+  if (source === "user") return "user-set";
+  if (source === "posted_schedule") return "posted-park-schedule";
+  if (source === "stored_schedule") return "stored-provider-schedule-past-freshness";
+  if (source === "catalogue") return "catalogue-hours-not-this-date";
+  if (source === "ai_timeline") return "prior-ai-timeline-hours";
+  if (source === "fallback_assumption") {
+    return "fallback-assumption-not-confirmed-operating-time";
+  }
+  return "full-day-fallback-non-theme-park-day";
+}
+
 export function formatDayConstraintsBlockForSmartPlan(
   trip: Trip,
   parkById: ReadonlyMap<string, Park>,
+  postedByDate?: ReadonlyMap<string, PostedHoursHint>,
 ): string {
   const lines: string[] = [
     "DAY AT-PARK CONSTRAINTS (hard — do not schedule guest activities outside these windows; treat as not in-park before start or after end):",
   ];
   for (const dk of eachDateKeyInRange(trip.start_date, trip.end_date)) {
-    const w = getEffectiveDayWindow(trip, dk, parkById);
-    const src =
-      w.source === "user"
-        ? "user-set"
-        : w.source === "park"
-          ? "typical-park-day-fallback-or-prior-AI-timeline-hours"
-          : "full-day-fallback-non-theme-park-day";
+    const w = getEffectiveDayWindow(trip, dk, parkById, postedByDate?.get(dk));
+    const src = dayWindowSourceLabel(w.source);
     lines.push(
       `- ${dk}: arrival at park ${w.start}, departure from park ${w.end} (source: ${src}).`,
     );
@@ -299,14 +337,10 @@ export function formatDayConstraintBlockForDate(
   trip: Trip,
   dateKey: string,
   parkById: ReadonlyMap<string, Park>,
+  posted?: PostedHoursHint | null,
 ): string {
-  const w = getEffectiveDayWindow(trip, dateKey, parkById);
-  const src =
-    w.source === "user"
-      ? "user-set"
-      : w.source === "park"
-        ? "typical-park-day-fallback-or-prior-AI-timeline-hours"
-        : "full-day-fallback-non-theme-park-day";
+  const w = getEffectiveDayWindow(trip, dateKey, parkById, posted);
+  const src = dayWindowSourceLabel(w.source);
   return [
     "DAY CONSTRAINTS — HARD RULES:",
     `Arrival at park: ${w.start}`,

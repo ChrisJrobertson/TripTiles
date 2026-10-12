@@ -1,99 +1,128 @@
 "use client";
 
-import Link from "next/link";
-import { Card } from "@/components/ui/Card";
-import { SectionHeader } from "@/components/ui/SectionHeader";
-import { PaymentsTab } from "@/components/planner/PaymentsTab";
-import { TripChecklistView } from "@/components/planner/TripChecklistView";
-import { KeyDatesPanel } from "@/components/planning/KeyDatesPanel";
-import type { Trip } from "@/lib/types";
+import { useTripWorkspaceData } from "@/components/planner/state/TripWorkspaceData";
+import { Badge } from "@/components/ui/Badge";
+import type { Park, Trip } from "@/lib/types";
+import {
+  buildTripWorkspaceModel,
+  organiseTone,
+  organiseToneLabel,
+  type OrganiseTone,
+  type WorkspaceAreaId,
+} from "@/lib/trip-workspace-status";
 import type { TripPayment } from "@/types/payments";
-
+import Link from "next/link";
+import { useMemo, useState } from "react";
 
 type Props = {
   trip: Trip;
   payments: TripPayment[];
-  onPaymentsChange: (tripId: string, next: TripPayment[]) => void;
-  regionLabelForKeyDates: string;
-  regionCountryCode?: string | null;
-  onTripPatch: (patch: Partial<Trip>) => void;
+  parks: Park[];
 };
 
-/**
- * Payments, checklist, and key dates surfaced on /planner (same data/actions as Planning tab).
- */
-export function PlannerPlanningDeck({
-  trip,
-  payments,
-  onPaymentsChange,
-  regionLabelForKeyDates,
-  regionCountryCode = null,
-  onTripPatch,
-}: Props) {
+const TONE_VARIANT: Record<OrganiseTone, "default" | "info" | "success" | "warning"> = {
+  complete: "success",
+  in_progress: "info",
+  needs_attention: "warning",
+  optional: "default",
+};
+
+const HREF: Partial<Record<WorkspaceAreaId, string>> = {
+  accommodation: "planning#organise-accommodation",
+  preferences: "planning#organise-preferences",
+  checklist: "checklist",
+  budget: "budget",
+};
+
+const WHEN_EMPTY: Partial<Record<WorkspaceAreaId, "needs_attention" | "optional">> = {
+  accommodation: "needs_attention",
+  preferences: "needs_attention",
+  checklist: "needs_attention",
+  budget: "optional",
+};
+
+function localDateKey(d = new Date()): string {
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${month}-${day}`;
+}
+
+export function PlannerPlanningDeck({ trip, payments, parks }: Props) {
+  const { checklistItems, budgetItems } = useTripWorkspaceData();
+  const [todayKey] = useState(localDateKey);
+  const parkById = useMemo(() => new Map(parks.map((park) => [park.id, park])), [parks]);
+  const checklist = useMemo(() => {
+    if (!checklistItems) return null;
+    return {
+      total: checklistItems.length,
+      checked: checklistItems.filter((item) => item.is_checked).length,
+    };
+  }, [checklistItems]);
+  const model = useMemo(
+    () =>
+      buildTripWorkspaceModel({
+        trip,
+        parkById,
+        payments,
+        todayKey,
+        checklist,
+        budgetItems,
+        tripHrefBase: `/trip/${trip.id}`,
+      }),
+    [budgetItems, checklist, parkById, payments, todayKey, trip],
+  );
+
+  const rows = (["accommodation", "preferences", "checklist", "budget"] as const)
+    .map((id) => model.areas.find((area) => area.id === id))
+    .filter((area): area is NonNullable<typeof area> => Boolean(area));
+
   return (
-    <div className="mt-8 grid gap-5 xl:grid-cols-3">
-      <Card variant="elevated" className="flex flex-col overflow-hidden p-4 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-tt-line-soft pb-3">
-          <SectionHeader
-            title="Payments schedule"
-            subtitle="Track deposits, balances, flights and tickets"
-            icon="💷"
-            className="min-w-0"
-          />
-        </div>
-        <PaymentsTab
-          trip={trip}
-          payments={payments}
-          onPaymentsChange={onPaymentsChange}
-          embedded
-          showTitleRow={false}
-        />
-      </Card>
-
-      <Card variant="elevated" className="flex flex-col overflow-hidden p-4 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-tt-line-soft pb-3">
-          <SectionHeader
-            title="To-do list"
-            subtitle="Prep, packing, and day-of"
-            icon="✓"
-            className="min-w-0"
-          />
-          <Link
-            href={`/trip/${trip.id}?tab=checklist`}
-            className="font-meta text-[11px] font-semibold uppercase tracking-wide text-tt-royal underline decoration-tt-line underline-offset-2"
-          >
-            Open full list
-          </Link>
-        </div>
-        <div className="pt-4">
-          <TripChecklistView trip={trip} embedded />
-        </div>
-      </Card>
-
-      <Card variant="elevated" className="flex flex-col overflow-hidden p-4 sm:p-5 xl:col-span-1">
-        <div className="border-b border-tt-line-soft pb-3">
-          <SectionHeader
-            title="Key dates & booking windows"
-            subtitle="Important dates before you travel"
-            icon="📅"
-          />
-        </div>
-        <div className="pt-4">
-          <KeyDatesPanel
-            trip={trip}
-            embedded
-            regionLabel={regionLabelForKeyDates}
-            regionCountryCode={regionCountryCode}
-            onTripPatch={onTripPatch}
-          />
+    <section
+      aria-label="Holiday setup"
+      className="rounded-tt-lg border border-tt-line bg-tt-surface px-3 py-3 sm:px-4"
+    >
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="font-heading text-sm font-semibold text-tt-royal">
+            Get this holiday ready
+          </h2>
+          <p className="mt-1 font-sans text-sm text-tt-ink-muted">
+            Stay, preferences, checklist, and budget live in Organise.
+          </p>
         </div>
         <Link
-          href={`/trip/${trip.id}?tab=payments`}
-          className="mt-4 inline-flex min-h-9 items-center font-meta text-[11px] font-semibold uppercase tracking-wide text-tt-royal underline decoration-tt-line underline-offset-4 hover:text-tt-royal-deep"
+          href={`/trip/${trip.id}?tab=planning`}
+          className="inline-flex min-h-11 shrink-0 items-center font-sans text-sm font-semibold text-tt-royal underline decoration-tt-line underline-offset-4"
         >
-          View on Organise tab →
+          Open Organise
         </Link>
-      </Card>
-    </div>
+      </div>
+      {rows.length > 0 ? (
+        <ul className="mt-2 divide-y divide-tt-line-soft">
+          {rows.map((area) => {
+            const tone = organiseTone(area.status, WHEN_EMPTY[area.id] ?? "optional");
+            const tab = HREF[area.id] ?? "planning";
+            return (
+              <li key={area.id}>
+                <Link
+                  href={`/trip/${trip.id}?tab=${tab}`}
+                  className="flex items-start justify-between gap-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-royal/40"
+                >
+                  <span className="min-w-0">
+                    <span className="block font-sans text-sm font-medium text-tt-ink">
+                      {area.label}
+                    </span>
+                    <span className="block font-sans text-xs text-tt-ink-muted">{area.detail}</span>
+                  </span>
+                  <Badge variant={TONE_VARIANT[tone]} className="mt-0.5 shrink-0 px-2 py-0.5">
+                    {organiseToneLabel(tone)}
+                  </Badge>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </section>
   );
 }

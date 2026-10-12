@@ -20,7 +20,7 @@ export function LiveWaitInline({ row, compact = false }: Props) {
   return (
     <span className="block max-w-full">
       <span className={textCls}>
-        <span className="font-medium text-royal/80">Live (advisory): </span>
+        <span className="font-medium text-royal/80">{parts.liveLabel}</span>
         {parts.statusLine}
         <span className="text-royal/55"> · {parts.freshnessLine}</span>
         {parts.stale ? (

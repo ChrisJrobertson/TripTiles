@@ -1,5 +1,9 @@
 # TripTiles — AI / agent notes
 
+## Canonical database baseline (October 2026)
+
+The active Supabase chain is the five files in `supabase/migrations/` (schema, reference catalogue, security/index hardening, trip RPC caller checks, and the Orlando intelligence forward migration). The previous 111-file history is archived in `supabase/legacy-migrations/` and is not replay-safe. Do not `db push` that archive. See `docs/migration-workflow.md` and `docs/supabase-clean-baseline-audit.md`.
+
 ## Migration discipline rule (May 2026)
 
 No database migration ships without:

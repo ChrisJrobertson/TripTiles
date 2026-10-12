@@ -16,6 +16,8 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import type { ChecklistCategory, Trip, TripChecklistItem } from "@/lib/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+const EMPTY_CHECKLIST: TripChecklistItem[] = [];
+
 const ORDER: ChecklistCategory[] = [
   "packing_essentials",
   "packing_clothing",
@@ -37,25 +39,42 @@ const LABELS: Record<ChecklistCategory, string> = {
 type Props = {
   trip: Trip;
   embedded?: boolean;
+  showProgress?: boolean;
+  /** When set, the parent owns the list. Organise and the overview share one fetch. */
+  items?: TripChecklistItem[] | null;
+  onItemsChange?: (items: TripChecklistItem[]) => void;
 };
 
-export function TripChecklistView({ trip, embedded = false }: Props) {
-  const [items, setItems] = useState<TripChecklistItem[]>([]);
-  const [loading, setLoading] = useState(true);
+export function TripChecklistView({
+  trip,
+  embedded = false,
+  showProgress = true,
+  items: itemsProp,
+  onItemsChange,
+}: Props) {
+  const controlled = onItemsChange != null;
+  const [localItems, setLocalItems] = useState<TripChecklistItem[]>([]);
+  const [loading, setLoading] = useState(!controlled);
+  const items = controlled ? (itemsProp ?? EMPTY_CHECKLIST) : localItems;
+  const showLoading = controlled ? itemsProp == null : loading;
   const [customLabel, setCustomLabel] = useState("");
   const [customCat, setCustomCat] = useState<ChecklistCategory>("packing_essentials");
   const [seeding, setSeeding] = useState(false);
 
   const reload = useCallback(async () => {
-    setLoading(true);
+    if (!controlled) setLoading(true);
     const r = await listTripChecklistItemsAction(trip.id);
-    if (r.ok) setItems(r.items);
-    setLoading(false);
-  }, [trip.id]);
+    if (r.ok) {
+      if (onItemsChange) onItemsChange(r.items);
+      else setLocalItems(r.items);
+    }
+    if (!controlled) setLoading(false);
+  }, [controlled, onItemsChange, trip.id]);
 
   useEffect(() => {
+    if (controlled) return;
     void reload();
-  }, [reload]);
+  }, [controlled, reload]);
 
   const checkedCount = useMemo(
     () => items.filter((i) => i.is_checked).length,
@@ -143,6 +162,7 @@ export function TripChecklistView({ trip, embedded = false }: Props) {
         />
       ) : null}
 
+      {showProgress ? (
       <div className="rounded-tt-lg border border-tt-line bg-tt-surface p-4 shadow-tt-sm sm:p-5">
         <MetricPill
           label="Checklist progress"
@@ -157,8 +177,9 @@ export function TripChecklistView({ trip, embedded = false }: Props) {
           />
         </div>
       </div>
+      ) : null}
 
-      {loading ? (
+      {showLoading ? (
         <div className="space-y-2">
           {[0, 1, 2].map((idx) => (
             <div
@@ -170,8 +191,12 @@ export function TripChecklistView({ trip, embedded = false }: Props) {
       ) : items.length === 0 ? (
         <EmptyState
           icon="🎒"
-          title="No todos yet"
-          description="Add your first one to keep track of what's left before you travel, or start with suggested family-holiday items."
+          title={embedded ? "Start a checklist" : "No todos yet"}
+          description={
+            embedded
+              ? "Packing and prep stay with this trip."
+              : "Add your first one to keep track of what's left before you travel, or start with suggested family-holiday items."
+          }
           action={
             <Button
               type="button"

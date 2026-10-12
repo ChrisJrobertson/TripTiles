@@ -90,11 +90,11 @@ VALUES ('dca-grizzly', 'dca', 'Grizzly River Run', 107, 'moderate', 35, 'multi_p
 
 -- VERIFIED: Big Thunder Mountain (Paris), height 102cm
 INSERT INTO public.attractions (id, park_id, name, height_requirement_cm, thrill_level, avg_wait_peak_minutes, skip_line_tier, skip_line_system, skip_line_notes)
-VALUES ('dlp-big-thunder', 'dlp', 'Big Thunder Mountain', 102, 'moderate', 50, 'premier_access', 'premier_access', 'Premier Access available — paid skip-the-line.');
+VALUES ('dlp-big-thunder', 'dlp', 'Big Thunder Mountain', 102, 'moderate', 50, NULL, 'premier_access', 'Premier Access available — paid skip-the-line.');
 
 -- VERIFIED: Hyperspace Mountain (relaunched as Star Wars Hyperspace Mountain), height 120cm
 INSERT INTO public.attractions (id, park_id, name, height_requirement_cm, thrill_level, avg_wait_peak_minutes, skip_line_tier, skip_line_system, skip_line_notes)
-VALUES ('dlp-hyperspace-mountain', 'dlp', 'Star Wars Hyperspace Mountain', 120, 'intense', 60, 'premier_access', 'premier_access', 'Premier Access available. Inversions, launch — most intense Mountain in the Disney portfolio.');
+VALUES ('dlp-hyperspace-mountain', 'dlp', 'Star Wars Hyperspace Mountain', 120, 'intense', 60, NULL, 'premier_access', 'Premier Access available. Inversions, launch — most intense Mountain in the Disney portfolio.');
 
 -- VERIFIED: Indiana Jones et le Temple du Peril, height 140cm
 INSERT INTO public.attractions (id, park_id, name, height_requirement_cm, thrill_level, avg_wait_peak_minutes, skip_line_tier, skip_line_system, skip_line_notes)
@@ -102,7 +102,7 @@ VALUES ('dlp-indiana-jones', 'dlp', 'Indiana Jones et le Temple du Péril', 140,
 
 -- VERIFIED: Phantom Manor, no height requirement
 INSERT INTO public.attractions (id, park_id, name, height_requirement_cm, thrill_level, avg_wait_peak_minutes, skip_line_tier, skip_line_system, skip_line_notes)
-VALUES ('dlp-phantom-manor', 'dlp', 'Phantom Manor', NULL, 'gentle', 30, 'premier_access', 'premier_access', 'Premier Access available. Darker reimagining of Haunted Mansion.');
+VALUES ('dlp-phantom-manor', 'dlp', 'Phantom Manor', NULL, 'gentle', 30, NULL, 'premier_access', 'Premier Access available. Darker reimagining of Haunted Mansion.');
 
 -- VERIFIED: Pirates of the Caribbean (Paris), no height requirement
 INSERT INTO public.attractions (id, park_id, name, height_requirement_cm, thrill_level, avg_wait_peak_minutes, skip_line_tier, skip_line_system, skip_line_notes)
@@ -110,15 +110,15 @@ VALUES ('dlp-pirates', 'dlp', 'Pirates of the Caribbean', NULL, 'gentle', 25, NU
 
 -- VERIFIED: it''s a small world (Paris), no height requirement
 INSERT INTO public.attractions (id, park_id, name, height_requirement_cm, thrill_level, avg_wait_peak_minutes, skip_line_tier, skip_line_system, skip_line_notes)
-VALUES ('dlp-small-world', 'dlp', 'it''s a small world', NULL, 'gentle', 30, 'premier_access', 'premier_access', 'Premier Access available.');
+VALUES ('dlp-small-world', 'dlp', 'it''s a small world', NULL, 'gentle', 30, NULL, 'premier_access', 'Premier Access available.');
 
 -- VERIFIED: Peter Pan''s Flight (Paris), no height requirement
 INSERT INTO public.attractions (id, park_id, name, height_requirement_cm, thrill_level, avg_wait_peak_minutes, skip_line_tier, skip_line_system, skip_line_notes)
-VALUES ('dlp-peter-pan', 'dlp', 'Peter Pan''s Flight', NULL, 'gentle', 70, 'premier_access', 'premier_access', 'Premier Access available. Often the longest standby in the park.');
+VALUES ('dlp-peter-pan', 'dlp', 'Peter Pan''s Flight', NULL, 'gentle', 70, NULL, 'premier_access', 'Premier Access available. Often the longest standby in the park.');
 
 -- VERIFIED: Buzz Lightyear Laser Blast, no height requirement
 INSERT INTO public.attractions (id, park_id, name, height_requirement_cm, thrill_level, avg_wait_peak_minutes, skip_line_tier, skip_line_system, skip_line_notes)
-VALUES ('dlp-buzz', 'dlp', 'Buzz Lightyear Laser Blast', NULL, 'gentle', 35, 'premier_access', 'premier_access', 'Premier Access available.');
+VALUES ('dlp-buzz', 'dlp', 'Buzz Lightyear Laser Blast', NULL, 'gentle', 35, NULL, 'premier_access', 'Premier Access available.');
 
 -- ============================================================
 -- WALT DISNEY STUDIOS PARIS — park_id: wdsp
@@ -126,11 +126,11 @@ VALUES ('dlp-buzz', 'dlp', 'Buzz Lightyear Laser Blast', NULL, 'gentle', 35, 'pr
 
 -- VERIFIED: Avengers Assemble Flight Force, height 120cm
 INSERT INTO public.attractions (id, park_id, name, height_requirement_cm, thrill_level, avg_wait_peak_minutes, skip_line_tier, skip_line_system, skip_line_notes)
-VALUES ('wdsp-flight-force', 'wdsp', 'Avengers Assemble: Flight Force', 120, 'intense', 60, 'premier_access', 'premier_access', 'Premier Access available. Launch coaster with inversions — Avengers Campus Paris.');
+VALUES ('wdsp-flight-force', 'wdsp', 'Avengers Assemble: Flight Force', 120, 'intense', 60, NULL, 'premier_access', 'Premier Access available. Launch coaster with inversions — Avengers Campus Paris.');
 
 -- VERIFIED: Spider Man WEB Adventure (Paris), no height requirement
 INSERT INTO public.attractions (id, park_id, name, height_requirement_cm, thrill_level, avg_wait_peak_minutes, skip_line_tier, skip_line_system, skip_line_notes)
-VALUES ('wdsp-web-adventure', 'wdsp', 'Spider-Man W.E.B. Adventure', NULL, 'gentle', 50, 'premier_access', 'premier_access', 'Premier Access available. Avengers Campus Paris.');
+VALUES ('wdsp-web-adventure', 'wdsp', 'Spider-Man W.E.B. Adventure', NULL, 'gentle', 50, NULL, 'premier_access', 'Premier Access available. Avengers Campus Paris.');
 
 -- VERIFIED: Crush''s Coaster, height 107cm
 INSERT INTO public.attractions (id, park_id, name, height_requirement_cm, thrill_level, avg_wait_peak_minutes, skip_line_tier, skip_line_system, skip_line_notes)
@@ -138,11 +138,11 @@ VALUES ('wdsp-crush', 'wdsp', 'Crush''s Coaster', 107, 'thrilling', 80, NULL, NU
 
 -- VERIFIED: Ratatouille The Adventure, no height requirement
 INSERT INTO public.attractions (id, park_id, name, height_requirement_cm, thrill_level, avg_wait_peak_minutes, skip_line_tier, skip_line_system, skip_line_notes)
-VALUES ('wdsp-ratatouille', 'wdsp', 'Ratatouille: The Adventure', NULL, 'gentle', 45, 'premier_access', 'premier_access', 'Premier Access available. Trackless dark ride.');
+VALUES ('wdsp-ratatouille', 'wdsp', 'Ratatouille: The Adventure', NULL, 'gentle', 45, NULL, 'premier_access', 'Premier Access available. Trackless dark ride.');
 
 -- VERIFIED: Tower of Terror (Paris), height 102cm
 INSERT INTO public.attractions (id, park_id, name, height_requirement_cm, thrill_level, avg_wait_peak_minutes, skip_line_tier, skip_line_system, skip_line_notes)
-VALUES ('wdsp-tower-terror', 'wdsp', 'The Twilight Zone Tower of Terror', 102, 'intense', 55, 'premier_access', 'premier_access', 'Premier Access available. Drop tower.');
+VALUES ('wdsp-tower-terror', 'wdsp', 'The Twilight Zone Tower of Terror', 102, 'intense', 55, NULL, 'premier_access', 'Premier Access available. Drop tower.');
 
 -- VERIFIED: Toy Soldiers Parachute Drop, height 81cm
 INSERT INTO public.attractions (id, park_id, name, height_requirement_cm, thrill_level, avg_wait_peak_minutes, skip_line_tier, skip_line_system, skip_line_notes)

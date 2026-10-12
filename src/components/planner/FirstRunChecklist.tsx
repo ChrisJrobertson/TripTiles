@@ -17,7 +17,7 @@ export function FirstRunChecklist({
   embedded,
 }: Props) {
   const [dismissed, setDismissed] = useState(true);
-  const [tipsOpen, setTipsOpen] = useState(!hasAnyAssignment);
+  const [tipsOpen, setTipsOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -56,7 +56,7 @@ export function FirstRunChecklist({
   ];
 
   const list = (
-    <ul className="space-y-1 font-sans text-xs leading-snug text-royal/80">
+    <ul className="space-y-1 font-sans text-xs leading-snug text-tt-ink-muted">
       {steps.map((s, i) => (
         <li key={i} className="flex items-start gap-2">
           <span
@@ -83,19 +83,19 @@ export function FirstRunChecklist({
   if (embedded) {
     return (
       <details
-        className="group rounded-lg border border-royal/10 bg-white/55 px-3 py-2 shadow-sm backdrop-blur-sm"
+        className="group mt-3 rounded-tt-md border border-tt-line-soft bg-tt-bg-soft/60 px-3 py-2"
         open={tipsOpen}
         onToggle={(e) =>
           setTipsOpen((e.target as HTMLDetailsElement).open)
         }
       >
-        <summary className="flex cursor-pointer list-none items-center gap-2 font-sans text-sm font-medium text-royal [&::-webkit-details-marker]:hidden">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 font-sans text-sm font-medium text-tt-royal [&::-webkit-details-marker]:hidden">
           <span className="min-w-0 flex-1">Organise checklist</span>
-          <span className="text-royal/35 transition group-open:rotate-180">
+          <span className="text-tt-ink-muted transition group-open:rotate-180">
             ▾
           </span>
         </summary>
-        <div className="mt-2 border-t border-royal/10 pt-2">
+        <div className="mt-2 border-t border-tt-line-soft pt-2">
           {list}
           <button
             type="button"

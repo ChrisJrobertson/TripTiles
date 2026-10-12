@@ -3,7 +3,11 @@
 import { currentUserCanCreatePayment } from "@/lib/entitlements";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { mapPaymentRow } from "@/lib/trip-payment-row";
-import type { PaymentCurrency, TripPayment } from "@/types/payments";
+import type {
+  PaymentCurrency,
+  TripPayment,
+  TripPaymentCategory,
+} from "@/types/payments";
 import { revalidatePath } from "next/cache";
 
 function revalidatePlanner() {
@@ -31,6 +35,25 @@ function normaliseOptionalDate(
   const s = v.trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return undefined;
   return s;
+}
+
+const PAYMENT_CATEGORIES: TripPaymentCategory[] = [
+  "cruise",
+  "villa",
+  "hotel",
+  "flights",
+  "tickets",
+  "insurance",
+  "dining",
+  "other",
+];
+
+function normaliseCategory(
+  category: TripPaymentCategory | null | undefined,
+): TripPaymentCategory | null | undefined {
+  if (category === undefined) return undefined;
+  if (category === null) return null;
+  return PAYMENT_CATEGORIES.includes(category) ? category : undefined;
 }
 
 function validateLabel(label: string): string | null {
@@ -71,6 +94,7 @@ export async function createPayment(input: {
   currency: PaymentCurrency;
   bookingDate?: string | null;
   dueDate?: string | null;
+  category?: TripPaymentCategory | null;
 }): Promise<
   { ok: true; payment: TripPayment } | { ok: false; error: string }
 > {
@@ -95,6 +119,10 @@ export async function createPayment(input: {
   }
   if (dueDate === undefined) {
     return { ok: false, error: "Invalid due date." };
+  }
+  const category = normaliseCategory(input.category ?? null);
+  if (category === undefined) {
+    return { ok: false, error: "Choose a valid payment category." };
   }
 
   const canAdd = await currentUserCanCreatePayment(input.tripId);
@@ -125,6 +153,7 @@ export async function createPayment(input: {
       currency: input.currency,
       booking_date: bookingDate,
       due_date: dueDate,
+      category,
       sort_order: sortOrder,
       updated_at: new Date().toISOString(),
     })
@@ -144,6 +173,7 @@ export type TripPaymentPatch = {
   currency?: PaymentCurrency;
   bookingDate?: string | null;
   dueDate?: string | null;
+  category?: TripPaymentCategory | null;
 };
 
 export async function updatePayment(
@@ -183,6 +213,13 @@ export async function updatePayment(
     const dd = normaliseOptionalDate(patch.dueDate);
     if (dd === undefined) return { ok: false, error: "Invalid due date." };
     body.due_date = dd;
+  }
+  if (patch.category !== undefined) {
+    const category = normaliseCategory(patch.category);
+    if (category === undefined) {
+      return { ok: false, error: "Choose a valid payment category." };
+    }
+    body.category = category;
   }
 
   if (Object.keys(body).length <= 1) {

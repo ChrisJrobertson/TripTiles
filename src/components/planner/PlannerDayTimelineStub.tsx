@@ -46,7 +46,7 @@ function primaryDayTitle(
   if (p.morning.state === "park") bits.push(p.morning.park.name);
   if (p.afternoon.state === "park") bits.push(p.afternoon.park.name);
   if (bits.length) return [...new Set(bits)].join(" · ");
-  return "Free day";
+  return "Open";
 }
 
 type Props = {
@@ -279,8 +279,7 @@ export function PlannerDayTimelineStub({
         {filledRows.length === 0 ? (
           <div className="px-4 py-14 text-center">
             <p className="font-sans text-sm text-tt-ink-muted">
-              Nothing planned for this day yet — use Plan this day ✨ or tap any slot
-              to add a park.
+              Nothing assigned yet. Choose a park, or leave this day free.
             </p>
           </div>
         ) : (
