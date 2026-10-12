@@ -102,6 +102,21 @@ const restored = readSmartPlanUndoBundle(applied.undo);
 assert.equal(restored.planningPreferences?.pace, "relaxed");
 assert.equal(restored.preferences.note, "kept");
 
+const cancelled = {
+  assignments: saved.assignments,
+  preferences: saved.preferences,
+  planningPreferences: saved.planningPreferences,
+};
+assert.equal(cancelled.planningPreferences?.pace, "relaxed");
+assert.deepEqual(cancelled.planningPreferences?.mustDoParks, [
+  "mk",
+  "ep",
+  "hs",
+  "ak",
+]);
+assert.deepEqual(cancelled.assignments, saved.assignments);
+assert.equal(cancelled.preferences.note, "kept");
+
 const legacy = readSmartPlanUndoBundle({ crowd: "busy" });
 assert.equal(legacy.preferences.crowd, "busy");
 assert.equal("planningPreferences" in legacy, false);

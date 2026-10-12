@@ -52,7 +52,7 @@ Null/blank status on older rows normalises to `legacy_unverified`. The migration
 
 Ingestion matches provider entity ids only. Similar names are not mapped.
 
-Orlando park ids confirmed on 2026-10-06 are in `src/lib/park-data/orlando-parks.ts` and migration `supabase/migrations/20261006140000_orlando_intelligence_foundation.sql`.
+Orlando park ids confirmed on 2026-10-06 are in `src/lib/park-data/orlando-parks.ts` and migration `supabase/migrations/20261012150000_orlando_intelligence_foundation.sql`.
 
 ## Data ownership
 

@@ -1816,6 +1816,14 @@ function PlannerClientInner({
               ? { ...(existing as Record<string, unknown>) }
               : {};
           dayMap[payload.dateKey] = dayRes.timeline;
+          if (payload.dayTimesPatch) {
+            const timesRes = await updateTripPreferencesPatchAction({
+              tripId: activeTripId,
+              patch: payload.dayTimesPatch,
+            });
+            if (!timesRes.ok) showToast(timesRes.error);
+            else Object.assign(prevPrefs, payload.dayTimesPatch);
+          }
           applyLocalPatch(activeTripId, {
             preferences: { ...prevPrefs, ai_day_timeline: dayMap },
             assignments: dayRes.assignments,
@@ -1953,6 +1961,14 @@ function PlannerClientInner({
         }
         if (res.mustDos != null && Object.keys(res.mustDos).length > 0) {
           prefPatch.must_dos = res.mustDos;
+        }
+        if (payload.dayTimesPatch) {
+          const timesRes = await updateTripPreferencesPatchAction({
+            tripId: activeTripId,
+            patch: payload.dayTimesPatch,
+          });
+          if (!timesRes.ok) showToast(timesRes.error);
+          else Object.assign(prefPatch, payload.dayTimesPatch);
         }
         applyLocalPatch(activeTripId, {
           assignments: res.assignments,

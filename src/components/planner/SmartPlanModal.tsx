@@ -50,7 +50,7 @@ import {
   type HolidaySmartWizardState,
 } from "@/lib/smart-plan-holiday-wizard";
 import { readTripPlanningProfile } from "@/lib/trip-intelligence";
-import type { DayTimes } from "@/lib/planner/day-times";
+import type { DayTimes, DayTimesByDate } from "@/lib/planner/day-times";
 import {
   buildDayTimesPreferencesPatch,
   defaultDayTimesFormHint,
@@ -105,6 +105,11 @@ export type SmartPlanGeneratePayload = {
    */
   planningPreferences?: TripPlanningPreferences | null;
   planningProfile?: TripPlanningProfile | null;
+  /**
+   * Day arrival/departure. Written only after generation succeeds.
+   * Null means this submit is not a day-scoped time edit.
+   */
+  dayTimesPatch?: { day_times: DayTimesByDate } | null;
 };
 
 type Props = {
@@ -282,14 +287,16 @@ export function SmartPlanModal({
     }
   }, [isDayScope, mode]);
 
-  const persistDayScopeTimes = useCallback(async (): Promise<boolean> => {
-    if (!isDayScope || !dayDateKey || !trip) return true;
+  const dayTimesPatchForSubmit = useCallback(():
+    | { ok: true; patch: { day_times: DayTimesByDate } | null }
+    | { ok: false } => {
+    if (!isDayScope || !dayDateKey || !trip) return { ok: true, patch: null };
     const a = dayArrival.trim();
     const d = dayDeparture.trim();
     const v = validateDayTimesPair(a || undefined, d || undefined);
     if (!v.ok) {
       showToast(v.message);
-      return false;
+      return { ok: false };
     }
     const times: DayTimes | null =
       a || d
@@ -298,10 +305,19 @@ export function SmartPlanModal({
             ...(d ? { departure: d } : {}),
           }
         : null;
-    const patch = buildDayTimesPreferencesPatch(trip.preferences, dayDateKey, times);
+    return {
+      ok: true,
+      patch: buildDayTimesPreferencesPatch(trip.preferences, dayDateKey, times),
+    };
+  }, [dayArrival, dayDateKey, dayDeparture, isDayScope, trip]);
+
+  const persistDayScopeTimes = useCallback(async (): Promise<boolean> => {
+    const pending = dayTimesPatchForSubmit();
+    if (!pending.ok) return false;
+    if (!pending.patch || !trip) return true;
     const res = await updateTripPreferencesPatchAction({
       tripId: trip.id,
-      patch,
+      patch: pending.patch,
     });
     if (!res.ok) {
       showToast(res.error);
@@ -309,17 +325,10 @@ export function SmartPlanModal({
     }
     const prefsBase = (trip.preferences ?? {}) as Record<string, unknown>;
     onTripPatch?.({
-      preferences: { ...prefsBase, ...patch },
+      preferences: { ...prefsBase, ...pending.patch },
     });
     return true;
-  }, [
-    isDayScope,
-    dayDateKey,
-    trip,
-    dayArrival,
-    dayDeparture,
-    onTripPatch,
-  ]);
+  }, [dayTimesPatchForSubmit, onTripPatch, trip]);
 
   const dayHasCalendarTiles = useMemo(() => {
     if (!trip || !isDayScope || !dayDateKey) return false;
@@ -393,6 +402,7 @@ export function SmartPlanModal({
         setTouringError(touringFailureUserMessage(res.code, res.message));
         return;
       }
+      if (!(await persistDayScopeTimes())) return;
       setTouringSequence(res.sequence);
     } catch (err) {
       if (touringRunRef.current === runId) {
@@ -414,6 +424,7 @@ export function SmartPlanModal({
     entUx,
     entEarly,
     touringPace,
+    persistDayScopeTimes,
   ]);
 
   useEffect(() => {
@@ -471,7 +482,6 @@ export function SmartPlanModal({
       if (!trip) return;
       if (isGenerating || sequencerBusy || profileSaving) return;
       if (showTouringPlanToggle && dayPlannerSource === "touring") {
-        if (!(await persistDayScopeTimes())) return;
         await runTouringGenerate();
         return;
       }
@@ -517,7 +527,8 @@ export function SmartPlanModal({
         const scopeForTiles =
           holidayWizard.scope ?? "fill_empty_days_only";
         const replaceTiles = smartPlanOverwriteFromScope(scopeForTiles);
-        if (!(await persistDayScopeTimes())) return;
+        const dayTimes = dayTimesPatchForSubmit();
+        if (!dayTimes.ok) return;
         await onGenerate({
           mode: "smart",
           userPrompt,
@@ -525,6 +536,7 @@ export function SmartPlanModal({
           dateKey: isDayScope ? (dayDateKey ?? undefined) : undefined,
           planningPreferences,
           planningProfile: profile,
+          dayTimesPatch: dayTimes.patch,
         });
         return;
       }
@@ -552,13 +564,15 @@ export function SmartPlanModal({
             includeUniversalSkipTips: skipUniversal,
           };
 
-      if (!(await persistDayScopeTimes())) return;
+      const dayTimes = dayTimesPatchForSubmit();
+      if (!dayTimes.ok) return;
       await onGenerate({
         mode,
         userPrompt: customText.trim(),
         replaceExistingTiles,
         dateKey: isDayScope ? (dayDateKey ?? undefined) : undefined,
         planningPreferences,
+        dayTimesPatch: dayTimes.patch,
       });
     },
     [
@@ -569,7 +583,7 @@ export function SmartPlanModal({
       showTouringPlanToggle,
       dayPlannerSource,
       runTouringGenerate,
-      persistDayScopeTimes,
+      dayTimesPatchForSubmit,
       mode,
       customText,
       holidayStep,
