@@ -17,6 +17,8 @@ import { showToast } from "@/lib/toast";
 import type { BudgetCategory, Trip, TripBudgetItem } from "@/lib/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+const EMPTY_BUDGET: TripBudgetItem[] = [];
+
 const CATEGORIES: BudgetCategory[] = [
   "flights",
   "accommodation",
@@ -56,11 +58,23 @@ type Props = {
   trip: Trip;
   onTripPatch: (patch: Partial<Trip>) => void;
   embedded?: boolean;
+  /** When set, the parent owns the list. Organise and the overview share one fetch. */
+  items?: TripBudgetItem[] | null;
+  onItemsChange?: (items: TripBudgetItem[]) => void;
 };
 
-export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
-  const [items, setItems] = useState<TripBudgetItem[]>([]);
-  const [loading, setLoading] = useState(true);
+export function TripBudgetView({
+  trip,
+  onTripPatch,
+  embedded = false,
+  items: itemsProp,
+  onItemsChange,
+}: Props) {
+  const controlled = onItemsChange != null;
+  const [localItems, setLocalItems] = useState<TripBudgetItem[]>([]);
+  const [loading, setLoading] = useState(!controlled);
+  const items = controlled ? (itemsProp ?? EMPTY_BUDGET) : localItems;
+  const showLoading = controlled ? itemsProp == null : loading;
   const [targetDraft, setTargetDraft] = useState(
     trip.budget_target != null ? String(trip.budget_target) : "",
   );
@@ -72,15 +86,19 @@ export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
   const [formPaid, setFormPaid] = useState(false);
 
   const reload = useCallback(async () => {
-    setLoading(true);
+    if (!controlled) setLoading(true);
     const r = await listTripBudgetItemsAction(trip.id);
-    if (r.ok) setItems(r.items);
-    setLoading(false);
-  }, [trip.id]);
+    if (r.ok) {
+      if (onItemsChange) onItemsChange(r.items);
+      else setLocalItems(r.items);
+    }
+    if (!controlled) setLoading(false);
+  }, [controlled, onItemsChange, trip.id]);
 
   useEffect(() => {
+    if (controlled) return;
     void reload();
-  }, [reload]);
+  }, [controlled, reload]);
 
   useEffect(() => {
     setTargetDraft(trip.budget_target != null ? String(trip.budget_target) : "");
@@ -323,7 +341,7 @@ export function TripBudgetView({ trip, onTripPatch, embedded = false }: Props) {
         ) : null}
       </Card>
 
-      {loading ? (
+      {showLoading ? (
         <div className="space-y-3 rounded-2xl border border-royal/10 bg-white p-5">
           <div className="h-4 w-1/3 animate-pulse rounded bg-royal/10" />
           <div className="h-4 w-full animate-pulse rounded bg-royal/10" />

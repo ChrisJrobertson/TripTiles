@@ -2,12 +2,11 @@
 
 import { generateDaySequenceAction } from "@/actions/day-sequencer";
 import {
-  saveTripPlanningProfileAction,
   updateTripPlanningPreferencesAction,
   updateTripPreferencesPatchAction,
 } from "@/actions/trips";
 import { getParkIdFromSlotValue } from "@/lib/assignment-slots";
-import { daysBetween, parseDate } from "@/lib/date-helpers";
+import { parseDate } from "@/lib/date-helpers";
 import {
   collectAssignmentParkIdsForDay,
   dayShowsTouringPlanModeToggle,
@@ -28,6 +27,7 @@ import type {
   Region,
   Trip,
   TripPlanningPreferences,
+  TripPlanningProfile,
 } from "@/lib/types";
 import type { TripRidePriority } from "@/types/attractions";
 import { LogoSpinner } from "@/components/ui/LogoSpinner";
@@ -37,6 +37,8 @@ import {
   SmartPlanHolidayWizardSteps,
   holidayWizardStepCount,
 } from "@/components/planner/SmartPlanHolidayWizardSteps";
+import { SmartPlanReadinessBrief } from "@/components/planner/SmartPlanReadinessBrief";
+import { buildSmartPlanReadiness } from "@/lib/smart-plan-readiness";
 import {
   buildHolidayWizardSupplementPrompt,
   buildTripPlanningProfileFromHolidayWizard,
@@ -98,8 +100,11 @@ export type SmartPlanGeneratePayload = {
   replaceExistingTiles: boolean;
   /** Optional day scope for day-detail "Plan my day". */
   dateKey?: string;
-  /** Smart mode only — saved to the trip before generation. */
+  /**
+   * Wizard answers. Stored with the calendar only after generation succeeds.
+   */
   planningPreferences?: TripPlanningPreferences | null;
+  planningProfile?: TripPlanningProfile | null;
 };
 
 type Props = {
@@ -161,7 +166,7 @@ export function SmartPlanModal({
     () => holidayWizardDefaults(),
   );
   const [holidayStep, setHolidayStep] = useState(0);
-  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaving] = useState(false);
   const [customText, setCustomText] = useState("");
 
   const [dayPlannerSource, setDayPlannerSource] = useState<"touring" | "ai">(
@@ -432,6 +437,19 @@ export function SmartPlanModal({
     [trip],
   );
 
+  const smartPlanReadiness = useMemo(
+    () =>
+      trip
+        ? buildSmartPlanReadiness({
+            trip,
+            parks,
+            scope: holidayWizard.scope,
+            focusDateKey: isDayScope ? (dayDateKey ?? null) : null,
+          })
+        : null,
+    [dayDateKey, holidayWizard.scope, isDayScope, parks, trip],
+  );
+
   const holidayLastIndex = holidayWizardStepCount(isDayScope) - 1;
 
   const handleWizardNext = useCallback(() => {
@@ -463,6 +481,17 @@ export function SmartPlanModal({
         !(showTouringPlanToggle && dayPlannerSource === "touring");
       const smartUsingWizard = mode === "smart" && touringAiPath;
       if (smartUsingWizard && holidayStep < holidayLastIndex) return;
+      if (
+        smartUsingWizard &&
+        !buildSmartPlanReadiness({
+          trip,
+          parks,
+          scope: holidayWizard.scope,
+          focusDateKey: isDayScope ? (dayDateKey ?? null) : null,
+        }).ready
+      ) {
+        return;
+      }
 
       const base = trip.planning_preferences;
       const skipDisney =
@@ -471,51 +500,37 @@ export function SmartPlanModal({
         trip.planning_preferences?.includeUniversalSkipTips !== false;
 
       if (mode === "smart" && smartUsingWizard) {
-        setProfileSaving(true);
-        try {
-          const profile = buildTripPlanningProfileFromHolidayWizard({
-            wizard: holidayWizard,
-            tripParks: parks,
-            trip,
-          });
-          const profRes = await saveTripPlanningProfileAction({
-            tripId: trip.id,
-            profile,
-          });
-          if (!profRes.ok) {
-            showToast(profRes.error);
-            return;
-          }
-          const prevPrefs = (trip.preferences ?? {}) as Record<string, unknown>;
-          onTripPatch?.({
-            preferences: {
-              ...prevPrefs,
-              trip_planning_profile: profile,
-            },
-          });
-          const planningPreferences = mapWizardToPlanningPreferences({
-            trip,
-            wizard: holidayWizard,
-            tripParks: parks,
-          });
-          const supplement = buildHolidayWizardSupplementPrompt(holidayWizard);
-          const userPrompt = [supplement, holidayWizard.freeText.trim()]
-            .filter(Boolean)
-            .join("\n\n");
-          const scopeForTiles =
-            holidayWizard.scope ?? "fill_empty_days_only";
-          const replaceTiles = smartPlanOverwriteFromScope(scopeForTiles);
-          if (!(await persistDayScopeTimes())) return;
-          await onGenerate({
-            mode: "smart",
-            userPrompt,
-            replaceExistingTiles: replaceTiles,
-            dateKey: isDayScope ? (dayDateKey ?? undefined) : undefined,
-            planningPreferences,
-          });
-        } finally {
-          setProfileSaving(false);
-        }
+        const profile = buildTripPlanningProfileFromHolidayWizard({
+          wizard: holidayWizard,
+          tripParks: parks,
+          trip,
+        });
+        const planningPreferences = mapWizardToPlanningPreferences({
+          trip,
+          wizard: holidayWizard,
+          tripParks: parks,
+        });
+        const supplement = buildHolidayWizardSupplementPrompt(holidayWizard);
+        const userPrompt = [supplement, holidayWizard.freeText.trim()]
+          .filter(Boolean)
+          .join("\n\n");
+        const scopeForTiles =
+          holidayWizard.scope ?? "fill_empty_days_only";
+        const replaceTiles = smartPlanOverwriteFromScope(scopeForTiles);
+        if (!(await persistDayScopeTimes())) return;
+        await onGenerate({
+          mode: "smart",
+          userPrompt,
+          replaceExistingTiles: replaceTiles,
+          dateKey: isDayScope ? (dayDateKey ?? undefined) : undefined,
+          planningPreferences,
+          planningProfile: profile,
+        });
+        return;
+      }
+
+      if (!base && trip.planning_preferences_issue?.unsupportedPace) {
+        showToast("Choose a supported pace in Organise before building a plan.");
         return;
       }
 
@@ -561,7 +576,6 @@ export function SmartPlanModal({
       holidayLastIndex,
       holidayWizard,
       parks,
-      onTripPatch,
       onGenerate,
       isDayScope,
       dayDateKey,
@@ -569,7 +583,7 @@ export function SmartPlanModal({
     ],
   );
 
-  if (!isOpen || !trip) return null;
+  if (!isOpen || !trip || !smartPlanReadiness) return null;
 
   const dayLabel = isDayScope
     ? parseDate(`${dayDateKey}T12:00:00`).toLocaleDateString("en-GB", {
@@ -578,11 +592,6 @@ export function SmartPlanModal({
         month: "short",
       })
     : null;
-
-  const tripDays =
-    trip.start_date && trip.end_date
-      ? daysBetween(parseDate(trip.start_date), parseDate(trip.end_date)) + 1
-      : 0;
 
   const touringSubmitReady =
     showTouringPlanToggle && dayPlannerSource === "touring";
@@ -611,9 +620,8 @@ export function SmartPlanModal({
           ? " Your calendar already has tiles for this day — the scope you pick on step 1 decides how much can change."
           : ""
       }`
-    : tripDays > 0
-      ? `TripTiles will use your answers to structure all ${tripDays} days in ${regionLabel} — parks, rest days, meal windows, and day notes — while detailed ride order still comes from AI Day Strategy later.`
-      : `TripTiles will use your answers to structure this trip in ${regionLabel}.`;
+    : (smartPlanReadiness?.scopeNote ??
+      `TripTiles will use your answers to structure this trip in ${regionLabel}.`);
 
   const skipTheLineSection = (
     <section className="rounded-lg border border-tt-line-soft bg-tt-surface/80 px-4 py-3">
@@ -678,7 +686,7 @@ export function SmartPlanModal({
     ? true
     : mode === "custom"
       ? Boolean(customText.trim()) && !customOver
-      : smartOnPreviewStep;
+      : smartOnPreviewStep && smartPlanReadiness.ready;
 
   return (
     <ModalShell
@@ -1007,9 +1015,10 @@ export function SmartPlanModal({
 
               {mode === "smart" ? (
                 <>
-                  <div className="rounded-lg border border-gold/40 bg-tt-surface/80 px-4 py-3 font-sans text-sm leading-relaxed text-tt-royal">
-                    {smartSummary}
-                  </div>
+                  <SmartPlanReadinessBrief
+                    readiness={smartPlanReadiness}
+                    onOpenOrganise={onClose}
+                  />
                   <div className="max-h-[min(58vh,28rem)] min-h-[12rem] overflow-y-auto pr-1">
                     <SmartPlanHolidayWizardSteps
                       trip={trip}
@@ -1018,6 +1027,7 @@ export function SmartPlanModal({
                       setWizard={setHolidayWizard}
                       stepIndex={holidayStep}
                       isDayScope={isDayScope}
+                      dayLines={smartPlanReadiness.days}
                       preview={
                         holidayPreview ?? {
                           totalTripNights: 0,
@@ -1153,7 +1163,7 @@ export function SmartPlanModal({
             <div className="rounded-lg border border-tt-line bg-tt-surface/85 px-3 py-2">
               <span className="inline-flex items-center gap-2 font-sans text-sm text-tt-royal/85">
                 <LogoSpinner size="sm" className="shrink-0" decorative />
-                Smart Plan is thinking — this usually takes 10-20 seconds.
+                Building your holiday plan. This usually takes 10–20 seconds.
               </span>
             </div>
           ) : null}
@@ -1224,7 +1234,7 @@ export function SmartPlanModal({
               ) : isGenerating ? (
                 <span className="inline-flex items-center justify-center gap-2">
                   <LogoSpinner size="sm" className="shrink-0" variant="onDark" decorative />
-                  Generating your plan…
+                  Building your plan…
                 </span>
               ) : sequencerBusy ? (
                 <span className="inline-flex items-center justify-center gap-2">
@@ -1234,11 +1244,7 @@ export function SmartPlanModal({
               ) : touringSubmitReady ? (
                 "Generate touring plan ✨"
               ) : smartUsingWizard ? (
-                isDayScope && dayHasAiTimeline ? (
-                  "Apply Smart Plan · Regenerate day ✨"
-                ) : (
-                  "Apply Smart Plan ✨"
-                )
+                "Build Smart Plan"
               ) : isDayScope && dayHasAiTimeline ? (
                 "Regenerate ✨"
               ) : replaceExistingTiles &&
@@ -1251,6 +1257,18 @@ export function SmartPlanModal({
             </button>
             ) : null}
           </div>
+          {smartUsingWizard && smartOnPreviewStep && !smartPlanReadiness.ready ? (
+            <p className="font-sans text-sm text-tt-ink">
+              Build Smart Plan stays off until the pace is confirmed in Organise.
+            </p>
+          ) : null}
+          {smartUsingWizard ? (
+            <p className="font-sans text-sm leading-relaxed text-tt-ink-muted">
+              {trip.previous_assignments_snapshot_at
+                ? "Undo Smart Plan in the trip menu restores the calendar from before the last plan, including rest days and park days."
+                : "After you apply this, Undo Smart Plan in the trip menu restores the previous calendar. Ride priorities stay as they are."}
+            </p>
+          ) : null}
           {!isDayScope ? (
             <p className="mt-3 text-left font-sans text-sm leading-relaxed text-tt-ink-muted">
               Just want to tweak one day?{" "}

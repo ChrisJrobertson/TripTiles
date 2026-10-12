@@ -33,15 +33,16 @@
 
 ## Canonical baseline
 
-The active chain is three files under `supabase/migrations/`:
+The active chain is four files under `supabase/migrations/`:
 
 - `*_triptiles_schema_baseline.sql`
 - `*_triptiles_reference_catalogue.sql`
 - `*_harden_security_definer_and_fk_indexes.sql`
+- `*_secure_trip_rpc_caller.sql`
 
 They replace the 111-file historical chain. That history is archived in `supabase/legacy-migrations/` and is not applied by `db reset` or `db push`. See `docs/supabase-clean-baseline-audit.md`.
 
-The new baseline supersedes the historical reconstruction chain. Do not replay the archive onto a new database, and do not `db push` those files. A replacement project is rebuilt by resetting migration history and pushing only the three active files.
+The new baseline supersedes the historical reconstruction chain. Do not replay the archive onto a new database, and do not `db push` those files. A replacement project is rebuilt by resetting migration history and pushing only the active files.
 
 A clean database is built with:
 

@@ -19,6 +19,11 @@ import {
   formatDateKey,
   parseDate,
 } from "@/lib/date-helpers";
+import { restoreProtectedAssignmentDays } from "@/lib/smart-plan-readiness";
+import {
+  postedHintForPrimaryPark,
+  postedHintsForTrip,
+} from "@/lib/park-data/day-facts";
 import {
   formatDayConstraintBlockForDate,
   formatDayConstraintsBlockForSmartPlan,
@@ -86,9 +91,12 @@ import {
   buildDefaultDayIntentForSmartPlan,
   buildTripPlanningContextForAI,
   collectThemeParkSlotIdsFromAssignment,
+  isTripPlanningProfile,
   readTripPlanningProfile,
   tripProfileAllowsStructuralMealSlots,
+  writeTripPlanningProfile,
 } from "@/lib/trip-intelligence";
+import { commitSmartPlan } from "@/lib/smart-plan-commit";
 import { formatRegionalDiningForPrompt } from "@/data/regional-dining";
 import {
   formatPlanningPreferencesForPrompt,
@@ -328,6 +336,15 @@ function stripMidTripRestPoolSlotsForPackedEdgeBuffers(params: {
       if (!id) continue;
       if (isMandatoryAnchorTileId(id)) continue;
       if (!isSmartPlanRestOrPoolTileId(id, parksById)) continue;
+      const originalId = getParkIdFromSlotValue(
+        trip.assignments?.[dateKey]?.[slot],
+      );
+      if (
+        originalId &&
+        isSmartPlanRestOrPoolTileId(originalId, parksById)
+      ) {
+        continue;
+      }
       delete day[slot];
       strippedSlotCount += 1;
     }
@@ -850,6 +867,12 @@ export type GenerateAIPlanInput = {
    * Default true: only empty slots are filled (manual picks kept).
    */
   preserveExistingSlots?: boolean;
+  /**
+   * Wizard answers to store only if this run produces a plan.
+   * Omitted values leave the saved pace and must-do parks untouched.
+   */
+  commitPlanningPreferences?: TripPlanningPreferences | null;
+  commitPlanningProfile?: TripPlanningProfile | null;
 };
 
 export type GenerateAIPlanResult =
@@ -2090,6 +2113,20 @@ export async function runGenerateAIPlan(
     return { ok: false, error: "TRIP_NOT_FOUND", message: "Trip not found." };
   }
 
+  const savedSmartPlanPreferences = { ...(trip.preferences ?? {}) };
+  const savedSmartPlanPlanningPreferences = trip.planning_preferences ?? null;
+  if (input.commitPlanningPreferences) {
+    trip.planning_preferences = input.commitPlanningPreferences;
+  }
+  if (
+    input.commitPlanningProfile &&
+    isTripPlanningProfile(input.commitPlanningProfile)
+  ) {
+    const prefs = { ...(trip.preferences ?? {}) };
+    writeTripPlanningProfile(prefs, input.commitPlanningProfile);
+    trip.preferences = prefs;
+  }
+
   const rid =
     trip.region_id ??
     (trip.destination !== "custom" ? trip.destination : null);
@@ -2237,8 +2274,11 @@ export async function runGenerateAIPlan(
   const sortedDateKeys = sortDateKeysFromSet(dateAllow);
   const sortedAllTripDateKeys = sortDateKeysFromSet(fullDateAllow);
   const parksById = new Map(parksForPrompt.map((p) => [p.id, p]));
+  const postedByDate = !normalizedDateKey
+    ? await postedHintsForTrip(supabase, trip, parksById)
+    : null;
   const dayConstraintsForFullTrip = !normalizedDateKey
-    ? formatDayConstraintsBlockForSmartPlan(trip, parksById)
+    ? formatDayConstraintsBlockForSmartPlan(trip, parksById, postedByDate ?? undefined)
     : null;
 
   const childAges = trip.child_ages?.length
@@ -2884,7 +2924,10 @@ export async function runGenerateAIPlan(
 
     const preserve =
       input.preserveExistingSlots !== false;
-    let mergedRaw = mergeAiIntoTrip(trip.assignments, guarded, preserve);
+    let mergedRaw = restoreProtectedAssignmentDays(
+      trip.assignments,
+      mergeAiIntoTrip(trip.assignments, guarded, preserve),
+    );
 
     const isOverwriteFullTrip =
       !normalizedDateKey && input.preserveExistingSlots === false;
@@ -3102,17 +3145,48 @@ export async function runGenerateAIPlan(
         assignmentDays: Object.keys(merged).length,
       },
     });
-    const { error: upErr } = await supabase
-      .from("trips")
-      .update({
-        previous_assignments_snapshot: trip.assignments,
-        previous_preferences_snapshot: trip.preferences ?? {},
-        previous_assignments_snapshot_at: now,
+    const committed = commitSmartPlan({
+      generationOk: true,
+      saved: {
+        assignments: trip.assignments ?? {},
+        preferences: savedSmartPlanPreferences,
+        planningPreferences: savedSmartPlanPlanningPreferences,
+      },
+      proposed: {
         assignments: merged,
         preferences: nextPrefs,
-        updated_at: now,
-        last_opened_at: now,
-      })
+        planningPreferences: input.commitPlanningPreferences ?? null,
+        profile:
+          input.commitPlanningProfile &&
+          isTripPlanningProfile(input.commitPlanningProfile)
+            ? input.commitPlanningProfile
+            : null,
+      },
+    });
+    const updateRow: {
+      previous_assignments_snapshot: Assignments;
+      previous_preferences_snapshot: typeof committed.undo;
+      previous_assignments_snapshot_at: string;
+      assignments: Assignments;
+      preferences: Record<string, unknown>;
+      updated_at: string;
+      last_opened_at: string;
+      planning_preferences?: TripPlanningPreferences | null;
+    } = {
+      previous_assignments_snapshot: trip.assignments ?? {},
+      previous_preferences_snapshot: committed.undo,
+      previous_assignments_snapshot_at: now,
+      assignments: committed.assignments,
+      preferences: committed.preferences,
+      updated_at: now,
+      last_opened_at: now,
+    };
+    if (input.commitPlanningPreferences) {
+      updateRow.planning_preferences = committed.planningPreferences;
+    }
+    const { error: upErr } = await supabase
+      .from("trips")
+      .update(updateRow)
       .eq("id", input.tripId)
       .eq("owner_id", user.id);
     logAiGen({
@@ -4097,10 +4171,17 @@ ${brief}
 END USER CONSTRAINTS`
     : "";
   const parkByIdForDay = new Map(parksForPrompt.map((p) => [p.id, p] as const));
+  const postedHintForTimeline = await postedHintForPrimaryPark(
+    await createClient(),
+    trip,
+    dateKey,
+    parkByIdForDay,
+  );
   const dayConstraintBlock = formatDayConstraintBlockForDate(
     trip,
     dateKey,
     parkByIdForDay,
+    postedHintForTimeline,
   );
   const userBlock = [
     buildAiRegionBriefingBlock(region, parksForPrompt),
@@ -4572,7 +4653,7 @@ When the user prompt states paidAccess is anything other than yes for that day, 
 ==== FORMATTING NOTES ====
 
 - Use 24h time format (HH:MM)
-- Park hours: assume 09:00 open and 22:00 close unless the user prompt says otherwise
+- Park hours: use DAY AT-PARK CONSTRAINTS in the user message when they are present. A line marked fallback-assumption is not a confirmed operating time. Do not invent a different open or close, and do not state 09:00–22:00 as fact.
 - Sequence times should advance reasonably (no backwards times)
 - Skip lightning_lane_strategy entirely if the family doesn't have Multi Pass access
 - Skip express_pass_strategy entirely if the family doesn't have Express Pass access
@@ -5458,10 +5539,17 @@ export async function generateDayStrategy(input: {
     );
   }
 
+  const postedHintForStrategy = await postedHintForPrimaryPark(
+    await createClient(),
+    trip,
+    dateKey,
+    parkById,
+  );
   const dayConstraintBlock = formatDayConstraintBlockForDate(
     trip,
     dateKey,
     parkById,
+    postedHintForStrategy,
   );
   const userMsg = [
     `PARK(S) FOR THIS PLAN: ${parksPlanLabel}`,

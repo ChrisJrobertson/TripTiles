@@ -1,7 +1,7 @@
 "use client";
 
 import { PlanningSections } from "@/components/planner/PlanningSections";
-import type { Trip } from "@/lib/types";
+import type { Park, Trip } from "@/lib/types";
 import type { TripPayment } from "@/types/payments";
 
 type Props = {
@@ -12,6 +12,9 @@ type Props = {
   regionLabelForKeyDates: string;
   regionCountryCode?: string | null;
   initialSection: "todo" | "payments" | "budget" | null;
+  parks: Park[];
+  onEditTrip: () => void;
+  hasAnyAssignment: boolean;
 };
 
 export function PlannerPlanningTabPanel({
@@ -22,6 +25,9 @@ export function PlannerPlanningTabPanel({
   regionLabelForKeyDates,
   regionCountryCode = null,
   initialSection,
+  parks,
+  onEditTrip,
+  hasAnyAssignment,
 }: Props) {
   return (
     <PlanningSections
@@ -32,6 +38,9 @@ export function PlannerPlanningTabPanel({
       regionLabelForKeyDates={regionLabelForKeyDates}
       regionCountryCode={regionCountryCode}
       initialSection={initialSection}
+      parks={parks}
+      onEditTrip={onEditTrip}
+      hasAnyAssignment={hasAnyAssignment}
     />
   );
 }

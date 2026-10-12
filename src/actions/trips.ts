@@ -30,6 +30,7 @@ import {
   isDayPlanFeedback,
   isTripPlanningProfile,
 } from "@/lib/trip-intelligence";
+import { readSmartPlanUndoBundle } from "@/lib/smart-plan-commit";
 import { readMustDosMap } from "@/lib/must-dos";
 import {
   computeSeedTemplates,
@@ -723,16 +724,31 @@ export async function undoSmartPlanAction(
       return { ok: false, error: "Nothing to undo." };
     }
 
+    const undoBundle = readSmartPlanUndoBundle(
+      row.previous_preferences_snapshot,
+    );
+    const restored: {
+      assignments: unknown;
+      preferences: Record<string, unknown>;
+      previous_assignments_snapshot: null;
+      previous_preferences_snapshot: null;
+      previous_assignments_snapshot_at: null;
+      updated_at: string;
+      planning_preferences?: unknown;
+    } = {
+      assignments: row.previous_assignments_snapshot,
+      preferences: undoBundle.preferences,
+      previous_assignments_snapshot: null,
+      previous_preferences_snapshot: null,
+      previous_assignments_snapshot_at: null,
+      updated_at: new Date().toISOString(),
+    };
+    if ("planningPreferences" in undoBundle) {
+      restored.planning_preferences = undoBundle.planningPreferences ?? null;
+    }
     const { error: upErr } = await supabase
       .from("trips")
-      .update({
-        assignments: row.previous_assignments_snapshot,
-        preferences: row.previous_preferences_snapshot ?? {},
-        previous_assignments_snapshot: null,
-        previous_preferences_snapshot: null,
-        previous_assignments_snapshot_at: null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(restored)
       .eq("id", tripId)
       .eq("owner_id", user.id);
 

@@ -25,6 +25,11 @@ import { ExpandedDayPanel } from "@/components/planner/ExpandedDayPanel";
 import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { heuristicCrowdToneFromNoteText } from "@/lib/planner-crowd-level-meta";
 import { plannerCalendarParkSlotStyle } from "@/lib/theme-colours";
+import {
+  classifyPlannerDay,
+  plannerDayReadiness,
+  plannerDayReadinessLabel,
+} from "@/lib/trip-workspace-status";
 import { normaliseThemeKey, themedEmptySlotSurfaceStyle } from "@/lib/themes";
 import { dayConditionRow } from "@/lib/planner-day-conditions";
 import { showToast } from "@/lib/toast";
@@ -417,7 +422,7 @@ export function Calendar({
   );
 
   return (
-    <div className="w-full min-w-0 overflow-x-auto rounded-tt-xl border border-tt-line bg-tt-surface/80 p-1.5 shadow-tt-md backdrop-blur-md">
+    <div className="w-full min-w-0 overflow-x-auto rounded-tt-lg border border-tt-line bg-tt-surface p-1.5">
       {skeletonActive ? (
         <div
           aria-hidden
@@ -452,6 +457,11 @@ export function Calendar({
             </div>
           ))}
         </div>
+        <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 px-0.5 font-sans text-[11px] text-tt-ink-muted">
+          <span>Open days still need a choice</span>
+          <span>Rest days are free on purpose</span>
+          <span>Ready days already have a plan</span>
+        </p>
 
         {weeks.map((week, wi) => (
           <Fragment key={wi}>
@@ -530,14 +540,37 @@ export function Calendar({
 
               const conflictDot = dayConflictDots[key];
               const aiRich = aiTimelineByDateKey.get(key);
+              const dayKind = classifyPlannerDay(ass, parkById);
+              const readiness = plannerDayReadiness({
+                kind: dayKind,
+                hasRidePriorities: rideCount > 0,
+                hasDayPlan: Boolean(aiRich),
+              });
+              const readinessText = plannerDayReadinessLabel(readiness);
+              const readinessBadgeClass =
+                readiness === "open"
+                  ? "bg-tt-surface text-tt-ink-muted"
+                  : readiness === "rest"
+                    ? "bg-tt-surface text-tt-ink"
+                    : readiness === "ready"
+                      ? "bg-tt-royal-soft text-tt-royal"
+                      : readiness === "needs_planning"
+                        ? "bg-amber-100 text-amber-950"
+                        : "bg-tt-bg-soft text-tt-ink-muted";
 
               return (
                 <div
                   key={key}
                   id={`planner-day-${key}`}
-                  className={`relative flex min-h-[7rem] flex-col rounded-tt-md border border-tt-line bg-tt-surface/95 shadow-tt-sm transition hover:border-tt-royal/30 sm:min-h-[8rem] md:min-h-[5.25rem]${
-                    aiRich ? " border-l-[3px] border-l-amber-400/85" : ""
-                  }${
+                  className={`relative flex min-h-[7rem] flex-col rounded-tt-md shadow-none transition sm:min-h-[8rem] md:min-h-[5.25rem]${
+                    readiness === "open"
+                      ? " border border-dashed border-tt-ink/25 bg-tt-bg-soft"
+                      : readiness === "rest"
+                        ? " border border-[#6B9080]/45 bg-tt-surface-warm"
+                        : readiness === "needs_planning"
+                          ? " border border-amber-300/90 bg-tt-surface"
+                          : " border border-tt-line bg-tt-surface"
+                  }${aiRich ? " border-l-[3px] border-l-amber-400/85" : ""}${
                     highlightDateKey === key || timelineSelectedDateKey === key
                       ? " ring-2 ring-tt-royal ring-offset-2 ring-offset-tt-surface"
                       : ""
@@ -599,8 +632,8 @@ export function Calendar({
                         }
                         aria-label={
                           useDayDetailShell
-                            ? `Open day planner for ${headingDate}`
-                            : `Open day detail for ${headingDate}`
+                            ? `Open ${headingDate}, ${readinessText}`
+                            : `Open day detail for ${headingDate}, ${readinessText}`
                         }
                         onClick={() => {
                           if (useDayDetailShell && onOpenDayDetail) {
@@ -637,6 +670,11 @@ export function Calendar({
                           <CrowdLevelIndicator level={crowdLevel} size="sm" />
                         </span>
                       ) : null}
+                      <span
+                        className={`rounded px-1 py-0.5 font-meta text-[0.52rem] font-semibold uppercase tracking-wide ${readinessBadgeClass}`}
+                      >
+                        {readinessText}
+                      </span>
                       <span className="font-heading text-base font-bold leading-none text-tt-royal sm:text-lg">
                         {dayNum}
                       </span>
@@ -653,9 +691,9 @@ export function Calendar({
                       ) : (
                         <span
                           className="inline-flex items-center gap-0.5 font-sans text-[0.55rem] text-tt-ink-soft"
+                          aria-hidden
                         >
-                          <span className="hidden sm:inline">Open</span>
-                          <span aria-hidden>→</span>
+                          <span>→</span>
                         </span>
                       )}
                       {rideCount > 0 ? (
@@ -697,6 +735,11 @@ export function Calendar({
                             <CrowdLevelIndicator level={crowdLevel} size="sm" />
                           </span>
                         ) : null}
+                        <span
+                          className={`rounded px-1 py-0.5 font-meta text-[0.52rem] font-semibold uppercase tracking-wide ${readinessBadgeClass}`}
+                        >
+                          {readinessText}
+                        </span>
                         <span className="font-heading text-base font-bold leading-none text-tt-royal sm:text-lg">
                           {dayNum}
                         </span>

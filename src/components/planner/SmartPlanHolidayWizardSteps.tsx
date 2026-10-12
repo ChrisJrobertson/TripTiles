@@ -8,6 +8,7 @@ import type {
 import {
   resolveParkPriorityIds,
 } from "@/lib/smart-plan-holiday-wizard";
+import type { SmartPlanDayLine } from "@/lib/smart-plan-readiness";
 import type {
   Park,
   SmartPlanHolidayStyle,
@@ -312,6 +313,7 @@ type Props = {
   stepIndex: number;
   isDayScope: boolean;
   preview: HolidaySmartPreview;
+  dayLines?: SmartPlanDayLine[];
   isSubmitting: boolean;
 };
 
@@ -323,6 +325,7 @@ export function SmartPlanHolidayWizardSteps({
   stepIndex,
   isDayScope,
   preview,
+  dayLines = [],
   isSubmitting,
 }: Props) {
   const order = stepOrder(isDayScope);
@@ -648,6 +651,28 @@ export function SmartPlanHolidayWizardSteps({
           <h3 className="font-heading text-base font-semibold text-tt-royal">
             Preview before applying
           </h3>
+          {dayLines.length > 0 ? (
+            <div className="space-y-2">
+              <p className="font-sans text-sm text-tt-ink">
+                Review this before it is saved. Undo Smart Plan in the trip menu
+                restores the previous calendar. Ride priorities are not changed.
+              </p>
+              <ul className="space-y-1 font-sans text-sm">
+                {dayLines.map((day) => (
+                  <li
+                    key={day.dateKey}
+                    className={`break-words rounded-md px-2 py-1 ${
+                      day.fate === "stays"
+                        ? "text-tt-ink-muted"
+                        : "bg-tt-bg-soft font-medium text-tt-ink"
+                    }`}
+                  >
+                    {day.fate === "stays" ? "Stays" : "Changes"} — {day.detail}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <ul className="space-y-2 font-sans text-sm leading-relaxed text-tt-royal/85">
             <li>
               <span className="font-semibold text-tt-royal">Scope:</span>{" "}

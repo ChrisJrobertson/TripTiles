@@ -599,7 +599,10 @@ export function MobileRidesSheet({
                 </ul>
 
                 <LiveWaitAttributionFooter
-                  visible={liveWait.showAttribution && liveWait.map.size > 0}
+                  queueTimes={liveWait.showAttribution && liveWait.map.size > 0}
+                  themeParksWiki={
+                    liveWait.showThemeParksWikiAttribution && liveWait.map.size > 0
+                  }
                 />
 
                 {heightLines.length ? (

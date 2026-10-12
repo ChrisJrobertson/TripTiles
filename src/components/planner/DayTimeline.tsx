@@ -5,6 +5,7 @@ import { PlannerTileIcon } from "@/components/planner/PlannerTileIcon";
 import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { getSlotTimeFromValue, getParkIdFromSlotValue } from "@/lib/assignment-slots";
 import type { SkipLineDayTimelineRow } from "@/lib/skip-line-day-timeline";
+import { isRestParkId } from "@/lib/planner-am-pm-display";
 import { plannerCalendarParkSlotStyle } from "@/lib/theme-colours";
 import { normaliseThemeKey, type ThemeKey } from "@/lib/themes";
 import type {
@@ -321,18 +322,20 @@ export function DayTimeline({
 
   const amId = getParkIdFromSlotValue(ass.am);
   const amTime = amId ? displayTimelineSlotTime("am", ass, open) : open;
-  const ropeTime = amId ? subMin(amTime, 30) : null;
+  const amIsRest = amId ? isRestParkId(amId) : false;
+  const ropeTime = amId && !amIsRest ? subMin(amTime, 30) : null;
 
   const pmId = getParkIdFromSlotValue(ass.pm);
+  const pmIsRest = pmId ? isRestParkId(pmId) : false;
   const dinnerId = getParkIdFromSlotValue(ass.dinner);
   const dinnerTime = dinnerId
     ? displayTimelineSlotTime("dinner", ass, open)
     : null;
 
   let returnTime: string | null = null;
-  if (pmId) {
+  if (pmId && !pmIsRest) {
     returnTime = subMin(close, 30);
-  } else if (dinnerId && dinnerTime) {
+  } else if (!pmId && dinnerId && dinnerTime) {
     returnTime = addMin(dinnerTime, 30);
   }
 

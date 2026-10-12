@@ -1,4 +1,6 @@
 import { runGenerateAIPlan, type GenerateAIPlanInput } from "@/actions/ai";
+import { loadPlanningPreferences } from "@/lib/planning-preferences-load";
+import { isTripPlanningProfile } from "@/lib/trip-intelligence";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +40,15 @@ export async function POST(req: Request) {
   const userPrompt = (body as { userPrompt?: unknown }).userPrompt;
   const dateKey = (body as { dateKey?: unknown }).dateKey;
   const preserveExistingSlots = (body as { preserveExistingSlots?: unknown }).preserveExistingSlots;
+  const commitPlanningRaw = (body as { commitPlanningPreferences?: unknown })
+    .commitPlanningPreferences;
+  const commitProfileRaw = (body as { commitPlanningProfile?: unknown })
+    .commitPlanningProfile;
+  const loadedCommit = loadPlanningPreferences(commitPlanningRaw);
+  const commitPlanningPreferences = loadedCommit.preferences;
+  const commitPlanningProfile = isTripPlanningProfile(commitProfileRaw)
+    ? commitProfileRaw
+    : null;
 
   if (
     typeof tripId !== "string" ||
@@ -56,6 +67,10 @@ export async function POST(req: Request) {
     userPrompt,
     dateKey: typeof dateKey === "string" ? dateKey : undefined,
     preserveExistingSlots: preserveExistingSlots !== false,
+    ...(commitPlanningPreferences
+      ? { commitPlanningPreferences }
+      : {}),
+    ...(commitPlanningProfile ? { commitPlanningProfile } : {}),
   };
 
   req.signal.addEventListener(

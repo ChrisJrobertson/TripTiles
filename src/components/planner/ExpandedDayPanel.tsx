@@ -759,6 +759,11 @@ export function ExpandedDayPanel({
 
       {embedded ? (
         <div data-no-swipe>
+          {parkLabels ? (
+            <p className="mb-2 font-sans text-xs leading-relaxed text-royal/70">
+              Ride priorities for {parkLabels}. Must do comes first. If time fits when the day allows.
+            </p>
+          ) : null}
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -1013,7 +1018,10 @@ export function ExpandedDayPanel({
       </div>
 
       <LiveWaitAttributionFooter
-        visible={liveWait.showAttribution && liveWait.map.size > 0}
+        queueTimes={liveWait.showAttribution && liveWait.map.size > 0}
+        themeParksWiki={
+          liveWait.showThemeParksWikiAttribution && liveWait.map.size > 0
+        }
       />
 
       {heightLines.length ? (

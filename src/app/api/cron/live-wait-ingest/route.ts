@@ -1,9 +1,4 @@
-import { runLiveWaitIngest } from "@/lib/live-wait/ingest-run";
-import {
-  liveWaitExternalParkIdsFromEnv,
-  liveWaitStaleAfterMinutesFromEnv,
-} from "@/lib/live-wait/ingest-env";
-import { getLiveWaitProviderAdapter } from "@/lib/live-wait/provider-factory";
+import { runThemeParkIngest } from "@/lib/park-data/orchestrate-ingest";
 import { getSupabaseUrl } from "@/lib/supabase/env";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
@@ -39,24 +34,14 @@ async function handleCron(request: NextRequest) {
     );
   }
 
-  const adapter = getLiveWaitProviderAdapter();
-  const startedAt = new Date().toISOString();
-
-  const log = await runLiveWaitIngest({
-    adapter,
+  const report = await runThemeParkIngest({
     supabaseUrl: url,
     serviceRoleKey: key,
-    externalParkIds: liveWaitExternalParkIdsFromEnv(),
-    staleAfterMinutes: liveWaitStaleAfterMinutesFromEnv(),
     dryRun: false,
   });
 
-  const finishedAt = new Date().toISOString();
-
   return NextResponse.json({
     ok: true,
-    startedAt,
-    finishedAt,
-    ...log,
+    ...report,
   });
 }

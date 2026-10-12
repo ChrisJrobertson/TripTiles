@@ -27,7 +27,6 @@ import {
   updateTripFromWizardAction,
   updateTripMetadataAction,
   updateParkMustDoDoneAction,
-  updateTripPlanningPreferencesAction,
   updateTripPreferencesPatchAction,
 } from "@/actions/trips";
 import { ModalShell } from "@/components/ui/ModalShell";
@@ -56,13 +55,10 @@ import { DayStrategyUpgradeModal } from "@/components/planner/DayStrategyUpgrade
 import { CustomTileModal } from "@/components/planner/CustomTileModal";
 import { DayPlannerModal } from "@/components/planner/DayPlannerModal";
 import { DayNotesPanel } from "@/components/planner/DayNotesPanel";
-import { AdventureTitleColorControl } from "@/components/planner/AdventureTitleColorControl";
-import { EditableTitle } from "@/components/planner/EditableTitle";
 import { MobilePlannerDock } from "@/components/planner/MobilePlannerDock";
-import { PlannerHeroStats } from "@/components/planner/PlannerHeroStats";
+import { TripWorkspaceBrief } from "@/components/planner/TripWorkspaceBrief";
 import { PlannerActionsMenu } from "@/components/planner/PlannerActionsMenu";
-import { PlannerTopNotices } from "@/components/planner/PlannerTopNotices";
-import { SavingIndicator } from "@/components/planner/SavingIndicator";
+import { TripWorkspaceDataProvider } from "@/components/planner/state/TripWorkspaceData";
 import { FamilyInvitePanel } from "@/components/planner/FamilyInvitePanel";
 import { ShareTripPanel } from "@/components/planner/ShareTripPanel";
 import {
@@ -78,16 +74,14 @@ import { formatUndoSnapshotHint } from "@/lib/date-helpers";
 import { buildSurpriseDayPlan } from "@/lib/surprise-day";
 import { isCruisePaletteTileName } from "@/lib/cruise-tiles";
 import { parkMatchesPlannerRegion } from "@/lib/park-matches-planner-region";
+import { classifyPlannerDay } from "@/lib/trip-workspace-status";
 import { copyTextToClipboard } from "@/lib/clipboard-access";
 import {
   sleep,
   SMART_PLAN_CLIENT_TIMEOUT_MS,
   withTimeout,
 } from "@/lib/smart-plan-client";
-import {
-  ADVENTURE_TITLE_COLOR_KEY,
-  resolvedAdventureTitleColor,
-} from "@/lib/adventure-title-color";
+import { ADVENTURE_TITLE_COLOR_KEY } from "@/lib/adventure-title-color";
 import { trackEvent } from "@/lib/analytics/client";
 import {
   plannerAiDayCrowdNotes,
@@ -106,7 +100,6 @@ import {
   buildTripStatsShareText,
   computeTripStats,
 } from "@/lib/compute-trip-stats";
-import { buildPlannerKeyDateRowsSorted } from "@/components/planning/KeyDatesPanel";
 import {
   heuristicCrowdToneFromNoteText,
   type CrowdLevel,
@@ -114,7 +107,6 @@ import {
 import { crowdLevelFromHeuristicTone } from "@/components/planner/CrowdLevelIndicator";
 import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { dayConditionRow } from "@/lib/planner-day-conditions";
-import { daysUntilTripStart } from "@/lib/trip-start-label";
 import {
   computePlannerDayConflicts,
   conflictDotForDay,
@@ -218,51 +210,6 @@ function dayCrowdNoteForDate(trip: Trip, dateKey: string): string | null {
   const raw = plannerAiDayCrowdNotes(trip)[dateKey]?.trim();
   if (!raw) return null;
   return sanitizeAiPlannerDisplayText(raw);
-}
-
-function formatTripHeroDateRange(startIso: string, endIso: string): string {
-  const a = parseDate(startIso);
-  const b = parseDate(endIso);
-  const sameMonth =
-    a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
-  if (sameMonth) {
-    return `${a.getDate()}–${b.getDate()} ${MONTHS_SHORT[b.getMonth()]} ${b.getFullYear()}`;
-  }
-  const sameYear = a.getFullYear() === b.getFullYear();
-  const left = `${a.getDate()} ${MONTHS_SHORT[a.getMonth()]}`;
-  const right = `${b.getDate()} ${MONTHS_SHORT[b.getMonth()]} ${b.getFullYear()}`;
-  return sameYear ? `${left} – ${right}` : `${left} ${a.getFullYear()} – ${right}`;
-}
-
-function plannerPartyLabel(trip: Trip): string {
-  const bits: string[] = [];
-  if (trip.adults > 0) {
-    bits.push(`${trip.adults} adult${trip.adults === 1 ? "" : "s"}`);
-  }
-  if (trip.children > 0) {
-    bits.push(`${trip.children} child${trip.children === 1 ? "" : "ren"}`);
-  }
-  return bits.length ? bits.join(", ") : "Party size not set";
-}
-
-function tripPlannerStatusMeta(trip: Trip): {
-  label: string;
-  dotClass: string;
-} {
-  const end = parseDate(trip.end_date);
-  const today = new Date();
-  const startOfToday = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  );
-  if (startOfToday.getTime() > end.getTime()) {
-    return { label: "Past trip", dotClass: "bg-tt-ink/40" };
-  }
-  if (daysUntilTripStart(trip.start_date) > 0) {
-    return { label: "Upcoming", dotClass: "bg-sky-500" };
-  }
-  return { label: "In progress", dotClass: "bg-emerald-600" };
 }
 
 type Props = {
@@ -849,22 +796,12 @@ function PlannerClientInner({
   tripsRef.current = trips;
 
   useEffect(() => {
-    if (!activeTrip?.id) {
-      setPlannerTimelineDateKey(null);
-      return;
-    }
-    const todayKey = formatDateKey(new Date());
-    const picked =
-      todayKey >= activeTrip.start_date && todayKey <= activeTrip.end_date
-        ? formatDateISO(parseDate(todayKey))
-        : formatDateISO(parseDate(activeTrip.start_date));
-    setPlannerTimelineDateKey(picked);
-  }, [
-    activeTrip?.id,
-    activeTrip?.start_date,
-    activeTrip?.end_date,
-    setPlannerTimelineDateKey,
-  ]);
+    if (!activeTrip?.id || !plannerTimelineDateKey) return;
+    sessionStorage.setItem(
+      `trip-${activeTrip.id}-timeline-day`,
+      plannerTimelineDateKey,
+    );
+  }, [activeTrip?.id, plannerTimelineDateKey]);
 
   const cataloguedParkIdSet = useMemo(
     () => new Set(cataloguedParkIdsProp ?? []),
@@ -883,6 +820,35 @@ function PlannerClientInner({
     if (!dayDateFromUrl) return null;
     return formatDateISO(parseDate(dayDateFromUrl));
   }, [dayDateFromUrl]);
+
+  useEffect(() => {
+    if (!activeTrip?.id) {
+      setPlannerTimelineDateKey(null);
+      return;
+    }
+    const inTrip = (key: string) =>
+      key >= activeTrip.start_date && key <= activeTrip.end_date;
+    if (dayCanonicalForDetail && inTrip(dayCanonicalForDetail)) {
+      setPlannerTimelineDateKey(dayCanonicalForDetail);
+      return;
+    }
+    const stored = sessionStorage.getItem(`trip-${activeTrip.id}-timeline-day`);
+    if (stored && inTrip(stored)) {
+      setPlannerTimelineDateKey(stored);
+      return;
+    }
+    const todayKey = formatDateKey(new Date());
+    const picked = inTrip(todayKey)
+      ? formatDateISO(parseDate(todayKey))
+      : formatDateISO(parseDate(activeTrip.start_date));
+    setPlannerTimelineDateKey(picked);
+  }, [
+    activeTrip?.id,
+    activeTrip?.start_date,
+    activeTrip?.end_date,
+    dayCanonicalForDetail,
+    setPlannerTimelineDateKey,
+  ]);
 
   const smartLanding = useMemo(() => {
     if (!activeTrip) {
@@ -1802,21 +1768,6 @@ function PlannerClientInner({
         | "smart-error"
         | "unknown" = "unknown";
       try {
-        if (payload.planningPreferences != null) {
-          const prefRes = await updateTripPlanningPreferencesAction({
-            tripId: activeTripId,
-            planningPreferences: payload.planningPreferences,
-          });
-          if (!prefRes.ok) {
-            spinnerClearReason = "smart-error";
-            setSmartError(prefRes.error);
-            showToast(prefRes.error);
-            return;
-          }
-          applyLocalPatch(activeTripId, {
-            planning_preferences: payload.planningPreferences,
-          });
-        }
         const tripBefore = trips.find((x) => x.id === activeTripId);
         if (payload.dateKey && !dayTimelineAnchorGuardBypassRef.current) {
           const dayRows =
@@ -1924,6 +1875,12 @@ function PlannerClientInner({
             userPrompt: payload.userPrompt,
             dateKey: payload.dateKey,
             preserveExistingSlots: !payload.replaceExistingTiles,
+            ...(payload.planningPreferences
+              ? { commitPlanningPreferences: payload.planningPreferences }
+              : {}),
+            ...(payload.planningProfile
+              ? { commitPlanningProfile: payload.planningProfile }
+              : {}),
           },
           {
             signal: generationController.signal,
@@ -2000,6 +1957,9 @@ function PlannerClientInner({
         applyLocalPatch(activeTripId, {
           assignments: res.assignments,
           preferences: prefPatch,
+          ...(payload.planningPreferences
+            ? { planning_preferences: payload.planningPreferences }
+            : {}),
           previous_assignments_snapshot: snapAssignments,
           previous_preferences_snapshot: snapPreferences,
           previous_assignments_snapshot_at: res.undoSnapshotAt,
@@ -2344,6 +2304,52 @@ function PlannerClientInner({
       ridePrioritiesByDayForActiveTrip,
       parkByIdPlanner,
       applySlotAssign,
+      commitAssignmentsUpdate,
+    ],
+  );
+
+  const onMakeRestDay = useCallback(
+    (dateKey: string) => {
+      if (!activeTripId) return;
+      const t = tripsRef.current.find((x) => x.id === activeTripId);
+      if (!t) return;
+      const apply = () => {
+        const trip = tripsRef.current.find((x) => x.id === activeTripId);
+        if (!trip || !activeTripId) return;
+        const nextAss: Assignments = { ...trip.assignments };
+        const day = { ...(nextAss[dateKey] ?? {}) };
+        day.am = "rest";
+        day.pm = "rest";
+        nextAss[dateKey] = day;
+        commitAssignmentsUpdate(activeTripId, nextAss, {
+          clearAiTimelineDateKeys: tripDayHasAiTimeline(trip, dateKey)
+            ? [dateKey]
+            : [],
+          touchedAssignmentDates: [dateKey],
+        });
+      };
+      const kind = classifyPlannerDay(t.assignments[dateKey], parkByIdPlanner);
+      const dayRows = ridePrioritiesByDayForActiveTrip[dateKey] ?? [];
+      const hasTimeline = tripDayHasAiTimeline(t, dateKey);
+      const replacing = kind !== "unplanned" && kind !== "rest";
+      if (replacing || hasTimeline || dayRows.length > 0) {
+        const bits = ["This day becomes a rest day."];
+        if (replacing) bits.push("The park on this day is replaced.");
+        if (hasTimeline) bits.push("The hour-by-hour plan will be cleared.");
+        if (dayRows.length > 0) bits.push("Ride priorities stay saved.");
+        if (
+          typeof window !== "undefined" &&
+          !window.confirm(bits.join(" "))
+        ) {
+          return;
+        }
+      }
+      apply();
+    },
+    [
+      activeTripId,
+      parkByIdPlanner,
+      ridePrioritiesByDayForActiveTrip,
       commitAssignmentsUpdate,
     ],
   );
@@ -2916,33 +2922,6 @@ function PlannerClientInner({
     return `${mon} · ${tag}`;
   }, [activeTrip, temperatureUnit]);
 
-  const nextPlannerMilestoneLabel = useMemo(() => {
-    if (!activeTrip) return null;
-    const rows = buildPlannerKeyDateRowsSorted(activeTrip);
-    const today = formatDateKey(new Date());
-    const upcoming = rows.find((r) => r.dateKey >= today);
-    return upcoming?.label ?? null;
-  }, [activeTrip]);
-
-  const heroMetadataLine = useMemo(() => {
-    if (!activeTrip) return null;
-    const start = parseDate(activeTrip.start_date);
-    const departs = Number.isNaN(start.getTime())
-      ? "—"
-      : start.toLocaleDateString("en-GB", {
-          day: "numeric",
-          month: "short",
-          year: "numeric",
-        });
-    const range = formatTripHeroDateRange(activeTrip.start_date, activeTrip.end_date);
-    const dest = activeRegionLabel;
-    const party = plannerPartyLabel(activeTrip);
-    const next = nextPlannerMilestoneLabel
-      ? `Next: ${nextPlannerMilestoneLabel}`
-      : "Next: —";
-    return `Departs ${departs} · ${next} · ${range} · ${dest} · ${party}`;
-  }, [activeTrip, activeRegionLabel, nextPlannerMilestoneLabel]);
-
   const plannerTimelineWeatherCrowd = useMemo(() => {
     if (!activeTrip || !plannerTimelineDateKey) {
       return { weather: null as string | null, crowd: null as CrowdLevel | null };
@@ -3015,189 +2994,95 @@ function PlannerClientInner({
     }
   }, [plannerTab, router, tripRouteBase]);
 
-  const heroTripStatus = activeTrip ? tripPlannerStatusMeta(activeTrip) : null;
-
   return (
     <div
       className="min-h-screen bg-tt-bg pb-28 pt-2 text-tt-ink lg:pb-16"
       style={shellThemeStyle}
     >
-      <div className="mx-auto w-full max-w-screen-2xl px-4 pt-2 sm:px-6 lg:px-8">
-        <PlannerTopNotices
-          hasTrip={trips.length > 0}
-          hasAnyAssignment={hasAnyAssignment}
-        />
-      </div>
-
       {activeTrip ? (
+        <TripWorkspaceDataProvider tripId={activeTrip.id}>
         <>
         <main
           ref={mainScrollRef}
           className="mx-auto w-full max-w-screen-2xl px-3 py-3 sm:px-5 sm:py-5 lg:px-6"
         >
-          <header className="relative overflow-hidden rounded-tt-xl border border-tt-line bg-gradient-to-br from-tt-surface via-tt-surface-warm to-tt-bg-soft px-4 py-4 shadow-tt-md sm:px-5 sm:py-5">
-            <div
-              className="pointer-events-none absolute inset-0 opacity-60"
-              aria-hidden
-              style={{
-                backgroundImage:
-                  "radial-gradient(circle at 12% 18%, rgba(255,255,255,.95) 0 1px, transparent 1.5px), radial-gradient(circle at 88% 20%, rgba(217,73,26,.22) 0 1px, transparent 1.6px), radial-gradient(circle at 70% 78%, rgba(47,147,222,.2) 0 1.5px, transparent 2px)",
-              }}
-            />
-            <div className="relative flex flex-col gap-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
-                <div className="min-w-0 flex-1 space-y-3">
-                  <div className="flex flex-wrap items-start gap-2">
-                    <span
-                      className="mt-2 inline-flex shrink-0 items-center gap-2"
-                      title={heroTripStatus?.label}
-                    >
-                      <span
-                        className={`inline-block h-2.5 w-2.5 rounded-full ${heroTripStatus?.dotClass ?? "bg-tt-ink/30"}`}
-                        aria-hidden
-                      />
-                      <span className="sr-only">
-                        Trip status: {heroTripStatus?.label ?? "Unknown"}
-                      </span>
-                    </span>
-                    <h1 className="min-w-0 flex-1 text-balance font-heading text-3xl font-semibold tracking-tight text-tt-royal sm:text-4xl">
-                      <EditableTitle
-                        key={`${activeTrip.id}-fam`}
-                        value={activeTrip.family_name}
-                        onSave={(v) => {
-                          const trimmed = v.trim();
-                          applyLocalPatch(activeTrip.id, { family_name: trimmed });
-                          void withSaving(async () => {
-                            setSaveError(null);
-                            const res = await updateTripMetadataAction({
-                              tripId: activeTrip.id,
-                              familyName: trimmed,
-                            });
-                            if (!res.ok) setSaveError(res.error);
-                          });
-                        }}
-                        className="inline-block min-w-[4ch] text-tt-royal"
-                      />
-                      <span className="text-tt-royal/35"> — </span>
-                      <span className="inline-flex max-w-full flex-wrap items-baseline gap-1.5 sm:gap-2">
-                        <EditableTitle
-                          key={`${activeTrip.id}-adv`}
-                          value={activeTrip.adventure_name}
-                          onSave={(v) => {
-                            const trimmed = v.trim();
-                            applyLocalPatch(activeTrip.id, {
-                              adventure_name: trimmed,
-                            });
-                            void withSaving(async () => {
-                              setSaveError(null);
-                              const res = await updateTripMetadataAction({
-                                tripId: activeTrip.id,
-                                adventureName: trimmed,
-                              });
-                              if (!res.ok) setSaveError(res.error);
-                            });
-                          }}
-                          className="inline-block min-w-[6ch]"
-                          style={{
-                            color: resolvedAdventureTitleColor(
-                              activeTrip.preferences,
-                            ),
-                          }}
-                        />
-                        <AdventureTitleColorControl
-                          preferences={activeTrip.preferences}
-                          onColorChange={(next) => {
-                            const prev =
-                              activeTrip.preferences &&
-                              typeof activeTrip.preferences === "object" &&
-                              !Array.isArray(activeTrip.preferences)
-                                ? ({
-                                    ...activeTrip.preferences,
-                                  } as Record<string, unknown>)
-                                : ({} as Record<string, unknown>);
-                            applyLocalPatch(activeTrip.id, {
-                              preferences: {
-                                ...prev,
-                                [ADVENTURE_TITLE_COLOR_KEY]: next,
-                              },
-                            });
-                            void withSaving(async () => {
-                              setSaveError(null);
-                              const res = await updateTripPreferencesPatchAction({
-                                tripId: activeTrip.id,
-                                patch: {
-                                  [ADVENTURE_TITLE_COLOR_KEY]: next,
-                                },
-                              });
-                              if (!res.ok) setSaveError(res.error);
-                            });
-                          }}
-                        />
-                      </span>
-                    </h1>
-                  </div>
-                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-sans text-sm text-tt-ink-muted">
-                    {heroMetadataLine}
-                  </p>
-                  <PlannerHeroStats trip={activeTrip} parks={calendarParks} />
-                </div>
-
-                <div className="flex w-full shrink-0 flex-col gap-2 sm:max-w-xs lg:w-64">
-                  <label className="block font-meta text-[11px] font-semibold uppercase tracking-wide text-tt-ink-soft">
-                    Switch trip
-                    <select
-                      value={activeTripId}
-                      onChange={(e) => {
-                        const id = e.target.value;
-                        setActiveTripId(id);
-                        void touchTripAction(id);
-                        const tabQ =
-                          plannerTab !== "planner" ? `?tab=${plannerTab}` : "";
-                        if (tripRouteBase) {
-                          router.push(`/trip/${id}${tabQ}`);
-                        }
-                      }}
-                      className="mt-1.5 min-h-11 w-full rounded-tt-md border border-tt-line bg-tt-surface px-3 py-2 text-sm font-semibold text-tt-royal shadow-tt-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-tt-royal/40"
-                    >
-                      {trips.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.family_name} — {t.adventure_name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                    {showGoToTodayPill ? (
-                      <Button
-                        type="button"
-                        variant="accent"
-                        size="sm"
-                        className="rounded-full"
-                        onClick={() => {
-                          const todayKey = formatDateKey(new Date());
-                          const el = document.getElementById(
-                            `planner-day-${todayKey}`,
-                          );
-                          el?.scrollIntoView({
-                            behavior: "smooth",
-                            block: "center",
-                          });
-                          setGoToTodayRingDateKey(todayKey);
-                          window.setTimeout(() => setGoToTodayRingDateKey(null), 1000);
-                        }}
-                      >
-                        Go to today →
-                      </Button>
-                    ) : null}
-                    <SavingIndicator
-                      isSaving={savingVisible}
-                      lastSavedAt={lastSavedAt}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </header>
+          <TripWorkspaceBrief
+            trip={activeTrip}
+            trips={trips}
+            parks={calendarParks}
+            payments={paymentsByTripId[activeTrip.id] ?? []}
+            regionLabel={activeRegionLabel}
+            onSwitchTrip={(id) => {
+              setActiveTripId(id);
+              void touchTripAction(id);
+              const tabQ = plannerTab !== "planner" ? `?tab=${plannerTab}` : "";
+              if (tripRouteBase) {
+                router.push(`/trip/${id}${tabQ}`);
+              }
+            }}
+            onSaveFamilyName={(v) => {
+              const trimmed = v.trim();
+              applyLocalPatch(activeTrip.id, { family_name: trimmed });
+              void withSaving(async () => {
+                setSaveError(null);
+                const res = await updateTripMetadataAction({
+                  tripId: activeTrip.id,
+                  familyName: trimmed,
+                });
+                if (!res.ok) setSaveError(res.error);
+              });
+            }}
+            onSaveAdventureName={(v) => {
+              const trimmed = v.trim();
+              applyLocalPatch(activeTrip.id, { adventure_name: trimmed });
+              void withSaving(async () => {
+                setSaveError(null);
+                const res = await updateTripMetadataAction({
+                  tripId: activeTrip.id,
+                  adventureName: trimmed,
+                });
+                if (!res.ok) setSaveError(res.error);
+              });
+            }}
+            onAdventureColorChange={(next) => {
+              const prev =
+                activeTrip.preferences &&
+                typeof activeTrip.preferences === "object" &&
+                !Array.isArray(activeTrip.preferences)
+                  ? ({ ...activeTrip.preferences } as Record<string, unknown>)
+                  : ({} as Record<string, unknown>);
+              applyLocalPatch(activeTrip.id, {
+                preferences: {
+                  ...prev,
+                  [ADVENTURE_TITLE_COLOR_KEY]: next,
+                },
+              });
+              void withSaving(async () => {
+                setSaveError(null);
+                const res = await updateTripPreferencesPatchAction({
+                  tripId: activeTrip.id,
+                  patch: { [ADVENTURE_TITLE_COLOR_KEY]: next },
+                });
+                if (!res.ok) setSaveError(res.error);
+              });
+            }}
+            showGoToToday={showGoToTodayPill}
+            onGoToToday={() => {
+              const todayKey = formatDateKey(new Date());
+              const el = document.getElementById(`planner-day-${todayKey}`);
+              el?.scrollIntoView({ behavior: "smooth", block: "center" });
+              setGoToTodayRingDateKey(todayKey);
+              window.setTimeout(() => setGoToTodayRingDateKey(null), 1000);
+            }}
+            isSaving={savingVisible}
+            lastSavedAt={lastSavedAt}
+            onOpenSmartPlan={() => {
+              setSmartError(null);
+              setSmartScopeOverride("trip");
+              setSmartOpen(true);
+            }}
+            onOpenDay={(dateKey) => openDayDetail(dateKey)}
+          />
 
           {saveError ? (
             <div
@@ -3217,7 +3102,7 @@ function PlannerClientInner({
           ) : null}
 
           <section
-            className="mt-4 flex flex-wrap items-center gap-2 rounded-tt-lg border border-tt-line bg-tt-surface/90 px-3 py-3 shadow-tt-sm backdrop-blur-md"
+            className="mt-3 flex flex-wrap items-center gap-2"
             aria-label="Trip actions"
           >
             <Button
@@ -3541,6 +3426,12 @@ function PlannerClientInner({
               regionLabelForKeyDates={regionLabel}
               regionCountryCode={activeTripRegionCountryCode}
               initialSection={initialPlanningSection}
+              parks={calendarParks}
+              hasAnyAssignment={hasAnyAssignment}
+              onEditTrip={() => {
+                setWizardEditId(activeTrip.id);
+                setWizardOpen(true);
+              }}
             />
           ) : (
             <PlannerGridColumnDynamic
@@ -3562,6 +3453,7 @@ function PlannerClientInner({
               onSaveDayTimes={onSaveDayTimes}
               onTransferSlot={onTransferSlot}
               onAssign={onAssign}
+              onMakeRestDay={onMakeRestDay}
               onClear={onClear}
               onNeedParkFirst={() => showHint("Pick a park first")}
               onAfterSlotClear={() => showToast("Slot cleared")}
@@ -3619,10 +3511,7 @@ function PlannerClientInner({
                 }
               }}
               paymentsByTripId={paymentsByTripId}
-              onPaymentsChange={handlePaymentsChange}
               onTripPatch={(patch) => applyLocalPatch(activeTrip.id, patch)}
-              regionLabelForKeyDates={regionLabel}
-              regionCountryCode={activeTripRegionCountryCode}
               setCompareMode={setCompareMode}
             />
           )}
@@ -3651,6 +3540,7 @@ function PlannerClientInner({
           </footer>
         ) : null}
         </>
+        </TripWorkspaceDataProvider>
       ) : (
         <main className="mx-auto w-full max-w-2xl px-4 py-12 text-center sm:px-6 sm:py-16">
           <div className="mx-auto flex max-w-md flex-col items-center">
@@ -3795,9 +3685,9 @@ function PlannerClientInner({
               Undo Smart Plan?
             </h2>
             <p className="mt-3 font-sans text-sm text-tt-royal/80">
-              This will restore your trip to the state it was in before the last
-              Smart Plan generation. Any Smart Plan suggestions will be removed.
-              This cannot be undone.
+              This puts the calendar back to how it was before the last Smart
+              Plan. Rest days and park days from that point return. Ride
+              priorities stay as they are. You can undo once.
             </p>
             <p className="mt-2 font-sans text-xs text-tt-royal/60">
               Snapshot:{" "}

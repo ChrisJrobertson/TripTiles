@@ -4,6 +4,7 @@ type Props = {
   /** True when `/api/live-wait/current` returned at least one mapped row. */
   hasLiveRows: boolean;
   showQueueTimesAttribution: boolean;
+  showThemeParksWikiAttribution?: boolean;
   loading: boolean;
 };
 
@@ -13,6 +14,7 @@ type Props = {
 export function LiveWaitDayStrip({
   hasLiveRows,
   showQueueTimesAttribution,
+  showThemeParksWikiAttribution = false,
   loading,
 }: Props) {
   if (loading) return null;
@@ -33,6 +35,20 @@ export function LiveWaitDayStrip({
             className="font-medium text-royal underline decoration-gold/50 underline-offset-2"
           >
             Powered by Queue-Times.com
+          </a>
+          .
+        </>
+      ) : null}
+      {showThemeParksWikiAttribution ? (
+        <>
+          {" "}
+          <a
+            href="https://themeparks.wiki/"
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-royal underline decoration-gold/50 underline-offset-2"
+          >
+            Powered by ThemeParks.wiki
           </a>
           .
         </>

@@ -54,6 +54,7 @@ export type PlannerGridColumnStackProps = {
     toSlot: SlotType,
   ) => void;
   onAssign: (dateKey: string, slot: SlotType, parkId: string) => void;
+  onMakeRestDay: (dateKey: string) => void;
   onClear: (dateKey: string, slot: SlotType) => void;
   onNeedParkFirst: () => void;
   onAfterSlotClear: () => void;
@@ -112,10 +113,7 @@ export type PlannerGridColumnStackProps = {
   onShareTimelineDay: (() => void) | undefined;
   onEditTimelineDay: () => void;
   paymentsByTripId: Record<string, TripPayment[]>;
-  onPaymentsChange: (tripId: string, next: TripPayment[]) => void;
   onTripPatch: (patch: Partial<Trip>) => void;
-  regionLabelForKeyDates: string;
-  regionCountryCode?: string | null;
   setCompareMode: (v: boolean) => void;
 };
 
@@ -138,6 +136,7 @@ export function PlannerGridColumnStack({
   onSaveDayTimes,
   onTransferSlot,
   onAssign,
+  onMakeRestDay,
   onClear,
   onNeedParkFirst,
   onAfterSlotClear,
@@ -174,10 +173,7 @@ export function PlannerGridColumnStack({
   onShareTimelineDay,
   onEditTimelineDay,
   paymentsByTripId,
-  onPaymentsChange,
   onTripPatch,
-  regionLabelForKeyDates,
-  regionCountryCode = null,
   setCompareMode,
 }: PlannerGridColumnStackProps) {
   const {
@@ -189,7 +185,7 @@ export function PlannerGridColumnStack({
 
   return (
     <div
-      className={`mt-8 grid items-start gap-6 ${
+      className={`mt-4 grid items-start gap-4 ${
         compareMode
           ? ""
           : "lg:grid-cols-[minmax(18rem,20rem)_minmax(0,1fr)] lg:gap-5 xl:gap-6"
@@ -256,15 +252,11 @@ export function PlannerGridColumnStack({
             {!hasAnyAssignment &&
             !dayDetailOpen &&
             !autoGenerateInFlight ? (
-              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-3 sm:p-4">
-                <div className="pointer-events-auto w-full max-w-md">
-                  <EmptyCalendarCta
-                    onGenerateAi={onEmptyCalendarGenerateAi}
-                    onAddManually={onEmptyCalendarAddManually}
-                    onSurpriseMe={onEmptyCalendarSurprise}
-                  />
-                </div>
-              </div>
+              <EmptyCalendarCta
+                onGenerateAi={onEmptyCalendarGenerateAi}
+                onAddManually={onEmptyCalendarAddManually}
+                onSurpriseMe={onEmptyCalendarSurprise}
+              />
             ) : null}
             <div className="relative min-w-0">
               {dayDetailOpen &&
@@ -295,6 +287,7 @@ export function PlannerGridColumnStack({
                     onOpenDayPlanner={(opts) =>
                       openDayPlanner(dayCanonicalForDetail, opts)
                     }
+                    onMakeRestDay={onMakeRestDay}
                     onUndoDayTweak={handleUndoDayTweak}
                     onGenerateMustDosForPark={(parkId) => {
                       void runMustDosGen(dayCanonicalForDetail, parkId);
@@ -336,6 +329,7 @@ export function PlannerGridColumnStack({
                     rideCountsByDay={rideCountsByDayForActiveTrip}
                     onRideDayPrioritiesUpdated={handleRideDayPrioritiesUpdated}
                     onOpenDayPlanner={openDayPlanner}
+                    onMakeRestDay={onMakeRestDay}
                     onUndoDayTweak={handleUndoDayTweak}
                     cataloguedParkIdSet={cataloguedParkIdSet}
                     onGenerateMustDosForPark={runMustDosGen}
@@ -362,7 +356,7 @@ export function PlannerGridColumnStack({
                 </>
               ) : (
                 <>
-                  <div className="hidden md:block">
+                  <div className="hidden md:block" id="trip-calendar">
                     <Calendar
                       trip={activeTrip}
                       parks={calendarParks}
@@ -394,10 +388,12 @@ export function PlannerGridColumnStack({
                   {tripRouteBase ? (
                     <MobileTripCalendarStripNav
                       trip={activeTrip}
+                      parks={calendarParks}
                       tripRouteBase={tripRouteBase}
                       dayNotes={mobilePlannerNoteMaps.ai}
                       userDayNotes={mobilePlannerNoteMaps.user}
                       showCoachMark={false}
+                      rideCountsByDay={rideCountsByDayForActiveTrip}
                     />
                   ) : null}
                   {activeTrip ? (
@@ -430,10 +426,7 @@ export function PlannerGridColumnStack({
                       <PlannerPlanningDeck
                         trip={activeTrip}
                         payments={paymentsByTripId[activeTrip.id] ?? []}
-                        onPaymentsChange={onPaymentsChange}
-                        regionLabelForKeyDates={regionLabelForKeyDates}
-                        regionCountryCode={regionCountryCode}
-                        onTripPatch={onTripPatch}
+                        parks={calendarParks}
                       />
                     </div>
                   ) : null}

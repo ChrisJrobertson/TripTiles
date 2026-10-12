@@ -38,6 +38,12 @@ import { sanitizeAiPlannerDisplayText } from "@/lib/ai-sanitize-notes";
 import { truncateForPreview } from "@/lib/truncate-text";
 import { plannerUserDayNotes } from "@/lib/planner-note-maps";
 import { getAiDayTimelineForDate } from "@/lib/ai-day-timeline";
+import {
+  classifyPlannerDay,
+  plannerDayNextStep,
+  plannerDayReadiness,
+  plannerDayReadinessLabel,
+} from "@/lib/trip-workspace-status";
 import { normaliseThemeKey } from "@/lib/themes";
 import { plannerCalendarParkSlotStyle } from "@/lib/theme-colours";
 import { buildSkipLineDayTimelineRows } from "@/lib/skip-line-day-timeline";
@@ -54,6 +60,7 @@ import {
 import { useUnsavedChanges } from "@/hooks/useUnsavedChanges";
 import type { Tier } from "@/lib/tier";
 import { LiveWaitDayStrip } from "@/components/live-wait/LiveWaitDayStrip";
+import { ParkDayFacts } from "@/components/planner/ParkDayFacts";
 import { useLiveWaitByAttractionForParks } from "@/components/live-wait/useLiveWaitByAttractionForParks";
 import { AIDayStrategyPanel } from "@/components/planner/AIDayStrategyPanel";
 import type {
@@ -136,6 +143,8 @@ export type TripDayPageViewProps = {
   onOpenSmartPlan: () => void;
   /** Consolidated AI for this day (slots + ride strategy). */
   onOpenDayPlanner: (options?: { tab?: "adjust" | "strategy" }) => void;
+  /** Sets morning and afternoon to a rest day. Confirms when that replaces a plan. */
+  onMakeRestDay?: (dateKey: string) => void;
   onUndoDayTweak: (dateKey: string) => void;
   onGenerateMustDosForPark: (parkId: string) => void;
   generatingMustDosParkId: string | null;
@@ -173,6 +182,7 @@ export function TripDayPageView({
   onSaveDayTimes,
   onOpenSmartPlan,
   onOpenDayPlanner,
+  onMakeRestDay,
   onUndoDayTweak,
   onGenerateMustDosForPark,
   generatingMustDosParkId,
@@ -529,15 +539,38 @@ export function TripDayPageView({
     return () => window.removeEventListener("keydown", onKey);
   }, [deskKb, closeToCalendar, prev, next, navigateTo]);
 
-  const parkLabels = useMemo(() => {
-    const ids = parkIdsAmPmForDay(trip, dayDate);
-    const names = ids
+  const dayReadiness = useMemo(() => {
+    const kind = classifyPlannerDay(ass, parkById);
+    const status = plannerDayReadiness({
+      kind,
+      hasRidePriorities: ridePriorities.length > 0,
+      hasDayPlan: Boolean(richTimeline),
+    });
+    const names = parkIdsAmPmForDay(trip, dayDate)
       .map((id) => parkById.get(id)?.name)
       .filter(Boolean) as string[];
-    if (names.length === 0) return "Rest / pool";
-    if (names.length === 1) return names[0]!;
-    return names.join(" · ");
-  }, [trip, dayDate, parkById]);
+    const place =
+      status === "rest"
+        ? "Rest day"
+        : status === "open"
+          ? "Nothing assigned yet"
+          : names.length > 0
+            ? names.join(" · ")
+            : plannerDayReadinessLabel(status);
+    const mustDo = ridePriorities.filter((row) => row.priority === "must_do").length;
+    const ifTime = ridePriorities.filter((row) => row.priority === "if_time").length;
+    const rides =
+      mustDo + ifTime > 0
+        ? `${mustDo} must do · ${ifTime} if time`
+        : null;
+    return {
+      status,
+      label: plannerDayReadinessLabel(status),
+      place,
+      next: plannerDayNextStep(status),
+      rides,
+    };
+  }, [ass, parkById, ridePriorities, richTimeline, trip, dayDate]);
 
   const dayHeaderChroma = useMemo(() => {
     const ids = parkIdsAmPmForDay(trip, dayDate);
@@ -738,7 +771,17 @@ export function TripDayPageView({
                     dayHeaderChroma ? " opacity-90" : " text-tt-ink-muted"
                   }`}
                 >
-                  {parkLabels}
+                  {dayReadiness.place}
+                  <span className="mx-1.5">·</span>
+                  {dayReadiness.label}
+                </p>
+                <p
+                  className={`mt-1 font-sans text-xs leading-relaxed${
+                    dayHeaderChroma ? " opacity-90" : " text-tt-ink"
+                  }`}
+                >
+                  {dayReadiness.next}
+                  {dayReadiness.rides ? ` ${dayReadiness.rides}.` : ""}
                 </p>
               </div>
             </div>
@@ -853,14 +896,74 @@ export function TripDayPageView({
           </div>
           <div className="flex flex-wrap items-center gap-2 font-sans text-xs text-tt-ink-muted">
             {amPmThemeIdsForRides.length > 0 ? (
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => queueAction(() => onOpenDayPlanner())}
-            >
-              <span aria-hidden>✨</span>
-              Plan this day
-            </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => queueAction(() => onOpenDayPlanner())}
+              >
+                <span aria-hidden>✨</span>
+                Quick plan
+              </Button>
+            ) : dayReadiness.status === "rest" ? null : (
+              <Button
+                type="button"
+                size="sm"
+                onClick={() =>
+                  queueAction(() => {
+                    showToast("Pick a park from the list, then tap this day.");
+                    closeToCalendar();
+                  })
+                }
+              >
+                Assign a park
+              </Button>
+            )}
+            {amPmThemeIdsForRides.length > 0 ||
+            (onMakeRestDay && dayReadiness.status !== "rest") ? (
+            <details className="group">
+              <summary className="flex min-h-9 cursor-pointer list-none items-center rounded-tt-md border border-tt-line bg-tt-surface px-3 font-sans text-xs font-semibold text-tt-royal [&::-webkit-details-marker]:hidden">
+                More for this day
+              </summary>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {amPmThemeIdsForRides.length > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      queueAction(() => {
+                        showToast("Pick a park from the list, then tap this day.");
+                        closeToCalendar();
+                      })
+                    }
+                  >
+                    Change park
+                  </Button>
+                ) : null}
+                {onMakeRestDay && dayReadiness.status !== "rest" ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => queueAction(() => onMakeRestDay(dayDate))}
+                  >
+                    Make this a rest day
+                  </Button>
+                ) : null}
+                {amPmThemeIdsForRides.length > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      queueAction(() => onOpenDayPlanner({ tab: "strategy" }))
+                    }
+                  >
+                    Build day strategy
+                  </Button>
+                ) : null}
+              </div>
+            </details>
             ) : null}
             {daySnapshotCount > 0 && latestDaySnapshot ? (
               <Button
@@ -976,7 +1079,7 @@ export function TripDayPageView({
               ) : null}
             </>
           ) : null}
-          {showLegacyPlannerChrome ? (
+          {dayReadiness.status === "rest" ? null : showLegacyPlannerChrome ? (
             <details className="mb-4 mt-3 rounded-lg border border-royal/10 bg-white/90 open:border-royal/20 dark:border-white/10 dark:bg-neutral-900/20">
               <summary className="cursor-pointer list-none p-3 font-sans text-sm font-semibold text-royal marker:hidden [&::-webkit-details-marker]:hidden dark:text-neutral-200">
                 Regenerate with different options
@@ -999,7 +1102,7 @@ export function TripDayPageView({
 
           {dayStrategyRow ? (
             <AIDayStrategyPanel strategy={dayStrategyRow} />
-          ) : showExpandedDayPanel ? (
+          ) : showExpandedDayPanel && dayReadiness.status !== "rest" ? (
             <ExpandedDayPanel
               embedded
               tripId={trip.id}
@@ -1028,9 +1131,12 @@ export function TripDayPageView({
             />
           ) : null}
 
+          <ParkDayFacts parkIds={amPmThemeIdsForRides} date={dayDate} />
+
           <LiveWaitDayStrip
             hasLiveRows={liveWaitDay.map.size > 0}
             showQueueTimesAttribution={liveWaitDay.showAttribution}
+            showThemeParksWikiAttribution={liveWaitDay.showThemeParksWikiAttribution}
             loading={liveWaitDay.status === "loading"}
           />
 
