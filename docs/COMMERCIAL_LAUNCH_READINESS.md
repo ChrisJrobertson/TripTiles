@@ -72,7 +72,7 @@ Stripe implementation: 15 / 15 = **100%**. Verified: 5 / 15 = **33.3%**. No test
 | --- | --- | ---: | ---: | ---: | --- |
 | T1 | `npm test` | 4 | 100 | 50 | Passed on 13 October 2026, including the new cron authorization, Stripe entitlement, and webhook dedup tests. |
 | T2 | `npm run lint` | 2 | 100 | 50 | Exit 0. One existing warning in `MobileDayView.tsx` (`react-hooks/exhaustive-deps`). |
-| T3 | `npx tsc --noEmit` | 3 | 100 | 50 | Exit 0 after the auth harness link params were typed. |
+| T3 | `npx tsc --noEmit` | 3 | 100 | 50 | Exit 0 on 13 October after the auth-harness env type accepted a constructed runtime name. |
 | T4 | `NODE_ENV=production npm run build` | 3 | 100 | 50 | The previous production build on this branch passed. It was not repeated after the 13 October edits. |
 | T5 | Playwright registration-to-trip journey | 3 | 50 | 25 | `e2e/public-journey.spec.ts` and `e2e/existing-customer.spec.ts` exist. One run passed marketing, pricing, and both signup validation tests. Login, protected redirects, and the signed-in reopen did not finish because a wedged dev server never served `/login`. A later run timed out after 15 minutes waiting for a fresh dev server. No account was created. |
 

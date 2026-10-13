@@ -5,7 +5,10 @@
  */
 const releaseRuntime = ["prod", "uction"].join("");
 
-export function assertAuthTestHarnessAllowed(env: NodeJS.ProcessEnv): void {
+export function assertAuthTestHarnessAllowed(env: {
+  NODE_ENV?: string;
+  TRIPTILES_ALLOW_AUTH_TEST?: string;
+}): void {
   if (env.NODE_ENV === releaseRuntime) {
     throw new Error("Auth test harness is refused for a release runtime.");
   }
