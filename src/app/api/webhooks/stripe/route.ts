@@ -1,4 +1,5 @@
 import { enqueueSubscriptionPaymentFailedEmail } from "@/lib/stripe/enqueue-payment-failed-email";
+import { classifyWebhookInsertError } from "@/lib/stripe/webhook-dedup";
 import { getStripeClient } from "@/lib/stripe/client";
 import {
   handleSubscriptionDeleted,
@@ -113,10 +114,11 @@ export async function POST(req: Request) {
     .from("stripe_webhook_events")
     .insert({ id: event.id });
 
-  if (dedupErr) {
-    if (dedupErr.code === "23505") {
-      return NextResponse.json({ received: true, duplicate: true });
-    }
+  const dedup = classifyWebhookInsertError(dedupErr?.code);
+  if (dedup === "duplicate") {
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+  if (dedup === "failed") {
     console.error("[stripe webhook] dedup insert failed", dedupErr);
     return NextResponse.json({ error: "dedup failed" }, { status: 500 });
   }
