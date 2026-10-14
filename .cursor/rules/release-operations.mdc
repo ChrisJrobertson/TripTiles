@@ -1,0 +1,14 @@
+---
+description: GitHub checks, Vercel diagnostics and release blockers
+globs: vercel.json,.github/**,docs/COMMERCIAL_LAUNCH_READINESS.md
+alwaysApply: false
+---
+
+# Release and operations
+
+- Quality CI installs with `npm ci`, then lints, typechecks, runs `npm test` and builds. It does not deploy or migrate.
+- `npm run deploy:vercel` and `vercel --prod` need explicit approval.
+- Vercel cron routes require `Authorization: Bearer` matching `CRON_SECRET`. Missing configuration must fail closed.
+- Read deployment logs through Vercel MCP only after that server is authenticated. Do not print environment secret values.
+- Update `docs/COMMERCIAL_LAUNCH_READINESS.md` only with evidence from commands or tool calls. Do not raise a score because a file exists.
+- A rollback path is a release blocker until backups and the previous deployment are identified. Do not invent one.

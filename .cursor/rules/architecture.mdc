@@ -1,0 +1,15 @@
+---
+description: TripTiles application structure, TypeScript boundaries and error handling
+globs: src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Architecture
+
+- App Router lives in `src/app`. Shared UI is in `src/components`. Server actions are in `src/actions`. Domain logic belongs in `src/lib`, not in large new client components.
+- Keep Supabase access in the existing server and `src/lib/supabase` helpers. Do not create a second client pattern.
+- Preserve British English in customer-facing copy.
+- Return explicit error states from server actions. Do not swallow failures into a success result.
+- Do not add a dependency when the repository already has a suitable utility.
+- `src/actions/ai.ts` is large. Extend the existing Smart Plan path rather than starting a parallel generator.
+- Static monthly conditions are not a live forecast. Wait times are live only when freshness is LIVE.

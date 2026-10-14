@@ -4,8 +4,8 @@
 import assert from "node:assert/strict";
 import { assertAuthTestHarnessAllowed } from "./test-session-guard";
 
-const releaseRuntime = ["prod", "uction"].join("");
-const localRuntime = ["develop", "ment"].join("");
+const releaseRuntime = "production" as const;
+const localRuntime = ["develop", "ment"].join("") as NodeJS.ProcessEnv["NODE_ENV"];
 
 function run() {
   assert.throws(

@@ -1,0 +1,16 @@
+---
+description: Supabase schema, RLS, auth and safe migration procedure
+globs: supabase/**,src/lib/supabase/**,src/middleware.ts,src/actions/auth.ts,src/actions/account.ts
+alwaysApply: false
+---
+
+# Database and security
+
+- Active migrations are the five files in `supabase/migrations/`. Do not replay `supabase/legacy-migrations/`.
+- Follow `CLAUDE.md`: cite sources, prove CHECK constraints, record row counts, UPSERT catalogue data, and write an idempotent SQL file after any MCP migration.
+- Inspect columns and constraints before writing an import. Do not guess allowed values.
+- Stop if remote migration history does not match the five-file baseline. Do not drop tables or reset the remote database.
+- Protected routes must fail closed when Supabase auth cannot be evaluated.
+- Authorise on the server. Do not trust client-supplied user ids. Do not use `user_metadata` for authorisation.
+- Service-role access stays on the server. Never expose it to the browser.
+- Webhook handlers must verify signatures. Do not log secrets or full payment payloads.
