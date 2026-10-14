@@ -1,7 +1,20 @@
 {
   "mcpServers": {
     "supabase": {
-      "url": "https://mcp.supabase.com/mcp?project_ref=hjbbojypllltfjfuojzn"
+      "url": "https://mcp.supabase.com/mcp?project_ref=inqexwdkuqdfdoaauxyw&read_only=true&features=database,docs,debugging"
+    },
+    "vercel": {
+      "url": "https://mcp.vercel.com"
+    },
+    "github": {
+      "url": "https://api.githubcopilot.com/mcp/readonly"
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"]
+    },
+    "figma": {
+      "url": "https://mcp.figma.com/mcp"
     }
   }
 }

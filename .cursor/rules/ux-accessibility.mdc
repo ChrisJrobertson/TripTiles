@@ -1,0 +1,14 @@
+---
+description: TripTiles UI consistency, responsive layout and accessibility
+globs: src/components/**/*.tsx,src/app/**/*.tsx
+alwaysApply: false
+---
+
+# UX and accessibility
+
+- Match existing TripTiles components, spacing and type before introducing a new visual pattern.
+- Compare with Figma only after the Figma MCP connection is actually authenticated. Do not edit Figma files.
+- Provide visible labels for inputs. Keep keyboard access for buttons, dialogs and day navigation.
+- Do not rely on colour alone for crowd, wait or error status.
+- Every changed screen needs a loading, empty and error state where data can fail.
+- Do not describe static monthly weather as live weather, or stale waits as live waits.

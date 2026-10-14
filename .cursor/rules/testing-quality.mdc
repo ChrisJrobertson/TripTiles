@@ -1,0 +1,13 @@
+---
+description: How TripTiles tests are run and how results must be reported
+globs: "**/*.test.ts,.github/workflows/**"
+alwaysApply: false
+---
+
+# Testing and quality
+
+- `npm test` runs the repository's `tsx` assertion scripts. Do not add a second test runner for a small change.
+- A test must fail if the behaviour is absent. Do not hard-code a passing result.
+- Browser checks use the local app. Do not drive production accounts or send live email.
+- Record the command, exit status and any warning. A warning is not a pass for the behaviour it concerns.
+- Playwright MCP may inspect a local session. It is not a substitute for `npm test`.
