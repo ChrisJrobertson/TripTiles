@@ -43,7 +43,7 @@ No application business logic, production data, Vercel settings or database migr
 | Playwright MCP connection | REQUIRES USER ACTION | `npx -y @playwright/mcp@latest --version` printed `0.0.83` and `--help` succeeded. Cursor did not expose Playwright tools in this session, so the agent connection is not verified. |
 | Figma MCP connection | REQUIRES USER ACTION | GET `https://mcp.figma.com/mcp` returned 405. No authenticated tool call. Plugin install needs the Cursor chat command `/add-plugin figma`. |
 | Application tests | PASS | `npm run lint` exit 0 with the existing `MobileDayView.tsx` hook warning. `npx tsc --noEmit` exit 0. `npm test` exit 0. |
-| CI/CD workflow | NOT TESTED | `.github/workflows/quality.yml` is new. It has not completed a GitHub Actions run yet. |
+| CI/CD workflow | PASS | GitHub Actions run [38536983000](https://github.com/ChrisJrobertson/TripTiles/actions/runs/38536983000) on pull request 10. Job `quality` passed: `npm ci`, lint, `tsc`, `npm test` and production build. Job `dependency-audit` exited 1 on existing advisories and is `continue-on-error`, so the workflow stayed green while the finding remains visible. |
 | Stored configuration security | PASS | `.cursor/mcp.json` has URLs and the Playwright command only. No tokens, headers or env secret values. `.gitignore` already ignores `.env*`. |
 
 Configuration on disk is not counted as a connected server.
@@ -83,6 +83,6 @@ Production build was not repeated. Application code did not change. The previous
 ## Remaining work
 
 - Complete the five logins and repeat the audit skill so each server can move from REQUIRES USER ACTION to PASS or FAIL.
-- Watch the first Quality workflow run on the pull request.
+- The first Quality workflow run has completed. The non-blocking audit job still reports the existing advisories.
 - Plan a Next.js security upgrade separately. Do not force it inside this setup.
 - Catalogue docs still mention `hjbbojypllltfjfuojzn`. That is historical and was left unchanged.
