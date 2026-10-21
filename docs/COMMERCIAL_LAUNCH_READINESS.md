@@ -17,7 +17,7 @@ Target project: `inqexwdkuqdfdoaauxyw`. The remote history matched the first fou
 
 Injected `DATABASE_URL` and `SUPABASE_SERVICE_KEY` are for retired project `kdmxevvmmsszqkwbmiko` (pooler host, JWT `ref` decoded locally). They were not used.
 
-`npx supabase link` and `migration list` still cannot run: `SUPABASE_ACCESS_TOKEN` and the database password are absent. `public.schema_migrations` is not exposed through PostgREST, so remote version history was not read. The five-file baseline was not pushed.
+`npx supabase migration list --linked` on 15 October showed all five local versions equal to the remote versions, including `20261012150000`. The sentence below that said the history could not be read is out of date.
 
 | ID | Criterion | Weight | Impl | Verified | Evidence |
 | --- | --- | ---: | ---: | ---: | --- |
@@ -33,13 +33,13 @@ Database implementation: 20 / 20 = **100%**. Verified: 16 / 20 = **80%**.
 
 | ID | Criterion | Weight | Impl | Verified | Evidence |
 | --- | --- | ---: | ---: | ---: | --- |
-| A1 | Register, verify email, log in | 4 | 100 | 25 | Signup, OTP, and password actions exist. Both existing users are confirmed. No new registration was executed. Local harness: `scripts/auth-test-session.ts` (Auth Admin `generateLink` only, refused for a release runtime or when `TRIPTILES_ALLOW_AUTH_TEST` is unset). Guard test passed. Harness was not executed against the project. |
-| A2 | Create an Orlando trip and retrieve it | 4 | 100 | 25 | Eight private Orlando trips already stored, four per owner. This run did not create or reopen one through the app. |
-| A3 | Edit dates, parks, and priorities, then see them after a new login | 4 | 100 | 25 | Edit and save code exists. Not executed. |
-| A4 | User B cannot read or change User A's private trip | 4 | 100 | 75 | `npm run test:isolation` signed in as both existing users. Each saw 4 trips, with no shared ids. Cross-reads were empty. A disposable Orlando probe owned by Chris was not readable, updatable, or deletable by Ellie. Chris could rename and delete only that probe. The same denial was checked against Ellie's existing trips. The eight real trips were not edited. |
-| A5 | Publish a trip, view the public page, then revoke it | 4 | 75 | 25 | `is_public` exists. All 8 live trips are private. Publish and revoke were not clicked. |
+| A1 | Register, verify email, log in | 4 | 100 | 50 | `e2e/returning-customer.spec.ts` passed on 21 October against `next start` and project `inqexwdkuqdfdoaauxyw`, commit `7b2945e`. The isolated confirmed account signed in through the login form, signed out, was refused by `/trip/{id}` and `/planner`, then signed in again. Live signup email was not sent again. The 21 October registration evidence still stands, and the combined register-then-login test remains split. Previous verified score 25. |
+| A2 | Create an Orlando trip and retrieve it | 4 | 100 | 75 | Same Playwright run created trip `95a460d1-c204-409b-880b-3b092d47cec8` for 6–13 December 2026, 2 adults, must-do parks `mk` and `eu`. After sign-out and a new login the same id, dates, party size, and parks were still on the trip. A later user-scoped read returned `Orlando 2026 revised`, `2026-12-06`–`2026-12-13`, adults 2, parks `mk` and `eu`. Previous verified score 25. |
+| A3 | Edit dates, parks, and priorities, then see them after a new login | 4 | 100 | 50 | The same run renamed the trip to `Orlando 2026 revised`, reloaded, and still showed that name. The database row matched. Dates, party size, and parks were checked after the second login and were not edited. Previous verified score 25. |
+| A4 | User B cannot read or change User A's private trip | 4 | 100 | 75 | `scripts/verify-e2e-isolation.ts` on 21 October, commit `7b2945e`, used `triptiles-e2e-returning@example.com` and `triptiles-e2e-isolation-b@example.com`. User-scoped REST: owner read 200/1 row; cross-read, cross-update, and cross-delete 200/0 rows; the reverse read was 0 rows. Ride priorities, payments, and budget items were 0 rows for the other user. Anon read of the private trip was 0 rows. Previous verified score 75. The older Chris/Ellie script now refuses to run unless `TRIPTILES_ALLOW_REAL_ACCOUNT_ISOLATION=1`. |
+| A5 | Publish a trip, view the public page, then revoke it | 4 | 75 | 25 | The same isolation run set `is_public` and a slug, then cleared them. Anon could read the published row and could not read it after revoke. The public page was not opened. The anon payload included the private note, child ages, and the payment row, so sharing does not yet expose only the public fields. Previous verified score 25. |
 
-Auth implementation: 19 / 20 = **95%**. Verified: 7 / 20 = **35%**. Registration, trip creation, and editing an existing trip were not executed in the browser.
+Auth implementation: 19 / 20 = **95%**. Verified: 11 / 20 = **55%**. Previous verified 7 / 20.
 
 ## Smart Plan and planning intelligence — weight 10
 
@@ -70,13 +70,13 @@ Stripe implementation: 15 / 15 = **100%**. Verified: 5 / 15 = **33.3%**. No test
 
 | ID | Criterion | Weight | Impl | Verified | Evidence |
 | --- | --- | ---: | ---: | ---: | --- |
-| T1 | `npm test` | 4 | 100 | 50 | Passed on 13 October 2026, including the new cron authorization, Stripe entitlement, and webhook dedup tests. |
-| T2 | `npm run lint` | 2 | 100 | 50 | Exit 0. One existing warning in `MobileDayView.tsx` (`react-hooks/exhaustive-deps`). |
-| T3 | `npx tsc --noEmit` | 3 | 100 | 50 | Exit 0 on 13 October after the auth-harness env type accepted a constructed runtime name. |
-| T4 | `NODE_ENV=production npm run build` | 3 | 100 | 50 | The previous production build on this branch passed. It was not repeated after the 13 October edits. |
-| T5 | Playwright registration-to-trip journey | 3 | 50 | 25 | `e2e/public-journey.spec.ts` and `e2e/existing-customer.spec.ts` exist. One run passed marketing, pricing, and both signup validation tests. Login, protected redirects, and the signed-in reopen did not finish because a wedged dev server never served `/login`. A later run timed out after 15 minutes waiting for a fresh dev server. No account was created. |
+| T1 | `npm test` | 4 | 100 | 50 | Passed on 21 October 2026, including `auth-redirect-origin.test.ts`, cron authorization, Stripe entitlement, and webhook dedup. |
+| T2 | `npm run lint` | 2 | 100 | 50 | Exit 0 on 21 October. The `MobileDayView.tsx` hook warning is gone. |
+| T3 | `npx tsc --noEmit` | 3 | 100 | 50 | Exit 0 on 21 October. |
+| T4 | `NODE_ENV=production npm run build` | 3 | 100 | 50 | Passed on 21 October, exit 0, after the Organise navigation change. The build lint no longer reported the `MobileDayView.tsx` hook warning. Not a deployed production check, so the score stays 50. |
+| T5 | Playwright registration-to-trip journey | 3 | 75 | 75 | `e2e/returning-customer.spec.ts` passed in 1.1 minutes against `next start` on port 3001, commit `7b2945e`. It logged in, created the Orlando trip, opened Organise, signed out, signed in, and saw the renamed trip after reload. `e2e/public-journey.spec.ts` passed 6 tests on the same server. `e2e/first-customer-journey.spec.ts` did not run: live signup email stays behind `TRIPTILES_E2E_ALLOW_SIGNUP_EMAIL=1`. Previous verified score 25. Previous implementation score 50. |
 
-Testing implementation: 13.5 / 15 = **90%**. Verified: 6.75 / 15 = **45%**.
+Testing implementation: 14.25 / 15 = **95%**. Verified: 8.25 / 15 = **55%**.
 
 `npm ci` failed before this change because `package-lock.json` did not contain `exceljs@4.4.0`. `npm install` updated the lockfile. `npm test` and the production build then ran from that install.
 
@@ -84,7 +84,7 @@ Testing implementation: 13.5 / 15 = **90%**. Verified: 6.75 / 15 = **45%**.
 
 | ID | Criterion | Weight | Impl | Verified | Evidence |
 | --- | --- | ---: | ---: | ---: | --- |
-| Sec1 | Two-user RLS isolation | 2.5 | 100 | 75 | Same evidence as A4. User-scoped clients, not the service role, were used for the allow and deny checks. |
+| Sec1 | Two-user RLS isolation | 2.5 | 100 | 75 | Same evidence as A4. User JWTs and the anon key were used for the allow and deny checks. The service role deleted only the e2e probe rows afterwards. |
 | Sec2 | Protected routes fail closed when auth cannot be evaluated | 2 | 100 | 75 | `authUnavailableDecision` unit test passed. Production server on port 3001, with no Supabase env: `GET /planner` → 307 `/login?next=%2Fplanner`; `GET /settings/profile` → 307 login; `GET /` and `GET /pricing` → 200. |
 | Sec3 | Rate limiting | 1.5 | 75 | 50 | Process-local limiter on sign-in, sign-up, OTP, password reset, and AI actions. Unit test passed. Counters are not shared across serverless isolates. |
 | Sec4 | Account export and deletion | 1.5 | 100 | 25 | Settings data-privacy route is in the build. Deletion flow was not run. |
@@ -120,27 +120,31 @@ Marketing notes from this pass:
 | Area | Implementation points | Verified points |
 | --- | ---: | ---: |
 | Database | 20.000 | 16.000 |
-| Authentication and trips | 19.000 | 7.000 |
+| Authentication and trips | 19.000 | 11.000 |
 | Smart Plan | 9.500 | 3.250 |
 | Stripe | 15.000 | 5.000 |
-| Testing | 13.500 | 6.750 |
+| Testing | 14.250 | 8.250 |
 | Security and privacy | 9.625 | 5.750 |
 | Production and integrations | 8.625 | 3.500 |
-| **Total** | **95.250** | **47.250** |
+| **Total** | **96.000** | **52.750** |
 
-**Implementation completeness: 95.25%.** Previous: 87.875%. Change: **+7.375** points.
+**Implementation completeness: 96%.** Previous: 95.25%. Change: **+0.75** points.
 
-**Verified commercial launch readiness: 47.25%.** Previous: 30.75%. Change: **+16.5** points.
+**Verified commercial launch readiness: 52.75%.** Previous: 47.25%. Change: **+5.5** points.
 
-The implementation increase is the applied Orlando schema, the two-user isolation proof, the partial Playwright suite, and the backup note. The verified increase is the migration list, the catalogue scripts, the isolation run, and the new unit tests. Playwright did not pass as a suite, and no Stripe or Anthropic call was made.
+The implementation increase is the passing returning-customer Playwright project. The verified increase is that journey, the second login, the trip rename, and the isolated two-user REST checks. No Stripe or Anthropic call was made.
 
 ## Launch verdict
 
 Not safe to accept paying customers.
 
-The five migrations are now on `inqexwdkuqdfdoaauxyw`, catalogue checks pass, and the two existing users cannot read or change each other's trips. Smart Plan has not made a real model call. Stripe has not completed a test-mode subscription. Email, Sentry, cron invocation, and backup restore are unverified. The browser journey that signs in and reopens a trip did not finish.
+Private staging for internal testing: **YES.** A production build on port 3001 completed the returning-customer journey against `inqexwdkuqdfdoaauxyw`. Stripe live keys are not set in this environment, and secrets were not committed. A Vercel preview was not created.
 
-## Commands run on 13 October
+Controlled beta: **NO.** Invited users can register and save a manual Orlando trip, but a published trip's anon API response includes private notes, child ages, and payments. Smart Plan has no API key. Account deletion and a hosted confirmation redirect were not exercised.
+
+Full commercial launch: **NO.** There is no Stripe test-mode payment, no real Smart Plan call, no backup restore, and the public-share payload is wider than the public page.
+
+## Commands run on 13–21 October
 
 ```text
 npx supabase migration list --linked
@@ -152,12 +156,26 @@ npm run verify:orlando-baseline
 npm run verify:florida-baseline
 npm test
 npm run lint
+npx tsc --noEmit
+NODE_ENV=production npm run build
+npx next start -p 3001
+node --env-file=.env.local ./node_modules/@playwright/test/cli.js test --project=journey
 ```
 
-`npx tsc --noEmit` and `NODE_ENV=production npm run build` were not repeated after these edits.
+`npx tsc --noEmit` passed on 21 October. `NODE_ENV=production npm run build` passed on 21 October after the Organise navigation change. `npm run test:e2e:returning` passed on 21 October. `scripts/verify-e2e-isolation.ts` passed on 21 October. The registration journey was not run.
 
-Playwright: one run passed 3 of 7 tests against a wedged server. The next run exited 1 with `Timed out waiting 900000ms from config.webServer`.
+Additional commands on 21 October:
+
+```text
+npm test
+npm run lint
+npx tsc --noEmit
+NODE_ENV=production npm run build
+npm run test:e2e:returning
+node --env-file=.env.local ./node_modules/@playwright/test/cli.js test --project=public
+node --env-file=.env.local --import tsx scripts/verify-e2e-isolation.ts
+```
 
 ## Next engineering task
 
-Start a healthy dev server on port 3001 and rerun `node --env-file=.env.local ./node_modules/@playwright/test/cli.js test`. Then run `npx tsc --noEmit` and a production build. A Stripe test-mode key and an Anthropic key are still required before those integrations can be called. Do not reset the database.
+Narrow public trip reads so an anon request for a published trip cannot return notes, child ages, or payments, then open `/plans/{slug}` and revoke the share in the browser. After that, a Stripe test-mode key and an Anthropic key are required before checkout or Smart Plan can be called. Do not send another confirmation email until the Supabase limit has cleared. Do not reset the database.
