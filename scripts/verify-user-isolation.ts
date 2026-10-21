@@ -19,6 +19,12 @@ function fail(message: string): never {
   process.exit(1);
 }
 
+if (process.env.TRIPTILES_ALLOW_REAL_ACCOUNT_ISOLATION !== "1") {
+  fail(
+    "Refusing to read or write the real customer accounts. Use scripts/verify-e2e-isolation.ts for isolated e2e users.",
+  );
+}
+
 async function signIn(email: string, password: string): Promise<SupabaseClient> {
   const client = createClient(url!, anon!, {
     auth: { persistSession: false, autoRefreshToken: false },

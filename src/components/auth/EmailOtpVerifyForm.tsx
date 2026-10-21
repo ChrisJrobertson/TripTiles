@@ -31,7 +31,7 @@ function introLine(mode: Mode): string {
     case "signin":
       return "Enter the code below to sign in.";
     case "signup":
-      return "Enter the code below to confirm your account.";
+      return "Open the confirmation link in that email. If the email also includes an 8-digit code, enter it below.";
     case "recovery":
       return "Enter the code below to continue to reset your password.";
     default:
@@ -134,7 +134,9 @@ export function EmailOtpVerifyForm({ mode, email, next }: Props) {
   return (
     <div className="w-full max-w-md space-y-6">
       <p className="font-sans text-base leading-relaxed text-tt-royal">
-        We’ve sent an 8-digit code to{" "}
+        {mode === "signup"
+          ? "We’ve sent a confirmation message to "
+          : "We’ve sent an 8-digit code to "}
         <span className="break-all font-semibold">{email}</span>.
       </p>
       <p className="font-sans text-sm text-tt-ink-muted">{introLine(mode)}</p>

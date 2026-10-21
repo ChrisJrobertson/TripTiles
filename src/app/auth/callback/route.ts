@@ -1,4 +1,6 @@
+import { callbackRedirectOrigin } from "@/lib/auth/auth-redirect-origin";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
+import { getPublicSiteUrl } from "@/lib/site";
 import { createRouteHandlerSupabaseClient } from "@/lib/supabase/route-handler";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -28,7 +30,8 @@ function compactReason(msg: string, max = 600): string {
 }
 
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams, origin: requestOrigin } = new URL(request.url);
+  const origin = callbackRedirectOrigin(requestOrigin, getPublicSiteUrl());
   const rawNextParam = searchParams.get("next");
   const hasExplicitNext = String(rawNextParam ?? "").trim() !== "";
   const next = safeNextPath(rawNextParam);

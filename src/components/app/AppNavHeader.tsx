@@ -117,7 +117,8 @@ function ManageSubscriptionControl({
   );
 }
 
-function plannerHrefPreservingQuery(
+function workspaceHref(
+  base: string,
   searchParams: URLSearchParams,
   tab: "planner" | "planning",
 ): string {
@@ -125,7 +126,7 @@ function plannerHrefPreservingQuery(
   if (tab === "planner") next.delete("tab");
   else next.set("tab", tab);
   const q = next.toString();
-  return q ? `/planner?${q}` : "/planner";
+  return q ? `${base}?${q}` : base;
 }
 
 function navUserLabel(displayName: string | null, email: string): string {
@@ -519,7 +520,9 @@ function AppNavHeaderInner(props: NavProps) {
   const searchParams = useSearchParams();
   const { upgradeNav, planPillTitle, planPillText } = resolveNavMeta(props);
 
+  const tripIdFromPath = pathname?.match(/^\/trip\/([0-9a-f-]{36})/i)?.[1] ?? null;
   const onPlanner = pathname === "/planner";
+  const workspaceBase = tripIdFromPath ? `/trip/${tripIdFromPath}` : "/planner";
   const tabRaw = searchParams.get("tab");
   const tab =
     tabRaw === "planning" ||
@@ -529,15 +532,12 @@ function AppNavHeaderInner(props: NavProps) {
       ? "planning"
       : "planner";
 
-  const plannerHomeHref = onPlanner
-    ? plannerHrefPreservingQuery(searchParams, "planner")
-    : "/planner";
-  const planningHref = onPlanner
-    ? plannerHrefPreservingQuery(searchParams, "planning")
-    : "/planner?tab=planning";
+  const plannerHomeHref = workspaceHref(workspaceBase, searchParams, "planner");
+  const planningHref = workspaceHref(workspaceBase, searchParams, "planning");
 
-  const plannerHomeActive = onPlanner && tab === "planner";
-  const planningActive = onPlanner && tab === "planning";
+  const onWorkspace = onPlanner || Boolean(tripIdFromPath);
+  const plannerHomeActive = onWorkspace && tab === "planner";
+  const planningActive = onWorkspace && tab === "planning";
   const liveWaitsActive = pathname === "/today-at-park";
   const passportAreaActive =
     pathname === "/passport" ||

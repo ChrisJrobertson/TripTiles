@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("marketing home and pricing render", async ({ page }) => {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/", { waitUntil: "commit" });
   await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
   await expect(page.getByText("Wait times", { exact: false }).first()).toBeVisible();
   await page.goto("/pricing");
@@ -10,7 +10,7 @@ test("marketing home and pricing render", async ({ page }) => {
 });
 
 test("signup blocks an invalid email and a short password before creating an account", async ({ page }) => {
-  await page.goto("/signup", { waitUntil: "domcontentloaded" });
+  await page.goto("/signup", { waitUntil: "commit" });
   await expect(page.getByRole("heading", { name: "Create your TripTiles account" })).toBeVisible();
   await page.locator("#signup-email").fill("not-an-email");
   await page.locator("#signup-password").fill("longpassword1");
@@ -28,7 +28,7 @@ test("signup blocks an invalid email and a short password before creating an acc
 });
 
 test("signup rejects a password mismatch", async ({ page }) => {
-  await page.goto("/signup", { waitUntil: "domcontentloaded" });
+  await page.goto("/signup", { waitUntil: "commit" });
   await expect(page.getByRole("heading", { name: "Create your TripTiles account" })).toBeVisible();
   await page.locator("#signup-email").fill("launch-check@example.com");
   await page.locator("#signup-password").fill("longpassword1");
@@ -39,7 +39,7 @@ test("signup rejects a password mismatch", async ({ page }) => {
 });
 
 test("login rejects an unknown password without leaving the form", async ({ page }) => {
-  await page.goto("/login", { waitUntil: "domcontentloaded" });
+  await page.goto("/login", { waitUntil: "commit" });
   await page.getByLabel("Email address").fill("nobody-triptiles-e2e@example.com");
   await page.getByLabel(/Password/).fill("not-the-password");
   await page.getByRole("button", { name: "Sign in with password" }).click();
@@ -48,12 +48,12 @@ test("login rejects an unknown password without leaving the form", async ({ page
 });
 
 test("protected planner redirects to login", async ({ page }) => {
-  await page.goto("/planner", { waitUntil: "domcontentloaded" });
+  await page.goto("/planner", { waitUntil: "commit" });
   await expect(page).toHaveURL(/\/login\?next=%2Fplanner/);
   await expect(page.getByRole("heading", { name: "Sign in to TripTiles" })).toBeVisible();
 });
 
 test("settings redirect to login", async ({ page }) => {
-  await page.goto("/settings/profile", { waitUntil: "domcontentloaded" });
+  await page.goto("/settings/profile", { waitUntil: "commit" });
   await expect(page).toHaveURL(/\/login\?next=%2Fsettings%2Fprofile/);
 });

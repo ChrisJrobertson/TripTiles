@@ -1,7 +1,9 @@
 "use server";
 
+import { authorisedAuthRedirectOrigin } from "@/lib/auth/auth-redirect-origin";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
 import { consumeRateLimit } from "@/lib/rate-limit";
+import { getPublicSiteUrl } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
 import type { AuthError } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
@@ -112,6 +114,12 @@ const AUTH_LIMITS = {
 
 function tooManyAttempts(retryAfterSec: number): string {
   return `Too many attempts. Try again in ${retryAfterSec} seconds.`;
+}
+
+/** Where Supabase should send the browser after the confirmation link. */
+function authCallbackUrl(nextPath: string): string {
+  const origin = authorisedAuthRedirectOrigin(getPublicSiteUrl());
+  return `${origin}/auth/callback?next=${encodeURIComponent(safeNextPath(nextPath))}`;
 }
 
 async function clientAddress(): Promise<string | null> {
@@ -320,9 +328,11 @@ export async function resendSignupOtpAction(input: {
 
   try {
     const supabase = await createClient();
+    const emailRedirectTo = authCallbackUrl("/onboarding");
     const { error } = await supabase.auth.resend({
       type: "signup",
       email,
+      options: emailRedirectTo ? { emailRedirectTo } : undefined,
     });
 
     if (error) {
@@ -370,9 +380,11 @@ export async function signUpWithPasswordAction(input: {
 
   try {
     const supabase = await createClient();
+    const emailRedirectTo = authCallbackUrl("/onboarding");
     const { data, error } = await supabase.auth.signUp({
       email: trimmedEmail,
       password: input.password,
+      options: emailRedirectTo ? { emailRedirectTo } : undefined,
     });
 
     if (error) {
