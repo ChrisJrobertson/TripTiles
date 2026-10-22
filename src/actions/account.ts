@@ -44,7 +44,7 @@ export async function exportUserDataAction(): Promise<
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
     supabase.from("trips").select("*").eq("owner_id", uid),
-    supabase.from("custom_tiles").select("*").eq("owner_id", uid),
+    supabase.from("custom_tiles").select("*").eq("user_id", uid),
     supabase.from("achievements").select("*").eq("user_id", uid),
     supabase.from("purchases").select("*").eq("user_id", uid),
     supabase

@@ -2,7 +2,7 @@
 
 import { authorisedAuthRedirectOrigin } from "@/lib/auth/auth-redirect-origin";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
-import { consumeRateLimit } from "@/lib/rate-limit";
+import { consumeSharedRateLimit } from "@/lib/rate-limit";
 import { getPublicSiteUrl } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
 import type { AuthError } from "@supabase/supabase-js";
@@ -140,7 +140,7 @@ async function limitAuthAttempt(
   email: string,
 ): Promise<string | null> {
   const spec = AUTH_LIMITS[kind];
-  const emailResult = consumeRateLimit(
+  const emailResult = await consumeSharedRateLimit(
     `${kind}:${email.trim().toLowerCase()}`,
     spec.limit,
     spec.windowMs,
@@ -148,7 +148,7 @@ async function limitAuthAttempt(
   if (!emailResult.allowed) return tooManyAttempts(emailResult.retryAfterSec);
   const ip = await clientAddress();
   if (!ip) return null;
-  const ipResult = consumeRateLimit(
+  const ipResult = await consumeSharedRateLimit(
     `${kind}-ip:${ip}`,
     spec.ipLimit,
     spec.windowMs,

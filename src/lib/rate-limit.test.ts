@@ -2,7 +2,11 @@
  * Run: npx tsx src/lib/rate-limit.test.ts
  */
 import assert from "node:assert/strict";
-import { consumeRateLimit, resetRateLimitsForTests } from "./rate-limit";
+import {
+  consumeRateLimit,
+  hashRateLimitBucket,
+  resetRateLimitsForTests,
+} from "./rate-limit";
 
 function run() {
   resetRateLimitsForTests();
@@ -29,6 +33,11 @@ function run() {
 
   assert.throws(() => consumeRateLimit("", 1, 1_000, start), /key is required/);
   assert.throws(() => consumeRateLimit("x", 0, 1_000, start), /at least 1/);
+
+  const hashed = hashRateLimitBucket("signup:a@example.com");
+  assert.equal(hashed.length, 64);
+  assert.equal(hashed.includes("@"), false);
+  assert.notEqual(hashRateLimitBucket("signup:a@example.com"), hashRateLimitBucket("signup:b@example.com"));
 
   console.log("rate-limit.test.ts: ok");
 }
