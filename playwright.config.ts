@@ -32,6 +32,12 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
     {
+      name: "sharing",
+      testMatch: /public-share-security\.spec\.ts/,
+      timeout: 180_000,
+      use: { ...devices["Desktop Chrome"] },
+    },
+    {
       name: "journey",
       testMatch: /first-customer-journey\.spec\.ts/,
       timeout: 600_000,

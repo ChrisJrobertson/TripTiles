@@ -6,6 +6,10 @@ import {
   tryAwardAchievementForUserId,
 } from "@/actions/achievements";
 import { getUserCustomTiles } from "@/lib/db/custom-tiles";
+import {
+  listOwnerCustomTileIds,
+  readPublicTripById,
+} from "@/lib/db/public-trip-read";
 import { getUserTripCount, mapTripRow } from "@/lib/db/trips";
 import { currentUserCanCreateTrip } from "@/lib/entitlements";
 import {
@@ -44,6 +48,7 @@ import type {
   DayPlanningIntent,
   Destination,
   SlotAssignmentValue,
+  Trip,
   TripPlanningPreferences,
   TripPlanningProfile,
 } from "@/lib/types";
@@ -1104,15 +1109,25 @@ export async function cloneTripAction(
       .eq("id", sourceTripId)
       .maybeSingle();
 
-    if (srcErr || !rawSource) return { ok: false, error: "Trip not found." };
+    if (srcErr) return { ok: false, error: "Trip not found." };
 
-    const source = mapTripRow(rawSource as Record<string, unknown>);
-    const canClone =
-      source.is_public || source.owner_id === user.id;
-    if (!canClone) return { ok: false, error: "Trip not found." };
+    const owned = rawSource
+      ? mapTripRow(rawSource as Record<string, unknown>)
+      : null;
+    const cloningOwn = Boolean(owned && owned.owner_id === user.id);
 
-    const ownerCustom = await getUserCustomTiles(source.owner_id);
-    const customIds = new Set(ownerCustom.map((t) => t.id));
+    let source: Trip;
+    let customIds: Set<string>;
+    if (cloningOwn && owned) {
+      source = owned;
+      const ownerCustom = await getUserCustomTiles(user.id);
+      customIds = new Set(ownerCustom.map((t) => t.id));
+    } else {
+      const published = await readPublicTripById(sourceTripId);
+      if (!published) return { ok: false, error: "Trip not found." };
+      source = published.trip;
+      customIds = await listOwnerCustomTileIds(published.ownerId);
+    }
     const cleaned = scrubAssignmentsForClone(source.assignments, customIds);
     const countSlots = (a: Assignments) => {
       let n = 0;
@@ -1139,7 +1154,7 @@ export async function cloneTripAction(
     const row = {
       owner_id: user.id,
       region_id: source.region_id,
-      family_name: source.family_name.trim(),
+      family_name: cloningOwn ? source.family_name.trim() || "My family" : "My family",
       adventure_name: adventureName,
       destination: legacyDestination,
       start_date: source.start_date,
@@ -1151,14 +1166,14 @@ export async function cloneTripAction(
       preferences: { ...source.preferences },
       is_public: false,
       public_slug: null as string | null,
-      adults: source.adults,
-      children: source.children,
-      child_ages: [...source.child_ages],
-      notes: source.notes,
-      planning_preferences: source.planning_preferences,
+      adults: cloningOwn ? source.adults : 2,
+      children: cloningOwn ? source.children : 0,
+      child_ages: cloningOwn ? [...source.child_ages] : [],
+      notes: cloningOwn ? source.notes : null,
+      planning_preferences: cloningOwn ? source.planning_preferences : null,
       colour_theme: source.colour_theme,
-      budget_target: source.budget_target,
-      budget_currency: source.budget_currency,
+      budget_target: cloningOwn ? source.budget_target : null,
+      budget_currency: cloningOwn ? source.budget_currency : "GBP",
       email_reminders: true,
       gallery_owner_label: null as string | null,
     };
@@ -1176,7 +1191,8 @@ export async function cloneTripAction(
     const newTripId = String(inserted.id);
     const newAchievements: string[] = [];
 
-    const { data: sourceRides } = await supabase
+    const rideClient = cloningOwn ? supabase : createServiceRoleClient();
+    const { data: sourceRides } = await rideClient
       .from("trip_ride_priorities")
       .select("attraction_id, day_date, priority, sort_order")
       .eq("trip_id", sourceTripId);
@@ -1204,10 +1220,12 @@ export async function cloneTripAction(
       }
     }
 
-    const { data: sourcePayments } = await supabase
-      .from("trip_payments")
-      .select("label, amount_pence, currency, booking_date, due_date, sort_order")
-      .eq("trip_id", sourceTripId);
+    const { data: sourcePayments } = cloningOwn
+      ? await supabase
+          .from("trip_payments")
+          .select("label, amount_pence, currency, booking_date, due_date, sort_order")
+          .eq("trip_id", sourceTripId)
+      : { data: null };
     if (sourcePayments?.length) {
       const clonedPay = sourcePayments.map(
         (r: {

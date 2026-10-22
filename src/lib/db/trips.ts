@@ -1,5 +1,8 @@
 import { loadPlanningPreferences } from "@/lib/planning-preferences-load";
 import { normaliseThemeKey } from "@/lib/themes";
+import { PUBLIC_TRIP_COLUMNS, toPublicTrip } from "@/lib/public-trip-contract";
+import { readPublicTripBySlug } from "@/lib/db/public-trip-read";
+import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createClient } from "@/lib/supabase/server";
 import type { Assignments, DaySnapshot, Destination, Trip } from "@/lib/types";
 
@@ -189,22 +192,11 @@ export async function getUserTripCount(userId: string): Promise<number> {
   return count ?? 0;
 }
 
-/** Public share page — `trips` RLS allows `is_public = true` for anon. */
+/** Public share page. Anonymous clients cannot read `trips`; this uses the allowlisted server read. */
 export async function getTripByPublicSlug(
   slug: string,
 ): Promise<Trip | null> {
-  const trimmed = slug.trim();
-  if (!trimmed) return null;
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("trips")
-    .select("*")
-    .eq("is_public", true)
-    .eq("public_slug", trimmed)
-    .maybeSingle();
-
-  if (error || !data) return null;
-  return mapTripRow(data as Record<string, unknown>);
+  return readPublicTripBySlug(slug);
 }
 
 export type PublicTripListSort = "clones" | "newest" | "longest";
@@ -237,13 +229,16 @@ export async function listPublicTrips(input: {
   sort?: PublicTripListSort;
   lengthBucket?: PublicTripLengthBucket | null;
 }): Promise<Trip[]> {
-  const supabase = await createClient();
+  const supabase = createServiceRoleClient();
   const sort = input.sort ?? "clones";
   const needsMemory =
     Boolean(input.lengthBucket) || sort === "longest";
 
   const buildBase = () => {
-    let q = supabase.from("trips").select("*").eq("is_public", true);
+    let q = supabase
+      .from("trips")
+      .select(PUBLIC_TRIP_COLUMNS)
+      .eq("is_public", true);
     if (input.regionId) q = q.eq("region_id", input.regionId);
     return q;
   };
@@ -263,7 +258,7 @@ export async function listPublicTrips(input: {
     );
     if (error) throw error;
     return (data ?? []).map((r) =>
-      scrubTripForPublicRead(mapTripRow(r as Record<string, unknown>)),
+      toPublicTrip(r as unknown as Record<string, unknown>),
     );
   }
 
@@ -280,7 +275,7 @@ export async function listPublicTrips(input: {
   if (error) throw error;
 
   let list = (data ?? []).map((r) =>
-    scrubTripForPublicRead(mapTripRow(r as Record<string, unknown>)),
+    toPublicTrip(r as unknown as Record<string, unknown>),
   );
   if (input.lengthBucket) {
     list = list.filter((t) => lengthBucketForTrip(t) === input.lengthBucket);

@@ -1,14 +1,12 @@
 import { PublicPlanPlannerShell } from "@/components/marketing/PublicPlanPlannerShell";
 import { CopyPlanLinkButton } from "@/components/marketing/CopyPlanLinkButton";
 import { PublicPlanActions } from "@/components/marketing/PublicPlanActions";
-import { getUserCustomTiles } from "@/lib/db/custom-tiles";
 import { getAllParks } from "@/lib/db/parks";
 import { getRegionById } from "@/lib/db/regions";
 import { incrementPublicTripViewCount } from "@/lib/db/public-trip-stats";
 import { getTripByPublicSlug } from "@/lib/db/trips";
 import { legacyDestinationFromRegionId } from "@/lib/legacy-destination";
 import type { Destination, Park } from "@/lib/types";
-import { customTileToPark } from "@/lib/types";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -104,15 +102,11 @@ export default async function PublicPlanPage({
   const user = await getCurrentUser();
   const isAuthed = Boolean(user);
 
-  const [allParks, ownerCustomTiles, region] = await Promise.all([
+  const [allParks, region] = await Promise.all([
     getAllParks(),
-    getUserCustomTiles(trip.owner_id),
     trip.region_id ? getRegionById(trip.region_id) : Promise.resolve(null),
   ]);
-  const parks: Park[] = [
-    ...filterParksForTrip(allParks, trip.region_id),
-    ...ownerCustomTiles.map(customTileToPark),
-  ];
+  const parks: Park[] = filterParksForTrip(allParks, trip.region_id);
 
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
