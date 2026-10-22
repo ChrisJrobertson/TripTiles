@@ -22,7 +22,7 @@ Injected `DATABASE_URL` and `SUPABASE_SERVICE_KEY` are for retired project `kdmx
 | ID | Criterion | Weight | Impl | Verified | Evidence |
 | --- | --- | ---: | ---: | ---: | --- |
 | D1 | Core tables readable on the target project | 4 | 100 | 75 | REST counts: parks 352, attractions 100, regions 43, profiles 2, trips 8, live_wait_park_mappings 146, live_wait_current present in OpenAPI, stripe_webhook_events 0 rows. |
-| D2 | Remote migration history matches the five repo files | 4 | 100 | 100 | `npx supabase migration list --linked` after the push: all five local versions equal the remote versions, including `20261012150000`. |
+| D2 | Remote migration history matches the five repo files | 4 | 100 | 100 | `npx supabase migration list --linked` on 22 October: the five baseline versions plus `20261022183758`, `20261022184716`, and `20261022184923` are equal locally and on `inqexwdkuqdfdoaauxyw`. |
 | D3 | Orlando intelligence objects applied | 4 | 100 | 75 | `park_operating_schedules` and `provider_fetch_log` exist, both with RLS enabled. Both are empty. `match_status` accepts only the allowed values (`bad_match` 0). Hours have not been ingested. |
 | D4 | Auth users have matching profiles | 4 | 100 | 75 | Auth Admin listed 2 confirmed users. Profile ids equal auth ids. Chris Robertson (`chrisjrobertson@outlook.com`, family) and Ellie Robertson (`ellie_robertson@icloud.com`, free). Trigger was not fired for a new signup in this run. |
 | D5 | Catalogue validation scripts pass | 4 | 100 | 75 | `verify:profiles-schema`, `verify:orlando-baseline` (44 parks, 60 attractions), and `verify:florida-baseline` passed against `inqexwdkuqdfdoaauxyw` on 13 October. |
@@ -37,16 +37,16 @@ Database implementation: 20 / 20 = **100%**. Verified: 16 / 20 = **80%**.
 | A2 | Create an Orlando trip and retrieve it | 4 | 100 | 75 | Same Playwright run created trip `95a460d1-c204-409b-880b-3b092d47cec8` for 6–13 December 2026, 2 adults, must-do parks `mk` and `eu`. After sign-out and a new login the same id, dates, party size, and parks were still on the trip. A later user-scoped read returned `Orlando 2026 revised`, `2026-12-06`–`2026-12-13`, adults 2, parks `mk` and `eu`. Previous verified score 25. |
 | A3 | Edit dates, parks, and priorities, then see them after a new login | 4 | 100 | 50 | The same run renamed the trip to `Orlando 2026 revised`, reloaded, and still showed that name. The database row matched. Dates, party size, and parks were checked after the second login and were not edited. Previous verified score 25. |
 | A4 | User B cannot read or change User A's private trip | 4 | 100 | 75 | `scripts/verify-e2e-isolation.ts` on 21 October, commit `7b2945e`, used `triptiles-e2e-returning@example.com` and `triptiles-e2e-isolation-b@example.com`. User-scoped REST: owner read 200/1 row; cross-read, cross-update, and cross-delete 200/0 rows; the reverse read was 0 rows. Ride priorities, payments, and budget items were 0 rows for the other user. Anon read of the private trip was 0 rows. Previous verified score 75. The older Chris/Ellie script now refuses to run unless `TRIPTILES_ALLOW_REAL_ACCOUNT_ISOLATION=1`. |
-| A5 | Publish a trip, view the public page, then revoke it | 4 | 75 | 25 | The same isolation run set `is_public` and a slug, then cleared them. Anon could read the published row and could not read it after revoke. The public page was not opened. The anon payload included the private note, child ages, and the payment row, so sharing does not yet expose only the public fields. Previous verified score 25. |
+| A5 | Publish a trip, view the public page, then revoke it | 4 | 100 | 75 | `20261022183758_close_public_trip_data_exposure.sql` is applied. Anonymous REST no longer has table privileges on trips, payments, ride priorities, budget items, profiles, or purchases. `scripts/verify-public-share-security.ts` passed on 22 October: a private probe, the same trip after publish, an unknown slug, and the trip after revoke all returned no anonymous rows and no private tokens. The owner could still read the private note and child age. `e2e/public-share-security.spec.ts` passed against `next start`: the public page showed the title, dates, public group, crowd line, and Magic Kingdom, and the HTML did not contain the private tokens. Unknown and revoked slugs rendered “This page could not be found.” Middleware session refresh still makes that not-found response HTTP 200. Previous verified score 25. |
 
-Auth implementation: 19 / 20 = **95%**. Verified: 11 / 20 = **55%**. Previous verified 7 / 20.
+Auth implementation: 20 / 20 = **100%**. Verified: 13 / 20 = **65%**. Previous verified 11 / 20.
 
 ## Smart Plan and planning intelligence — weight 10
 
 | ID | Criterion | Weight | Impl | Verified | Evidence |
 | --- | --- | ---: | ---: | ---: | --- |
 | S1 | Authenticated request and subscription-tier gate | 2 | 100 | 25 | `runGenerateAIPlan` checks the user and `assertTierAllows`. Not called with a session. |
-| S2 | Real model call, structured output, failure handling, usage limit | 3 | 100 | 25 | Model is `claude-haiku-4-5-20251001`. `ANTHROPIC_API_KEY` is unset, so no live call. Process-local limit is 12 AI calls per user per hour, shared by Smart Plan, day strategy, timeline, must-dos, and tweaks. |
+| S2 | Real model call, structured output, failure handling, usage limit | 3 | 100 | 25 | Model is `claude-haiku-4-5-20251001`. `ANTHROPIC_API_KEY` is unset, so no live call was made. The 12-per-hour limit now uses the shared Postgres window, with the process-local counter as fallback. |
 | S3 | Opening hours and weather are not presented as verified when they are not | 3 | 100 | 50 | `npm test` passed `orlando-intelligence.test.ts` and `planner-day-conditions.test.ts`. PDF and calendar copy now say `Typical {month} average, not a live forecast`. |
 | S4 | Saved plan still available after a new login | 2 | 75 | 25 | `commitSmartPlan` is implemented and unit-tested. No login-to-login check. |
 
@@ -86,12 +86,12 @@ Testing implementation: 14.25 / 15 = **95%**. Verified: 8.25 / 15 = **55%**.
 | --- | --- | ---: | ---: | ---: | --- |
 | Sec1 | Two-user RLS isolation | 2.5 | 100 | 75 | Same evidence as A4. User JWTs and the anon key were used for the allow and deny checks. The service role deleted only the e2e probe rows afterwards. |
 | Sec2 | Protected routes fail closed when auth cannot be evaluated | 2 | 100 | 75 | `authUnavailableDecision` unit test passed. Production server on port 3001, with no Supabase env: `GET /planner` → 307 `/login?next=%2Fplanner`; `GET /settings/profile` → 307 login; `GET /` and `GET /pricing` → 200. |
-| Sec3 | Rate limiting | 1.5 | 75 | 50 | Process-local limiter on sign-in, sign-up, OTP, password reset, and AI actions. Unit test passed. Counters are not shared across serverless isolates. |
-| Sec4 | Account export and deletion | 1.5 | 100 | 25 | Settings data-privacy route is in the build. Deletion flow was not run. |
+| Sec3 | Rate limiting | 1.5 | 100 | 75 | `consume_rate_limit` is applied. `scripts/verify-shared-rate-limit.ts` passed on 22 October: the second hit in the same window was denied, the bucket stored both hits under a hash, and the anonymous role could not select the table or execute the function. Sign-in and Smart Plan call this shared window and fall back to the process-local counter if the RPC fails. |
+| Sec4 | Account export and deletion | 1.5 | 100 | 50 | Export now reads `custom_tiles.user_id`. `scripts/verify-account-lifecycle.ts` created a disposable `triptiles-e2e-delete-*@example.com` account, confirmed the trip and custom tile export queries, deleted that auth user, and confirmed the profile, trip, and tile were gone. The anonymous response did not contain the probe note, and sign-in then failed. The settings screen was not clicked. Real customer accounts were not used. |
 | Sec5 | Webhook verification and dedup | 1.5 | 100 | 50 | Dedup classification is unit-tested and used by the webhook route. `constructEvent` was not called. |
 | Sec6 | Secrets stay out of the repo | 1 | 100 | 50 | `.env*` is gitignored. `.env.local.example` has empty secret fields. No key was committed. |
 
-Security implementation: 9.625 / 10 = **96.25%**. Verified: 5.75 / 10 = **57.5%**. Rate limits are still process-local.
+Security implementation: 10 / 10 = **100%**. Verified: 6.5 / 10 = **65%**. Previous verified 5.75 / 10.
 
 ## Production configuration, email, live data and monitoring — weight 10
 
@@ -120,19 +120,19 @@ Marketing notes from this pass:
 | Area | Implementation points | Verified points |
 | --- | ---: | ---: |
 | Database | 20.000 | 16.000 |
-| Authentication and trips | 19.000 | 11.000 |
+| Authentication and trips | 20.000 | 13.000 |
 | Smart Plan | 9.500 | 3.250 |
 | Stripe | 15.000 | 5.000 |
 | Testing | 14.250 | 8.250 |
-| Security and privacy | 9.625 | 5.750 |
+| Security and privacy | 10.000 | 6.500 |
 | Production and integrations | 8.625 | 3.500 |
-| **Total** | **96.000** | **52.750** |
+| **Total** | **97.375** | **55.500** |
 
-**Implementation completeness: 96%.** Previous: 95.25%. Change: **+0.75** points.
+**Implementation completeness: 97.375%.** Previous: 96%. Change: **+1.375** points.
 
-**Verified commercial launch readiness: 52.75%.** Previous: 47.25%. Change: **+5.5** points.
+**Verified commercial launch readiness: 55.5%.** Previous: 52.75%. Change: **+2.75** points.
 
-The implementation increase is the passing returning-customer Playwright project. The verified increase is that journey, the second login, the trip rename, and the isolated two-user REST checks. No Stripe or Anthropic call was made.
+The increase is the applied public-share lockdown, the passing anonymous API and `/plans/{slug}` checks, the shared rate-limit window, and the disposable account export and deletion. No Stripe test payment and no Anthropic call were made.
 
 ## Launch verdict
 
@@ -140,9 +140,9 @@ Not safe to accept paying customers.
 
 Private staging for internal testing: **YES.** A production build on port 3001 completed the returning-customer journey against `inqexwdkuqdfdoaauxyw`. Stripe live keys are not set in this environment, and secrets were not committed. A Vercel preview was not created.
 
-Controlled beta: **NO.** Invited users can register and save a manual Orlando trip, but a published trip's anon API response includes private notes, child ages, and payments. Smart Plan has no API key. Account deletion and a hosted confirmation redirect were not exercised.
+Controlled beta: **NO.** The anonymous public-share exposure is closed on `inqexwdkuqdfdoaauxyw`, but there is still no hosted staging deployment. The Supabase Auth Site URL and redirect allowlist have not been confirmed for a public origin. Smart Plan has no API key. Resend, Sentry, and `CRON_SECRET` are unset.
 
-Full commercial launch: **NO.** There is no Stripe test-mode payment, no real Smart Plan call, no backup restore, and the public-share payload is wider than the public page.
+Full commercial launch: **NO.** There is no Stripe test-mode payment, no real Smart Plan call, and no backup restore. Live billing was not enabled.
 
 ## Commands run on 13–21 October
 
@@ -176,6 +176,21 @@ node --env-file=.env.local ./node_modules/@playwright/test/cli.js test --project
 node --env-file=.env.local --import tsx scripts/verify-e2e-isolation.ts
 ```
 
+Additional commands on 22 October:
+
+```text
+npx supabase db push --linked --dry-run
+npx supabase db push --linked --yes
+node --env-file=.env.local --import tsx scripts/verify-public-share-security.ts
+node --env-file=.env.local --import tsx scripts/verify-shared-rate-limit.ts
+TRIPTILES_ALLOW_AUTH_TEST=1 node --env-file=.env.local --import tsx scripts/verify-account-lifecycle.ts
+npm test
+npm run lint
+npx tsc --noEmit
+NODE_ENV=production npm run build
+npm run test:e2e:sharing
+```
+
 ## Next engineering task
 
-Narrow public trip reads so an anon request for a published trip cannot return notes, child ages, or payments, then open `/plans/{slug}` and revoke the share in the browser. After that, a Stripe test-mode key and an Anthropic key are required before checkout or Smart Plan can be called. Do not send another confirmation email until the Supabase limit has cleared. Do not reset the database.
+Add a Stripe test-mode secret, webhook secret, and the four test price ids, then run checkout, webhook, portal, and cancellation against isolated data. Add `ANTHROPIC_API_KEY` and run one Orlando Smart Plan. Confirm the hosted Auth redirect allowlist before any staging deploy. Preserve the not-found HTTP status for `/plans/{slug}` when middleware refreshes a session. Do not enable live billing, deploy, or reset the database.
