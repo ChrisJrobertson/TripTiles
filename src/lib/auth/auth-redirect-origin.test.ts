@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import {
   authorisedAuthRedirectOrigin,
   callbackRedirectOrigin,
+  configuredAuthOrigins,
   isAuthorisedAppOrigin,
 } from "./auth-redirect-origin";
 
@@ -13,7 +14,17 @@ function run() {
   assert.equal(isAuthorisedAppOrigin("http://127.0.0.1:3001"), true);
   assert.equal(isAuthorisedAppOrigin("https://www.triptiles.app"), true);
   assert.equal(isAuthorisedAppOrigin("https://triptiles.app"), true);
-  assert.equal(isAuthorisedAppOrigin("https://triptiles-git-main.vercel.app"), true);
+  assert.equal(isAuthorisedAppOrigin("https://triptiles-git-main.vercel.app", []), false);
+  assert.equal(isAuthorisedAppOrigin("https://evil-triptiles.vercel.app", []), false);
+  assert.equal(isAuthorisedAppOrigin("https://triptiles.vercel.app.evil.com", []), false);
+
+  const staging = "https://triptiles-staging.vercel.app";
+  assert.deepEqual(configuredAuthOrigins(` ${staging}, http://192.168.0.27:3001, https://evil.com/phish `), [
+    staging,
+  ]);
+  assert.equal(isAuthorisedAppOrigin(staging, [staging]), true);
+  assert.equal(isAuthorisedAppOrigin("https://triptiles-staging.vercel.app.evil.com", [staging]), false);
+  assert.equal(isAuthorisedAppOrigin("https://not-our-app.vercel.app", [staging]), false);
 
   assert.equal(isAuthorisedAppOrigin("http://localhost:3000"), false);
   assert.equal(isAuthorisedAppOrigin("https://evil.com"), false);

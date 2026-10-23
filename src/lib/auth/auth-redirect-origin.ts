@@ -1,9 +1,20 @@
 /**
  * Fixed application origins for auth email links and post-confirmation redirects.
  * Request host headers and callback parameters are never accepted as an origin.
+ * Extra hosts come only from the exact list in TRIPTILES_AUTH_ORIGINS.
  */
 
 const CANONICAL_ORIGIN = "https://www.triptiles.app";
+
+const LOCAL_ORIGINS = new Set([
+  "http://localhost:3001",
+  "http://127.0.0.1:3001",
+]);
+
+const PRODUCTION_ORIGINS = new Set([
+  "https://triptiles.app",
+  "https://www.triptiles.app",
+]);
 
 function normalisedOrigin(raw: string | null | undefined): string | null {
   if (!raw) return null;
@@ -18,19 +29,34 @@ function normalisedOrigin(raw: string | null | undefined): string | null {
   return url.origin;
 }
 
-/** True only for this app's local, production, and TripTiles Vercel hosts. */
-export function isAuthorisedAppOrigin(raw: string | null | undefined): boolean {
+/**
+ * HTTPS origins added for a named staging or preview host.
+ * Entries with a path, query, userinfo, or a non-HTTPS scheme are dropped.
+ */
+export function configuredAuthOrigins(
+  raw: string | null | undefined = process.env.TRIPTILES_AUTH_ORIGINS,
+): readonly string[] {
+  if (!raw) return [];
+  const seen = new Set<string>();
+  for (const part of raw.split(",")) {
+    const origin = normalisedOrigin(part);
+    if (!origin) continue;
+    if (!origin.startsWith("https://")) continue;
+    if (PRODUCTION_ORIGINS.has(origin)) continue;
+    seen.add(origin);
+  }
+  return [...seen];
+}
+
+/** True only for local development, production, or an explicitly configured origin. */
+export function isAuthorisedAppOrigin(
+  raw: string | null | undefined,
+  configured: readonly string[] = configuredAuthOrigins(),
+): boolean {
   const origin = normalisedOrigin(raw);
   if (!origin) return false;
-  const url = new URL(origin);
-  const host = url.hostname.toLowerCase();
-
-  if (url.protocol === "http:") {
-    return (host === "localhost" || host === "127.0.0.1") && url.port === "3001";
-  }
-  if (url.protocol !== "https:") return false;
-  if (host === "triptiles.app" || host === "www.triptiles.app") return true;
-  return host.endsWith(".vercel.app") && host.includes("triptiles");
+  if (LOCAL_ORIGINS.has(origin) || PRODUCTION_ORIGINS.has(origin)) return true;
+  return configured.includes(origin);
 }
 
 /**
