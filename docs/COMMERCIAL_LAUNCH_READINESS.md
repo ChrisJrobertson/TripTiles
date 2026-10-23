@@ -45,12 +45,12 @@ Auth implementation: 20 / 20 = **100%**. Verified: 13 / 20 = **65%**. Previous v
 
 | ID | Criterion | Weight | Impl | Verified | Evidence |
 | --- | --- | ---: | ---: | ---: | --- |
-| S1 | Authenticated request and subscription-tier gate | 2 | 100 | 25 | `runGenerateAIPlan` checks the user and `assertTierAllows`. Not called with a session. |
-| S2 | Real model call, structured output, failure handling, usage limit | 3 | 100 | 25 | Anthropic remains the default when `ANTHROPIC_API_KEY` is set, model `claude-haiku-4-5-20251001`, with the existing stream and prompt cache. Hugging Face Inference Providers is a second path: `HF_TOKEN` at `https://router.huggingface.co/v1/chat/completions`, default model `openai/gpt-oss-120b:fastest`, override `HF_PLANNER_MODEL`. It is selected only by `TRIPTILES_AI_PROVIDER=huggingface`, or when Anthropic is unset and `HF_TOKEN` is set. Both keys are unset, so no Orlando plan was generated, saved, or retrieved. The shared 12-per-hour limit, validation, park-hours provenance, authentication, and entitlements are unchanged. Anthropic was not removed. |
+| S1 | Authenticated request and subscription-tier gate | 2 | 100 | 50 | On 23 October, `POST /api/ai/generate-plan-stream` on the running production server, with no session, returned an SSE `done` event `{ ok: false, error: "NOT_AUTHED" }`. No model was called. A signed-in entitled request was not made. |
+| S2 | Real model call, structured output, failure handling, usage limit | 3 | 100 | 25 | Anthropic remains the default when `ANTHROPIC_API_KEY` is set. Hugging Face stays optional behind `HF_TOKEN`. Both keys are still unset, so the live Orlando generation remains blocked. No itinerary was generated, saved, or retrieved. Anthropic was not removed. |
 | S3 | Opening hours and weather are not presented as verified when they are not | 3 | 100 | 50 | `npm test` passed `orlando-intelligence.test.ts` and `planner-day-conditions.test.ts`. PDF and calendar copy now say `Typical {month} average, not a live forecast`. |
 | S4 | Saved plan still available after a new login | 2 | 75 | 25 | `commitSmartPlan` is implemented and unit-tested. No login-to-login check. |
 
-Smart Plan implementation: 9.5 / 10 = **95%**. Verified: 3.25 / 10 = **32.5%**.
+Smart Plan implementation: 9.5 / 10 = **95%**. Verified: 3.75 / 10 = **37.5%**.
 
 ## Stripe payments and subscription lifecycle — weight 15
 
@@ -58,13 +58,13 @@ No Stripe test-mode call was made. `STRIPE_SECRET_KEY` is unset. No charges.
 
 | ID | Criterion | Weight | Impl | Verified | Evidence |
 | --- | --- | ---: | ---: | ---: | --- |
-| P1 | Plan selection and checkout start | 3 | 100 | 25 | `/api/checkout` is in the production build. Not called. |
-| P2 | Webhook signature check | 3 | 100 | 25 | `constructEvent` rejects a missing or invalid signature (`src/app/api/webhooks/stripe/route.ts`). Not invoked. |
+| P1 | Plan selection and checkout start | 3 | 100 | 25 | `POST /api/checkout` on the running server returned HTTP 401 `Not signed in.` No checkout session was created. |
+| P2 | Webhook signature check | 3 | 100 | 50 | `POST /api/webhooks/stripe` on the running server returned HTTP 500 `Webhook not configured.` because `STRIPE_WEBHOOK_SECRET` is unset. `webhook-signature.test.ts` accepted a locally signed payload and rejected a bad signature. No Stripe account was used and no event was written. |
 | P3 | Paid, failed, deleted, and portal events | 4 | 100 | 25 | Handlers exist for `checkout.session.completed`, subscription created/updated/deleted, `invoice.paid`, `invoice.payment_succeeded`, and `invoice.payment_failed`. Customer portal route exists. Not invoked. |
 | P4 | A successful payment updates that user's tier | 3 | 100 | 50 | `profileTierActionForSubscription` is what the webhook sync now calls. Unit test: active and trialing set a paid tier; past_due and unpaid in grace, canceled, incomplete, and unknown statuses leave the tier unchanged. No Stripe test payment was made. |
 | P5 | Replay / idempotency | 2 | 100 | 50 | `classifyWebhookInsertError` maps Postgres `23505` to duplicate and any other code to failed. The webhook route uses it. No webhook was delivered. `stripe_webhook_events` was not written by this run. |
 
-Stripe implementation: 15 / 15 = **100%**. Verified: 5 / 15 = **33.3%**. No test-mode checkout, portal session, or signed webhook was executed. `STRIPE_SECRET_KEY` is unset.
+Stripe implementation: 15 / 15 = **100%**. Verified: 5.75 / 15 = **38.3%**. No test-mode checkout, portal session, or signed webhook was executed. `POST /api/customer-portal` returned HTTP 401 `Not signed in.` `STRIPE_SECRET_KEY` is unset.
 
 ## Testing, code quality and browser E2E — weight 15
 
@@ -102,7 +102,7 @@ Security implementation: 10 / 10 = **100%**. Verified: 6.5 / 10 = **65%**. Previ
 | Prod3 | Wait times are called live only when every row is LIVE | 1.5 | 100 | 50 | Homepage render contains “Wait times” and does not contain “Live waits”. `/today-at-park` with no database rendered “Park operations” and “Wait times could not be loaded”. The all-rows-LIVE eyebrow was not exercised with provider data. |
 | Prod4 | Resend email | 1.5 | 75 | 25 | Resend client and cron route exist. `RESEND_API_KEY` unset. No message sent. |
 | Prod5 | Sentry | 1 | 75 | 25 | `sentry.server.config.ts` and `sentry.edge.config.ts` exist. No DSN, so no event was received. |
-| Prod6 | Cron authentication | 1 | 100 | 75 | Both cron routes call `isCronAuthorized`. On 23 October, `GET /api/cron/process-emails` and `GET /api/cron/live-wait-ingest` on `next start` returned HTTP 401 `{"error":"Unauthorized"}` with no bearer token. `CRON_SECRET` is unset, so the routes fail closed. An authorised cron run was not executed. |
+| Prod6 | Cron authentication | 1 | 100 | 75 | Both cron routes fail closed on the running server: unauthorised HTTP requests returned 401, and `CRON_SECRET` is unset there. `scripts/verify-authorised-cron.ts` then called the handlers with a one-off secret. The email job returned HTTP 200, sent 0, failed 0; two future pending rows stayed pending. The live-wait handler returned HTTP 401 for a wrong bearer and HTTP 500 `Missing Supabase configuration` when the service key was removed, before any provider call. The real ingest was not run. |
 | Prod7 | Privacy, terms, export, and deletion surfaces | 1.5 | 100 | 25 | `/privacy`, `/terms`, and `/settings/data-privacy` are in the production build. Not reviewed in a browser session beyond the build. |
 | Prod8 | Backup, restore, and rollback procedure | 1 | 25 | 0 | `docs/release-backup.md` describes the intended Supabase and Vercel path. No restore or rollback was executed. |
 
@@ -121,18 +121,18 @@ Marketing notes from this pass:
 | --- | ---: | ---: |
 | Database | 20.000 | 16.000 |
 | Authentication and trips | 20.000 | 13.000 |
-| Smart Plan | 9.500 | 3.250 |
-| Stripe | 15.000 | 5.000 |
+| Smart Plan | 9.500 | 3.750 |
+| Stripe | 15.000 | 5.750 |
 | Testing | 14.250 | 8.250 |
 | Security and privacy | 10.000 | 6.500 |
 | Production and integrations | 8.625 | 3.750 |
-| **Total** | **97.375** | **55.750** |
+| **Total** | **97.375** | **57.000** |
 
 **Implementation completeness: 97.375%.** Previous: 97.375%. Change: **0** points.
 
-**Verified commercial launch readiness: 55.75%.** Previous: 55.5%. Change: **+0.25** points.
+**Verified commercial launch readiness: 57%.** Previous: 55.75%. Change: **+1.25** points.
 
-The increase is the unauthorised cron HTTP check. Missing and revoked public plans now return HTTP 404. Hugging Face is wired beside Anthropic, and no model call was made. No Stripe test payment was made.
+The increase is the unauthenticated Smart Plan refusal and the local Stripe signature check. No model call and no Stripe test payment were made. The production build was not repeated while `next start` was serving port 3001.
 
 ## Launch verdict
 
@@ -206,6 +206,17 @@ npm run test:e2e:sharing
 
 `GET /plans/not-a-published-e2e-slug` returned 404. Both cron routes returned 401 without a bearer token.
 
+Later on 23 October, without restarting that server:
+
+```text
+npm test
+npm run lint
+npx tsc --noEmit
+node --env-file=.env.local --import tsx scripts/verify-authorised-cron.ts
+```
+
+`POST /api/checkout` and `POST /api/customer-portal` returned 401. `POST /api/webhooks/stripe` returned 500. `POST /api/ai/generate-plan-stream` returned `NOT_AUTHED`. `NODE_ENV=production npm run build` was not run again.
+
 ## Next engineering task
 
-Add a Stripe test-mode secret, webhook secret, and the four test price ids (`STRIPE_PRICE_PRO_MONTHLY`, `STRIPE_PRICE_PRO_ANNUAL`, `STRIPE_PRICE_FAMILY_MONTHLY`, `STRIPE_PRICE_FAMILY_ANNUAL`), then run checkout, webhook, portal, and cancellation against isolated data. Add `HF_TOKEN` with Inference Providers permission, or `ANTHROPIC_API_KEY`, and run one Orlando Smart Plan. Confirm the hosted Auth redirect allowlist, then set the server environment and authorise a private staging deploy. Do not enable live billing, deploy, or reset the database.
+Add a Stripe test-mode secret, webhook secret, publishable key, and the four test price ids (`STRIPE_PRICE_PRO_MONTHLY`, `STRIPE_PRICE_PRO_ANNUAL`, `STRIPE_PRICE_FAMILY_MONTHLY`, `STRIPE_PRICE_FAMILY_ANNUAL`), then run checkout, webhook, portal, and cancellation against isolated data. Add `HF_TOKEN` with Inference Providers permission, or `ANTHROPIC_API_KEY`, and run one Orlando Smart Plan. Set `CRON_SECRET` before an authorised hosted cron run; do not run live-wait ingest until that call is meant to write provider data. Confirm the Supabase Auth Site URL and redirect allowlist, then set Resend, Sentry, the service role, and `CRON_SECRET` on Vercel and authorise a private staging deploy. Do not enable live billing, deploy, or reset the database.
