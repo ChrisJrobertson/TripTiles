@@ -41,6 +41,8 @@ Database implementation: 20 / 20 = **100%**. Verified: 16 / 20 = **80%**.
 
 Auth implementation: 20 / 20 = **100%**. Verified: 13 / 20 = **65%**. Previous verified 11 / 20.
 
+Signup, recovery, and login links use `/auth/callback`. The return path is a same-origin path. On 23 October the origin allowlist stopped matching any `vercel.app` host that merely contains `triptiles`. Allowed origins are `http://localhost:3001`, `http://127.0.0.1:3001`, `https://triptiles.app`, `https://www.triptiles.app`, and exact HTTPS origins in `TRIPTILES_AUTH_ORIGINS`. The Supabase dashboard Site URL and redirect list were not changed.
+
 ## Smart Plan and planning intelligence — weight 10
 
 | ID | Criterion | Weight | Impl | Verified | Evidence |
@@ -130,19 +132,57 @@ Marketing notes from this pass:
 
 **Implementation completeness: 97.375%.** Previous: 97.375%. Change: **0** points.
 
-**Verified commercial launch readiness: 57%.** Previous: 55.75%. Change: **+1.25** points.
+**Verified commercial launch readiness: 57%.** Previous: 57%. Change: **0** points.
 
-The increase is the unauthenticated Smart Plan refusal and the local Stripe signature check. No model call and no Stripe test payment were made. The production build was not repeated while `next start` was serving port 3001.
+The auth allowlist is now an exact origin list. No model call, Stripe test payment, hosted deploy, or score change came from that. `ANTHROPIC_API_KEY`, `HF_TOKEN`, and the Stripe test credentials are still unset.
+
+## Integration configuration
+
+Checked on 23 October. Local means `.env.local`. Vercel means project `triptiles` (`prj_e3cIQQ1HiBFlE4uaQ6AlNqISiqzH`). A value is not treated as configured unless it is present. No placeholder was written.
+
+| Variable | Service | Kind | Where | Needed for | How to verify |
+| --- | --- | --- | --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase API settings | Public | Local set. Vercel set. | Staging and launch | App reads project `inqexwdkuqdfdoaauxyw`. |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` or `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase API settings | Public | Vercel set. | Staging and launch | Browser client starts. The value is not printed here. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase API settings | Secret | Local set. Vercel missing. | Staging and launch | Server jobs that need the service role return 500 when it is absent. |
+| `NEXT_PUBLIC_SITE_URL` | This app | Public | Local set to `http://localhost:3001`. Vercel missing. | Staging and launch | Must be an allowlisted origin. Auth email links use it. |
+| `TRIPTILES_AUTH_ORIGINS` | This app | Public | Unset. | Staging, when the host is not one of the four built-in origins | Unit test: an unlisted `vercel.app` host is rejected; the exact listed origin is accepted. |
+| `ANTHROPIC_API_KEY` | Anthropic console | Secret | Unset. | One of the two AI keys is required for staging and launch | One signed-in Orlando Smart Plan saves and reloads. |
+| `HF_TOKEN` | Hugging Face, Inference Providers permission | Secret | Unset. | Optional while Anthropic remains the default | Same Orlando plan with `TRIPTILES_AI_PROVIDER=huggingface`. |
+| `TRIPTILES_AI_PROVIDER` | This app | Public | Unset, so Anthropic wins when its key exists | Only when selecting Hugging Face | Provider unit test. |
+| `HF_PLANNER_MODEL` | Hugging Face router | Public | Unset. Default `openai/gpt-oss-120b:fastest` | Optional | Response parses through the existing itinerary validator. |
+| `STRIPE_SECRET_KEY` | Stripe test mode | Secret | Unset. | Staging and launch. Live key is not accepted for this step | Test checkout session opens. |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook endpoint | Secret | Unset. | Staging and launch | Signed test event updates one disposable user. A second delivery is a duplicate. |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe test mode | Public | Unset. | Staging and launch | Pricing page can start checkout. |
+| `STRIPE_PRICE_PRO_MONTHLY` | Stripe test price | Public id | Unset. | Staging and launch | Checkout rejects any other price id. |
+| `STRIPE_PRICE_PRO_ANNUAL` | Stripe test price | Public id | Unset. | Staging and launch | Same. |
+| `STRIPE_PRICE_FAMILY_MONTHLY` | Stripe test price | Public id | Unset. | Staging and launch | Same. |
+| `STRIPE_PRICE_FAMILY_ANNUAL` | Stripe test price | Public id | Unset. | Staging and launch | Same. |
+| `NEXT_PUBLIC_STRIPE_PRICE_*` | Same four prices | Public id | Unset. | Staging and launch, for the pricing page | The four ids match the server names. |
+| `RESEND_API_KEY` | Resend | Secret | Unset. | Launch. Staging if email is part of the trial | One disposable message leaves the queue as sent. |
+| `CRON_SECRET` | Vercel cron | Secret | Unset. | Staging and launch | `Authorization: Bearer` matches. A missing secret stays HTTP 401. |
+| `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN` | Sentry | Secret | Unset. | Launch. Recommended for staging | One captured server exception appears in the project. |
+| `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | Sentry | Secret / public names | Unset. | Optional source maps | Build uploads maps. Not required to boot. |
+
+Supabase Authentication URL configuration, to be set in the dashboard only when a staging host is chosen:
+
+- Site URL: the same origin as `NEXT_PUBLIC_SITE_URL`.
+- Redirect URLs: `http://localhost:3001/auth/callback`, `https://www.triptiles.app/auth/callback`, `https://triptiles.app/auth/callback`, and `https://<exact-staging-host>/auth/callback`.
+- Do not add a `*.vercel.app` wildcard.
+
+The dashboard was not changed.
 
 ## Launch verdict
 
 Not safe to accept paying customers.
 
-Private staging for internal testing: **YES.** A production build on port 3001 served the public-plan checks against `inqexwdkuqdfdoaauxyw`. Stripe live keys are not set in this environment, and secrets were not committed. A Vercel preview was not created. The linked Vercel project still has only the public Supabase URL and publishable key, so a hosted staging deploy is not ready.
+Local private staging: **YES.** The production server on port 3001 is the existing build against `inqexwdkuqdfdoaauxyw`. This pass did not restart it.
 
-Controlled beta: **NO.** There is still no hosted staging deployment. The Supabase Auth Site URL and redirect allowlist have not been confirmed for a public origin. Smart Plan has neither `ANTHROPIC_API_KEY` nor `HF_TOKEN`. Resend, Sentry, and `CRON_SECRET` are unset.
+Hosted private staging: **NO.** Not deployed. Vercel has the public Supabase URL and publishable key only. A preview would be `npx vercel deploy` on project `triptiles`, team `team_RLdK7DHd9H7fifdKL9T3EGmI`, and it would use that same Supabase project. Preview writes would land in the current database, including the two real customer accounts. Do not deploy until the staging origin is listed exactly in `TRIPTILES_AUTH_ORIGINS`, `NEXT_PUBLIC_SITE_URL`, and the Supabase redirect list, and the server secrets in the table above are set. Cron must stay unauthorised until `CRON_SECRET` is set, because the live-wait job writes provider rows.
 
-Full commercial launch: **NO.** There is no Stripe test-mode payment, no real Smart Plan call, and no backup restore. Live billing was not enabled.
+Controlled customer beta: **NO.** No hosted deployment, no AI key, no Stripe test payment, no Resend, no Sentry, and the Auth dashboard allowlist is unconfirmed.
+
+Full paid commercial launch: **NO.** No Stripe test-mode lifecycle, no real Smart Plan, and no backup restore. Live billing was not enabled.
 
 ## Commands run on 13–21 October
 
@@ -217,6 +257,8 @@ node --env-file=.env.local --import tsx scripts/verify-authorised-cron.ts
 
 `POST /api/checkout` and `POST /api/customer-portal` returned 401. `POST /api/webhooks/stripe` returned 500. `POST /api/ai/generate-plan-stream` returned `NOT_AUTHED`. `NODE_ENV=production npm run build` was not run again.
 
+Later on 23 October the origin allowlist tests, `npm test`, `npm run lint`, and `npx tsc --noEmit` were run. A production build used `TRIPTILES_DIST_DIR=.next-phase7` so it did not replace the directory served on port 3001.
+
 ## Next engineering task
 
-Add a Stripe test-mode secret, webhook secret, publishable key, and the four test price ids (`STRIPE_PRICE_PRO_MONTHLY`, `STRIPE_PRICE_PRO_ANNUAL`, `STRIPE_PRICE_FAMILY_MONTHLY`, `STRIPE_PRICE_FAMILY_ANNUAL`), then run checkout, webhook, portal, and cancellation against isolated data. Add `HF_TOKEN` with Inference Providers permission, or `ANTHROPIC_API_KEY`, and run one Orlando Smart Plan. Set `CRON_SECRET` before an authorised hosted cron run; do not run live-wait ingest until that call is meant to write provider data. Confirm the Supabase Auth Site URL and redirect allowlist, then set Resend, Sentry, the service role, and `CRON_SECRET` on Vercel and authorise a private staging deploy. Do not enable live billing, deploy, or reset the database.
+Put `ANTHROPIC_API_KEY` or `HF_TOKEN` in `.env.local` and run one signed-in Orlando Smart Plan. Put the Stripe test secret, webhook secret, publishable key, and four price ids in `.env.local` and run checkout through cancellation on a disposable user. Choose the exact staging hostname, add it to `TRIPTILES_AUTH_ORIGINS`, `NEXT_PUBLIC_SITE_URL`, and the Supabase redirect list, then set the missing Vercel secrets and authorise `npx vercel deploy`. Do not enable live billing, run live-wait ingest, or reset the database.
