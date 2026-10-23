@@ -30,7 +30,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const trip = await getTripByPublicSlug(slug);
-  if (!trip) return { title: "Plan · TripTiles" };
+  if (!trip) notFound();
 
   const region = trip.region_id
     ? await getRegionById(trip.region_id)

@@ -31,7 +31,10 @@ test("a published plan shows only the public contract", async ({ page }) => {
     }
     expect(html.includes('"child_ages":[13]'), "public page serialised child ages").toBe(false);
 
-    await page.goto("/plans/not-a-published-e2e-slug", { waitUntil: "domcontentloaded" });
+    const missing = await page.goto("/plans/not-a-published-e2e-slug", {
+      waitUntil: "domcontentloaded",
+    });
+    expect(missing?.status()).toBe(404);
     await expect(page.getByRole("heading", { name: "This page could not be found." })).toBeVisible();
     const missingHtml = await page.content();
     expect(missingHtml.includes("E2E Public Title"), "unknown slug showed the public title").toBe(false);
@@ -40,7 +43,8 @@ test("a published plan shows only the public contract", async ({ page }) => {
     }
 
     await revokeShareProbe(probe);
-    await page.goto(`/plans/${probe.slug}`, { waitUntil: "domcontentloaded" });
+    const revoked = await page.goto(`/plans/${probe.slug}`, { waitUntil: "domcontentloaded" });
+    expect(revoked?.status()).toBe(404);
     await expect(page.getByRole("heading", { name: "This page could not be found." })).toBeVisible();
     const revokedHtml = await page.content();
     expect(revokedHtml.includes("E2E Public Title"), "revoked plan stayed on the public page").toBe(false);

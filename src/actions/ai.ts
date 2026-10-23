@@ -1,6 +1,15 @@
 "use server";
 
 import Anthropic from "@anthropic-ai/sdk";
+import {
+  createHuggingFacePlannerMessage,
+  plannerAiConfigured,
+  resolvePlannerModel,
+  selectPlannerProvider,
+  type PlannerMessage,
+  type PlannerPrompt,
+  type PlannerStreamEvent,
+} from "@/lib/ai/planner-provider";
 import { getCustomTilesForRegion } from "@/lib/db/custom-tiles";
 import { getParksForRegion } from "@/lib/db/parks";
 import { getRegionById } from "@/lib/db/regions";
@@ -138,6 +147,26 @@ const anthropic = new Anthropic({
 });
 
 const SMART_PLAN_MODEL = "claude-haiku-4-5-20251001";
+
+async function createPlannerMessage(
+  prompt: PlannerPrompt & { stream: true },
+  options?: { signal?: AbortSignal },
+): Promise<AsyncIterable<PlannerStreamEvent>>;
+async function createPlannerMessage(
+  prompt: PlannerPrompt,
+  options?: { signal?: AbortSignal },
+): Promise<PlannerMessage>;
+async function createPlannerMessage(
+  prompt: PlannerPrompt,
+  options?: { signal?: AbortSignal },
+): Promise<PlannerMessage | AsyncIterable<PlannerStreamEvent>> {
+  if (selectPlannerProvider() === "huggingface") {
+    return createHuggingFacePlannerMessage(prompt, options);
+  }
+  return anthropic.messages.create(prompt as never, options as never) as Promise<
+    PlannerMessage | AsyncIterable<PlannerStreamEvent>
+  >;
+}
 const SMART_PLAN_RATE_LIMIT = 12;
 const SMART_PLAN_RATE_WINDOW_MS = 60 * 60 * 1000;
 
@@ -202,7 +231,7 @@ function smartPlanModelForProfileTier(
   tier: string | null | undefined,
 ): string {
   void tier;
-  return SMART_PLAN_MODEL;
+  return resolvePlannerModel(SMART_PLAN_MODEL);
 }
 const AI_GEN_DEBUG =
   process.env.AI_GEN_DEBUG === "1" || process.env.NODE_ENV !== "production";
@@ -1423,7 +1452,7 @@ export async function tweakDay(input: {
   if (rateLimited) {
     return { status: "error", error: rateLimited, code: "ai_failure" };
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!plannerAiConfigured()) {
     return { status: "error", error: "AI is not configured.", code: "ai_failure" };
   }
   if (input.mode === "freetext" && !input.freetext?.trim()) {
@@ -1551,7 +1580,7 @@ ${input.mode === "freetext" ? `\nUSER REQUEST: ${input.freetext?.trim()}` : ""}`
   let aiGenError: string | null = null;
   let tweakDayStopReason: string | null = null;
   try {
-    const msg = await anthropic.messages.create({
+    const msg = await createPlannerMessage({
       model,
       max_tokens: 2000,
       system: [
@@ -2101,17 +2130,17 @@ export async function runGenerateAIPlan(
     throw e;
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!plannerAiConfigured()) {
     logAiGen({
       step: "action_exit_result",
       tripId: input.tripId,
       userId: user.id,
-      details: { ok: false, error: "AI_ERROR", reason: "missing_anthropic_key" },
+      details: { ok: false, error: "AI_ERROR", reason: "missing_ai_credentials" },
     });
     return {
       ok: false,
       error: "AI_ERROR",
-      message: "ANTHROPIC_API_KEY is not configured.",
+      message: "AI is not configured.",
     };
   }
 
@@ -2489,7 +2518,7 @@ export async function runGenerateAIPlan(
     promptLength: composedUserMessage.length,
   });
 
-  const model = SMART_PLAN_MODEL;
+  const model = resolvePlannerModel(SMART_PLAN_MODEL);
 
   let inputTokens = 0;
   let outputTokens = 0;
@@ -2529,7 +2558,7 @@ export async function runGenerateAIPlan(
             parksCount: parksForPrompt.length,
             details: { planAttempt, tPass, maxTokens: maxTok },
           });
-          const stream = await anthropic.messages.create(
+          const stream = await createPlannerMessage(
             {
               model,
               max_tokens: maxTok,
@@ -3449,10 +3478,10 @@ export async function generateMustDosForPark(input: {
     throw e;
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!plannerAiConfigured()) {
     return {
       ok: false,
-      error: "ANTHROPIC_API_KEY is not configured.",
+      error: "AI is not configured.",
       code: "AI_ERROR",
     };
   }
@@ -3564,7 +3593,7 @@ Produce 4–6 specific named attractions in rough chronological order for a full
   );
   let mustDosStopReason: string | null = null;
   try {
-    const msg = await anthropic.messages.create({
+    const msg = await createPlannerMessage({
       model,
       max_tokens: 2500,
       system: [
@@ -4001,7 +4030,7 @@ export async function generateDayTimeline(
     return { ok: false, error: rateLimited, code: "ai_failure" };
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!plannerAiConfigured()) {
     return {
       ok: false,
       error: "AI is not configured.",
@@ -4267,8 +4296,8 @@ END USER CONSTRAINTS`
   try {
     const DAY_TL_MAX = 8192;
     const DAY_TL_MAX_RETRY = 12_000;
-    let msg: Awaited<ReturnType<typeof anthropic.messages.create>>;
-    msg = await anthropic.messages.create({
+    let msg: PlannerMessage;
+    msg = await createPlannerMessage({
       model,
       max_tokens: DAY_TL_MAX,
       system: [
@@ -4291,7 +4320,7 @@ END USER CONSTRAINTS`
       messages: [{ role: "user", content: userBlock }],
     });
     if (msg.stop_reason === "max_tokens") {
-      msg = await anthropic.messages.create({
+      msg = await createPlannerMessage({
         model,
         max_tokens: DAY_TL_MAX_RETRY,
         system: [
@@ -5294,7 +5323,7 @@ export async function generateDayStrategy(input: {
   const rateLimited = await smartPlanRateLimitMessage(user.id);
   if (rateLimited) return { status: "error", error: rateLimited };
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!plannerAiConfigured()) {
     return { status: "error", error: "AI is not configured." };
   }
 
@@ -5646,7 +5675,7 @@ export async function generateDayStrategy(input: {
       ].join("\n\n")
     : [buildAiRegionBriefingBlock(region, parksForPrompt), userMsg].join("\n\n");
 
-  const model = SMART_PLAN_MODEL;
+  const model = resolvePlannerModel(SMART_PLAN_MODEL);
   const promptKey = `day_strategy:${dateKey}:${primaryParkId}`;
 
   let inputTokens = 0;
@@ -5658,7 +5687,7 @@ export async function generateDayStrategy(input: {
   let strategyStopReason: string | null = null;
 
   try {
-    let msg = await anthropic.messages.create({
+    let msg = await createPlannerMessage({
       model,
       max_tokens: 3000,
       system: [
@@ -5680,7 +5709,7 @@ export async function generateDayStrategy(input: {
         tripId: input.tripId,
         dateKey,
       });
-      msg = await anthropic.messages.create({
+      msg = await createPlannerMessage({
         model,
         max_tokens: 6000,
         system: [
@@ -5748,7 +5777,7 @@ export async function generateDayStrategy(input: {
           dateKey,
         });
         const retryUserBlock = `${userBlock}\n\nRETRY INSTRUCTION: Your previous response was not valid JSON. Return ONLY a valid JSON object — no markdown code fences, no prose, no explanation. Start your response with { and end it with }.`;
-        const retryMsg = await anthropic.messages.create({
+        const retryMsg = await createPlannerMessage({
           model,
           max_tokens: 6000,
           system: [

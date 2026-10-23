@@ -157,7 +157,13 @@ export default function PrivacyPage() {
             <a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noreferrer">
               Anthropic
             </a>{" "}
-            — AI processing when you use Smart Plan.
+            — AI processing when Smart Plan uses Anthropic.
+          </li>
+          <li>
+            <a href="https://huggingface.co/privacy" target="_blank" rel="noreferrer">
+              Hugging Face
+            </a>{" "}
+            — AI processing when Smart Plan uses Inference Providers.
           </li>
           <li>
             <a href="https://resend.com/legal/privacy-policy" target="_blank" rel="noreferrer">
