@@ -15,7 +15,7 @@ A restore that has not been rehearsed is not evidence that customer data can be 
 ## Application
 
 - Production deploys go through Vercel. Roll back by promoting the previous successful deployment in the Vercel dashboard. Do not deploy from this repository with `npm run deploy:vercel` unless that release was requested.
-- The five-minute live-wait cron in `vercel.json` is incompatible with a Vercel Hobby plan. Leaving it in place is intentional. Removing it, or changing it to once a day, needs a separate decision.
+- Live-wait ingest is scheduled once a day at 09:30 UTC. Vercel Hobby rejects a cron that runs more than once per day, which blocked deploy. A five-minute schedule needs a Pro plan.
 
 ## What this does not cover
 
