@@ -1,5 +1,6 @@
 "use server";
 
+import { accountDeletionEmailMatches } from "@/lib/account/delete-confirmation";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
@@ -44,7 +45,7 @@ export async function exportUserDataAction(): Promise<
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
     supabase.from("trips").select("*").eq("owner_id", uid),
-    supabase.from("custom_tiles").select("*").eq("owner_id", uid),
+    supabase.from("custom_tiles").select("*").eq("user_id", uid),
     supabase.from("achievements").select("*").eq("user_id", uid),
     supabase.from("purchases").select("*").eq("user_id", uid),
     supabase
@@ -102,7 +103,7 @@ export async function deleteAccountAction(input: {
   if (!user || !user.email) {
     return { ok: false, error: "Not signed in." };
   }
-  if (input.confirmationEmail.trim().toLowerCase() !== user.email.toLowerCase()) {
+  if (!accountDeletionEmailMatches(user.email, input.confirmationEmail)) {
     return { ok: false, error: "Email does not match your account." };
   }
 

@@ -2,7 +2,10 @@
 
 import { LiveWaitAttributionFooter } from "@/components/live-wait/LiveWaitAttributionFooter";
 import { Badge, Button, Card, EmptyState } from "@/components/ui";
-import { classifyFreshness } from "@/lib/park-data/freshness";
+import {
+  classifyFreshness,
+  freshnessAllowsLiveDescription,
+} from "@/lib/park-data/freshness";
 import { minutesBetween } from "@/lib/live-wait/display-format";
 import type { LiveWaitOperatingStatus } from "@/types/live-wait";
 import { useRouter } from "next/navigation";
@@ -229,6 +232,18 @@ export function TodayAtParkClient({
     (row) => !row.is_open || row.operating_status !== "open",
   );
   const staleCount = rides.filter((row) => isRowStale(row, generatedAtIso)).length;
+  const everyRowLive =
+    rides.length > 0 &&
+    rides.every((row) =>
+      freshnessAllowsLiveDescription(
+        classifyFreshness({
+          observedAt: row.observed_at,
+          fetchedAt: row.fetched_at,
+          staleAfter: row.stale_after,
+          now: new Date(generatedAtIso),
+        }),
+      ),
+    );
   const latest = latestObservedAt(rides);
 
   function buildUrl(params: { regionId?: string | null; parkId?: string | null }) {
@@ -256,7 +271,7 @@ export function TodayAtParkClient({
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
       <header className="space-y-3">
         <p className="font-sans text-xs font-semibold uppercase tracking-[0.18em] text-tt-royal">
-          Live park operations
+          {everyRowLive ? "Live park operations" : "Park operations"}
         </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -340,7 +355,7 @@ export function TodayAtParkClient({
 
       {loadError ? (
         <Card className="border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          Live waits could not be loaded: {loadError}
+          Wait times could not be loaded: {loadError}
         </Card>
       ) : null}
 

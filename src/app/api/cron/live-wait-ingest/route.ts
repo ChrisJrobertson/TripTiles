@@ -1,3 +1,4 @@
+import { isCronAuthorized } from "@/lib/cron/authorize";
 import { runThemeParkIngest } from "@/lib/park-data/orchestrate-ingest";
 import { getSupabaseUrl } from "@/lib/supabase/env";
 import type { NextRequest } from "next/server";
@@ -19,9 +20,7 @@ export async function POST(request: NextRequest) {
 }
 
 async function handleCron(request: NextRequest) {
-  const secret = process.env.CRON_SECRET?.trim();
-  const authHeader = request.headers.get("authorization");
-  if (!secret || authHeader !== `Bearer ${secret}`) {
+  if (!isCronAuthorized(request.headers.get("authorization"), process.env.CRON_SECRET)) {
     return unauthorized();
   }
 

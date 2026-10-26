@@ -1,3 +1,4 @@
+import { isCronAuthorized } from "@/lib/cron/authorize";
 import { formatDateKey, parseDate } from "@/lib/date-helpers";
 import { sendTemplatedEmail, type EmailTemplate } from "@/lib/email/send";
 import { getEffectiveRetailTier } from "@/lib/tiers";
@@ -20,9 +21,7 @@ function unauthorized() {
 }
 
 async function handleCronRequest(request: NextRequest) {
-  const secret = process.env.CRON_SECRET?.trim();
-  const authHeader = request.headers.get("authorization");
-  if (!secret || authHeader !== `Bearer ${secret}`) {
+  if (!isCronAuthorized(request.headers.get("authorization"), process.env.CRON_SECRET)) {
     return unauthorized();
   }
 

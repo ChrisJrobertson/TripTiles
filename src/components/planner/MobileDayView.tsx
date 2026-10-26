@@ -1156,8 +1156,10 @@ export function MobileDayView({
     Math.max(0, days.length - 1),
   );
   const activeDay = days[safeIndex]!;
-  const ridePrioritiesForActiveDay =
-    ridePrioritiesByDay[activeDay.dateKey] ?? [];
+  const ridePrioritiesForActiveDay = useMemo(
+    () => ridePrioritiesByDay[activeDay.dateKey] ?? [],
+    [ridePrioritiesByDay, activeDay.dateKey],
+  );
   const rideDisplayCount =
     rideCountsByDay?.[activeDay.dateKey]?.total ??
     ridePrioritiesForActiveDay.length;

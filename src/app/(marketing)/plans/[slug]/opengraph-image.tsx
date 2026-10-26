@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { OgLogoLockup } from "@/lib/brand/og-logo-lockup";
-import { getPublicAdventureTitleFromRow } from "@/lib/public-trip-display";
+import { readPublicTripBySlug } from "@/lib/db/public-trip-read";
+import { getPublicAdventureTitle } from "@/lib/public-trip-display";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const runtime = "nodejs";
@@ -46,15 +47,9 @@ export default async function Image({
   }
 
   try {
-    const admin = createServiceRoleClient();
-    const { data: tripRow } = await admin
-      .from("trips")
-      .select("*")
-      .eq("public_slug", trimmed)
-      .eq("is_public", true)
-      .maybeSingle();
+    const trip = await readPublicTripBySlug(trimmed);
 
-    if (!tripRow) {
+    if (!trip) {
       return new ImageResponse(
         <div
           style={{
@@ -86,12 +81,11 @@ export default async function Image({
       );
     }
 
-    const row = tripRow as Record<string, unknown>;
-    const adventureName = getPublicAdventureTitleFromRow(row);
-    const startDate = String(row.start_date ?? "");
-    const endDate = String(row.end_date ?? "");
-    const regionId =
-      row.region_id != null ? String(row.region_id) : null;
+    const admin = createServiceRoleClient();
+    const adventureName = getPublicAdventureTitle(trip);
+    const startDate = trip.start_date;
+    const endDate = trip.end_date;
+    const regionId = trip.region_id;
     let dest = "Theme park adventure";
     if (regionId) {
       const { data: reg } = await admin

@@ -1,10 +1,14 @@
 "use server";
 
+import { authorisedAuthRedirectOrigin } from "@/lib/auth/auth-redirect-origin";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
+import { consumeSharedRateLimit } from "@/lib/rate-limit";
+import { getPublicSiteUrl } from "@/lib/site";
 import { createClient } from "@/lib/supabase/server";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import type { AuthError } from "@supabase/supabase-js";
+import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 
 function mapSignInError(error: AuthError): string {
   const code = (error.code ?? "").toLowerCase();
@@ -101,6 +105,58 @@ function mapSignUpError(error: AuthError): string {
   return error.message || "Something went wrong. Please try again.";
 }
 
+const AUTH_LIMITS = {
+  signin: { limit: 8, windowMs: 15 * 60 * 1000, ipLimit: 30 },
+  signup: { limit: 5, windowMs: 60 * 60 * 1000, ipLimit: 20 },
+  otp: { limit: 5, windowMs: 15 * 60 * 1000, ipLimit: 15 },
+  reset: { limit: 5, windowMs: 60 * 60 * 1000, ipLimit: 10 },
+} as const;
+
+function tooManyAttempts(retryAfterSec: number): string {
+  return `Too many attempts. Try again in ${retryAfterSec} seconds.`;
+}
+
+/** Where Supabase should send the browser after the confirmation link. */
+function authCallbackUrl(nextPath: string): string {
+  const origin = authorisedAuthRedirectOrigin(getPublicSiteUrl());
+  return `${origin}/auth/callback?next=${encodeURIComponent(safeNextPath(nextPath))}`;
+}
+
+async function clientAddress(): Promise<string | null> {
+  try {
+    const h = await headers();
+    const raw =
+      h.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      h.get("x-real-ip")?.trim() ||
+      "";
+    return raw || null;
+  } catch {
+    return null;
+  }
+}
+
+async function limitAuthAttempt(
+  kind: keyof typeof AUTH_LIMITS,
+  email: string,
+): Promise<string | null> {
+  const spec = AUTH_LIMITS[kind];
+  const emailResult = await consumeSharedRateLimit(
+    `${kind}:${email.trim().toLowerCase()}`,
+    spec.limit,
+    spec.windowMs,
+  );
+  if (!emailResult.allowed) return tooManyAttempts(emailResult.retryAfterSec);
+  const ip = await clientAddress();
+  if (!ip) return null;
+  const ipResult = await consumeSharedRateLimit(
+    `${kind}-ip:${ip}`,
+    spec.ipLimit,
+    spec.windowMs,
+  );
+  if (!ipResult.allowed) return tooManyAttempts(ipResult.retryAfterSec);
+  return null;
+}
+
 export async function signInWithPasswordAction(input: {
   email: string;
   password: string;
@@ -112,6 +168,8 @@ export async function signInWithPasswordAction(input: {
   if (!trimmedEmail || !input.password) {
     return { ok: false, error: "Email and password are required" };
   }
+  const limited = await limitAuthAttempt("signin", trimmedEmail);
+  if (limited) return { ok: false, error: limited };
 
   try {
     const supabase = await createClient();
@@ -146,6 +204,8 @@ export async function sendSignInOtpAction(input: {
   if (!trimmedEmail) {
     return { ok: false, error: "Email is required" };
   }
+  const limited = await limitAuthAttempt("otp", trimmedEmail);
+  if (limited) return { ok: false, error: limited };
 
   try {
     const supabase = await createClient();
@@ -182,6 +242,8 @@ export async function verifySignInOtpAction(input: {
   if (!email || token.length !== 8) {
     return { ok: false, error: VERIFY_OTP_MISMATCH };
   }
+  const limited = await limitAuthAttempt("otp", email);
+  if (limited) return { ok: false, error: limited };
 
   const supabase = await createClient();
   const { error } = await supabase.auth.verifyOtp({
@@ -208,6 +270,8 @@ export async function verifySignupOtpAction(input: {
   if (!email || token.length !== 8) {
     return { ok: false, error: VERIFY_OTP_MISMATCH };
   }
+  const limited = await limitAuthAttempt("otp", email);
+  if (limited) return { ok: false, error: limited };
 
   const supabase = await createClient();
   const { error } = await supabase.auth.verifyOtp({
@@ -234,6 +298,8 @@ export async function verifyRecoveryOtpAction(input: {
   if (!email || token.length !== 8) {
     return { ok: false, error: VERIFY_OTP_MISMATCH };
   }
+  const limited = await limitAuthAttempt("otp", email);
+  if (limited) return { ok: false, error: limited };
 
   const supabase = await createClient();
   const { error } = await supabase.auth.verifyOtp({
@@ -257,12 +323,16 @@ export async function resendSignupOtpAction(input: {
   if (!email) {
     return { ok: false, error: "Email is required" };
   }
+  const limited = await limitAuthAttempt("otp", email);
+  if (limited) return { ok: false, error: limited };
 
   try {
     const supabase = await createClient();
+    const emailRedirectTo = authCallbackUrl("/onboarding");
     const { error } = await supabase.auth.resend({
       type: "signup",
       email,
+      options: emailRedirectTo ? { emailRedirectTo } : undefined,
     });
 
     if (error) {
@@ -305,12 +375,16 @@ export async function signUpWithPasswordAction(input: {
   if (input.password.length < 8) {
     return { ok: false, error: "Password must be at least 8 characters" };
   }
+  const limited = await limitAuthAttempt("signup", trimmedEmail);
+  if (limited) return { ok: false, error: limited };
 
   try {
     const supabase = await createClient();
+    const emailRedirectTo = authCallbackUrl("/onboarding");
     const { data, error } = await supabase.auth.signUp({
       email: trimmedEmail,
       password: input.password,
+      options: emailRedirectTo ? { emailRedirectTo } : undefined,
     });
 
     if (error) {
@@ -353,6 +427,8 @@ export async function resetPasswordAction(input: {
   if (!trimmed) {
     return { ok: true };
   }
+  const limited = await limitAuthAttempt("reset", trimmed);
+  if (limited) return { ok: true };
 
   try {
     const supabase = await createClient();

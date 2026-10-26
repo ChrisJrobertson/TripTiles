@@ -1,8 +1,6 @@
 import { AppRoutePulseFallback } from "@/components/app/AppRoutePulseFallback";
 import { ProfileLoadErrorPanel } from "@/components/app/ProfileLoadErrorPanel";
 import { getActiveTripForUser } from "@/lib/db/trips";
-import { loadPlannerClientServerData } from "@/lib/planner-server-data";
-import { getPublicSiteUrl } from "@/lib/site";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
@@ -56,33 +54,19 @@ async function PlannerRedirectContent({
 
   const sp = await searchParams;
   const supabase = await createClient();
-  const siteUrl = getPublicSiteUrl() || "https://www.triptiles.app";
-  const loaded = await loadPlannerClientServerData({
-    supabase,
-    userId: user.id,
-    siteUrl,
-    searchParams: sp,
-    forcedTripId: null,
-  });
-
-  if (!loaded.ok) {
-    if (loaded.error === "tier") {
-      return <ProfileLoadErrorPanel detail={loaded.message} />;
-    }
-    if (loaded.error === "profile") {
-      return <ProfileLoadErrorPanel detail={loaded.message} />;
-    }
-    return <ProfileLoadErrorPanel detail={loaded.message} />;
+  const { count, error } = await supabase
+    .from("trips")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", user.id)
+    .eq("is_archived", false);
+  if (error) {
+    return <ProfileLoadErrorPanel detail="Your trips could not be loaded. Refresh and try again." />;
   }
-
-  const trips = loaded.props.initialTrips;
-
-  if (trips.length === 0) {
-    redirect("/onboarding");
-  }
+  if (!count) redirect("/onboarding");
 
   const active = await getActiveTripForUser(user.id);
-  const tripId = active?.id ?? trips[0]!.id;
+  const tripId = active?.id;
+  if (!tripId) redirect("/onboarding");
 
   const qs = new URLSearchParams();
   for (const [k, raw] of Object.entries(sp)) {

@@ -48,11 +48,15 @@ export function dayConditionRow(
   const month = day.getMonth() + 1;
   const mc = getMonthlyConditions(regionId, month);
   if (!mc) return null;
+  const monthName = MONTHS_LONG[month - 1] ?? "this month";
+  const tempLabel = formatTempForUnit(mc.tempHighC, mc.tempHighF, tempUnit);
+  const crowdWord = CROWD_WORDS[mc.crowdLevel].toLowerCase();
+  const staticLabel = `Typical ${monthName} average, not a live forecast: ${mc.weatherEmoji} ${tempLabel}, ${crowdWord} crowds`;
   return {
     conditions: mc,
-    tempLabel: formatTempForUnit(mc.tempHighC, mc.tempHighF, tempUnit),
+    tempLabel,
     crowd: mc.crowdLevel,
-    tooltip: crowdTooltipForMonth(mc.crowdLevel, month),
+    tooltip: `${staticLabel}. ${crowdTooltipForMonth(mc.crowdLevel, month)}`,
   };
 }
 
@@ -73,5 +77,6 @@ export function pdfDayConditionLine(
     tempUnit === "c"
       ? `${Math.round(row.conditions.tempHighC)}°C${fParen}`
       : `${Math.round(row.conditions.tempHighF)}°F${fParen}`;
-  return `Expected conditions: ${row.conditions.weatherEmoji} ${tempPart}, ${crowdW} crowds`;
+  const monthName = MONTHS_LONG[day.getMonth()] ?? "this month";
+  return `Typical ${monthName} average, not a live forecast: ${row.conditions.weatherEmoji} ${tempPart}, ${crowdW} crowds`;
 }

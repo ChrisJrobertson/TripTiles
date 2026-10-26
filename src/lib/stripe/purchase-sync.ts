@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Stripe from "stripe";
+import { profileTierActionForSubscription } from "@/lib/stripe/entitlement";
 import {
   mapStripeIdsToProductSku,
   priceIdToTier,
@@ -175,36 +176,30 @@ export async function upsertPurchaseFromStripeSubscription(
     amount_gbp_pence: baseRow.amount_gbp_pence,
   });
 
-  if (input.profileGracePeriod) {
-    console.info(
-      "[stripe webhook] subscription in grace period — profile tier unchanged",
-      { userId: input.userId, status: sub.status },
-    );
+  const tierAction = profileTierActionForSubscription({
+    status: sub.status,
+    profileGracePeriod: input.profileGracePeriod,
+  });
+  if (tierAction === "leave_unchanged") {
+    if (input.profileGracePeriod) {
+      console.info(
+        "[stripe webhook] subscription in grace period — profile tier unchanged",
+        { userId: input.userId, status: sub.status },
+      );
+    } else if (
+      sub.status === "unpaid" ||
+      sub.status === "incomplete_expired" ||
+      sub.status === "incomplete"
+    ) {
+      console.info(
+        "[stripe webhook] subscription not entitled — profile tier unchanged (grace)",
+        { userId: input.userId, status: sub.status },
+      );
+    }
     return;
   }
 
-  if (sub.status === "canceled") {
-    // customer.subscription.deleted handles profile cleanup; only mirror purchase row.
-    return;
-  }
-
-  if (
-    sub.status === "unpaid" ||
-    sub.status === "incomplete_expired" ||
-    sub.status === "incomplete"
-  ) {
-    console.info(
-      "[stripe webhook] subscription not entitled — profile tier unchanged (grace)",
-      { userId: input.userId, status: sub.status },
-    );
-    return;
-  }
-
-  if (
-    sub.status === "active" ||
-    sub.status === "trialing" ||
-    sub.status === "past_due"
-  ) {
+  {
     const { data: beforeRow, error: beforeErr } = await admin
       .from("profiles")
       .select("tier")
