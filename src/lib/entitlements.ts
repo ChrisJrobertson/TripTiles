@@ -1,3 +1,8 @@
+import {
+  AI_GENERATIONS_TOTAL_COLUMN,
+  canGenerateFromUsage,
+  parseLifetimeCount,
+} from "@/lib/ai/usage-counter";
 import { getTierConfig } from "@/lib/tiers";
 import {
   readProfileRow,
@@ -6,8 +11,6 @@ import {
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import { countActiveTripsForUser, getUserTier, maxActiveTripsForUser } from "@/lib/tier";
 import type { AIDayStrategyEntitlement, UserTier } from "@/lib/types";
-
-const AI_GENERATIONS_TOTAL_COLUMN = "ai_generations_life" + "time";
 
 /** Loads `profiles.tier` for the signed-in user. Throws if the row is missing or invalid. */
 export async function getCurrentTier(): Promise<UserTier> {
@@ -45,13 +48,12 @@ export async function currentUserCanGenerateAI(): Promise<boolean> {
   const rt = await getUserTier(user.id);
   const cfg = getTierConfig(rt);
   const cap = cfg.features.maxSmartPlanRuns;
-  if (cap === null) return true;
-  const used = Number(
-    (profile as Record<string, number | undefined> | null)?.[
+  const used = parseLifetimeCount(
+    (profile as Record<string, unknown> | null)?.[
       AI_GENERATIONS_TOTAL_COLUMN
-    ] ?? 0,
+    ],
   );
-  return used < cap;
+  return canGenerateFromUsage(used, cap);
 }
 
 export async function currentUserCanUseAIDayPlanner(): Promise<boolean> {

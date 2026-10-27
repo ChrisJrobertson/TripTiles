@@ -37,6 +37,10 @@ import {
   formatDayConstraintBlockForDate,
   formatDayConstraintsBlockForSmartPlan,
 } from "@/lib/planner/day-times";
+import {
+  AI_GENERATIONS_TOTAL_COLUMN,
+  incrementAiGenerationLifetime,
+} from "@/lib/ai/usage-counter";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
 import {
   formatDayRidePicksForPrompt,
@@ -179,9 +183,6 @@ async function smartPlanRateLimitMessage(userId: string): Promise<string | null>
   if (result.allowed) return null;
   return `Too many Smart Plan requests. Try again in ${result.retryAfterSec} seconds.`;
 }
-const AI_GENERATIONS_TOTAL_COLUMN =
-  `ai_generations_${"life"}${"time"}` as const;
-
 type ResponseCompletionStatus = "complete" | "truncated" | "error";
 
 function responseCompletionFromStopReason(
@@ -1347,14 +1348,8 @@ async function applyDayTweakProposal(params: {
 
 async function incrementAiGenerationCounter(
   userId: string,
-  previousProfile: Record<string, number | undefined> | null,
-): Promise<void> {
-  const supabase = await createClient();
-  const prevTotal = Number(previousProfile?.[AI_GENERATIONS_TOTAL_COLUMN] ?? 0);
-  await supabase
-    .from("profiles")
-    .update({ [AI_GENERATIONS_TOTAL_COLUMN]: prevTotal + 1 })
-    .eq("id", userId);
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return incrementAiGenerationLifetime(userId);
 }
 
 type AiGenerationStatus = "pending" | "success" | "failed" | "cancelled";
@@ -1567,13 +1562,6 @@ ${tripPrefs || "No saved Smart Plan preferences."}
 ${input.mode === "freetext" ? `\nUSER REQUEST: ${input.freetext?.trim()}` : ""}`,
   ].join("\n\n");
 
-  const supabase = await createClient();
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select(`${AI_GENERATIONS_TOTAL_COLUMN}, tier`)
-    .eq("id", user.id)
-    .maybeSingle();
-
   let inputTokens = 0;
   let outputTokens = 0;
   let aiGenStatus: AiGenerationStatus = "pending";
@@ -1604,10 +1592,13 @@ ${input.mode === "freetext" ? `\nUSER REQUEST: ${input.freetext?.trim()}` : ""}`
     );
     if (!proposed) throw new Error("AI returned an invalid day plan.");
     aiGenStatus = "success";
-    await incrementAiGenerationCounter(
-      user.id,
-      profile as Record<string, number | undefined> | null,
-    );
+    const counted = await incrementAiGenerationCounter(user.id);
+    if (!counted.ok) {
+      return {
+        status: "error",
+        error: `Could not record usage: ${counted.error}`,
+      };
+    }
     const generationsUsedForTrip = await successfulAiGenerationCount(
       input.tripId,
       user.id,
@@ -2225,12 +2216,6 @@ export async function runGenerateAIPlan(
   });
 
   const supabase = await createClient();
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select(AI_GENERATIONS_TOTAL_COLUMN)
-    .eq("id", user.id)
-    .maybeSingle();
 
   let canGenerateAi: boolean;
   try {
@@ -3321,15 +3306,14 @@ export async function runGenerateAIPlan(
       /* count query failed; insert succeeded so at least 1 */
     }
 
-    const prevTotal = Number(
-      (profile as Record<string, number | undefined> | null)?.[
-        AI_GENERATIONS_TOTAL_COLUMN
-      ] ?? 0,
-    );
-    await supabase
-      .from("profiles")
-      .update({ [AI_GENERATIONS_TOTAL_COLUMN]: prevTotal + 1 })
-      .eq("id", user.id);
+    const counted = await incrementAiGenerationCounter(user.id);
+    if (!counted.ok) {
+      return {
+        ok: false,
+        error: "AI_ERROR",
+        message: `Could not record usage: ${counted.error}. Your plan may have saved — refresh the page.`,
+      };
+    }
 
     const newAchievements: string[] = [];
     const firstAi = await awardAchievementAction("first_ai_plan");
@@ -3739,15 +3723,14 @@ Produce 4–6 specific named attractions in rough chronological order for a full
       };
     }
 
-    const prevTotal = Number(
-      (profile as Record<string, number | undefined> | null)?.[
-        AI_GENERATIONS_TOTAL_COLUMN
-      ] ?? 0,
-    );
-    await supabase
-      .from("profiles")
-      .update({ [AI_GENERATIONS_TOTAL_COLUMN]: prevTotal + 1 })
-      .eq("id", user.id);
+    const counted = await incrementAiGenerationCounter(user.id);
+    if (!counted.ok) {
+      return {
+        ok: false,
+        error: `Could not record usage: ${counted.error}`,
+        code: "AI_ERROR",
+      };
+    }
 
     revalidatePath("/planner");
     return {
@@ -4538,15 +4521,14 @@ END USER CONSTRAINTS`
       };
     }
 
-    const prevTotal = Number(
-      (profile as Record<string, number | undefined> | null)?.[
-        AI_GENERATIONS_TOTAL_COLUMN
-      ] ?? 0,
-    );
-    await supabase
-      .from("profiles")
-      .update({ [AI_GENERATIONS_TOTAL_COLUMN]: prevTotal + 1 })
-      .eq("id", user.id);
+    const counted = await incrementAiGenerationCounter(user.id);
+    if (!counted.ok) {
+      return {
+        ok: false,
+        error: `Could not record usage: ${counted.error}`,
+        code: "ai_failure",
+      };
+    }
 
     revalidatePath("/planner");
     revalidatePath(`/trip/${tripId}`);

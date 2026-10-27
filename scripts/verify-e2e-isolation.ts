@@ -237,16 +237,20 @@ async function main() {
     });
     if (published.rows !== 1) fail(`Owner could not publish: ${JSON.stringify(published)}`);
 
+    // 22 Oct: anonymous clients have no trips SELECT. Published pages are a
+    // server-side service-role read, not a public PostgREST grant.
     const anonPublic = await rest(
       `trips?public_slug=eq.${slug}&select=id,adventure_name,notes,child_ages,adults,is_public`,
       null,
     );
-    const publicRow = Array.isArray(anonPublic.body) ? anonPublic.body[0] : null;
-    if (anonPublic.rows !== 1 || !publicRow?.is_public) fail("Anon could not read the published trip");
+    if (anonPublic.rows !== 0) {
+      fail(`Anon REST read a published trip: ${JSON.stringify(anonPublic)}`);
+    }
     const anonOther = await rest(`trips?id=eq.${tripB.id}&select=id`, null);
     if (anonOther.rows !== 0) fail("Publishing User A exposed User B");
 
     const anonPayment = await rest(`trip_payments?trip_id=eq.${tripA.id}&select=label`, null);
+    if (anonPayment.rows !== 0) fail("Anon REST read payments on a published trip");
     const revoked = await rest(`trips?id=eq.${tripA.id}`, sessionA.access_token, {
       method: "PATCH",
       body: JSON.stringify({ is_public: false, public_slug: null }),
@@ -280,8 +284,8 @@ async function main() {
         publicShare: {
           status: anonPublic.status,
           rows: anonPublic.rows,
-          exposedNotes: publicRow?.notes === secretNote,
-          exposedChildAges: Array.isArray(publicRow?.child_ages) && publicRow.child_ages.length > 0,
+          exposedNotes: false,
+          exposedChildAges: false,
           exposedPayment: anonPayment.rows > 0,
         },
         afterRevoke: { status: anonAfterRevoke.status, rows: anonAfterRevoke.rows },
