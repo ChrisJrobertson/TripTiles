@@ -24,25 +24,16 @@ function fail(message: string): never {
 }
 
 async function ensureProfile(
-  admin: { from: (table: string) => any },
-  userId: string,
-  email: string,
+  lookup: () => PromiseLike<{
+    data: { id?: string } | null;
+    error: { message: string } | null;
+  }>,
+  insert: () => PromiseLike<{ error: { message: string } | null }>,
 ): Promise<void> {
-  const { data: profile, error: profileError } = await admin
-    .from("profiles")
-    .select("id")
-    .eq("id", userId)
-    .maybeSingle();
+  const { data: profile, error: profileError } = await lookup();
   if (profileError) fail(`Profile lookup failed: ${profileError.message}`);
   if (profile?.id) return;
-  const { error: insertProfileError } = await admin.from("profiles").insert({
-    id: userId,
-    email,
-    tier: "free",
-    referral_code: crypto.randomUUID().replaceAll("-", ""),
-    temperature_unit: "c",
-    email_marketing_opt_out: false,
-  });
+  const { error: insertProfileError } = await insert();
   if (insertProfileError) fail(`Profile insert failed: ${insertProfileError.message}`);
 }
 
@@ -101,8 +92,30 @@ async function main() {
   const dropLeftover = (id: string) => leftoverUserIds.delete(id);
 
   try {
-    await ensureProfile(admin, userId, email);
-    await ensureProfile(admin, inviteeId, inviteeEmail);
+    await ensureProfile(
+      () => admin.from("profiles").select("id").eq("id", userId).maybeSingle(),
+      () =>
+        admin.from("profiles").insert({
+          id: userId,
+          email,
+          tier: "free",
+          referral_code: crypto.randomUUID().replaceAll("-", ""),
+          temperature_unit: "c",
+          email_marketing_opt_out: false,
+        }),
+    );
+    await ensureProfile(
+      () => admin.from("profiles").select("id").eq("id", inviteeId).maybeSingle(),
+      () =>
+        admin.from("profiles").insert({
+          id: inviteeId,
+          email: inviteeEmail,
+          tier: "free",
+          referral_code: crypto.randomUUID().replaceAll("-", ""),
+          temperature_unit: "c",
+          email_marketing_opt_out: false,
+        }),
+    );
 
     const user = createClient(url, anon, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -217,7 +230,19 @@ async function main() {
       fail(`Could not create the second owner: ${owner2Error?.message ?? "no user"}`);
     }
     leftoverUserIds.add(owner2.user.id);
-    await ensureProfile(admin, owner2.user.id, `triptiles-e2e-delete2-${stamp}@example.com`);
+    await ensureProfile(
+      () =>
+        admin.from("profiles").select("id").eq("id", owner2.user.id).maybeSingle(),
+      () =>
+        admin.from("profiles").insert({
+          id: owner2.user.id,
+          email: `triptiles-e2e-delete2-${stamp}@example.com`,
+          tier: "free",
+          referral_code: crypto.randomUUID().replaceAll("-", ""),
+          temperature_unit: "c",
+          email_marketing_opt_out: false,
+        }),
+    );
 
     const { data: trip2, error: trip2Error } = await admin
       .from("trips")
