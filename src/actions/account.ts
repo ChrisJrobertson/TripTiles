@@ -1,5 +1,6 @@
 "use server";
 
+import { clearCollaboratorRefsForAccount } from "@/lib/account/clear-collaborator-refs";
 import { accountDeletionEmailMatches } from "@/lib/account/delete-confirmation";
 import { createServiceRoleClient } from "@/lib/supabase/service-role";
 import { createClient, getCurrentUser } from "@/lib/supabase/server";
@@ -108,8 +109,18 @@ export async function deleteAccountAction(input: {
   }
 
   const admin = createServiceRoleClient();
+  const cleared = await clearCollaboratorRefsForAccount(admin, user.id);
+  if (!cleared.ok) {
+    console.error("account.delete_collaborator_refs_failed");
+    return {
+      ok: false,
+      error: "Could not delete this account. Please try again.",
+    };
+  }
+
   const { error } = await admin.auth.admin.deleteUser(user.id);
   if (error) {
+    console.error("account.delete_user_failed", error.code ?? "unknown");
     return { ok: false, error: error.message };
   }
 

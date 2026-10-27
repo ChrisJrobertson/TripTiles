@@ -8,5 +8,10 @@
       "path": "/api/cron/live-wait-ingest",
       "schedule": "30 9 * * *"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "cursor/october-rc-verified-*": false
+    }
+  }
 }

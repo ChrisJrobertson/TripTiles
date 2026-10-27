@@ -1,6 +1,7 @@
 "use server";
 
 import { authorisedAuthRedirectOrigin } from "@/lib/auth/auth-redirect-origin";
+import { recoveryEmailRedirectTo } from "@/lib/auth/recovery-redirect";
 import { safeNextPath } from "@/lib/auth/safe-next-path";
 import { consumeSharedRateLimit } from "@/lib/rate-limit";
 import { getPublicSiteUrl } from "@/lib/site";
@@ -432,9 +433,17 @@ export async function resetPasswordAction(input: {
 
   try {
     const supabase = await createClient();
-    await supabase.auth.resetPasswordForEmail(trimmed);
+    const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
+      redirectTo: recoveryEmailRedirectTo(getPublicSiteUrl()),
+    });
+    if (error) {
+      console.error(
+        "auth.reset_password_email_failed",
+        error.code ?? "unknown",
+      );
+    }
   } catch {
-    /* always succeed from caller's perspective */
+    console.error("auth.reset_password_email_failed", "exception");
   }
 
   return { ok: true };
