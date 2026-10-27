@@ -136,6 +136,35 @@ Marketing notes from this pass:
 
 The auth allowlist is now an exact origin list. No model call, Stripe test payment, hosted deploy, or score change came from that. `ANTHROPIC_API_KEY`, `HF_TOKEN`, and the Stripe test credentials are still unset.
 
+## 27 October review-branch evidence
+
+Recorded on 27 October 2026. Historical scores above are unchanged. This pass pushed completed October work to GitHub review branch `cursor/october-rc-verified-20261027` and opened a draft PR into `cursor/launch-readiness-027e`. It did not merge, did not apply SQL to production, and did not authorise paid launch.
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| `npm test` | PASS | Includes `usage-counter`, `recovery-redirect`, and `clear-collaborator-refs`. |
+| `npm run lint` | PASS | Exit 0. |
+| `npx tsc --noEmit` | PASS | Exit 0. |
+| `NODE_ENV=production npm run build` | PASS | Next.js 15.5.15 Turbopack. Started with `--env-file=.env.staging.runtime.local` against `whuvghmgdxgsaqpfcorq`. Existing `import-in-the-middle` warnings remain. |
+| Playwright public journeys | PASS | 6/6 against `next start` on port 3001. |
+| Playwright published-plan page | PASS | `e2e/public-share-security.spec.ts` passed on retry after a Playwright trace-artifact flake. |
+| AI-counter unit tests | PASS | Fail-closed finite caps; trusted increment helper. |
+| Isolation / published-plan REST | PASS | `verify-e2e-isolation.ts` and `verify-public-share-security.ts` on staging. Anon REST cannot read trips, including published slugs. |
+| Account lifecycle + collaborator FK | PASS | Disposable inviter deleted after `invited_by` cleanup. Invitee profile and another owner's trip remained. Refuses production project ref. |
+| Reviewed grants / JWT | PASS | `verify-security-hardening.ts` on staging, including atomic increment RPC and verified-email invite gate. |
+| Shared rate-limit | PASS | One database window; anonymous execute denied. |
+| Authorised cron | PASS | Wrong bearer HTTP 401. Email job 200 with sent 0. Live-wait missing-config fail-closed. |
+| Password recovery | PASS | Staging `generateLink` type `recovery` used `redirect_to=http://localhost:3001/auth/callback?next=%2Freset-password`. OTP length 8. `verifyOtp` + password update + sign-in succeeded. `resetPasswordForEmail` then hit `over_email_send_rate_limit`. Inbox delivery NOT TESTED. Anti-enumeration preserved (`resetPasswordAction` still always `{ ok: true }`). |
+| Anthropic Smart Plan | BLOCKED | `ANTHROPIC_API_KEY` empty. |
+| Resend | BLOCKED | `RESEND_API_KEY` empty. |
+| Stripe | BLOCKED | Secret, webhook, and price ids empty. No charges. |
+| Production hardening SQL | BLOCKED | Review files stay in `supabase/reviews/`. Not copied to `supabase/migrations/`. Not applied to `inqexwdkuqdfdoaauxyw`. |
+| Paid customer launch | BLOCKED | Unchanged. |
+
+Local Auth `supabase/config.toml` uses port 3001 and `otp_length = 6` for Docker. Hosted staging Auth remains 8-digit, matching the UI.
+
+Vercel: GitHub still reports `Production – triptiles` at `7c18cdc` (5 October, `vercel-hobby-preview`). Commit `c5bf214` on `cursor/launch-readiness-027e` is `Preview – triptiles`. This review branch sets `git.deploymentEnabled` for `cursor/october-rc-verified-*` to false so a push or draft PR must not create a preview that could use production credentials. The active integration is **Vercel – triptiles**. **Vercel – trip-tiles** is the obsolete blocked account and must be ignored.
+
 ## Integration configuration
 
 Checked on 23 October. Local means `.env.local`. Vercel means project `triptiles` (`prj_e3cIQQ1HiBFlE4uaQ6AlNqISiqzH`). A value is not treated as configured unless it is present. No placeholder was written.
